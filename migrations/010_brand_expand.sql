@@ -1,0 +1,11 @@
+ALTER TABLE brands ADD COLUMN icon_url VARCHAR(500) NULL AFTER logo_url;
+ALTER TABLE brands ADD COLUMN address TEXT NULL AFTER whatsapp_number;
+ALTER TABLE brands ADD COLUMN gmaps_url VARCHAR(500) NULL AFTER address;
+ALTER TABLE brands ADD COLUMN legalitas TEXT NULL AFTER gmaps_url;
+ALTER TABLE brands ADD COLUMN bank_name VARCHAR(100) NULL AFTER legalitas;
+ALTER TABLE brands ADD COLUMN bank_account_number VARCHAR(50) NULL AFTER bank_name;
+ALTER TABLE brands ADD COLUMN bank_account_holder VARCHAR(150) NULL AFTER bank_account_number;
+ALTER TABLE brands ADD COLUMN social_facebook VARCHAR(255) NULL AFTER bank_account_holder;
+ALTER TABLE brands ADD COLUMN social_instagram VARCHAR(255) NULL AFTER social_facebook;
+ALTER TABLE brands ADD COLUMN social_tiktok VARCHAR(255) NULL AFTER social_instagram;
+ALTER TABLE brands ADD COLUMN social_youtube VARCHAR(255) NULL AFTER social_tiktok;

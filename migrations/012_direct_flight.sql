@@ -1,0 +1,2 @@
+ALTER TABLE schedules
+ADD COLUMN is_direct_flight BOOLEAN NOT NULL DEFAULT FALSE;

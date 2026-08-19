@@ -1,0 +1,8 @@
+package identity
+
+// identity — Placeholder untuk fase autentikasi (menyusul).
+// Akan berisi:
+//   - User model & repository
+//   - Login / refresh token handler
+//   - JWT middleware
+//   - Role-based access control (RBAC)

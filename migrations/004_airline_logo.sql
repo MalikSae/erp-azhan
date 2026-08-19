@@ -1,0 +1,1 @@
+ALTER TABLE airlines ADD COLUMN logo_url VARCHAR(500) NULL AFTER name;

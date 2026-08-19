@@ -1,0 +1,23 @@
+# ERP Azhan API — .gitignore
+
+# Environment secrets
+.env
+
+# Build output
+/bin/
+*.exe
+
+# Node (jika ada tooling frontend di masa depan)
+node_modules/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+/uploads/
+/scratch/
