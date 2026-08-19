@@ -19,5 +19,11 @@ Thumbs.db
 .idea/
 *.swp
 
-/uploads/
+/uploads/*
+!/uploads/airline-logos/
+!/uploads/airline-logos/**
+!/uploads/brand-icons/
+!/uploads/brand-icons/**
+!/uploads/brand-logos/
+!/uploads/brand-logos/**
 /scratch/
