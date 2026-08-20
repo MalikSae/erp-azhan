@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"erp-azhan/api/internal/identity"
+	"github.com/go-chi/chi/v5"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler dokumen.
@@ -23,12 +23,13 @@ func NewHandler(repo *Repository) *Handler {
 }
 
 var validJenis = map[string]bool{
-	"pas_foto":   true,
-	"paspor":     true,
-	"ktp":        true,
-	"kk":         true,
-	"buku_nikah": true,
-	"akte_lahir": true,
+	"pas_foto":          true,
+	"paspor":            true,
+	"ktp":               true,
+	"kk":                true,
+	"buku_nikah":        true,
+	"akte_lahir":        true,
+	"vaksin_meningitis": true,
 }
 
 var validStatuses = map[string]bool{
@@ -47,7 +48,7 @@ func (h *Handler) ListDokumen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	brandID := identity.GetBrandID(r.Context())
-	
+
 	// Verify jamaah exists and belongs to brand
 	exists, err := h.repo.JamaahExistsForBrand(r.Context(), jamaahID, brandID)
 	if err != nil {

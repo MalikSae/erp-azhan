@@ -428,7 +428,7 @@ func (h *Handler) UploadDokumen(w http.ResponseWriter, r *http.Request) {
 		"ktp":               true,
 		"kk":                true,
 		"buku_nikah":        true,
-		"foto":              true,
+		"pas_foto":          true,
 		"vaksin_meningitis": true,
 	}
 	if !validJenis[req.Jenis] {
