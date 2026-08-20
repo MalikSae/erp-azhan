@@ -24,6 +24,8 @@ import CompliancePage from './pages/CompliancePage';
 import UserManagementPage from './pages/UserManagementPage';
 import BrandsPage from './pages/BrandsPage';
 import BrandFormPage from './pages/BrandFormPage';
+import BankAccountsPage from './pages/BankAccountsPage';
+import PaymentConfirmationsPage from './pages/PaymentConfirmationsPage';
 
 function App() {
   return (
@@ -66,6 +68,8 @@ function App() {
               <Route path="/brands/new" element={<BrandFormPage />} />
               <Route path="/brands/:id/edit" element={<BrandFormPage />} />
               <Route path="/users" element={<UserManagementPage />} />
+              <Route path="/bank-accounts" element={<BankAccountsPage />} />
+              <Route path="/payments" element={<PaymentConfirmationsPage />} />
             </Route>
           </Route>
 

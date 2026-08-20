@@ -61,8 +61,8 @@ func (r *Repository) ListDailyBrandTransactions(ctx context.Context) ([]DailyBra
 // Memverifikasi brand via 2-hop JOIN: payments -> bookings -> schedules.
 func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brandID *int64) ([]Payment, error) {
 	q := `
-		SELECT p.id, p.booking_id, p.jumlah, p.metode, 
-			DATE_FORMAT(p.tanggal, '%Y-%m-%d') AS tanggal, p.status, p.bukti_url, p.created_at
+		SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,
+			p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.created_at
 		FROM payments p
 		JOIN bookings b ON b.id = p.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
@@ -86,12 +86,8 @@ func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brand
 	items := make([]Payment, 0)
 	for rows.Next() {
 		var p Payment
-		var buktiURL sql.NullString
-		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &buktiURL, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.CreatedAt); err != nil {
 			return nil, fmt.Errorf("payment.List scan: %w", err)
-		}
-		if buktiURL.Valid {
-			p.BuktiURL = &buktiURL.String
 		}
 		items = append(items, p)
 	}
@@ -104,8 +100,8 @@ func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brand
 // Memverifikasi brand via 2-hop JOIN.
 func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Payment, error) {
 	q := `
-		SELECT p.id, p.booking_id, p.jumlah, p.metode, 
-			DATE_FORMAT(p.tanggal, '%Y-%m-%d') AS tanggal, p.status, p.bukti_url, p.created_at
+		SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,
+			p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.created_at
 		FROM payments p
 		JOIN bookings b ON b.id = p.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
@@ -120,28 +116,66 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Pa
 	}
 
 	var p Payment
-	var buktiURL sql.NullString
-	err := r.db.QueryRowContext(ctx, q, args...).Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &buktiURL, &p.CreatedAt)
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("payment.GetByID: %w", err)
 	}
-	if buktiURL.Valid {
-		p.BuktiURL = &buktiURL.String
-	}
 	return &p, nil
+}
+
+func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string) ([]Payment, error) {
+	q := `SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.created_at,j.nama_lengkap,s.jadwal_nama,br.name FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN jamaah j ON j.id=b.jamaah_id JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE 1=1`
+	args := []any{}
+	if brandID != nil {
+		q += " AND s.brand_id=?"
+		args = append(args, *brandID)
+	}
+	if status != "" {
+		q += " AND p.status=?"
+		args = append(args, status)
+	}
+	q += " ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END,p.created_at DESC"
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Payment{}
+	for rows.Next() {
+		var p Payment
+		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.CreatedAt, &p.JamaahName, &p.ScheduleName, &p.BrandName); err != nil {
+			return nil, err
+		}
+		items = append(items, p)
+	}
+	return items, rows.Err()
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 // Create menambahkan payment baru. Status selalu 'pending'.
 func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePaymentRequest) (*Payment, error) {
-	const q = `INSERT INTO payments (booking_id, jumlah, metode, tanggal, status, bukti_url)
-		VALUES (?, ?, ?, ?, 'pending', ?)`
+	var bankName, accountNumber, accountHolder *string
+	if req.BankAccountID != nil {
+		var n, no, h string
+		err := r.db.QueryRowContext(ctx, `SELECT bank_name,account_number,account_holder FROM bank_accounts WHERE id=? AND is_active=TRUE`, *req.BankAccountID).Scan(&n, &no, &h)
+		if err != nil {
+			return nil, ErrNotFound
+		}
+		bankName = &n
+		accountNumber = &no
+		accountHolder = &h
+	}
+	const q = `INSERT INTO payments (booking_id,bank_account_id,destination_bank_name,destination_account_number,destination_account_holder,jumlah,metode,sender_name,sender_bank,tanggal,status,bukti_url,notes,source) VALUES (?,?,?,?,?,?,?,?,?,?,'pending',?,?,?)`
 
-	res, err := r.db.ExecContext(ctx, q, bookingID, req.Jumlah, req.Metode, req.Tanggal, req.BuktiURL)
+	source := req.Source
+	if source == "" {
+		source = "admin"
+	}
+	res, err := r.db.ExecContext(ctx, q, bookingID, req.BankAccountID, bankName, accountNumber, accountHolder, req.Jumlah, req.Metode, req.SenderName, req.SenderBank, req.Tanggal, req.BuktiURL, req.Notes, source)
 	if err != nil {
 		return nil, fmt.Errorf("payment.Create: %w", err)
 	}
@@ -180,7 +214,7 @@ func (r *Repository) GetBookingTotalAndPaid(ctx context.Context, bookingID int64
 // ─── UpdateStatus ─────────────────────────────────────────────────────────────
 
 // UpdateStatus mengubah status payment dan otomatis menyinkronkan status booking (Lunas/DP).
-func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus string) (*Payment, error) {
+func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus string, rejectionReason *string, verifiedBy int64) (*Payment, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("payment.UpdateStatus tx: %w", err)
@@ -196,7 +230,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 		return nil, fmt.Errorf("payment.UpdateStatus get booking_id: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, `UPDATE payments SET status=? WHERE id=?`, newStatus, id)
+	_, err = tx.ExecContext(ctx, `UPDATE payments SET status=?,rejection_reason=?,verified_by=?,verified_at=NOW() WHERE id=?`, newStatus, rejectionReason, verifiedBy, id)
 	if err != nil {
 		return nil, fmt.Errorf("payment.UpdateStatus update: %w", err)
 	}

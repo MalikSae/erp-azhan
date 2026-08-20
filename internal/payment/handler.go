@@ -63,6 +63,22 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// ListAllPayments menampilkan inbox pembayaran lintas brand untuk pusat,
+// atau otomatis scoped untuk admin brand.
+func (h *Handler) ListAllPayments(w http.ResponseWriter, r *http.Request) {
+	status := r.URL.Query().Get("status")
+	if status != "" && status != "pending" && status != "confirmed" && status != "rejected" {
+		writeError(w, 400, "status tidak valid")
+		return
+	}
+	items, err := h.repo.ListAll(r.Context(), identity.GetBrandID(r.Context()), status)
+	if err != nil {
+		writeError(w, 500, "gagal mengambil daftar pembayaran")
+		return
+	}
+	writeJSON(w, 200, items)
+}
+
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 // CreatePayment godoc
@@ -139,8 +155,12 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Status != "confirmed" {
-		writeError(w, http.StatusBadRequest, "status tidak valid, hanya bisa diubah ke confirmed")
+	if req.Status != "confirmed" && req.Status != "rejected" {
+		writeError(w, http.StatusBadRequest, "status harus confirmed atau rejected")
+		return
+	}
+	if req.Status == "rejected" && (req.RejectionReason == nil || len(*req.RejectionReason) < 3) {
+		writeError(w, http.StatusBadRequest, "alasan penolakan wajib diisi")
 		return
 	}
 
@@ -154,12 +174,12 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Idempotent check
-	if p.Status == "confirmed" {
+	if p.Status != "pending" {
 		writeJSON(w, http.StatusOK, p)
 		return
 	}
 
-	updated, err := h.repo.UpdateStatus(r.Context(), id, req.Status)
+	updated, err := h.repo.UpdateStatus(r.Context(), id, req.Status, req.RejectionReason, identity.GetAdminUserID(r.Context()))
 	if err != nil {
 		handleRepoError(w, err)
 		return

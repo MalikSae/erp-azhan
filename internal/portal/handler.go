@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/jamaah"
 	"erp-azhan/api/internal/payment"
+	"github.com/go-chi/chi/v5"
 )
 
 type loginAttempt struct {
@@ -295,6 +295,87 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, payments)
+}
+
+// ListBankAccounts mengembalikan rekening aktif milik brand jamaah.
+func (h *Handler) ListBankAccounts(w http.ResponseWriter, r *http.Request) {
+	jamaahID := identity.GetPortalJamaahID(r.Context())
+	if jamaahID <= 0 {
+		writeError(w, 401, "unauthorized")
+		return
+	}
+	rows, err := h.db.QueryContext(r.Context(), `SELECT a.id,a.bank_name,a.account_number,a.account_holder,a.instructions FROM bank_accounts a JOIN jamaah j ON j.brand_id=a.brand_id WHERE j.id=? AND a.is_active=TRUE ORDER BY a.sort_order,a.id`, jamaahID)
+	if err != nil {
+		writeError(w, 500, "gagal mengambil rekening")
+		return
+	}
+	defer rows.Close()
+	type account struct {
+		ID            int64   `json:"id"`
+		BankName      string  `json:"bank_name"`
+		AccountNumber string  `json:"account_number"`
+		AccountHolder string  `json:"account_holder"`
+		Instructions  *string `json:"instructions"`
+	}
+	items := []account{}
+	for rows.Next() {
+		var a account
+		if rows.Scan(&a.ID, &a.BankName, &a.AccountNumber, &a.AccountHolder, &a.Instructions) != nil {
+			writeError(w, 500, "gagal membaca rekening")
+			return
+		}
+		items = append(items, a)
+	}
+	writeJSON(w, 200, items)
+}
+
+// CreatePayment menerima konfirmasi transfer manual dari jamaah.
+func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
+	jamaahID := identity.GetPortalJamaahID(r.Context())
+	bookingID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if jamaahID <= 0 || err != nil || bookingID <= 0 {
+		writeError(w, 400, "booking tidak valid")
+		return
+	}
+	b, err := h.bookingRepo.GetByID(r.Context(), bookingID, nil)
+	if err != nil || b.JamaahID != jamaahID {
+		writeError(w, 404, "booking tidak ditemukan")
+		return
+	}
+	var req payment.CreatePaymentRequest
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		writeError(w, 400, "request body tidak valid")
+		return
+	}
+	req.Source = "portal"
+	if req.Jumlah <= 0 || req.BankAccountID == nil || req.SenderName == nil || strings.TrimSpace(*req.SenderName) == "" || req.BuktiURL == nil || strings.TrimSpace(*req.BuktiURL) == "" {
+		writeError(w, 400, "rekening tujuan, nominal, nama pengirim, dan bukti transfer wajib diisi")
+		return
+	}
+	var accountBrand, bookingBrand int64
+	err = h.db.QueryRowContext(r.Context(), `SELECT brand_id FROM bank_accounts WHERE id=? AND is_active=TRUE`, *req.BankAccountID).Scan(&accountBrand)
+	if err == nil {
+		err = h.db.QueryRowContext(r.Context(), `SELECT s.brand_id FROM bookings b JOIN schedules s ON s.id=b.schedule_id WHERE b.id=?`, bookingID).Scan(&bookingBrand)
+	}
+	if err != nil || accountBrand != bookingBrand {
+		writeError(w, 400, "rekening tujuan tidak tersedia untuk brand ini")
+		return
+	}
+	total, totalPaid, err := h.paymentRepo.GetBookingTotalAndPaid(r.Context(), bookingID)
+	if err != nil {
+		writeError(w, 500, "gagal memeriksa tagihan")
+		return
+	}
+	if total != nil && req.Jumlah > *total-totalPaid {
+		writeError(w, 400, "nominal melebihi sisa tagihan")
+		return
+	}
+	item, err := h.paymentRepo.Create(r.Context(), bookingID, &req)
+	if err != nil {
+		writeError(w, 500, "gagal menyimpan konfirmasi pembayaran")
+		return
+	}
+	writeJSON(w, 201, item)
 }
 
 // ─── GET /api/portal/dokumen ──────────────────────────────────────────────────

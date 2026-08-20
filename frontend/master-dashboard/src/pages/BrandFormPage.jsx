@@ -382,34 +382,11 @@ const BrandFormPage = () => {
 
             {/* MetaBox Info Rekening */}
             <MetaBox title="Info Rekening Bank">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input 
-                  label="Nama Bank"
-                  className="!mb-0"
-                  name="bank_name"
-                  value={formData.bank_name}
-                  onChange={handleChange}
-                  placeholder="BSI / Mandiri / BCA"
-                />
-
-                <Input 
-                  label="Nomor Rekening"
-                  className="!mb-0"
-                  name="bank_account_number"
-                  value={formData.bank_account_number}
-                  onChange={handleChange}
-                  placeholder="1234567890"
-                />
+              <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
+                <p className="text-sm font-semibold text-neutral-900">Rekening dikelola terpusat</p>
+                <p className="mt-1 text-sm leading-6 text-neutral-600">Satu brand dapat memiliki beberapa rekening aktif. Rekening lama sudah dipindahkan otomatis dan tetap tersedia.</p>
+                <Button type="button" variant="secondary" className="mt-3" onClick={() => navigate('/bank-accounts')}>Kelola Rekening Bank</Button>
               </div>
-
-              <FormField label="Atas Nama">
-                <Input 
-                  name="bank_account_holder"
-                  value={formData.bank_account_holder}
-                  onChange={handleChange}
-                  placeholder="PT. Azhan Wisata Mandiri"
-                />
-              </FormField>
             </MetaBox>
 
             {/* MetaBox Media Sosial */}

@@ -48,6 +48,16 @@ export const updatePaymentStatus = async (paymentId, status) => {
   return data;
 };
 
+export const listAllPayments = async (status = '') => {
+  const { data } = await api.get('/api/admin/payments', { params: status ? { status } : {} });
+  return data;
+};
+
+export const verifyPayment = async (paymentId, status, rejectionReason = null) => {
+  const { data } = await api.put(`/api/admin/payments/${paymentId}/status`, { status, rejection_reason: rejectionReason });
+  return data;
+};
+
 export const deletePayment = async (paymentId) => {
   const { data } = await api.delete(`/api/admin/payments/${paymentId}`);
   return data;

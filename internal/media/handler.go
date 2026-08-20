@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -73,8 +72,15 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	}
 
 	contentType := http.DetectContentType(buffer[:n])
-	if !strings.HasPrefix(contentType, "image/") {
-		writeError(w, http.StatusBadRequest, "file harus berupa gambar")
+	extensions := map[string]string{
+		"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
+	}
+	ext, isImage := extensions[contentType]
+	if contentType == "application/pdf" && category == "dokumen-jamaah" {
+		ext = ".pdf"
+	}
+	if ext == "" {
+		writeError(w, http.StatusBadRequest, "file harus berupa JPG, PNG, WEBP, GIF, atau PDF")
 		return
 	}
 
@@ -85,7 +91,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	}
 
 	// 3. Generate unique name
-	newFileName := uuid.New().String() + ".webp"
+	newFileName := uuid.New().String() + ext
 	uploadDir := filepath.Join(".", "uploads", category)
 
 	// 4. Create folder if not exists
@@ -95,59 +101,29 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 		return
 	}
 
-	// 5. Save original file to a temp file
-	tempFile, err := os.CreateTemp("", "upload-*.tmp")
-	if err != nil {
-		fmt.Printf("Gagal membuat temp file: %v\n", err)
-		writeError(w, http.StatusInternalServerError, "gagal memproses gambar")
-		return
-	}
-	tempPath := tempFile.Name()
-	defer os.Remove(tempPath)
-
-	if _, err := io.Copy(tempFile, file); err != nil {
-		tempFile.Close()
-		fmt.Printf("Gagal menulis ke temp file: %v\n", err)
-		writeError(w, http.StatusInternalServerError, "gagal memproses gambar")
-		return
-	}
-	tempFile.Close()
-
 	finalPath := filepath.Join(uploadDir, newFileName)
-
-	maxWidth := r.FormValue("max_width")
-	if strings.TrimSpace(maxWidth) == "" {
-		maxWidth = "512"
-	}
-
-	generateThumbnail := r.FormValue("generate_thumbnail") == "true"
-
-	// 6. Execute cwebp
-	cmd := exec.Command("cwebp", "-q", "80", "-resize", maxWidth, "0", tempPath, "-o", finalPath)
-	output, err := cmd.CombinedOutput()
+	destination, err := os.OpenFile(finalPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
-		fmt.Printf("cwebp gagal: %v\nOutput: %s\n", err, string(output))
-		writeError(w, http.StatusInternalServerError, "gagal memproses gambar")
+		writeError(w, http.StatusInternalServerError, "gagal menyimpan file")
+		return
+	}
+	if _, err := io.Copy(destination, file); err != nil {
+		destination.Close()
+		_ = os.Remove(finalPath)
+		writeError(w, http.StatusInternalServerError, "gagal menyimpan file")
+		return
+	}
+	if err := destination.Close(); err != nil {
+		_ = os.Remove(finalPath)
+		writeError(w, http.StatusInternalServerError, "gagal menyimpan file")
 		return
 	}
 
 	publicURL := fmt.Sprintf("/uploads/%s/%s", category, newFileName)
 	response := map[string]string{"url": publicURL}
 
-	// 7. Generate thumbnail if requested
-	if generateThumbnail {
-		thumbFileName := strings.TrimSuffix(newFileName, ".webp") + "-thumb.webp"
-		thumbFinalPath := filepath.Join(uploadDir, thumbFileName)
-		
-		thumbCmd := exec.Command("cwebp", "-q", "75", "-resize", "300", "0", tempPath, "-o", thumbFinalPath)
-		thumbOutput, thumbErr := thumbCmd.CombinedOutput()
-		if thumbErr != nil {
-			fmt.Printf("cwebp thumb gagal: %v\nOutput: %s\n", thumbErr, string(thumbOutput))
-			// Non-fatal error, return main image only
-		} else {
-			response["thumb_url"] = fmt.Sprintf("/uploads/%s/%s", category, thumbFileName)
-		}
-	}
+	// Format asli dipertahankan agar upload tidak bergantung pada binary eksternal.
+	_ = isImage
 
 	// 8. Success
 	writeJSON(w, http.StatusCreated, response)

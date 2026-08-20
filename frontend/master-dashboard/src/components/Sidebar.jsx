@@ -17,6 +17,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
 
   const adminItems = [
     { name: 'Kelola Brand', path: '/brands', status: 'active' },
+    { name: 'Rekening Bank', path: '/bank-accounts', status: 'active' },
+    { name: 'Konfirmasi Pembayaran', path: '/payments', status: 'active' },
     { name: 'User Management', path: '/users', status: 'active' }
   ];
 

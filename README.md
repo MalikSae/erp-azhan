@@ -54,7 +54,7 @@ erp-azhan/
 ├── frontend/
 │   ├── master-dashboard/    # Dashboard Super Admin (Multi-Brand, Master Data, Inventory Global, User Mgmt)
 │   └── travel-dashboard/    # Dashboard Travel Partner (Katalog Paket, Jamaah, Booking, Progress, Stok Cabang)
-├── migrations/              # Script dan file SQL migrasi database (001 - 027)
+├── migrations/              # Script dan file SQL migrasi database (001 - 028)
 ├── uploads/                 # Storage lokal file upload media, foto, & dokumen
 ├── .env.example             # Template konfigurasi environment
 ├── go.mod
@@ -168,6 +168,7 @@ npm run build
 - Ringkasan jumlah brand, paket terbit, hotel, dan maskapai dari API aktual.
 - Daftar keberangkatan terdekat, kapasitas kursi aktif, serta distribusi status paket.
 - Line chart transaksi terkonfirmasi selama 30 hari terakhir, dengan garis dan warna berbeda untuk setiap brand.
+- Pengelolaan beberapa rekening transfer resmi per brand dan inbox konfirmasi pembayaran lintas brand.
 - Pengelolaan brand, pengguna, paket, hotel, maskapai, itinerary, add-on, inventory, dan laporan lintas brand.
 
 ### Travel Dashboard (`:5174`)
@@ -176,6 +177,7 @@ npm run build
 - Grafik arus pembayaran 30 hari berdasarkan transaksi terkonfirmasi.
 - Pengelolaan jamaah, booking, add-on, diskon, pembayaran, progress dokumen, dan distribusi perlengkapan.
 - Pembatalan **block seat** tanpa membatalkan data booking.
+- Inbox konfirmasi transfer manual yang dapat dikonfirmasi atau ditolak oleh admin brand.
 - Form dan modal menggunakan susunan label/input yang konsisten dan responsif.
 
 ### Paket dan Penerbangan
@@ -244,6 +246,7 @@ npm run build
 | `PUT` | `/api/admin/schedules/{id}/status` | Update status publikasi paket (*draft*, *published*, *archived*) |
 | `PUT` | `/api/admin/schedules/{id}/seat` | Update kuota total kursi paket |
 | `GET` | `/api/admin/analytics/transactions-30-days` | *(Super Admin)* Agregasi transaksi terkonfirmasi 30 hari per brand |
+| `CRUD` | `/api/admin/bank-accounts` | *(Super Admin)* Kelola beberapa rekening transfer resmi per brand |
 
 #### C. Data Jamaah & Dokumen
 | Method | Endpoint | Deskripsi |
@@ -278,6 +281,7 @@ npm run build
 | Method | Endpoint | Deskripsi |
 |---|---|---|
 | `GET` | `/api/admin/bookings/{booking_id}/payments` | List riwayat pembayaran suatu booking |
+| `GET` | `/api/admin/payments` | Inbox pembayaran; lintas brand untuk pusat dan scoped untuk admin brand |
 | `POST` | `/api/admin/bookings/{booking_id}/payments` | Pencatatan pembayaran & upload bukti transfer |
 | `PUT` | `/api/admin/payments/{id}/status` | Konfirmasi pembayaran berstatus *pending* menjadi *confirmed* |
 | `DELETE`| `/api/admin/payments/{id}` | Hapus catatan pembayaran |
@@ -303,6 +307,7 @@ List kosong selalu mengembalikan array `[]`, bukan `null`.
 |---|---|
 | `026_schedule_flight_routes.sql` | Menambahkan data rute pergi, transit, tujuan, dan rute pulang pada paket |
 | `027_booking_seat_block_state.sql` | Menyimpan status pembatalan block seat secara terpisah dari status booking |
+| `028_manual_bank_transfers.sql` | Migrasi rekening lama, multi-rekening per brand, bukti transfer portal, dan status penolakan |
 
 Selalu jalankan seluruh migrasi secara berurutan setelah menarik perubahan terbaru:
 

@@ -65,7 +65,7 @@ const DataTable = ({
   // Reset to first page when search changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, data.length, itemsPerPage]);
 
   // Paginate data
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);

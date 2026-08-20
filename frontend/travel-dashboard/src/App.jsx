@@ -11,6 +11,7 @@ import BookingFormPage from './pages/BookingFormPage';
 import BookingDetailPage from './pages/BookingDetailPage';
 import PaketPage from './pages/PaketPage';
 import StokPerlengkapanPage from './pages/StokPerlengkapanPage';
+import PaymentConfirmationsPage from './pages/PaymentConfirmationsPage';
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
           <Route path="/bookings" element={<BookingsPage />} />
           <Route path="/bookings/new" element={<BookingFormPage />} />
           <Route path="/bookings/:id" element={<BookingDetailPage />} />
+          <Route path="/payments" element={<PaymentConfirmationsPage />} />
         </Route>
       </Route>
     </Routes>

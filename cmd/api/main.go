@@ -16,6 +16,7 @@ import (
 	"erp-azhan/api/internal/addon"
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/airline"
+	"erp-azhan/api/internal/bankaccount"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
 	"erp-azhan/api/internal/dokumen"
@@ -100,6 +101,8 @@ func main() {
 
 	brandRepo := brand.NewRepository(db)
 	brandHandler := brand.NewHandler(brandRepo)
+	bankAccountRepo := bankaccount.NewRepository(db)
+	bankAccountHandler := bankaccount.NewHandler(bankAccountRepo)
 
 	mediaHandler := media.NewHandler()
 
@@ -156,6 +159,8 @@ func main() {
 			r.Get("/bookings", portalHandler.ListBookings)
 			r.Get("/bookings/{id}", portalHandler.GetBookingByID)
 			r.Get("/bookings/{id}/payments", portalHandler.ListPayments)
+			r.Get("/bank-accounts", portalHandler.ListBankAccounts)
+			r.Post("/bookings/{id}/payments", portalHandler.CreatePayment)
 			r.Get("/dokumen", portalHandler.ListDokumen)
 			r.Post("/dokumen", portalHandler.UploadDokumen)
 			r.Post("/media/upload", mediaHandler.UploadPortalMedia)
@@ -194,6 +199,14 @@ func main() {
 			r.Post("/", brandHandler.CreateBrand)
 			r.Put("/{id}", brandHandler.UpdateBrand)
 			r.Delete("/{id}", brandHandler.DeleteBrand)
+		})
+
+		r.Route("/bank-accounts", func(r chi.Router) {
+			r.Use(brand.RequireSuperAdmin)
+			r.Get("/", bankAccountHandler.List)
+			r.Post("/", bankAccountHandler.Create)
+			r.Put("/{id}", bankAccountHandler.Update)
+			r.Delete("/{id}", bankAccountHandler.Delete)
 		})
 
 		// Users (Super Admin Only)
@@ -265,6 +278,7 @@ func main() {
 		r.Put("/perlengkapan-set-template", perlengkapanHandler.UpdateSetTemplate)
 
 		// Payments
+		r.Get("/payments", paymentHandler.ListAllPayments)
 		r.Get("/bookings/{booking_id}/payments", paymentHandler.ListPayments)
 		r.Post("/bookings/{booking_id}/payments", paymentHandler.CreatePayment)
 		r.Put("/payments/{id}/status", paymentHandler.UpdatePaymentStatus)
