@@ -37,16 +37,16 @@ const CurrencyInput = ({
     }
   };
 
-  const inputBaseClasses = 'w-full rounded-md border border-neutral-300 py-2 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors';
+  const inputBaseClasses = 'h-11 w-full min-w-0 rounded-md border border-neutral-300 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors';
   const disabledClasses = disabled ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : 'bg-white';
   const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500 ring-danger-500' : '';
-  const paddingClass = prefix ? 'pl-11 pr-3' : 'px-3';
+  const paddingClass = prefix ? 'pl-14 pr-3' : 'px-3';
 
   return (
     <FormField label={label} error={error} required={required} className={className}>
       <div className="relative">
         {prefix && (
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500 text-sm font-medium font-body border-r border-neutral-200 pr-2 my-1.5">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex w-11 items-center justify-center border-r border-neutral-200 text-sm font-medium text-neutral-500 font-body">
             {prefix}
           </div>
         )}

@@ -55,7 +55,11 @@ func main() {
 	}
 	defer db.Close()
 
-	_, err = db.Exec("INSERT INTO admin_users (email, password_hash) VALUES (?, ?)", email, string(hash))
+	_, err = db.Exec(`
+		INSERT INTO admin_users (email, password_hash)
+		VALUES (?, ?)
+		ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)
+	`, email, string(hash))
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
 		if errorsAs(err, &mysqlErr) && mysqlErr.Number == 1062 { // Duplicate entry

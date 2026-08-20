@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { 
   getBooking, 
   updateBookingStatus, 
+  cancelBookingSeatBlock,
   listPayments, 
   createPayment, 
   updatePaymentStatus, 
@@ -157,6 +158,8 @@ const BookingDetailPage = () => {
   };
 
   const [cancelConfirmModal, setCancelConfirmModal] = useState(false);
+  const [cancelSeatBlockModal, setCancelSeatBlockModal] = useState(false);
+  const [seatBlockLoading, setSeatBlockLoading] = useState(false);
 
   const handleBookingStatus = (newStatus) => {
     if (newStatus === "batal") {
@@ -174,6 +177,20 @@ const BookingDetailPage = () => {
     } catch (err) {
       setError(err.response?.data?.error || "Gagal mengubah status booking");
       setCancelConfirmModal(false);
+    }
+  };
+
+  const handleCancelSeatBlock = async () => {
+    setSeatBlockLoading(true);
+    try {
+      await cancelBookingSeatBlock(id);
+      setCancelSeatBlockModal(false);
+      await fetchAll();
+    } catch (err) {
+      setError(err.response?.data?.error || "Gagal melepas blok kursi");
+      setCancelSeatBlockModal(false);
+    } finally {
+      setSeatBlockLoading(false);
     }
   };
 
@@ -443,8 +460,17 @@ const BookingDetailPage = () => {
         />
 
         {/* Action Buttons Top Bar */}
-        {nextActions.length > 0 && (
+        {(nextActions.length > 0 || booking.is_seat_blocked) && (
           <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+            {booking.is_seat_blocked && booking.status !== 'batal' && (
+              <Button
+                variant="secondary"
+                onClick={() => setCancelSeatBlockModal(true)}
+                className="text-xs sm:text-sm font-medium"
+              >
+                Cancel Block Seat
+              </Button>
+            )}
             {nextActions.map(action => (
               <Button 
                 key={action.status} 
@@ -566,8 +592,8 @@ const BookingDetailPage = () => {
               </p>
               <p className="text-xs font-body text-neutral-600">
                 Status Kursi:{" "}
-                <span className={`font-semibold ${booking.status === 'baru' ? 'text-warning-600' : booking.status === 'batal' ? 'text-neutral-400' : 'text-success-600'}`}>
-                  {booking.status === 'baru' ? 'Belum Terkunci' : booking.status === 'batal' ? 'Dibatalkan' : 'Terkunci'}
+                <span className={`font-semibold ${booking.is_seat_blocked ? 'text-success-600' : booking.status === 'batal' ? 'text-neutral-400' : 'text-warning-600'}`}>
+                  {booking.is_seat_blocked ? 'Terkunci' : booking.status === 'batal' ? 'Dibatalkan' : 'Tidak Diblokir'}
                 </span>
               </p>
             </div>
@@ -927,7 +953,8 @@ const BookingDetailPage = () => {
           {addonError && <Alert variant="error" message={addonError} onClose={() => setAddonError(null)} />}
 
           <Input
-            label="Nama Layanan / Add-on *"
+            label="Nama Layanan / Add-on"
+            className="!mb-0"
             placeholder="Contoh: Kereta Cepat Haramain, Upgrade Kamar Ka'bah View"
             required
             value={addonForm.nama}
@@ -935,7 +962,8 @@ const BookingDetailPage = () => {
           />
 
           <CurrencyInput
-            label="Nominal Biaya (Rp) *"
+            label="Nominal Biaya (Rp)"
+            className="!mb-0"
             placeholder="0"
             required
             value={addonForm.nominal}
@@ -960,19 +988,21 @@ const BookingDetailPage = () => {
         <form onSubmit={handleUpdateDiskonSubmit} className="space-y-4">
           {diskonError && <Alert variant="error" message={diskonError} onClose={() => setDiskonError(null)} />}
 
+          <Input
+            label="Keterangan / Alasan Diskon"
+            className="!mb-0"
+            placeholder="Contoh: Promo Early Bird, Diskon Keluarga, Voucher Milad"
+            value={diskonForm.diskon_keterangan}
+            onChange={(e) => setDiskonForm({ ...diskonForm, diskon_keterangan: e.target.value })}
+          />
+
           <CurrencyInput
-            label="Nominal Diskon (Rp) *"
+            label="Nominal Diskon (Rp)"
+            className="!mb-0"
             placeholder="0"
             required
             value={diskonForm.diskon}
             onChange={(val) => setDiskonForm({ ...diskonForm, diskon: val })}
-          />
-
-          <Input
-            label="Keterangan / Alasan Diskon"
-            placeholder="Contoh: Promo Early Bird, Diskon Keluarga, Voucher Milad"
-            value={diskonForm.diskon_keterangan}
-            onChange={(e) => setDiskonForm({ ...diskonForm, diskon_keterangan: e.target.value })}
           />
 
           <div className="flex justify-between items-center pt-4 border-t border-neutral-200">
@@ -1010,7 +1040,8 @@ const BookingDetailPage = () => {
 
           <div>
             <CurrencyInput 
-              label="Jumlah (Rp) *" 
+              label="Jumlah (Rp)"
+              className="!mb-0"
               required 
               value={paymentForm.jumlah}
               onChange={(val) => {
@@ -1044,7 +1075,9 @@ const BookingDetailPage = () => {
           </div>
 
           <CustomDropdown 
-            label="Metode Pembayaran *" 
+            label="Metode Pembayaran"
+            className="!mb-0"
+            required
             value={paymentForm.metode}
             onChange={(val) => setPaymentForm({...paymentForm, metode: val})}
             options={[
@@ -1056,7 +1089,8 @@ const BookingDetailPage = () => {
 
           <Input 
             type="date" 
-            label="Tanggal Pembayaran *" 
+            label="Tanggal Pembayaran"
+            className="!mb-0"
             required 
             value={paymentForm.tanggal}
             onChange={(e) => setPaymentForm({...paymentForm, tanggal: e.target.value})}
@@ -1118,6 +1152,27 @@ const BookingDetailPage = () => {
       </Modal>
 
       {/* Modal Konfirmasi Pembatalan Booking */}
+      <Modal
+        isOpen={cancelSeatBlockModal}
+        onClose={() => !seatBlockLoading && setCancelSeatBlockModal(false)}
+        title="Lepaskan Block Seat"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-600 font-body">
+            Kursi akan dikembalikan ke kuota paket. Booking, data jamaah, pembayaran, dan tagihan tetap aktif serta tidak dibatalkan.
+          </p>
+          <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 text-xs text-warning-800">
+            Status booking tetap <strong>{booking.status.toUpperCase()}</strong> setelah blok kursi dilepas.
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
+            <Button variant="ghost" onClick={() => setCancelSeatBlockModal(false)} disabled={seatBlockLoading}>Kembali</Button>
+            <Button variant="danger" onClick={handleCancelSeatBlock} disabled={seatBlockLoading}>
+              {seatBlockLoading ? "Memproses..." : "Ya, Lepaskan Kursi"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         isOpen={cancelConfirmModal}
         onClose={() => setCancelConfirmModal(false)}

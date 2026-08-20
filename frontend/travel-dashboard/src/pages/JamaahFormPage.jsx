@@ -102,7 +102,7 @@ const JamaahFormPage = () => {
       <form onSubmit={handleSubmit} className="space-y-6">
         <MetaBox title="Identitas Jamaah">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Nama Lengkap *" name="nama_lengkap" value={formData.nama_lengkap} onChange={handleChange} required />
+            <Input label="Nama Lengkap" name="nama_lengkap" value={formData.nama_lengkap} onChange={handleChange} required />
             <Input label="Nama Ayah Kandung" name="nama_ayah_kandung" value={formData.nama_ayah_kandung} onChange={handleChange} />
             <Input label="NIK" name="nik" value={formData.nik || ''} onChange={handleChange} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

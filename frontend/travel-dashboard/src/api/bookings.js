@@ -28,6 +28,11 @@ export const updateBookingStatus = async (id, status) => {
   return data;
 };
 
+export const cancelBookingSeatBlock = async (id) => {
+  const { data } = await api.delete(`/api/admin/bookings/${id}/seat-block`);
+  return data;
+};
+
 export const listPayments = async (bookingId) => {
   const { data } = await api.get(`/api/admin/bookings/${bookingId}/payments`);
   return data;

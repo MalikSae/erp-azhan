@@ -55,6 +55,23 @@ func (h *Handler) GetItinerary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, it)
 }
 
+// GetPublicItinerary godoc
+// GET /api/itineraries/{id}
+// Hanya mengembalikan itinerary yang terkait jadwal berstatus published.
+func (h *Handler) GetPublicItinerary(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	it, err := h.repo.GetPublishedByID(r.Context(), id)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, it)
+}
+
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 // CreateItinerary godoc

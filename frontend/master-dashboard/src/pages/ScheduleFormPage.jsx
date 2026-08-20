@@ -52,9 +52,14 @@ const ScheduleFormPage = () => {
     berangkat_tanggal: '',
     berangkat_jam: '',
     berangkat_kode_penerbangan: '',
+    berangkat_bandara_asal: '',
+    berangkat_bandara_tujuan: '',
     pulang_tanggal: '',
     pulang_jam: '',
     pulang_kode_penerbangan: '',
+    pulang_bandara_asal: '',
+    pulang_bandara_tujuan: '',
+    transit_bandara: '',
     hotel_mekkah_id: '',
     hotel_madinah_id: '',
     harga_quad: '',
@@ -112,9 +117,14 @@ const ScheduleFormPage = () => {
             berangkat_tanggal: scheduleData.berangkat_tanggal ? scheduleData.berangkat_tanggal.split('T')[0] : '',
             berangkat_jam: scheduleData.berangkat_jam || '',
             berangkat_kode_penerbangan: scheduleData.berangkat_kode_penerbangan || '',
+            berangkat_bandara_asal: scheduleData.berangkat_bandara_asal || '',
+            berangkat_bandara_tujuan: scheduleData.berangkat_bandara_tujuan || '',
             pulang_tanggal: scheduleData.pulang_tanggal ? scheduleData.pulang_tanggal.split('T')[0] : '',
             pulang_jam: scheduleData.pulang_jam || '',
             pulang_kode_penerbangan: scheduleData.pulang_kode_penerbangan || '',
+            pulang_bandara_asal: scheduleData.pulang_bandara_asal || '',
+            pulang_bandara_tujuan: scheduleData.pulang_bandara_tujuan || '',
+            transit_bandara: scheduleData.transit_bandara || '',
             hotel_mekkah_id: scheduleData.hotel_mekkah?.id || scheduleData.hotel_mekkah_id || '',
             hotel_madinah_id: scheduleData.hotel_madinah?.id || scheduleData.hotel_madinah_id || '',
             harga_quad: scheduleData.harga_quad || '',
@@ -209,9 +219,15 @@ const ScheduleFormPage = () => {
 
 
   const formatCurrency = (val) => {
-    if (!val) return '';
+    if (val === '' || val === null || val === undefined) return '';
     const num = val.toString().replace(/\D/g, '');
     return num.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  const parseCurrency = (val) => {
+    if (val === '' || val === null || val === undefined) return 0;
+    const digits = val.toString().replace(/\D/g, '');
+    return digits ? Number(digits) : 0;
   };
 
   const handleCurrencyChange = (e) => {
@@ -219,7 +235,7 @@ const ScheduleFormPage = () => {
     const rawValue = value.replace(/\D/g, '');
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: rawValue
     }));
   };
 
@@ -269,6 +285,18 @@ const ScheduleFormPage = () => {
     setFormError(null);
 
     try {
+      const hargaQuad = parseCurrency(formData.harga_quad);
+      const hargaTriple = parseCurrency(formData.harga_triple);
+      const hargaDouble = parseCurrency(formData.harga_double);
+      const hargaCoret = formData.is_promo && formData.harga_coret
+        ? parseCurrency(formData.harga_coret)
+        : null;
+
+      if (hargaCoret !== null && hargaCoret <= hargaQuad) {
+        setFormError('Harga coret harus lebih besar dari Harga Quad karena merupakan harga sebelum promo.');
+        return;
+      }
+
       const payload = {
         ...formData,
         is_promo: !!formData.is_promo,
@@ -279,10 +307,10 @@ const ScheduleFormPage = () => {
         maskapai_id: parseInt(formData.maskapai_id, 10),
         hotel_mekkah_id: parseInt(formData.hotel_mekkah_id, 10),
         hotel_madinah_id: parseInt(formData.hotel_madinah_id, 10),
-        harga_quad: parseFloat(formData.harga_quad),
-        harga_triple: parseFloat(formData.harga_triple),
-        harga_double: parseFloat(formData.harga_double),
-        harga_coret: formData.is_promo && formData.harga_coret ? parseFloat(formData.harga_coret) : null,
+        harga_quad: hargaQuad,
+        harga_triple: hargaTriple,
+        harga_double: hargaDouble,
+        harga_coret: hargaCoret,
         status: formData.status,
         itinerary_id: formData.itinerary_id ? parseInt(formData.itinerary_id, 10) : null,
         include_items: includeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
@@ -449,11 +477,22 @@ const ScheduleFormPage = () => {
                   <Input label="Jam Berangkat" className="text-center !mb-0" type="text" name="berangkat_jam" value={formData.berangkat_jam} onChange={handleTimeChange} placeholder="mis. 09:00" />
                   <Input label="Kode Penerbangan Berangkat" className="!mb-0" name="berangkat_kode_penerbangan" value={formData.berangkat_kode_penerbangan} onChange={handleChange} placeholder="mis. SV 821" />
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input label="Bandara Asal Berangkat" className="!mb-0" name="berangkat_bandara_asal" value={formData.berangkat_bandara_asal} onChange={handleChange} placeholder="mis. Jakarta (CGK)" />
+                  <Input label="Bandara Tujuan Berangkat" className="!mb-0" name="berangkat_bandara_tujuan" value={formData.berangkat_bandara_tujuan} onChange={handleChange} placeholder="mis. Jeddah (JED)" />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Input label="Tanggal Pulang" className="!mb-0" type="date" name="pulang_tanggal" value={formData.pulang_tanggal} onChange={handleChange} required />
                   <Input label="Jam Pulang" className="text-center !mb-0" type="text" name="pulang_jam" value={formData.pulang_jam} onChange={handleTimeChange} placeholder="mis. 15:30 +1" />
                   <Input label="Kode Penerbangan Pulang" className="!mb-0" name="pulang_kode_penerbangan" value={formData.pulang_kode_penerbangan} onChange={handleChange} placeholder="mis. SV 822" />
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input label="Bandara Asal Pulang" className="!mb-0" name="pulang_bandara_asal" value={formData.pulang_bandara_asal} onChange={handleChange} placeholder="mis. Madinah (MED)" />
+                  <Input label="Bandara Tujuan Pulang" className="!mb-0" name="pulang_bandara_tujuan" value={formData.pulang_bandara_tujuan} onChange={handleChange} placeholder="mis. Jakarta (CGK)" />
+                </div>
+                {!formData.is_direct_flight && (
+                  <Input label="Bandara Transit" className="!mb-0" name="transit_bandara" value={formData.transit_bandara} onChange={handleChange} placeholder="mis. Doha (DOH), 3 jam" />
+                )}
               </div>
             </MetaBox>
 
@@ -520,8 +559,8 @@ const ScheduleFormPage = () => {
                   
                   {formData.is_promo && (
                     <div className="pl-[148px]">
-                      {formData.harga_coret && parseInt(formData.harga_coret.toString().replace(/\D/g, '')) <= parseInt(formData.harga_quad.toString().replace(/\D/g, '')) && (
-                        <p className="text-xs text-danger-600 mt-1">Harga coret harus lebih besar!</p>
+                      {formData.harga_coret && parseCurrency(formData.harga_coret) <= parseCurrency(formData.harga_quad) && (
+                        <p className="text-xs text-danger-600 mt-1">Harga coret harus lebih besar dari Harga Quad.</p>
                       )}
                     </div>
                   )}

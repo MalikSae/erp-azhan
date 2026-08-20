@@ -67,7 +67,7 @@ const CustomDropdown = ({
           type="button"
           disabled={disabled}
           onClick={() => !disabled && setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between rounded-md border px-3 py-2 text-sm font-body text-left transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500
+          className={`h-11 w-full min-w-0 flex items-center justify-between rounded-md border px-3 text-sm font-body text-left transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500
             ${disabled ? 'bg-neutral-50 text-neutral-400 border-neutral-200 cursor-not-allowed' : 'bg-white cursor-pointer'}
             ${error 
               ? 'border-danger-500 focus:border-danger-500 ring-danger-500' 

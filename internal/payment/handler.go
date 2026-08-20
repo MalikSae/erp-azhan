@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
 	"erp-azhan/api/internal/identity"
+	"github.com/go-chi/chi/v5"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler payment.
@@ -19,6 +19,17 @@ type Handler struct {
 // NewHandler membuat Handler baru.
 func NewHandler(repo *Repository) *Handler {
 	return &Handler{repo: repo}
+}
+
+// ListDailyBrandTransactions mengembalikan transaksi terkonfirmasi 30 hari per brand.
+// GET /api/admin/analytics/transactions-30-days
+func (h *Handler) ListDailyBrandTransactions(w http.ResponseWriter, r *http.Request) {
+	items, err := h.repo.ListDailyBrandTransactions(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "gagal mengambil data transaksi")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
@@ -32,7 +43,7 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	brandID := identity.GetBrandID(r.Context())
-	
+
 	// Verify booking exists and belongs to brand
 	exists, err := h.repo.BookingExistsForBrand(r.Context(), bookingID, brandID)
 	if err != nil {

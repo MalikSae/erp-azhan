@@ -42,9 +42,14 @@ type Schedule struct {
 	BerangkatTanggal         string       `json:"berangkat_tanggal"`
 	BerangkatJam             string       `json:"berangkat_jam"`
 	BerangkatKodePenerbangan string       `json:"berangkat_kode_penerbangan"`
+	BerangkatBandaraAsal     string       `json:"berangkat_bandara_asal"`
+	BerangkatBandaraTujuan   string       `json:"berangkat_bandara_tujuan"`
 	PulangTanggal            string       `json:"pulang_tanggal"`
 	PulangJam                string       `json:"pulang_jam"`
 	PulangKodePenerbangan    string       `json:"pulang_kode_penerbangan"`
+	PulangBandaraAsal        string       `json:"pulang_bandara_asal"`
+	PulangBandaraTujuan      string       `json:"pulang_bandara_tujuan"`
+	TransitBandara           string       `json:"transit_bandara"`
 	HotelMekkah              HotelRef     `json:"hotel_mekkah"`
 	HotelMadinah             HotelRef     `json:"hotel_madinah"`
 	HargaQuad                float64      `json:"harga_quad"`
@@ -75,9 +80,14 @@ type PublicSchedule struct {
 	BerangkatTanggal         string       `json:"berangkat_tanggal"`
 	BerangkatJam             string       `json:"berangkat_jam"`
 	BerangkatKodePenerbangan string       `json:"berangkat_kode_penerbangan"`
+	BerangkatBandaraAsal     string       `json:"berangkat_bandara_asal"`
+	BerangkatBandaraTujuan   string       `json:"berangkat_bandara_tujuan"`
 	PulangTanggal            string       `json:"pulang_tanggal"`
 	PulangJam                string       `json:"pulang_jam"`
 	PulangKodePenerbangan    string       `json:"pulang_kode_penerbangan"`
+	PulangBandaraAsal        string       `json:"pulang_bandara_asal"`
+	PulangBandaraTujuan      string       `json:"pulang_bandara_tujuan"`
+	TransitBandara           string       `json:"transit_bandara"`
 	HotelMekkah              HotelRef     `json:"hotel_mekkah"`
 	HotelMadinah             HotelRef     `json:"hotel_madinah"`
 	HargaQuad                float64      `json:"harga_quad"`
@@ -109,9 +119,14 @@ func (s *Schedule) ToPublic() *PublicSchedule {
 		BerangkatTanggal:         s.BerangkatTanggal,
 		BerangkatJam:             s.BerangkatJam,
 		BerangkatKodePenerbangan: s.BerangkatKodePenerbangan,
+		BerangkatBandaraAsal:     s.BerangkatBandaraAsal,
+		BerangkatBandaraTujuan:   s.BerangkatBandaraTujuan,
 		PulangTanggal:            s.PulangTanggal,
 		PulangJam:                s.PulangJam,
 		PulangKodePenerbangan:    s.PulangKodePenerbangan,
+		PulangBandaraAsal:        s.PulangBandaraAsal,
+		PulangBandaraTujuan:      s.PulangBandaraTujuan,
+		TransitBandara:           s.TransitBandara,
 		HotelMekkah:              s.HotelMekkah,
 		HotelMadinah:             s.HotelMadinah,
 		HargaQuad:                s.HargaQuad,
@@ -131,20 +146,20 @@ func (s *Schedule) ToPublic() *PublicSchedule {
 
 // ScheduleListItem dipakai di ListSchedulesAdmin — ringkas, tanpa detail hotel/airline.
 type ScheduleListItem struct {
-	ID               int64  `json:"id"`
-	BrandID          int64  `json:"brand_id"`
-	JadwalNama       string `json:"jadwal_nama"`
-	Status           string `json:"status"`
-	IsPromo          bool   `json:"is_promo"`
-	IsTicketConfirmed bool  `json:"is_ticket_confirmed"`
-	IsDirectFlight    bool  `json:"is_direct_flight"`
-	BerangkatTanggal string `json:"berangkat_tanggal"`
-	SeatTotal        int     `json:"seat_total"`
-	SeatSisa         int     `json:"seat_sisa"`
-	HargaQuad        float64 `json:"harga_quad"`
-	HargaTriple      float64 `json:"harga_triple"`
-	HargaDouble      float64 `json:"harga_double"`
-	AddOns           []AddOnRef `json:"add_ons"`
+	ID                int64      `json:"id"`
+	BrandID           int64      `json:"brand_id"`
+	JadwalNama        string     `json:"jadwal_nama"`
+	Status            string     `json:"status"`
+	IsPromo           bool       `json:"is_promo"`
+	IsTicketConfirmed bool       `json:"is_ticket_confirmed"`
+	IsDirectFlight    bool       `json:"is_direct_flight"`
+	BerangkatTanggal  string     `json:"berangkat_tanggal"`
+	SeatTotal         int        `json:"seat_total"`
+	SeatSisa          int        `json:"seat_sisa"`
+	HargaQuad         float64    `json:"harga_quad"`
+	HargaTriple       float64    `json:"harga_triple"`
+	HargaDouble       float64    `json:"harga_double"`
+	AddOns            []AddOnRef `json:"add_ons"`
 }
 
 // ─── Internal input struct (setelah validasi) ─────────────────────────────────
@@ -163,9 +178,14 @@ type ScheduleInput struct {
 	BerangkatTanggal         string
 	BerangkatJam             string
 	BerangkatKodePenerbangan string
+	BerangkatBandaraAsal     string
+	BerangkatBandaraTujuan   string
 	PulangTanggal            string
 	PulangJam                string
 	PulangKodePenerbangan    string
+	PulangBandaraAsal        string
+	PulangBandaraTujuan      string
+	TransitBandara           string
 	HotelMekkahID            int64
 	HotelMadinahID           int64
 	HargaQuad                float64
@@ -197,9 +217,14 @@ type CreateScheduleRequest struct {
 	BerangkatTanggal         string   `json:"berangkat_tanggal"`
 	BerangkatJam             string   `json:"berangkat_jam"`
 	BerangkatKodePenerbangan string   `json:"berangkat_kode_penerbangan"`
+	BerangkatBandaraAsal     string   `json:"berangkat_bandara_asal"`
+	BerangkatBandaraTujuan   string   `json:"berangkat_bandara_tujuan"`
 	PulangTanggal            string   `json:"pulang_tanggal"`
 	PulangJam                string   `json:"pulang_jam"`
 	PulangKodePenerbangan    string   `json:"pulang_kode_penerbangan"`
+	PulangBandaraAsal        string   `json:"pulang_bandara_asal"`
+	PulangBandaraTujuan      string   `json:"pulang_bandara_tujuan"`
+	TransitBandara           string   `json:"transit_bandara"`
 	HotelMekkahID            int64    `json:"hotel_mekkah_id"`
 	HotelMadinahID           int64    `json:"hotel_madinah_id"`
 	HargaQuad                float64  `json:"harga_quad"`

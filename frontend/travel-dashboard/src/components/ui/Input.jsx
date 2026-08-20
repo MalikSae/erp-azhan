@@ -6,7 +6,7 @@ const Input = ({ label, type = 'text', value, onChange, error, required, placeho
   const isPasswordField = type === 'password';
   const inputType = isPasswordField && showPassword ? 'text' : type;
 
-  const inputBaseClasses = 'w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors';
+  const inputBaseClasses = 'h-11 w-full min-w-0 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors';
   const disabledClasses = disabled || readOnly ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : '';
   const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500' : '';
   const paddingRightClass = isPasswordField ? 'pr-10' : '';

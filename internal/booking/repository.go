@@ -10,12 +10,13 @@ import (
 
 // Sentinel errors
 var (
-	ErrNotFound                         = errors.New("data tidak ditemukan")
-	ErrSeatHabis                        = errors.New("kursi sudah habis, tidak bisa konfirmasi DP")
-	ErrInvalidStatus                    = errors.New("status tidak valid")
+	ErrNotFound                        = errors.New("data tidak ditemukan")
+	ErrSeatHabis                       = errors.New("kursi sudah habis, tidak bisa konfirmasi DP")
+	ErrInvalidStatus                   = errors.New("status tidak valid")
+	ErrSeatBelumDiblokir               = errors.New("kursi booking belum diblokir")
 	ErrTemplatePerlengkapanBelumDiatur = errors.New("template set perlengkapan belum diatur untuk brand ini")
-	ErrPerlengkapanSudahDiberikan       = errors.New("perlengkapan untuk booking ini sudah pernah diberikan")
-	ErrPerlengkapanBelumDiberikan       = errors.New("perlengkapan belum pernah diberikan untuk booking ini")
+	ErrPerlengkapanSudahDiberikan      = errors.New("perlengkapan untuk booking ini sudah pernah diberikan")
+	ErrPerlengkapanBelumDiberikan      = errors.New("perlengkapan belum pernah diberikan untuk booking ini")
 )
 
 type ErrStokKurang struct {
@@ -28,10 +29,10 @@ func (e *ErrStokKurang) Error() string {
 
 // Status yang menandakan kursi sudah terkunci (pernah dp/lebih).
 var lockedStatuses = map[string]bool{
-	"dp":               true,
-	"lunas":            true,
-	"dokumen_lengkap":  true,
-	"siap_berangkat":   true,
+	"dp":              true,
+	"lunas":           true,
+	"dokumen_lengkap": true,
+	"siap_berangkat":  true,
 }
 
 // AllowedProgressFields adalah mapping dari key request ke nama kolom database.
@@ -51,7 +52,7 @@ var AllowedProgressFields = map[string]string{
 // berdasarkan keberadaan dokumen paspor di tabel dokumen_jamaah.
 const selectBookingFull = `
 	SELECT b.id, b.schedule_id, s.jadwal_nama, s.berangkat_tanggal, b.jamaah_id, j.nama_lengkap,
-		b.room_type, b.harga_dasar, b.status, b.total_harga, b.diskon, b.diskon_keterangan,
+		b.room_type, b.harga_dasar, b.status, b.is_seat_blocked, b.total_harga, b.diskon, b.diskon_keterangan,
 		b.progress_paspor, b.progress_visa, b.progress_tiket, b.progress_hotel,
 		b.progress_land_arrangement, b.progress_manasik, b.progress_siskopatuh, b.progress_vaksin_meningitis,
 		b.perlengkapan_status, DATE_FORMAT(b.perlengkapan_tanggal, '%Y-%m-%d') AS perlengkapan_tanggal, b.perlengkapan_diberikan_oleh,
@@ -203,10 +204,11 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 
 	// 1. Ambil booking existing (status lama + schedule_id)
 	var oldStatus string
+	var isSeatBlocked bool
 	var scheduleID int64
 	err = tx.QueryRowContext(ctx,
-		`SELECT status, schedule_id FROM bookings WHERE id=?`, bookingID,
-	).Scan(&oldStatus, &scheduleID)
+		`SELECT status, schedule_id, is_seat_blocked FROM bookings WHERE id=?`, bookingID,
+	).Scan(&oldStatus, &scheduleID, &isSeatBlocked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -224,17 +226,20 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 	}
 
 	// 3. Logic seat_sisa
-	oldIsLocked := lockedStatuses[oldStatus]
 	newIsLocked := lockedStatuses[newStatus]
 
-	if newStatus == "batal" && oldIsLocked {
+	if newStatus == "batal" && isSeatBlocked {
 		// Kembalikan kursi: status lama sudah terkunci, sekarang dibatalkan
 		_, err = tx.ExecContext(ctx,
 			`UPDATE schedules SET seat_sisa = seat_sisa + 1 WHERE id=?`, scheduleID)
 		if err != nil {
 			return nil, fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
 		}
-	} else if newIsLocked && !oldIsLocked {
+		_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE WHERE id=?`, bookingID)
+		if err != nil {
+			return nil, fmt.Errorf("booking.UpdateStatus clear seat block: %w", err)
+		}
+	} else if newIsLocked && oldStatus == "baru" && !isSeatBlocked {
 		// Transisi PERTAMA KALI ke status terkunci (baru→dp, baru→lunas, dst)
 		if seatSisa <= 0 {
 			return nil, ErrSeatHabis
@@ -243,6 +248,10 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 			`UPDATE schedules SET seat_sisa = seat_sisa - 1 WHERE id=?`, scheduleID)
 		if err != nil {
 			return nil, fmt.Errorf("booking.UpdateStatus decrement seat: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=TRUE WHERE id=?`, bookingID)
+		if err != nil {
+			return nil, fmt.Errorf("booking.UpdateStatus mark seat block: %w", err)
 		}
 	}
 	// else: transisi lain (dp→lunas, dll) → seat_sisa tidak berubah
@@ -258,6 +267,38 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 		return nil, fmt.Errorf("booking.UpdateStatus commit: %w", err)
 	}
 
+	return r.GetByID(ctx, bookingID, nil)
+}
+
+// CancelSeatBlock melepaskan kursi tanpa mengubah status maupun data booking.
+func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Booking, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("booking.CancelSeatBlock tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var scheduleID int64
+	var isBlocked bool
+	err = tx.QueryRowContext(ctx, `SELECT schedule_id, is_seat_blocked FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&scheduleID, &isBlocked)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("booking.CancelSeatBlock find: %w", err)
+	}
+	if !isBlocked {
+		return nil, ErrSeatBelumDiblokir
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=LEAST(seat_total, seat_sisa + 1) WHERE id=?`, scheduleID); err != nil {
+		return nil, fmt.Errorf("booking.CancelSeatBlock restore seat: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE WHERE id=?`, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.CancelSeatBlock update: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, fmt.Errorf("booking.CancelSeatBlock commit: %w", err)
+	}
 	return r.GetByID(ctx, bookingID, nil)
 }
 
@@ -512,7 +553,7 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 
 	err := rows.Scan(
 		&b.ID, &b.ScheduleID, &b.JadwalNama, &berangkatTanggal, &b.JamaahID, &b.NamaJamaah,
-		&b.RoomType, &hargaDasar, &b.Status, &totalHarga, &b.Diskon, &diskonKeterangan,
+		&b.RoomType, &hargaDasar, &b.Status, &b.IsSeatBlocked, &totalHarga, &b.Diskon, &diskonKeterangan,
 		&vestigialPaspor, &b.ProgressVisa, &b.ProgressTiket, &b.ProgressHotel,
 		&b.ProgressLandArrangement, &b.ProgressManasik, &b.ProgressSiskopatuh, &b.ProgressVaksinMeningitis,
 		&perlengkapanStatus, &perlengkapanTanggal, &perlengkapanDiberikanOleh,

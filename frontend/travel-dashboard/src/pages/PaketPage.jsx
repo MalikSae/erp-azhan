@@ -345,6 +345,12 @@ const PaketPage = () => {
                       <span className="font-mono text-neutral-900">{selectedSchedule.berangkat_kode_penerbangan}</span>
                     </p>
                   )}
+                  {(selectedSchedule.berangkat_bandara_asal || selectedSchedule.berangkat_bandara_tujuan) && (
+                    <p>
+                      <span className="text-neutral-500">Rute Berangkat:</span>{' '}
+                      <span className="font-medium text-neutral-900">{selectedSchedule.berangkat_bandara_asal || '-'} → {selectedSchedule.berangkat_bandara_tujuan || '-'}</span>
+                    </p>
+                  )}
                   <p>
                     <span className="text-neutral-500">Kepulangan:</span>{' '}
                     <span className="font-medium text-neutral-900">
@@ -357,10 +363,19 @@ const PaketPage = () => {
                       <span className="font-mono text-neutral-900">{selectedSchedule.pulang_kode_penerbangan}</span>
                     </p>
                   )}
+                  {(selectedSchedule.pulang_bandara_asal || selectedSchedule.pulang_bandara_tujuan) && (
+                    <p>
+                      <span className="text-neutral-500">Rute Pulang:</span>{' '}
+                      <span className="font-medium text-neutral-900">{selectedSchedule.pulang_bandara_asal || '-'} → {selectedSchedule.pulang_bandara_tujuan || '-'}</span>
+                    </p>
+                  )}
                   <p>
                     <span className="text-neutral-500">Tipe Penerbangan:</span>{' '}
                     <span className="font-medium">{selectedSchedule.is_direct_flight ? 'Direct Flight (Langsung)' : 'Transit'}</span>
                   </p>
+                  {!selectedSchedule.is_direct_flight && selectedSchedule.transit_bandara && (
+                    <p><span className="text-neutral-500">Transit:</span>{' '}<span className="font-medium text-neutral-900">{selectedSchedule.transit_bandara}</span></p>
+                  )}
                 </div>
               </div>
 

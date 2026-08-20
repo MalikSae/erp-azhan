@@ -30,9 +30,14 @@ const selectFull = `
 		DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d') AS berangkat_tanggal,
 		COALESCE(TIME_FORMAT(s.berangkat_jam, '%H:%i'), '') AS berangkat_jam,
 		COALESCE(s.berangkat_kode_penerbangan, '') AS berangkat_kode_penerbangan,
+		COALESCE(s.berangkat_bandara_asal, '') AS berangkat_bandara_asal,
+		COALESCE(s.berangkat_bandara_tujuan, '') AS berangkat_bandara_tujuan,
 		DATE_FORMAT(s.pulang_tanggal, '%Y-%m-%d') AS pulang_tanggal,
 		COALESCE(s.pulang_jam, '') AS pulang_jam,
 		COALESCE(s.pulang_kode_penerbangan, '') AS pulang_kode_penerbangan,
+		COALESCE(s.pulang_bandara_asal, '') AS pulang_bandara_asal,
+		COALESCE(s.pulang_bandara_tujuan, '') AS pulang_bandara_tujuan,
+		COALESCE(s.transit_bandara, '') AS transit_bandara,
 		s.hotel_mekkah_id,
 		COALESCE(hm.name, '') AS hm_name,
 		COALESCE(hm.star_rating, 0) AS hm_star,
@@ -89,13 +94,13 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 			) AS add_ons
 		FROM schedules s
 		WHERE 1=1`
-	
+
 	var args []interface{}
 	if brandID != nil {
 		q += " AND s.brand_id = ?"
 		args = append(args, *brandID)
 	}
-	
+
 	q += " ORDER BY s.created_at DESC"
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
@@ -165,19 +170,21 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 	const q = `
 		INSERT INTO schedules (
 			brand_id, jadwal_nama, status, is_promo, is_ticket_confirmed, is_direct_flight, seat_total, seat_sisa,
-			maskapai_id, berangkat_tanggal, berangkat_jam, berangkat_kode_penerbangan,
-			pulang_tanggal, pulang_jam, pulang_kode_penerbangan,
+			maskapai_id, berangkat_tanggal, berangkat_jam, berangkat_kode_penerbangan, berangkat_bandara_asal, berangkat_bandara_tujuan,
+			pulang_tanggal, pulang_jam, pulang_kode_penerbangan, pulang_bandara_asal, pulang_bandara_tujuan, transit_bandara,
 			hotel_mekkah_id, hotel_madinah_id,
 			harga_quad, harga_triple, harga_double, harga_coret,
 			itinerary_id, include_items, exclude_items,
 			brosur_url, brosur_thumb_url
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	res, err := tx.ExecContext(ctx, q,
 		inp.BrandID, inp.JadwalNama, inp.Status, inp.IsPromo, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
 		nullInt64(inp.MaskapaiID),
 		inp.BerangkatTanggal, nullString(inp.BerangkatJam), nullString(inp.BerangkatKodePenerbangan),
+		nullString(inp.BerangkatBandaraAsal), nullString(inp.BerangkatBandaraTujuan),
 		inp.PulangTanggal, nullString(inp.PulangJam), nullString(inp.PulangKodePenerbangan),
+		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
 		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaCoret,
 		inp.ItineraryID, includeJSON, excludeJSON,
@@ -228,8 +235,8 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 	const q = `
 		UPDATE schedules SET
 			brand_id=?, jadwal_nama=?, status=COALESCE(NULLIF(?, ''), status), is_promo=?, is_ticket_confirmed=?, is_direct_flight=?, seat_total=?, seat_sisa=?,
-			maskapai_id=?, berangkat_tanggal=?, berangkat_jam=?, berangkat_kode_penerbangan=?,
-			pulang_tanggal=?, pulang_jam=?, pulang_kode_penerbangan=?,
+			maskapai_id=?, berangkat_tanggal=?, berangkat_jam=?, berangkat_kode_penerbangan=?, berangkat_bandara_asal=?, berangkat_bandara_tujuan=?,
+			pulang_tanggal=?, pulang_jam=?, pulang_kode_penerbangan=?, pulang_bandara_asal=?, pulang_bandara_tujuan=?, transit_bandara=?,
 			hotel_mekkah_id=?, hotel_madinah_id=?,
 			harga_quad=?, harga_triple=?, harga_double=?, harga_coret=?,
 			itinerary_id=?, include_items=?, exclude_items=?,
@@ -240,7 +247,9 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 		finalBrandID, inp.JadwalNama, inp.Status, inp.IsPromo, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
 		nullInt64(inp.MaskapaiID),
 		inp.BerangkatTanggal, nullString(inp.BerangkatJam), nullString(inp.BerangkatKodePenerbangan),
+		nullString(inp.BerangkatBandaraAsal), nullString(inp.BerangkatBandaraTujuan),
 		inp.PulangTanggal, nullString(inp.PulangJam), nullString(inp.PulangKodePenerbangan),
+		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
 		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaCoret,
 		inp.ItineraryID, includeJSON, excludeJSON,
@@ -427,7 +436,9 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		&s.ID, &s.BrandID, &s.JadwalNama, &s.Status, &s.IsPromo, &s.IsTicketConfirmed, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
 		&maskapaiID, &maskapaiName, &maskapaiLogo,
 		&s.BerangkatTanggal, &s.BerangkatJam, &s.BerangkatKodePenerbangan,
+		&s.BerangkatBandaraAsal, &s.BerangkatBandaraTujuan,
 		&s.PulangTanggal, &s.PulangJam, &s.PulangKodePenerbangan,
+		&s.PulangBandaraAsal, &s.PulangBandaraTujuan, &s.TransitBandara,
 		&hotelMekkahID, &hmName, &hmStar, &hmDist,
 		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist,
 		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaCoret,

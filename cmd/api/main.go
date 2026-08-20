@@ -132,6 +132,7 @@ func main() {
 
 	// Public: jadwal yang sudah published (tanpa prefix /admin)
 	r.With(requireDB(db)).Get("/api/schedules", scheduleHandler.ListSchedulesPublic)
+	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: resolve domain ke brand
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
@@ -241,6 +242,7 @@ func main() {
 		r.Get("/bookings/{id}", bookingHandler.GetBooking)
 		r.Post("/bookings", bookingHandler.CreateBooking)
 		r.Put("/bookings/{id}/status", bookingHandler.UpdateBookingStatus)
+		r.Delete("/bookings/{id}/seat-block", bookingHandler.CancelSeatBlock)
 		r.Post("/bookings/{id}/addons", bookingHandler.AddBookingAddon)
 		r.Delete("/bookings/{id}/addons/{addon_id}", bookingHandler.DeleteBookingAddon)
 		r.Put("/bookings/{id}/diskon", bookingHandler.UpdateBookingDiskon)
@@ -267,6 +269,9 @@ func main() {
 		r.Post("/bookings/{booking_id}/payments", paymentHandler.CreatePayment)
 		r.Put("/payments/{id}/status", paymentHandler.UpdatePaymentStatus)
 		r.Delete("/payments/{id}", paymentHandler.DeletePayment)
+
+		// Analytics lintas brand (Super Admin Only)
+		r.With(brand.RequireSuperAdmin).Get("/analytics/transactions-30-days", paymentHandler.ListDailyBrandTransactions)
 	})
 
 	// ─── Start Server ─────────────────────────────────────────────────────────

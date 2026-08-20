@@ -90,7 +90,7 @@ const BookingFormPage = () => {
         <MetaBox title="Pilih Jamaah dan Paket">
           <div className="space-y-4">
             <CustomDropdown 
-              label="Pilih Jamaah *" 
+              label="Pilih Jamaah"
               name="jamaah_id" 
               value={formData.jamaah_id} 
               onChange={handleChange} 
@@ -103,7 +103,7 @@ const BookingFormPage = () => {
             />
 
             <CustomDropdown 
-              label="Pilih Paket (Hanya Publish) *" 
+              label="Pilih Paket (Hanya Publish)"
               name="schedule_id" 
               value={formData.schedule_id} 
               onChange={handleChange} 

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
-	"erp-azhan/api/internal/identity"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler schedule.
@@ -267,7 +267,7 @@ func (h *Handler) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 // Mengembalikan *ScheduleInput yang sudah siap pakai, atau false jika ada gate yang gagal.
 func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWriter, req *CreateScheduleRequest) (*ScheduleInput, bool) {
 	const dateLayout = "2006-01-02"
-	
+
 	ctxBrandID := identity.GetBrandID(ctx)
 	var finalBrandID int64
 	if ctxBrandID != nil {
@@ -473,9 +473,14 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		BerangkatTanggal:         req.BerangkatTanggal,
 		BerangkatJam:             req.BerangkatJam,
 		BerangkatKodePenerbangan: req.BerangkatKodePenerbangan,
+		BerangkatBandaraAsal:     strings.TrimSpace(req.BerangkatBandaraAsal),
+		BerangkatBandaraTujuan:   strings.TrimSpace(req.BerangkatBandaraTujuan),
 		PulangTanggal:            req.PulangTanggal,
 		PulangJam:                req.PulangJam,
 		PulangKodePenerbangan:    req.PulangKodePenerbangan,
+		PulangBandaraAsal:        strings.TrimSpace(req.PulangBandaraAsal),
+		PulangBandaraTujuan:      strings.TrimSpace(req.PulangBandaraTujuan),
+		TransitBandara:           strings.TrimSpace(req.TransitBandara),
 		HotelMekkahID:            req.HotelMekkahID,
 		HotelMadinahID:           req.HotelMadinahID,
 		HargaQuad:                req.HargaQuad,

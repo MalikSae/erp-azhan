@@ -26,3 +26,11 @@ type CreatePaymentRequest struct {
 type UpdatePaymentStatusRequest struct {
 	Status string `json:"status"`
 }
+
+// DailyBrandTransaction adalah agregasi pembayaran terkonfirmasi per brand dan hari.
+type DailyBrandTransaction struct {
+	Date        string  `json:"date"`
+	BrandID     int64   `json:"brand_id"`
+	TotalAmount float64 `json:"total_amount"`
+	Count       int     `json:"count"`
+}

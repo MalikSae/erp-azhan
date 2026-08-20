@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
 	"erp-azhan/api/internal/identity"
+	"github.com/go-chi/chi/v5"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler booking.
@@ -30,12 +30,12 @@ var validRoomTypes = map[string]bool{
 
 // validStatuses berisi enum status booking yang valid.
 var validStatuses = map[string]bool{
-	"baru":             true,
-	"dp":               true,
-	"lunas":            true,
-	"dokumen_lengkap":  true,
-	"siap_berangkat":   true,
-	"batal":            true,
+	"baru":            true,
+	"dp":              true,
+	"lunas":           true,
+	"dokumen_lengkap": true,
+	"siap_berangkat":  true,
+	"batal":           true,
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
@@ -184,6 +184,26 @@ func (h *Handler) UpdateBookingStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, err := h.repo.UpdateBookingStatus(r.Context(), id, req.Status)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
+}
+
+// CancelSeatBlock melepaskan blok kursi tanpa membatalkan booking.
+// DELETE /api/admin/bookings/{id}/seat-block
+func (h *Handler) CancelSeatBlock(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	brandID := identity.GetBrandID(r.Context())
+	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	b, err := h.repo.CancelSeatBlock(r.Context(), id)
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -410,6 +430,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "kursi sudah habis, tidak bisa konfirmasi DP")
 	case errors.Is(err, ErrInvalidStatus):
 		writeError(w, http.StatusBadRequest, "status tidak valid")
+	case errors.Is(err, ErrSeatBelumDiblokir):
+		writeError(w, http.StatusConflict, "kursi booking ini sudah tidak diblokir")
 	case errors.Is(err, ErrTemplatePerlengkapanBelumDiatur):
 		writeError(w, http.StatusBadRequest, "template set perlengkapan belum diatur untuk brand ini")
 	case errors.Is(err, ErrPerlengkapanSudahDiberikan):

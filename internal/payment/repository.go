@@ -9,9 +9,9 @@ import (
 
 // Sentinel errors
 var (
-	ErrNotFound       = errors.New("data tidak ditemukan")
-	ErrCannotDelete   = errors.New("tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
-	ErrInvalidStatus  = errors.New("status tidak valid")
+	ErrNotFound      = errors.New("data tidak ditemukan")
+	ErrCannotDelete  = errors.New("tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
+	ErrInvalidStatus = errors.New("status tidak valid")
 )
 
 // Repository mengelola semua query ke tabel payments.
@@ -22,6 +22,37 @@ type Repository struct {
 // NewRepository membuat instance Repository.
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
+}
+
+// ListDailyBrandTransactions mengambil pembayaran confirmed selama 30 hari,
+// termasuk hari ini, dan mengelompokkannya berdasarkan brand dan tanggal.
+func (r *Repository) ListDailyBrandTransactions(ctx context.Context) ([]DailyBrandTransaction, error) {
+	const q = `
+		SELECT DATE_FORMAT(COALESCE(p.tanggal, DATE(p.created_at)), '%Y-%m-%d') AS payment_date,
+			s.brand_id, COALESCE(SUM(p.jumlah), 0), COUNT(*)
+		FROM payments p
+		JOIN bookings b ON b.id = p.booking_id
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE p.status = 'confirmed'
+			AND COALESCE(p.tanggal, DATE(p.created_at)) BETWEEN CURDATE() - INTERVAL 29 DAY AND CURDATE()
+		GROUP BY payment_date, s.brand_id
+		ORDER BY payment_date ASC, s.brand_id ASC`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("payment.ListDailyBrandTransactions: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]DailyBrandTransaction, 0)
+	for rows.Next() {
+		var item DailyBrandTransaction
+		if err := rows.Scan(&item.Date, &item.BrandID, &item.TotalAmount, &item.Count); err != nil {
+			return nil, fmt.Errorf("payment.ListDailyBrandTransactions scan: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────

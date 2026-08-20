@@ -58,6 +58,24 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (*Itinerary, error) 
 	return r.fetchFull(ctx, id)
 }
 
+// GetPublishedByID mengambil itinerary hanya jika dipakai oleh minimal satu
+// jadwal published. Ini mencegah itinerary paket draft bocor ke endpoint publik.
+func (r *Repository) GetPublishedByID(ctx context.Context, id int64) (*Itinerary, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM schedules
+			WHERE itinerary_id = ? AND status = 'published'
+		)`, id).Scan(&exists)
+	if err != nil {
+		return nil, fmt.Errorf("itinerary.GetPublishedByID: %w", err)
+	}
+	if !exists {
+		return nil, ErrNotFound
+	}
+	return r.fetchFull(ctx, id)
+}
+
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 // Create menyisipkan itinerary baru beserta days-nya dalam satu transaction.
