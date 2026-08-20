@@ -54,7 +54,7 @@ erp-azhan/
 ├── frontend/
 │   ├── master-dashboard/    # Dashboard Super Admin (Multi-Brand, Master Data, Inventory Global, User Mgmt)
 │   └── travel-dashboard/    # Dashboard Travel Partner (Katalog Paket, Jamaah, Booking, Progress, Stok Cabang)
-├── migrations/              # Script dan file SQL migrasi database (001 - 025)
+├── migrations/              # Script dan file SQL migrasi database (001 - 027)
 ├── uploads/                 # Storage lokal file upload media, foto, & dokumen
 ├── .env.example             # Template konfigurasi environment
 ├── go.mod
@@ -137,6 +137,54 @@ npm run dev
 ```
 > Berjalan di **`http://localhost:5174`**
 
+### 4. Membuat / Mereset Akun Super Admin
+
+Gunakan command seed berikut. Jangan menyimpan password produksi di README atau source code.
+
+```powershell
+go run cmd/seed-admin/main.go admin@example.com "password-minimal-8-karakter"
+```
+
+Super Admin Grup (`brand_id = null`) masuk melalui Master Dashboard. Admin yang terikat ke brand masuk melalui Travel Dashboard.
+
+### 5. Verifikasi Build
+
+```powershell
+go test ./...
+
+cd frontend/master-dashboard
+npm run build
+
+cd ../travel-dashboard
+npm run build
+```
+
+---
+
+## Fitur Dashboard Terkini
+
+### Master Dashboard (`:5173`)
+
+- Ringkasan jumlah brand, paket terbit, hotel, dan maskapai dari API aktual.
+- Daftar keberangkatan terdekat, kapasitas kursi aktif, serta distribusi status paket.
+- Line chart transaksi terkonfirmasi selama 30 hari terakhir, dengan garis dan warna berbeda untuk setiap brand.
+- Pengelolaan brand, pengguna, paket, hotel, maskapai, itinerary, add-on, inventory, dan laporan lintas brand.
+
+### Travel Dashboard (`:5174`)
+
+- Dashboard operasional berisi statistik booking, pembayaran, keberangkatan, tindak lanjut, dan kesiapan perlengkapan.
+- Grafik arus pembayaran 30 hari berdasarkan transaksi terkonfirmasi.
+- Pengelolaan jamaah, booking, add-on, diskon, pembayaran, progress dokumen, dan distribusi perlengkapan.
+- Pembatalan **block seat** tanpa membatalkan data booking.
+- Form dan modal menggunakan susunan label/input yang konsisten dan responsif.
+
+### Paket dan Penerbangan
+
+- Paket mendukung rute keberangkatan dan kepulangan lengkap, termasuk titik transit.
+- Itinerary paket tersedia melalui endpoint publik dan admin.
+- Harga Quad, Triple, dan Double disimpan sebagai nilai numerik utuh meskipun input ditampilkan dalam format Rupiah.
+- Harga coret adalah harga sebelum promo sehingga wajib lebih besar dari Harga Quad.
+
 ---
 
 ## Ringkasan Endpoint API
@@ -146,6 +194,7 @@ npm run dev
 |---|---|---|
 | `GET` | `/api/health` | Status kesehatan API & koneksi database |
 | `GET` | `/api/schedules` | List paket/jadwal yang berstatus *published* (publik) |
+| `GET` | `/api/itineraries/{id}` | Detail itinerary paket publik |
 | `GET` | `/api/public/brand` | Resolusi info brand berdasarkan domain / subdomain |
 | `GET` | `/uploads/*` | Static file server untuk media, foto, & dokumen |
 
@@ -194,6 +243,7 @@ npm run dev
 | `CRUD` | `/api/admin/schedules` | Manajemen paket/jadwal keberangkatan |
 | `PUT` | `/api/admin/schedules/{id}/status` | Update status publikasi paket (*draft*, *published*, *archived*) |
 | `PUT` | `/api/admin/schedules/{id}/seat` | Update kuota total kursi paket |
+| `GET` | `/api/admin/analytics/transactions-30-days` | *(Super Admin)* Agregasi transaksi terkonfirmasi 30 hari per brand |
 
 #### C. Data Jamaah & Dokumen
 | Method | Endpoint | Deskripsi |
@@ -207,6 +257,7 @@ npm run dev
 | Method | Endpoint | Deskripsi |
 |---|---|---|
 | `CRUD` | `/api/admin/bookings` | Pemesanan paket jamaah & update status order (*draft*, *dp*, *lunas*, *batal*) |
+| `DELETE` | `/api/admin/bookings/{id}/seat-block` | Batalkan block seat tanpa menghapus atau membatalkan booking |
 | `POST` | `/api/admin/bookings/{id}/addons` | Tambah add-on berbayar ke booking tertentu |
 | `DELETE`| `/api/admin/bookings/{id}/addons/{addon_id}`| Hapus add-on dari booking |
 | `PUT` | `/api/admin/bookings/{id}/diskon` | Update nominal diskon transaksi booking |
@@ -228,7 +279,7 @@ npm run dev
 |---|---|---|
 | `GET` | `/api/admin/bookings/{booking_id}/payments` | List riwayat pembayaran suatu booking |
 | `POST` | `/api/admin/bookings/{booking_id}/payments` | Pencatatan pembayaran & upload bukti transfer |
-| `PUT` | `/api/admin/payments/{id}/status` | Verifikasi status pembayaran (*pending*, *verified*, *rejected*) |
+| `PUT` | `/api/admin/payments/{id}/status` | Konfirmasi pembayaran berstatus *pending* menjadi *confirmed* |
 | `DELETE`| `/api/admin/payments/{id}` | Hapus catatan pembayaran |
 | `POST` | `/api/admin/media/upload` | Upload gambar/dokumen multipart (foto hotel, logo maskapai, dokumen jamaah, bukti bayar) |
 
@@ -243,3 +294,18 @@ Semua response error mengikuti format standar Bahasa Indonesia:
 }
 ```
 List kosong selalu mengembalikan array `[]`, bukan `null`.
+
+---
+
+## Migrasi Terbaru
+
+| File | Perubahan |
+|---|---|
+| `026_schedule_flight_routes.sql` | Menambahkan data rute pergi, transit, tujuan, dan rute pulang pada paket |
+| `027_booking_seat_block_state.sql` | Menyimpan status pembatalan block seat secara terpisah dari status booking |
+
+Selalu jalankan seluruh migrasi secara berurutan setelah menarik perubahan terbaru:
+
+```powershell
+go run migrations/run.go
+```
