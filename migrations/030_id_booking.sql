@@ -1,0 +1,1 @@
+ALTER TABLE bookings ADD COLUMN id_booking VARCHAR(6) NULL AFTER id;

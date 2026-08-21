@@ -455,7 +455,7 @@ const BookingDetailPage = () => {
       {/* Header & Quick Action Buttons */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <PageHeader 
-          title={`Booking #INV-${String(booking.id).padStart(5, '0')}`} 
+          title={`Booking ${booking.id_booking || `ID: ${booking.id}`}`} 
           onBack={() => navigate(-1)}
         />
 
@@ -510,9 +510,9 @@ const BookingDetailPage = () => {
 
           <div className="sm:text-right space-y-1.5 border-t sm:border-t-0 pt-4 sm:pt-0 border-neutral-200">
             <div className="flex sm:justify-end items-center gap-2">
-              <span className="text-xs font-semibold font-heading uppercase tracking-wider text-neutral-400">INVOICE</span>
-              <span className="text-sm font-bold font-heading text-neutral-900">
-                #INV-{String(booking.id).padStart(5, '0')}
+              <span className="text-xs font-semibold font-heading uppercase tracking-wider text-neutral-400">ID BOOKING</span>
+              <span className="text-sm font-bold font-mono text-neutral-900">
+                {booking.id_booking || `ID: ${booking.id}`}
               </span>
             </div>
             <p className="text-xs font-body text-neutral-500">

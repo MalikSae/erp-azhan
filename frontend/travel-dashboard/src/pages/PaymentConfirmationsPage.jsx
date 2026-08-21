@@ -42,7 +42,7 @@ export default function PaymentConfirmationsPage() {
       && (!filters.to || date <= filters.to);
   }).map((item) => ({
     ...item,
-    invoice: `INV-${String(item.booking_id).padStart(5, '0')}`,
+    invoice: item.booking_id_booking || item.id_booking || `ID: ${item.booking_id}`,
     search_detail: [item.jamaah_name, item.schedule_name, item.sender_name, item.sender_bank, item.destination_bank_name, item.destination_account_number].filter(Boolean).join(' '),
   })), [items, filters]);
 
@@ -90,7 +90,7 @@ export default function PaymentConfirmationsPage() {
   };
 
   return <div className="space-y-5">
-    <PageHeader title="Konfirmasi Pembayaran" subtitle="Cari dan verifikasi transfer manual jamaah dalam satu tabel." />
+    <PageHeader title="Pembayaran" subtitle="Cari dan verifikasi transfer manual jamaah dalam satu tabel." />
     {error && <Alert variant="error" message={error} />}
     <section className="rounded-lg border border-neutral-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="font-semibold text-neutral-900">Filter pembayaran</h2><p className="text-xs text-neutral-500">Persempit data berdasarkan status, rekening, atau tanggal transfer.</p></div>{hasFilters && <button onClick={resetFilters} className="text-sm font-semibold text-brand hover:underline">Reset filter</button>}</div>

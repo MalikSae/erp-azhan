@@ -56,6 +56,18 @@ const BookingsPage = () => {
   };
 
   const columns = [
+    {
+      header: "ID Booking",
+      accessor: (row) => (
+        <button
+          type="button"
+          onClick={() => navigate(`/bookings/${row.id}`)}
+          className="font-mono text-sm font-semibold text-neutral-900 hover:text-primary-600 hover:underline transition-colors"
+        >
+          {row.id_booking || `ID: ${row.id}`}
+        </button>
+      )
+    },
     { 
       header: "Jamaah", 
       accessor: (row) => (

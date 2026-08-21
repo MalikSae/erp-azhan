@@ -2,11 +2,15 @@ package booking
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 )
+
+const idBookingCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
 // Sentinel errors
 var (
@@ -17,6 +21,8 @@ var (
 	ErrTemplatePerlengkapanBelumDiatur = errors.New("template set perlengkapan belum diatur untuk brand ini")
 	ErrPerlengkapanSudahDiberikan      = errors.New("perlengkapan untuk booking ini sudah pernah diberikan")
 	ErrPerlengkapanBelumDiberikan      = errors.New("perlengkapan belum pernah diberikan untuk booking ini")
+	ErrKodeBrandNotSet                 = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
+	ErrGenerateIDBookingFailed         = errors.New("gagal generate ID Booking unik, coba lagi")
 )
 
 type ErrStokKurang struct {
@@ -51,7 +57,7 @@ var AllowedProgressFields = map[string]string{
 // Kolom progress_paspor di tabel bookings bersifat VESTIGIAL dan di-override secara dinamis
 // berdasarkan keberadaan dokumen paspor di tabel dokumen_jamaah.
 const selectBookingFull = `
-	SELECT b.id, b.schedule_id, s.jadwal_nama, s.berangkat_tanggal, b.jamaah_id, j.nama_lengkap,
+	SELECT b.id, b.id_booking, b.schedule_id, s.jadwal_nama, s.berangkat_tanggal, b.jamaah_id, j.nama_lengkap,
 		b.room_type, b.harga_dasar, b.status, b.is_seat_blocked, b.total_harga, b.diskon, b.diskon_keterangan,
 		b.progress_paspor, b.progress_visa, b.progress_tiket, b.progress_hotel,
 		b.progress_land_arrangement, b.progress_manasik, b.progress_siskopatuh, b.progress_vaksin_meningitis,
@@ -154,6 +160,61 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 	return b, nil
 }
 
+// GenerateIDBooking generates a 6-character unique booking ID: {kode_brand (2 chars)}{4 random chars from charset}.
+func (r *Repository) GenerateIDBooking(ctx context.Context, tx *sql.Tx, brandID int64) (string, error) {
+	var kodeBrand sql.NullString
+	qBrand := "SELECT kode_brand FROM brands WHERE id = ?"
+	var err error
+	if tx != nil {
+		err = tx.QueryRowContext(ctx, qBrand, brandID).Scan(&kodeBrand)
+	} else {
+		err = r.db.QueryRowContext(ctx, qBrand, brandID).Scan(&kodeBrand)
+	}
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("booking.GenerateIDBooking get brand: %w", err)
+	}
+
+	if !kodeBrand.Valid || strings.TrimSpace(kodeBrand.String) == "" {
+		return "", ErrKodeBrandNotSet
+	}
+
+	prefix := strings.ToUpper(strings.TrimSpace(kodeBrand.String))
+	charsetLen := big.NewInt(int64(len(idBookingCharset)))
+
+	for attempt := 0; attempt < 10; attempt++ {
+		randomBytes := make([]byte, 4)
+		for i := 0; i < 4; i++ {
+			num, err := rand.Int(rand.Reader, charsetLen)
+			if err != nil {
+				return "", fmt.Errorf("booking.GenerateIDBooking rand: %w", err)
+			}
+			randomBytes[i] = idBookingCharset[num.Int64()]
+		}
+
+		code := prefix + string(randomBytes)
+
+		var count int
+		qCheck := "SELECT COUNT(*) FROM bookings WHERE id_booking = ?"
+		if tx != nil {
+			err = tx.QueryRowContext(ctx, qCheck, code).Scan(&count)
+		} else {
+			err = r.db.QueryRowContext(ctx, qCheck, code).Scan(&count)
+		}
+		if err != nil {
+			return "", fmt.Errorf("booking.GenerateIDBooking check uniqueness: %w", err)
+		}
+
+		if count == 0 {
+			return code, nil
+		}
+	}
+
+	return "", ErrGenerateIDBookingFailed
+}
+
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 // CreateBooking membuat booking baru dengan status='baru' (dipaksa server).
@@ -165,16 +226,30 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 	}
 	defer tx.Rollback()
 
+	var brandID int64
+	err = tx.QueryRowContext(ctx, `SELECT brand_id FROM schedules WHERE id = ?`, req.ScheduleID).Scan(&brandID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("booking.Create find schedule brand: %w", err)
+	}
+
+	idBooking, err := r.GenerateIDBooking(ctx, tx, brandID)
+	if err != nil {
+		return nil, err
+	}
+
 	totalHarga := req.TotalHarga
 	if totalHarga == nil {
 		totalHarga = autoHarga
 	}
 	hargaDasar := totalHarga
 
-	const q = `INSERT INTO bookings (schedule_id, jamaah_id, room_type, harga_dasar, status, total_harga, created_by)
-		VALUES (?, ?, ?, ?, 'baru', ?, ?)`
+	const q = `INSERT INTO bookings (id_booking, schedule_id, jamaah_id, room_type, harga_dasar, status, total_harga, created_by)
+		VALUES (?, ?, ?, ?, ?, 'baru', ?, ?)`
 
-	res, err := tx.ExecContext(ctx, q, req.ScheduleID, req.JamaahID, req.RoomType, hargaDasar, totalHarga, createdBy)
+	res, err := tx.ExecContext(ctx, q, idBooking, req.ScheduleID, req.JamaahID, req.RoomType, hargaDasar, totalHarga, createdBy)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Create: %w", err)
 	}
@@ -541,6 +616,7 @@ func computeSiapBerangkat(b *Booking) {
 
 func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	var b Booking
+	var idBooking sql.NullString
 	var totalHarga sql.NullFloat64
 	var hargaDasar sql.NullFloat64
 	var diskonKeterangan sql.NullString
@@ -552,7 +628,7 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	var perlengkapanDiberikanOleh sql.NullInt64
 
 	err := rows.Scan(
-		&b.ID, &b.ScheduleID, &b.JadwalNama, &berangkatTanggal, &b.JamaahID, &b.NamaJamaah,
+		&b.ID, &idBooking, &b.ScheduleID, &b.JadwalNama, &berangkatTanggal, &b.JamaahID, &b.NamaJamaah,
 		&b.RoomType, &hargaDasar, &b.Status, &b.IsSeatBlocked, &totalHarga, &b.Diskon, &diskonKeterangan,
 		&vestigialPaspor, &b.ProgressVisa, &b.ProgressTiket, &b.ProgressHotel,
 		&b.ProgressLandArrangement, &b.ProgressManasik, &b.ProgressSiskopatuh, &b.ProgressVaksinMeningitis,
@@ -561,6 +637,9 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("booking.scanRow: %w", err)
+	}
+	if idBooking.Valid {
+		b.IDBooking = idBooking.String
 	}
 	if berangkatTanggal.Valid {
 		b.BerangkatTanggal = &berangkatTanggal.String

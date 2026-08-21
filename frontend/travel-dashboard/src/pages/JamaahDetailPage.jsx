@@ -301,6 +301,9 @@ const JamaahDetailPage = () => {
                   >
                     <div className="space-y-1 min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-neutral-100 text-neutral-800">
+                          {b.id_booking || `ID: ${b.id}`}
+                        </span>
                         <span className="text-sm font-medium font-heading text-neutral-900 group-hover:text-primary-600 transition-colors">
                           {b.jadwal_nama}
                         </span>

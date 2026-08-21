@@ -438,6 +438,10 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "perlengkapan untuk booking ini sudah pernah diberikan")
 	case errors.Is(err, ErrPerlengkapanBelumDiberikan):
 		writeError(w, http.StatusBadRequest, "perlengkapan belum pernah diberikan untuk booking ini")
+	case errors.Is(err, ErrKodeBrandNotSet):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, ErrGenerateIDBookingFailed):
+		writeError(w, http.StatusInternalServerError, err.Error())
 	case errors.As(err, &errStok):
 		writeError(w, http.StatusConflict, errStok.Message)
 	default:

@@ -42,7 +42,7 @@ export default function PaymentConfirmationsPage() {
       && (!filters.to || date <= filters.to);
   }).map((item) => ({
     ...item,
-    invoice: `INV-${String(item.booking_id).padStart(5, '0')}`,
+    invoice: item.booking_id_booking || item.id_booking || `ID: ${item.booking_id}`,
     search_detail: [item.brand_name, item.jamaah_name, item.schedule_name, item.sender_name, item.sender_bank, item.destination_bank_name, item.destination_account_number].filter(Boolean).join(' '),
   })), [items, filters]);
 

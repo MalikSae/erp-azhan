@@ -16,6 +16,7 @@ type BookingAddon struct {
 // Booking adalah response lengkap admin — JOIN nama jamaah + jadwal_nama schedule.
 type Booking struct {
 	ID               int64    `json:"id"`
+	IDBooking        string   `json:"id_booking"`
 	ScheduleID       int64    `json:"schedule_id"`
 	JadwalNama       string   `json:"jadwal_nama"`
 	BerangkatTanggal *string  `json:"berangkat_tanggal"`

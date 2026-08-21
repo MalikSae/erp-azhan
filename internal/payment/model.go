@@ -25,6 +25,7 @@ type Payment struct {
 	JamaahName               string     `json:"jamaah_name,omitempty"`
 	ScheduleName             string     `json:"schedule_name,omitempty"`
 	BrandName                string     `json:"brand_name,omitempty"`
+	BookingIDBooking         string     `json:"booking_id_booking,omitempty"`
 	CreatedAt                time.Time  `json:"created_at"`
 }
 
