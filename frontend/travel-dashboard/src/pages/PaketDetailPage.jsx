@@ -408,33 +408,45 @@ const PaketDetailPage = () => {
 
             <div className="p-5 space-y-4">
               {/* Hotel Makkah */}
-              <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-1">
+              <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-1.5">
                 <span className="text-xs font-bold uppercase tracking-wider text-neutral-500 block">
                   Hotel Makkah
                 </span>
                 <p className="text-sm font-bold text-neutral-900">
                   {schedule.hotel_mekkah?.name || '-'}
                 </p>
-                {schedule.hotel_mekkah?.star_rating && (
+                {schedule.hotel_mekkah?.star_rating > 0 ? (
                   <p className="text-xs text-warning-600 font-semibold">
                     {'★'.repeat(schedule.hotel_mekkah.star_rating)} ({schedule.hotel_mekkah.star_rating} Bintang)
                   </p>
-                )}
+                ) : null}
+                {schedule.hotel_mekkah?.distance_m !== null && schedule.hotel_mekkah?.distance_m !== undefined ? (
+                  <p className="text-xs text-neutral-600 flex items-center gap-1.5 pt-0.5">
+                    <MapPin size={13} className="text-primary-600 shrink-0" />
+                    <span>±{schedule.hotel_mekkah.distance_m} meter ke Masjidil Haram</span>
+                  </p>
+                ) : null}
               </div>
 
               {/* Hotel Madinah */}
-              <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-1">
+              <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-1.5">
                 <span className="text-xs font-bold uppercase tracking-wider text-neutral-500 block">
                   Hotel Madinah
                 </span>
                 <p className="text-sm font-bold text-neutral-900">
                   {schedule.hotel_madinah?.name || '-'}
                 </p>
-                {schedule.hotel_madinah?.star_rating && (
+                {schedule.hotel_madinah?.star_rating > 0 ? (
                   <p className="text-xs text-warning-600 font-semibold">
                     {'★'.repeat(schedule.hotel_madinah.star_rating)} ({schedule.hotel_madinah.star_rating} Bintang)
                   </p>
-                )}
+                ) : null}
+                {schedule.hotel_madinah?.distance_m !== null && schedule.hotel_madinah?.distance_m !== undefined ? (
+                  <p className="text-xs text-neutral-600 flex items-center gap-1.5 pt-0.5">
+                    <MapPin size={13} className="text-primary-600 shrink-0" />
+                    <span>±{schedule.hotel_madinah.distance_m} meter ke Masjid Nabawi</span>
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>

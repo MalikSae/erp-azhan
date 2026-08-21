@@ -84,6 +84,7 @@ func NewRepository(db *sql.DB) *Repository {
 func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListItem, error) {
 	q := `
 		SELECT s.id, s.brand_id, s.jadwal_nama, s.status, s.is_promo, s.is_ticket_confirmed, s.is_direct_flight,
+			s.maskapai_id, COALESCE(a.name, ''), a.logo_url,
 			DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d') AS berangkat_tanggal,
 			s.seat_total, s.seat_sisa, s.harga_quad, s.harga_triple, s.harga_double,
 			(
@@ -93,6 +94,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 				WHERE sao.schedule_id = s.id
 			) AS add_ons
 		FROM schedules s
+		LEFT JOIN airlines a ON a.id = s.maskapai_id
 		WHERE 1=1`
 
 	var args []interface{}
@@ -113,11 +115,25 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 	for rows.Next() {
 		var item ScheduleListItem
 		var addOnsJSON []byte
+		var maskapaiID *int64
+		var maskapaiName string
+		var maskapaiLogo *string
+
 		if err := rows.Scan(&item.ID, &item.BrandID, &item.JadwalNama, &item.Status, &item.IsPromo, &item.IsTicketConfirmed, &item.IsDirectFlight,
+			&maskapaiID, &maskapaiName, &maskapaiLogo,
 			&item.BerangkatTanggal, &item.SeatTotal, &item.SeatSisa,
 			&item.HargaQuad, &item.HargaTriple, &item.HargaDouble, &addOnsJSON); err != nil {
 			return nil, fmt.Errorf("schedule.List scan: %w", err)
 		}
+
+		if maskapaiID != nil && *maskapaiID > 0 {
+			item.Maskapai = &MaskapaiRef{
+				ID:      *maskapaiID,
+				Name:    maskapaiName,
+				LogoURL: maskapaiLogo,
+			}
+		}
+
 		item.AddOns = []AddOnRef{}
 		if len(addOnsJSON) > 0 {
 			_ = json.Unmarshal(addOnsJSON, &item.AddOns)

@@ -144,22 +144,23 @@ func (s *Schedule) ToPublic() *PublicSchedule {
 	}
 }
 
-// ScheduleListItem dipakai di ListSchedulesAdmin — ringkas, tanpa detail hotel/airline.
+// ScheduleListItem dipakai di ListSchedulesAdmin — ringkas.
 type ScheduleListItem struct {
-	ID                int64      `json:"id"`
-	BrandID           int64      `json:"brand_id"`
-	JadwalNama        string     `json:"jadwal_nama"`
-	Status            string     `json:"status"`
-	IsPromo           bool       `json:"is_promo"`
-	IsTicketConfirmed bool       `json:"is_ticket_confirmed"`
-	IsDirectFlight    bool       `json:"is_direct_flight"`
-	BerangkatTanggal  string     `json:"berangkat_tanggal"`
-	SeatTotal         int        `json:"seat_total"`
-	SeatSisa          int        `json:"seat_sisa"`
-	HargaQuad         float64    `json:"harga_quad"`
-	HargaTriple       float64    `json:"harga_triple"`
-	HargaDouble       float64    `json:"harga_double"`
-	AddOns            []AddOnRef `json:"add_ons"`
+	ID                int64        `json:"id"`
+	BrandID           int64        `json:"brand_id"`
+	JadwalNama        string       `json:"jadwal_nama"`
+	Status            string       `json:"status"`
+	IsPromo           bool         `json:"is_promo"`
+	IsTicketConfirmed bool         `json:"is_ticket_confirmed"`
+	IsDirectFlight    bool         `json:"is_direct_flight"`
+	Maskapai          *MaskapaiRef `json:"maskapai"`
+	BerangkatTanggal  string       `json:"berangkat_tanggal"`
+	SeatTotal         int          `json:"seat_total"`
+	SeatSisa          int          `json:"seat_sisa"`
+	HargaQuad         float64      `json:"harga_quad"`
+	HargaTriple       float64      `json:"harga_triple"`
+	HargaDouble       float64      `json:"harga_double"`
+	AddOns            []AddOnRef   `json:"add_ons"`
 }
 
 // ─── Internal input struct (setelah validasi) ─────────────────────────────────

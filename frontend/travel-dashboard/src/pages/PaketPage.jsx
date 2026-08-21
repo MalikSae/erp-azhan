@@ -38,6 +38,7 @@ const PaketPage = () => {
   
   const [filterStatus, setFilterStatus] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
+  const [filterMaskapai, setFilterMaskapai] = useState('');
 
   const fetchSchedules = async () => {
     setIsLoading(true);
@@ -57,6 +58,18 @@ const PaketPage = () => {
     fetchSchedules();
   }, []);
 
+  const availableMaskapai = useMemo(() => {
+    const map = new Map();
+    schedules.forEach(s => {
+      if (s.maskapai && s.maskapai.id) {
+        map.set(String(s.maskapai.id), s.maskapai.name);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [schedules]);
+
   const availableMonths = useMemo(() => {
     const map = new Map();
     schedules.forEach(s => {
@@ -74,6 +87,9 @@ const PaketPage = () => {
   }, [schedules]);
 
   const filteredSchedules = schedules.filter(s => {
+    if (filterMaskapai) {
+      if (!s.maskapai || String(s.maskapai.id) !== String(filterMaskapai)) return false;
+    }
     if (filterStatus) {
       if (s.status !== filterStatus) return false;
     }
@@ -143,6 +159,29 @@ const PaketPage = () => {
           {row.jadwal_nama}
         </button>
       )
+    },
+    { 
+      header: 'Maskapai', 
+      key: 'maskapai',
+      accessor: (row) => {
+        const logo = row.maskapai?.logo_url;
+        const name = row.maskapai?.name;
+        if (logo) {
+          const logoSrc = logo.startsWith('http') ? logo : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${logo}`;
+          return (
+            <div className="flex items-center" title={name || 'Maskapai'}>
+              <div className="w-10 h-7 rounded border border-neutral-200 bg-white p-0.5 flex items-center justify-center overflow-hidden shadow-2xs">
+                <img 
+                  src={logoSrc} 
+                  alt={name || 'Logo Maskapai'} 
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+            </div>
+          );
+        }
+        return <span className="text-xs font-semibold text-neutral-700">{name || '-'}</span>;
+      }
     },
     { 
       header: 'Status', 
@@ -225,24 +264,6 @@ const PaketPage = () => {
         const minPrice = getMinPrice(row);
         return minPrice > 0 ? formatCurrency(minPrice) : '-';
       }
-    },
-    { 
-      header: 'Aksi', 
-      key: 'aksi',
-      accessor: (row) => (
-        <div className="flex gap-2 items-center">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => navigate(`/paket/${row.id}`)}
-            className="!px-2.5 text-primary-600 hover:text-primary-700 hover:bg-primary-50"
-            title="Lihat Detail Paket"
-          >
-            <Eye size={15} className="mr-1 inline" />
-            Detail
-          </Button>
-        </div>
-      )
     }
   ];
 
@@ -274,27 +295,40 @@ const PaketPage = () => {
             searchPlaceholder="Cari paket..."
             emptyMessage='Belum ada paket untuk travel Anda.'
             toolbarActions={
-              <div className="flex flex-col sm:flex-row gap-2 w-full">
+              <div className="flex flex-col sm:flex-row gap-2 w-full flex-wrap sm:flex-nowrap">
+                {/* 1. Jadwal (Bulan) */}
+                <CustomDropdown 
+                  value={filterMonth}
+                  onChange={(val) => setFilterMonth(val)}
+                  className="!mb-0 w-full sm:w-40"
+                  placeholder="Semua Jadwal"
+                  options={[
+                    { value: '', label: 'Semua Jadwal' },
+                    ...availableMonths.map(m => ({ value: m.value, label: m.label }))
+                  ]}
+                />
+                {/* 2. Maskapai */}
+                <CustomDropdown 
+                  value={filterMaskapai}
+                  onChange={(val) => setFilterMaskapai(val)}
+                  className="!mb-0 w-full sm:w-44"
+                  placeholder="Semua Maskapai"
+                  options={[
+                    { value: '', label: 'Semua Maskapai' },
+                    ...availableMaskapai.map(m => ({ value: m.value, label: m.label }))
+                  ]}
+                />
+                {/* 3. Status */}
                 <CustomDropdown 
                   value={filterStatus}
                   onChange={(val) => setFilterStatus(val)}
-                  className="!mb-0 w-full sm:w-40"
+                  className="!mb-0 w-full sm:w-36"
                   placeholder="Semua Status"
                   options={[
                     { value: '', label: 'Semua Status' },
                     { value: 'draft', label: 'Draft' },
                     { value: 'published', label: 'Published' },
                     { value: 'archived', label: 'Archived' }
-                  ]}
-                />
-                <CustomDropdown 
-                  value={filterMonth}
-                  onChange={(val) => setFilterMonth(val)}
-                  className="!mb-0 w-full sm:w-40"
-                  placeholder="Semua Bulan"
-                  options={[
-                    { value: '', label: 'Semua Bulan' },
-                    ...availableMonths.map(m => ({ value: m.value, label: m.label }))
                   ]}
                 />
               </div>
