@@ -10,6 +10,7 @@ import BookingsPage from './pages/BookingsPage';
 import BookingFormPage from './pages/BookingFormPage';
 import BookingDetailPage from './pages/BookingDetailPage';
 import PaketPage from './pages/PaketPage';
+import PaketDetailPage from './pages/PaketDetailPage';
 import StokPerlengkapanPage from './pages/StokPerlengkapanPage';
 import PaymentConfirmationsPage from './pages/PaymentConfirmationsPage';
 
@@ -23,7 +24,9 @@ function App() {
           <Route path="/" element={<DashboardPage />} />
           
           <Route path="/paket" element={<PaketPage />} />
+          <Route path="/paket/:id" element={<PaketDetailPage />} />
           <Route path="/schedules" element={<PaketPage />} />
+          <Route path="/schedules/:id" element={<PaketDetailPage />} />
 
           <Route path="/stok-perlengkapan" element={<StokPerlengkapanPage />} />
           <Route path="/perlengkapan" element={<StokPerlengkapanPage />} />

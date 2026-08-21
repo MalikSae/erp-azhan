@@ -62,10 +62,10 @@ const DataTable = ({
     return result;
   }, [data, searchQuery, sortConfig, columns]);
 
-  // Reset to first page when search changes
+  // Reset to first page when search or data changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, data.length, itemsPerPage]);
+  }, [searchQuery, data, itemsPerPage]);
 
   // Paginate data
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -93,7 +93,7 @@ const DataTable = ({
                   placeholder={searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-11 w-full min-w-0 rounded-md border border-neutral-300 bg-white pl-10 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body"
+                  className="w-full rounded-md border border-neutral-300 pl-10 pr-3 py-2 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body bg-white"
                 />
               </>
             )}

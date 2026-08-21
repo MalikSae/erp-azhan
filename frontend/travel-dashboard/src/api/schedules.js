@@ -7,3 +7,8 @@ export const listSchedulesAdmin = async (filters = {}) => {
   const { data } = await api.get(`/api/admin/schedules?${params.toString()}`);
   return data;
 };
+
+export const getScheduleAdmin = async (id) => {
+  const { data } = await api.get(`/api/admin/schedules/${id}`);
+  return data;
+};

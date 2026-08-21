@@ -30,12 +30,10 @@ var validRoomTypes = map[string]bool{
 
 // validStatuses berisi enum status booking yang valid.
 var validStatuses = map[string]bool{
-	"baru":            true,
-	"dp":              true,
-	"lunas":           true,
-	"dokumen_lengkap": true,
-	"siap_berangkat":  true,
-	"batal":           true,
+	"baru":  true,
+	"dp":    true,
+	"lunas": true,
+	"batal": true,
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
@@ -172,7 +170,7 @@ func (h *Handler) UpdateBookingStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Validasi enum status
 	if !validStatuses[req.Status] {
-		writeError(w, http.StatusBadRequest, "status tidak valid, harus baru/dp/lunas/dokumen_lengkap/siap_berangkat/batal")
+		writeError(w, http.StatusBadRequest, "status tidak valid, harus baru/dp/lunas/batal")
 		return
 	}
 

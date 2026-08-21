@@ -35,10 +35,8 @@ func (e *ErrStokKurang) Error() string {
 
 // Status yang menandakan kursi sudah terkunci (pernah dp/lebih).
 var lockedStatuses = map[string]bool{
-	"dp":              true,
-	"lunas":           true,
-	"dokumen_lengkap": true,
-	"siap_berangkat":  true,
+	"dp":    true,
+	"lunas": true,
 }
 
 // AllowedProgressFields adalah mapping dari key request ke nama kolom database.

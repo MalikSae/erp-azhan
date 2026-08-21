@@ -2,7 +2,7 @@ import React from 'react';
 import Button from './Button';
 import { ArrowLeft } from 'lucide-react';
 
-const PageHeader = ({ title, actionLabel, onAction, secondaryActionLabel, onSecondaryAction, onBack, subtitle }) => {
+const PageHeader = ({ title, actionLabel, onAction, secondaryActionLabel, onSecondaryAction, onBack, subtitle, children }) => {
   return (
     <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-3">
       <div className="flex items-center gap-3">
@@ -22,10 +22,13 @@ const PageHeader = ({ title, actionLabel, onAction, secondaryActionLabel, onSeco
           {subtitle && <p className="mt-1 text-sm text-neutral-500 font-body">{subtitle}</p>}
         </div>
       </div>
-      {(actionLabel || secondaryActionLabel) && <div className="flex w-full gap-2 md:w-auto">
-        {secondaryActionLabel && <Button variant="secondary" onClick={onSecondaryAction} className="flex-1 md:flex-none">{secondaryActionLabel}</Button>}
-        {actionLabel && <Button variant="primary" onClick={onAction} className="flex-1 md:flex-none">{actionLabel}</Button>}
-      </div>}
+      {(actionLabel || secondaryActionLabel || children) && (
+        <div className="flex w-full gap-2 md:w-auto items-center flex-wrap">
+          {children}
+          {secondaryActionLabel && <Button variant="secondary" onClick={onSecondaryAction} className="flex-1 md:flex-none">{secondaryActionLabel}</Button>}
+          {actionLabel && <Button variant="primary" onClick={onAction} className="flex-1 md:flex-none">{actionLabel}</Button>}
+        </div>
+      )}
     </div>
   );
 };

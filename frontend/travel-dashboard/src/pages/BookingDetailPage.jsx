@@ -16,6 +16,7 @@ import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengk
 import { getJamaah } from "../api/jamaah";
 import { uploadMedia } from "../api/media";
 import { useAuth } from "../context/AuthContext";
+import { getStatusBadgeConfig, getSeatLockIcon } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
@@ -29,7 +30,7 @@ import FormField from "../components/ui/FormField";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import CurrencyInput from "../components/ui/CurrencyInput";
 import Toggle from "../components/ui/Toggle";
-import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Plane, Check, Plus, Trash2, Tag, Percent, Package } from "lucide-react";
+import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -395,18 +396,6 @@ const BookingDetailPage = () => {
     batal: []  // Terminal
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'baru': return <Badge variant="warning">BARU</Badge>;
-      case 'dp': return <Badge variant="primary">SEAT BLOCKED</Badge>;
-      case 'lunas': return <Badge variant="success">LUNAS</Badge>;
-      case 'dokumen_lengkap': return <Badge variant="success">DOKUMEN LENGKAP</Badge>;
-      case 'siap_berangkat': return <Badge variant="success">SIAP BERANGKAT</Badge>;
-      case 'batal': return <Badge variant="archived">BATAL</Badge>;
-      default: return <Badge variant="neutral">{status.toUpperCase()}</Badge>;
-    }
-  };
-
   const nextActions = statusTransitions[booking.status] || [];
 
   const paymentColumns = [
@@ -518,8 +507,22 @@ const BookingDetailPage = () => {
             <p className="text-xs font-body text-neutral-500">
               Tgl Booking: <span className="text-neutral-700 font-medium">{formatTanggal(booking.created_at)}</span>
             </p>
-            <div className="pt-1 flex sm:justify-end">
-              {getStatusBadge(booking.status)}
+            <div className="pt-1 flex sm:justify-end items-center gap-2 flex-wrap">
+              {(() => {
+                const [statusVariant, statusLabel] = getStatusBadgeConfig(booking.status);
+                const lockInfo = getSeatLockIcon(booking.status, booking.is_seat_blocked);
+                const IconComponent = lockInfo?.icon === 'CircleCheckBig' ? CircleCheckBig : Loader;
+                return (
+                  <>
+                    <Badge variant={statusVariant} hideIcon={true}>{statusLabel}</Badge>
+                    {lockInfo && (
+                      <span title={lockInfo.label} className={`inline-flex items-center ${lockInfo.colorClass}`}>
+                        <IconComponent size={16} />
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -590,12 +593,21 @@ const BookingDetailPage = () => {
               <p className="text-xs font-body text-neutral-600">
                 Tipe Kamar: <span className="font-semibold uppercase text-primary-700">{booking.room_type || booking.tipe_kamar}</span>
               </p>
-              <p className="text-xs font-body text-neutral-600">
-                Status Kursi:{" "}
-                <span className={`font-semibold ${booking.is_seat_blocked ? 'text-success-600' : booking.status === 'batal' ? 'text-neutral-400' : 'text-warning-600'}`}>
-                  {booking.is_seat_blocked ? 'Terkunci' : booking.status === 'batal' ? 'Dibatalkan' : 'Tidak Diblokir'}
-                </span>
-              </p>
+              <div className="flex items-center gap-2 pt-0.5 text-xs font-body text-neutral-600">
+                <span>Status Seat:</span>
+                {(() => {
+                  const lockInfo = getSeatLockIcon(booking.status, booking.is_seat_blocked);
+                  if (!lockInfo) {
+                    return <span className="font-semibold text-neutral-400">–</span>;
+                  }
+                  const IconComponent = lockInfo.icon === 'CircleCheckBig' ? CircleCheckBig : Loader;
+                  return (
+                    <span title={lockInfo.label} className={`inline-flex items-center ${lockInfo.colorClass}`}>
+                      <IconComponent size={16} />
+                    </span>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         </div>

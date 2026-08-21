@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/ui/PageHeader';
-import Card from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
 import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
 import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Badge from '../components/ui/Badge';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import { listSchedulesAdmin } from '../api/schedules';
 import UrgentPackagesBanner from '../components/UrgentPackagesBanner';
-import { Plane, Hotel, CheckCircle2, XCircle, Sparkles, Eye } from 'lucide-react';
+import { Eye } from 'lucide-react';
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-';
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 };
@@ -31,16 +31,13 @@ const getMinPrice = (row) => {
 };
 
 const PaketPage = () => {
+  const navigate = useNavigate();
   const [schedules, setSchedules] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   
   const [filterStatus, setFilterStatus] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
-
-  // Modal Detail State (Read-Only)
-  const [selectedSchedule, setSelectedSchedule] = useState(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   const fetchSchedules = async () => {
     setIsLoading(true);
@@ -65,10 +62,12 @@ const PaketPage = () => {
     schedules.forEach(s => {
       if (s.berangkat_tanggal) {
         const d = new Date(s.berangkat_tanggal);
-        const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const formatter = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' });
-        const label = formatter.format(d);
-        map.set(val, label);
+        if (!isNaN(d.getTime())) {
+          const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const formatter = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' });
+          const label = formatter.format(d);
+          map.set(val, label);
+        }
       }
     });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([value, label]) => ({ value, label }));
@@ -81,6 +80,7 @@ const PaketPage = () => {
     if (filterMonth) {
       if (!s.berangkat_tanggal) return false;
       const d = new Date(s.berangkat_tanggal);
+      if (isNaN(d.getTime())) return false;
       const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (val !== filterMonth) return false;
     }
@@ -123,14 +123,35 @@ const PaketPage = () => {
   }, [schedules]);
 
   const handleOpenDetail = (pkgOrSchedule) => {
-    const schedule = pkgOrSchedule.rawSchedule || pkgOrSchedule;
-    setSelectedSchedule(schedule);
-    setIsDetailOpen(true);
+    const id = pkgOrSchedule.id || pkgOrSchedule.rawSchedule?.id;
+    if (id) {
+      navigate(`/paket/${id}`);
+    }
   };
 
   const columns = [
-    { header: 'Nama Paket', key: 'jadwal_nama' },
-    { header: 'Status', key: 'status' },
+    { 
+      header: 'Nama Paket', 
+      key: 'jadwal_nama',
+      accessor: (row) => (
+        <button
+          type="button"
+          onClick={() => navigate(`/paket/${row.id}`)}
+          className="font-semibold text-neutral-900 hover:text-primary-600 hover:underline text-left transition-colors"
+          title="Lihat Detail Paket"
+        >
+          {row.jadwal_nama}
+        </button>
+      )
+    },
+    { 
+      header: 'Status', 
+      key: 'status',
+      accessor: (row) => {
+        const label = row.status.charAt(0).toUpperCase() + row.status.slice(1);
+        return <Badge variant={row.status}>{label}</Badge>;
+      }
+    },
     { 
       header: 'Tiket', 
       key: 'tiket',
@@ -139,7 +160,20 @@ const PaketPage = () => {
         const valA = a.is_ticket_confirmed ? 1 : 0;
         const valB = b.is_ticket_confirmed ? 1 : 0;
         return valA - valB;
-      }
+      },
+      accessor: (row) => row.is_ticket_confirmed ? (
+        <div title="Confirmed" className="flex items-center text-success-500">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+        </div>
+      ) : (
+        <div title="Belum Confirmed" className="flex items-center text-neutral-300">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+          </svg>
+        </div>
+      )
     },
     {
       header: 'Promo',
@@ -149,7 +183,20 @@ const PaketPage = () => {
         const valA = a.is_promo ? 1 : 0;
         const valB = b.is_promo ? 1 : 0;
         return valA - valB;
-      }
+      },
+      accessor: (row) => row.is_promo ? (
+        <div title="Promo Aktif" className="flex items-center text-warning-500">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M11.983 1.907a.75.75 0 0 0-1.292-.656l-8.5 9.5A.75.75 0 0 0 2.75 12h6.572l-1.305 6.093a.75.75 0 0 0 1.292.656l8.5-9.5A.75.75 0 0 0 17.25 8h-6.572l1.305-6.093Z" />
+          </svg>
+        </div>
+      ) : (
+        <div title="Tidak Ada Promo" className="flex items-center text-neutral-300">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM6.75 9.25a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Z" clipRule="evenodd" />
+          </svg>
+        </div>
+      )
     },
     { 
       header: 'Berangkat', 
@@ -159,21 +206,44 @@ const PaketPage = () => {
         const tA = a.berangkat_tanggal ? new Date(a.berangkat_tanggal).getTime() : 0;
         const tB = b.berangkat_tanggal ? new Date(b.berangkat_tanggal).getTime() : 0;
         return tA - tB;
-      }
+      },
+      accessor: (row) => formatDate(row.berangkat_tanggal)
     },
     { 
       header: 'Sisa Seat', 
       key: 'seat_sisa',
       sortable: true,
-      sortFn: (a, b) => (a.seat_sisa || 0) - (b.seat_sisa || 0)
+      sortFn: (a, b) => (a.seat_sisa || 0) - (b.seat_sisa || 0),
+      accessor: (row) => row.seat_sisa ?? '-'
     },
     { 
       header: 'Harga Mulai', 
       key: 'harga',
       sortable: true,
-      sortFn: (a, b) => getMinPrice(a) - getMinPrice(b)
+      sortFn: (a, b) => getMinPrice(a) - getMinPrice(b),
+      accessor: (row) => {
+        const minPrice = getMinPrice(row);
+        return minPrice > 0 ? formatCurrency(minPrice) : '-';
+      }
     },
-    { header: 'Aksi', key: 'aksi' }
+    { 
+      header: 'Aksi', 
+      key: 'aksi',
+      accessor: (row) => (
+        <div className="flex gap-2 items-center">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate(`/paket/${row.id}`)}
+            className="!px-2.5 text-primary-600 hover:text-primary-700 hover:bg-primary-50"
+            title="Lihat Detail Paket"
+          >
+            <Eye size={15} className="mr-1 inline" />
+            Detail
+          </Button>
+        </div>
+      )
+    }
   ];
 
   return (
@@ -201,6 +271,7 @@ const PaketPage = () => {
             columns={columns}
             data={filteredSchedules}
             itemsPerPage={15}
+            searchPlaceholder="Cari paket..."
             emptyMessage='Belum ada paket untuk travel Anda.'
             toolbarActions={
               <div className="flex flex-col sm:flex-row gap-2 w-full">
@@ -228,274 +299,9 @@ const PaketPage = () => {
                 />
               </div>
             }
-            renderCell={(row, key) => {
-              if (key === 'status') {
-                const label = row.status.charAt(0).toUpperCase() + row.status.slice(1);
-                return <Badge variant={row.status}>{label}</Badge>;
-              }
-              if (key === 'tiket') {
-                return row.is_ticket_confirmed ? (
-                  <div title="Confirmed" className="flex items-center text-success-500">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                ) : (
-                  <div title="Belum Confirmed" className="flex items-center text-neutral-300">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                );
-              }
-              if (key === 'promo') {
-                return row.is_promo ? (
-                  <div title="Promo Aktif" className="flex items-center text-warning-500">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M11.983 1.907a.75.75 0 0 0-1.292-.656l-8.5 9.5A.75.75 0 0 0 2.75 12h6.572l-1.305 6.093a.75.75 0 0 0 1.292.656l8.5-9.5A.75.75 0 0 0 17.25 8h-6.572l1.305-6.093Z" />
-                    </svg>
-                  </div>
-                ) : (
-                  <div title="Tidak Ada Promo" className="flex items-center text-neutral-300">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM6.75 9.25a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                );
-              }
-              if (key === 'berangkat_tanggal') return formatDate(row.berangkat_tanggal);
-
-              if (key === 'harga') {
-                const minPrice = getMinPrice(row);
-                return minPrice > 0 ? formatCurrency(minPrice) : '-';
-              }
-              if (key === 'aksi') {
-                return (
-                  <div className="flex gap-2 items-center">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => handleOpenDetail(row)}
-                      className="!px-2.5 text-primary-600 hover:text-primary-700 hover:bg-primary-50"
-                      title="Lihat Detail Paket"
-                    >
-                      <Eye size={15} className="mr-1 inline" />
-                      Detail
-                    </Button>
-                  </div>
-                );
-              }
-              return row[key];
-            }}
           />
         </div>
       )}
-
-      {/* Modal Detail Paket (Read-Only) */}
-      <Modal
-        isOpen={isDetailOpen}
-        onClose={() => setIsDetailOpen(false)}
-        title="Detail Paket Umroh"
-        size="lg"
-      >
-        {selectedSchedule && (
-          <div className="space-y-6 font-body text-neutral-800">
-            {/* Header Paket */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-neutral-200">
-              <div>
-                <h3 className="text-lg font-bold font-heading text-neutral-900">
-                  {selectedSchedule.jadwal_nama}
-                </h3>
-                <p className="text-xs text-neutral-500">
-                  ID Jadwal: #{selectedSchedule.id}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedSchedule.is_promo && <Badge variant="promo">Promo</Badge>}
-                {selectedSchedule.status && (
-                  <Badge variant={selectedSchedule.status}>
-                    {selectedSchedule.status.charAt(0).toUpperCase() + selectedSchedule.status.slice(1)}
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            {/* Grid Detail Keberangkatan & Akomodasi */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Kolom 1: Penerbangan & Jadwal */}
-              <div className="p-4 bg-neutral-50 rounded-lg space-y-2 border border-neutral-200">
-                <div className="flex items-center gap-2 text-primary-700 font-semibold font-heading text-xs uppercase tracking-wider pb-1 border-b border-neutral-200">
-                  <Plane size={15} />
-                  <span>Jadwal Penerbangan</span>
-                </div>
-                <div className="text-xs space-y-1.5 pt-1">
-                  <p>
-                    <span className="text-neutral-500">Maskapai:</span>{' '}
-                    <span className="font-semibold text-neutral-900">{selectedSchedule.maskapai?.name || '-'}</span>
-                  </p>
-                  <p>
-                    <span className="text-neutral-500">Keberangkatan:</span>{' '}
-                    <span className="font-medium text-neutral-900">
-                      {formatDate(selectedSchedule.berangkat_tanggal)} ({selectedSchedule.berangkat_jam || '-'})
-                    </span>
-                  </p>
-                  {selectedSchedule.berangkat_kode_penerbangan && (
-                    <p>
-                      <span className="text-neutral-500">Kode Berangkat:</span>{' '}
-                      <span className="font-mono text-neutral-900">{selectedSchedule.berangkat_kode_penerbangan}</span>
-                    </p>
-                  )}
-                  {(selectedSchedule.berangkat_bandara_asal || selectedSchedule.berangkat_bandara_tujuan) && (
-                    <p>
-                      <span className="text-neutral-500">Rute Berangkat:</span>{' '}
-                      <span className="font-medium text-neutral-900">{selectedSchedule.berangkat_bandara_asal || '-'} → {selectedSchedule.berangkat_bandara_tujuan || '-'}</span>
-                    </p>
-                  )}
-                  <p>
-                    <span className="text-neutral-500">Kepulangan:</span>{' '}
-                    <span className="font-medium text-neutral-900">
-                      {formatDate(selectedSchedule.pulang_tanggal)} ({selectedSchedule.pulang_jam || '-'})
-                    </span>
-                  </p>
-                  {selectedSchedule.pulang_kode_penerbangan && (
-                    <p>
-                      <span className="text-neutral-500">Kode Pulang:</span>{' '}
-                      <span className="font-mono text-neutral-900">{selectedSchedule.pulang_kode_penerbangan}</span>
-                    </p>
-                  )}
-                  {(selectedSchedule.pulang_bandara_asal || selectedSchedule.pulang_bandara_tujuan) && (
-                    <p>
-                      <span className="text-neutral-500">Rute Pulang:</span>{' '}
-                      <span className="font-medium text-neutral-900">{selectedSchedule.pulang_bandara_asal || '-'} → {selectedSchedule.pulang_bandara_tujuan || '-'}</span>
-                    </p>
-                  )}
-                  <p>
-                    <span className="text-neutral-500">Tipe Penerbangan:</span>{' '}
-                    <span className="font-medium">{selectedSchedule.is_direct_flight ? 'Direct Flight (Langsung)' : 'Transit'}</span>
-                  </p>
-                  {!selectedSchedule.is_direct_flight && selectedSchedule.transit_bandara && (
-                    <p><span className="text-neutral-500">Transit:</span>{' '}<span className="font-medium text-neutral-900">{selectedSchedule.transit_bandara}</span></p>
-                  )}
-                </div>
-              </div>
-
-              {/* Kolom 2: Hotel & Kursi */}
-              <div className="p-4 bg-neutral-50 rounded-lg space-y-2 border border-neutral-200">
-                <div className="flex items-center gap-2 text-primary-700 font-semibold font-heading text-xs uppercase tracking-wider pb-1 border-b border-neutral-200">
-                  <Hotel size={15} />
-                  <span>Akomodasi & Kuota</span>
-                </div>
-                <div className="text-xs space-y-1.5 pt-1">
-                  <p>
-                    <span className="text-neutral-500">Hotel Makkah:</span>{' '}
-                    <span className="font-semibold text-neutral-900">
-                      {selectedSchedule.hotel_mekkah?.name || '-'} {selectedSchedule.hotel_mekkah?.star_rating ? `(★${selectedSchedule.hotel_mekkah.star_rating})` : ''}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-neutral-500">Hotel Madinah:</span>{' '}
-                    <span className="font-semibold text-neutral-900">
-                      {selectedSchedule.hotel_madinah?.name || '-'} {selectedSchedule.hotel_madinah?.star_rating ? `(★${selectedSchedule.hotel_madinah.star_rating})` : ''}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-neutral-500">Total Kuota:</span>{' '}
-                    <span className="font-medium text-neutral-900">{selectedSchedule.seat_total} Kursi</span>
-                  </p>
-                  <p>
-                    <span className="text-neutral-500">Sisa Kuota:</span>{' '}
-                    <span className="font-bold text-success-600">{selectedSchedule.seat_sisa} Kursi Tersedia</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Rincian Harga Kamar */}
-            <div>
-              <h4 className="text-xs font-bold font-heading uppercase tracking-wider text-neutral-500 mb-2">
-                Rincian Harga Paket per Tipe Kamar
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3 bg-white border border-neutral-200 rounded-lg text-center shadow-sm">
-                  <span className="text-xs font-semibold uppercase text-neutral-500 block">Kamar Quad (4 Orang)</span>
-                  <span className="text-base font-bold font-heading text-primary-700">
-                    {formatCurrency(selectedSchedule.harga_quad)}
-                  </span>
-                </div>
-                <div className="p-3 bg-white border border-neutral-200 rounded-lg text-center shadow-sm">
-                  <span className="text-xs font-semibold uppercase text-neutral-500 block">Kamar Triple (3 Orang)</span>
-                  <span className="text-base font-bold font-heading text-primary-700">
-                    {formatCurrency(selectedSchedule.harga_triple)}
-                  </span>
-                </div>
-                <div className="p-3 bg-white border border-neutral-200 rounded-lg text-center shadow-sm">
-                  <span className="text-xs font-semibold uppercase text-neutral-500 block">Kamar Double (2 Orang)</span>
-                  <span className="text-base font-bold font-heading text-primary-700">
-                    {formatCurrency(selectedSchedule.harga_double)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Fasilitas Include & Exclude */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Include */}
-              <div className="p-3.5 bg-white border border-neutral-200 rounded-lg space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold font-heading uppercase tracking-wider text-success-700">
-                  <CheckCircle2 size={15} />
-                  <span>Fasilitas Termasuk (Include)</span>
-                </div>
-                {selectedSchedule.include_items && selectedSchedule.include_items.length > 0 ? (
-                  <ul className="text-xs space-y-1 text-neutral-600 list-disc list-inside">
-                    {selectedSchedule.include_items.map((inc, i) => (
-                      <li key={i}>{inc}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-neutral-400 italic">Tidak ada keterangan fasilitas include.</p>
-                )}
-              </div>
-
-              {/* Exclude */}
-              <div className="p-3.5 bg-white border border-neutral-200 rounded-lg space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold font-heading uppercase tracking-wider text-neutral-500">
-                  <XCircle size={15} />
-                  <span>Tidak Termasuk (Exclude)</span>
-                </div>
-                {selectedSchedule.exclude_items && selectedSchedule.exclude_items.length > 0 ? (
-                  <ul className="text-xs space-y-1 text-neutral-600 list-disc list-inside">
-                    {selectedSchedule.exclude_items.map((exc, i) => (
-                      <li key={i}>{exc}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-neutral-400 italic">Tidak ada keterangan fasilitas exclude.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Add-ons yang Tersedia */}
-            {selectedSchedule.add_ons && selectedSchedule.add_ons.length > 0 && (
-              <div>
-                <h4 className="text-xs font-bold font-heading uppercase tracking-wider text-neutral-500 mb-2">
-                  Layanan Tambahan (Add-Ons) Tersedia
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {selectedSchedule.add_ons.map((addon) => (
-                    <span
-                      key={addon.id}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 text-primary-800 text-xs font-medium rounded-md border border-primary-200"
-                    >
-                      <Sparkles size={12} className="text-primary-600" />
-                      {addon.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
     </div>
   );
 };
