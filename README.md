@@ -159,6 +159,16 @@ cd ../travel-dashboard
 npm run build
 ```
 
+### 6. Seeder Hotel dan Maskapai
+
+Isi master data dengan nama hotel Mekkah/Madinah dan maskapai nyata yang umum digunakan perjalanan umrah:
+
+```bash
+go run -buildvcs=false cmd/seed-hotels-airlines/main.go
+```
+
+Seeder aman dijalankan ulang: nama yang sudah ada akan dilewati. Jarak hotel merupakan estimasi operasional dan dapat dikoreksi melalui dashboard. Foto serta logo tidak di-hotlink; unggah aset resmi yang memiliki izin penggunaan melalui dashboard.
+
 ---
 
 ## Fitur Dashboard Terkini
