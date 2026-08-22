@@ -17,6 +17,7 @@ type hotelSeed struct {
 	City       string
 	StarRating int
 	DistanceM  int
+	LogoURL    string
 }
 
 type airlineSeed struct {
@@ -27,22 +28,22 @@ type airlineSeed struct {
 // Nama hotel nyata. DistanceM adalah estimasi jarak jalan kaki operasional ke
 // Masjidil Haram/Masjid Nabawi dan tetap dapat dikoreksi admin setelah seeding.
 var hotels = []hotelSeed{
-	{"Fairmont Makkah Clock Royal Tower", "mekkah", 5, 100},
-	{"Swissotel Makkah", "mekkah", 5, 150},
-	{"Pullman ZamZam Makkah", "mekkah", 5, 150},
-	{"Makkah Towers", "mekkah", 5, 200},
-	{"Jabal Omar Marriott Hotel Makkah", "mekkah", 5, 650},
-	{"DoubleTree by Hilton Makkah Jabal Omar", "mekkah", 4, 750},
-	{"Anjum Hotel Makkah", "mekkah", 5, 750},
-	{"voco Makkah by IHG", "mekkah", 5, 1400},
-	{"Anwar Al Madinah Mövenpick", "madinah", 5, 100},
-	{"Dallah Taibah Hotel", "madinah", 5, 100},
-	{"Pullman Zamzam Madina", "madinah", 5, 150},
-	{"Frontel Al Harithia", "madinah", 5, 200},
-	{"Millennium Al Aqeeq Hotel", "madinah", 5, 250},
-	{"Saja Al Madinah", "madinah", 4, 600},
-	{"Leader Al Muna Kareem Hotel", "madinah", 4, 500},
-	{"Elaf Taiba Hotel", "madinah", 3, 350},
+	{"Fairmont Makkah Clock Royal Tower", "mekkah", 5, 100, "/uploads/hotel-logos/fairmont.png"},
+	{"Swissotel Makkah", "mekkah", 5, 150, ""},
+	{"Pullman ZamZam Makkah", "mekkah", 5, 150, ""},
+	{"Makkah Towers", "mekkah", 5, 200, ""},
+	{"Jabal Omar Marriott Hotel Makkah", "mekkah", 5, 650, ""},
+	{"DoubleTree by Hilton Makkah Jabal Omar", "mekkah", 4, 750, "/uploads/hotel-logos/doubletree.png"},
+	{"Anjum Hotel Makkah", "mekkah", 5, 750, "/uploads/hotel-logos/anjum.png"},
+	{"voco Makkah by IHG", "mekkah", 5, 1400, "/uploads/hotel-logos/voco.png"},
+	{"Anwar Al Madinah Mövenpick", "madinah", 5, 100, "/uploads/hotel-logos/movenpick.png"},
+	{"Dallah Taibah Hotel", "madinah", 5, 100, "/uploads/hotel-logos/dallah-taibah.png"},
+	{"Pullman Zamzam Madina", "madinah", 5, 150, ""},
+	{"Frontel Al Harithia", "madinah", 5, 200, ""},
+	{"Millennium Al Aqeeq Hotel", "madinah", 5, 250, ""},
+	{"Saja Al Madinah", "madinah", 4, 600, ""},
+	{"Leader Al Muna Kareem Hotel", "madinah", 4, 500, ""},
+	{"Elaf Taiba Hotel", "madinah", 3, 350, ""},
 }
 
 var airlines = []airlineSeed{
@@ -84,7 +85,7 @@ func main() {
 	}
 	defer tx.Rollback()
 
-	hotelCreated, hotelSkipped := seedHotels(ctx, tx)
+	hotelCreated, hotelUpdated, hotelSkipped := seedHotels(ctx, tx)
 	airlineCreated, airlineUpdated, airlineSkipped := seedAirlines(ctx, tx)
 	if err := tx.Commit(); err != nil {
 		log.Fatalf("[ERROR] commit seeder: %v", err)
@@ -93,23 +94,35 @@ func main() {
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println("SEED MASTER HOTEL & MASKAPAI SELESAI")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Printf("Hotel    : %d dibuat, %d sudah ada/dilewati\n", hotelCreated, hotelSkipped)
+	fmt.Printf("Hotel    : %d dibuat, %d logo dilengkapi, %d sudah sesuai/dilewati\n", hotelCreated, hotelUpdated, hotelSkipped)
 	fmt.Printf("Maskapai : %d dibuat, %d logo dilengkapi, %d sudah sesuai/dilewati\n", airlineCreated, airlineUpdated, airlineSkipped)
 	fmt.Println("Logo yang belum tersedia dapat diunggah melalui dashboard.")
 }
 
-func seedHotels(ctx context.Context, tx *sql.Tx) (created, skipped int) {
+func seedHotels(ctx context.Context, tx *sql.Tx) (created, updated, skipped int) {
 	for _, item := range hotels {
 		var id uint64
-		err := tx.QueryRowContext(ctx, `SELECT id FROM hotels WHERE UPPER(name)=UPPER(?) LIMIT 1`, item.Name).Scan(&id)
+		var photoURL sql.NullString
+		err := tx.QueryRowContext(ctx, `SELECT id, photo_url FROM hotels WHERE UPPER(name)=UPPER(?) LIMIT 1`, item.Name).Scan(&id, &photoURL)
 		if err == nil {
+			if item.LogoURL != "" && (!photoURL.Valid || photoURL.String == "") {
+				if _, err := tx.ExecContext(ctx, `UPDATE hotels SET photo_url=? WHERE id=?`, item.LogoURL, id); err != nil {
+					log.Fatalf("[ERROR] memperbarui logo hotel %q: %v", item.Name, err)
+				}
+				updated++
+				continue
+			}
 			skipped++
 			continue
 		}
 		if err != sql.ErrNoRows {
 			log.Fatalf("[ERROR] memeriksa hotel %q: %v", item.Name, err)
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO hotels (name, city, star_rating, distance_m, photo_url) VALUES (?, ?, ?, ?, NULL)`, item.Name, item.City, item.StarRating, item.DistanceM); err != nil {
+		var seedLogo any
+		if item.LogoURL != "" {
+			seedLogo = item.LogoURL
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO hotels (name, city, star_rating, distance_m, photo_url) VALUES (?, ?, ?, ?, ?)`, item.Name, item.City, item.StarRating, item.DistanceM, seedLogo); err != nil {
 			log.Fatalf("[ERROR] menambah hotel %q: %v", item.Name, err)
 		}
 		created++

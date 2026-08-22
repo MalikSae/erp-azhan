@@ -176,6 +176,7 @@ jalankan migration berikut setelah menarik versi terbaru:
 
 ```bash
 go run -buildvcs=false migrations/run.go migrations/030_seed_airline_logo_urls.sql
+go run -buildvcs=false migrations/run.go migrations/031_seed_hotel_logo_urls.sql
 ```
 
 Jarak hotel merupakan estimasi operasional dan dapat dikoreksi melalui dashboard.
