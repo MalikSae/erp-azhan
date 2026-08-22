@@ -19,6 +19,11 @@ type hotelSeed struct {
 	DistanceM  int
 }
 
+type airlineSeed struct {
+	Name    string
+	LogoURL string
+}
+
 // Nama hotel nyata. DistanceM adalah estimasi jarak jalan kaki operasional ke
 // Masjidil Haram/Masjid Nabawi dan tetap dapat dikoreksi admin setelah seeding.
 var hotels = []hotelSeed{
@@ -40,19 +45,19 @@ var hotels = []hotelSeed{
 	{"Elaf Taiba Hotel", "madinah", 3, 350},
 }
 
-var airlines = []string{
-	"Garuda Indonesia",
-	"Saudia",
-	"Emirates",
-	"Qatar Airways",
-	"Etihad Airways",
-	"Oman Air",
-	"Turkish Airlines",
-	"Malaysia Airlines",
-	"Royal Brunei Airlines",
-	"Lion Air",
-	"Batik Air",
-	"AirAsia X",
+var airlines = []airlineSeed{
+	{"Garuda Indonesia", "/uploads/airline-logos/248e6902-020f-4062-914b-e0dd44d8e5f8.webp"},
+	{"Saudia", "/uploads/airline-logos/7426450f-d7a1-4486-9623-2e9d3b8b192a.webp"},
+	{"Emirates", "/uploads/airline-logos/181837fa-a756-456f-891c-6f3af052723e.webp"},
+	{"Qatar Airways", ""},
+	{"Etihad Airways", ""},
+	{"Oman Air", "/uploads/airline-logos/49bdd0d0-f27a-4102-8435-d65ffbaad645.webp"},
+	{"Turkish Airlines", ""},
+	{"Malaysia Airlines", ""},
+	{"Royal Brunei Airlines", ""},
+	{"Lion Air", "/uploads/airline-logos/f28d8537-8eab-43e4-a265-ca08a3609a7b.webp"},
+	{"Batik Air", ""},
+	{"AirAsia X", ""},
 }
 
 func main() {
@@ -80,7 +85,7 @@ func main() {
 	defer tx.Rollback()
 
 	hotelCreated, hotelSkipped := seedHotels(ctx, tx)
-	airlineCreated, airlineSkipped := seedAirlines(ctx, tx)
+	airlineCreated, airlineUpdated, airlineSkipped := seedAirlines(ctx, tx)
 	if err := tx.Commit(); err != nil {
 		log.Fatalf("[ERROR] commit seeder: %v", err)
 	}
@@ -89,8 +94,8 @@ func main() {
 	fmt.Println("SEED MASTER HOTEL & MASKAPAI SELESAI")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Printf("Hotel    : %d dibuat, %d sudah ada/dilewati\n", hotelCreated, hotelSkipped)
-	fmt.Printf("Maskapai : %d dibuat, %d sudah ada/dilewati\n", airlineCreated, airlineSkipped)
-	fmt.Println("Foto dan logo sengaja kosong; unggah aset resmi melalui dashboard.")
+	fmt.Printf("Maskapai : %d dibuat, %d logo dilengkapi, %d sudah sesuai/dilewati\n", airlineCreated, airlineUpdated, airlineSkipped)
+	fmt.Println("Logo yang belum tersedia dapat diunggah melalui dashboard.")
 }
 
 func seedHotels(ctx context.Context, tx *sql.Tx) (created, skipped int) {
@@ -112,19 +117,31 @@ func seedHotels(ctx context.Context, tx *sql.Tx) (created, skipped int) {
 	return
 }
 
-func seedAirlines(ctx context.Context, tx *sql.Tx) (created, skipped int) {
-	for _, name := range airlines {
+func seedAirlines(ctx context.Context, tx *sql.Tx) (created, updated, skipped int) {
+	for _, item := range airlines {
 		var id uint64
-		err := tx.QueryRowContext(ctx, `SELECT id FROM airlines WHERE UPPER(name)=UPPER(?) LIMIT 1`, name).Scan(&id)
+		var logoURL sql.NullString
+		err := tx.QueryRowContext(ctx, `SELECT id, logo_url FROM airlines WHERE UPPER(name)=UPPER(?) LIMIT 1`, item.Name).Scan(&id, &logoURL)
 		if err == nil {
+			if item.LogoURL != "" && (!logoURL.Valid || logoURL.String == "") {
+				if _, err := tx.ExecContext(ctx, `UPDATE airlines SET logo_url=? WHERE id=?`, item.LogoURL, id); err != nil {
+					log.Fatalf("[ERROR] memperbarui logo maskapai %q: %v", item.Name, err)
+				}
+				updated++
+				continue
+			}
 			skipped++
 			continue
 		}
 		if err != sql.ErrNoRows {
-			log.Fatalf("[ERROR] memeriksa maskapai %q: %v", name, err)
+			log.Fatalf("[ERROR] memeriksa maskapai %q: %v", item.Name, err)
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO airlines (name, logo_url) VALUES (?, NULL)`, name); err != nil {
-			log.Fatalf("[ERROR] menambah maskapai %q: %v", name, err)
+		var seedLogo any
+		if item.LogoURL != "" {
+			seedLogo = item.LogoURL
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO airlines (name, logo_url) VALUES (?, ?)`, item.Name, seedLogo); err != nil {
+			log.Fatalf("[ERROR] menambah maskapai %q: %v", item.Name, err)
 		}
 		created++
 	}

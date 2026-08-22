@@ -167,7 +167,20 @@ Isi master data dengan nama hotel Mekkah/Madinah dan maskapai nyata yang umum di
 go run -buildvcs=false cmd/seed-hotels-airlines/main.go
 ```
 
-Seeder aman dijalankan ulang: nama yang sudah ada akan dilewati. Jarak hotel merupakan estimasi operasional dan dapat dikoreksi melalui dashboard. Foto serta logo tidak di-hotlink; unggah aset resmi yang memiliki izin penggunaan melalui dashboard.
+Seeder ini aman dijalankan ulang. Data yang sudah ada tidak diduplikasi dan
+logo maskapai yang masih kosong akan dilengkapi dari aset di
+`uploads/airline-logos`. Logo yang telah diatur admin tidak akan ditimpa.
+
+Jika data hotel dan maskapai sudah pernah di-seed sebelum dukungan logo tersedia,
+jalankan migration berikut setelah menarik versi terbaru:
+
+```bash
+go run -buildvcs=false migrations/run.go migrations/030_seed_airline_logo_urls.sql
+```
+
+Jarak hotel merupakan estimasi operasional dan dapat dikoreksi melalui dashboard.
+Foto hotel dan logo maskapai yang belum disediakan tetap dapat diunggah melalui
+dashboard menggunakan aset resmi yang memiliki izin penggunaan.
 
 ---
 
