@@ -308,9 +308,193 @@ List kosong selalu mengembalikan array `[]`, bukan `null`.
 | `026_schedule_flight_routes.sql` | Menambahkan data rute pergi, transit, tujuan, dan rute pulang pada paket |
 | `027_booking_seat_block_state.sql` | Menyimpan status pembatalan block seat secara terpisah dari status booking |
 | `028_manual_bank_transfers.sql` | Migrasi rekening lama, multi-rekening per brand, bukti transfer portal, dan status penolakan |
+| `029_extend_document_types.sql` | Menambahkan vaksin meningitis dan menyelaraskan tipe dokumen portal |
 
 Selalu jalankan seluruh migrasi secara berurutan setelah menarik perubahan terbaru:
 
 ```powershell
 go run migrations/run.go
 ```
+
+---
+
+## Deployment VPS dengan aaPanel (Dari Awal Sampai Online)
+
+Contoh domain pada panduan ini:
+
+- API: `api.example.com`
+- Master Dashboard: `admin.example.com`
+- Travel Dashboard: `travel.example.com`
+- Microsite dipasang dari repository `azhan-microsite` secara terpisah.
+
+Ganti seluruh domain, password, dan path sesuai server produksi. Jangan memakai kredensial contoh secara langsung.
+
+### 1. Siapkan server dan aaPanel
+
+1. Gunakan Ubuntu 22.04/24.04 dengan minimal 2 vCPU dan RAM 4 GB.
+2. Arahkan DNS A record ketiga domain ke IP VPS.
+3. Instal aaPanel dari dokumentasi resminya, kemudian pasang **Nginx**, **MySQL 8**, dan **Node.js Manager** dari App Store.
+4. Melalui terminal aaPanel, instal Git, build tools, dan Go 1.25+:
+
+```bash
+sudo apt update
+sudo apt install -y git curl build-essential
+cd /tmp
+curl -LO https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go
+sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' | sudo tee /etc/profile.d/go.sh
+source /etc/profile.d/go.sh
+go version
+```
+
+### 2. Clone dan siapkan database
+
+```bash
+cd /www/wwwroot
+git clone https://github.com/MalikSae/erp-azhan.git
+cd erp-azhan
+go mod download
+```
+
+Di aaPanel buat database dan user khusus, misalnya `erp_azhan`, menggunakan charset `utf8mb4`. Jangan gunakan user `root` untuk aplikasi. Salin konfigurasi:
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Contoh `.env` produksi:
+
+```env
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=erp_azhan_app
+DB_PASSWORD=PASSWORD_DATABASE_YANG_KUAT
+DB_NAME=erp_azhan
+APP_PORT=9090
+CORS_ALLOWED_ORIGINS=https://admin.example.com,https://travel.example.com,https://*.example.com
+JWT_SECRET=RANDOM_MINIMAL_64_KARAKTER
+JWT_ACCESS_TTL_MINUTES=15
+JWT_REFRESH_TTL_DAYS=7
+```
+
+Jalankan seluruh migrasi **sekali pada database baru**, berurutan berdasarkan nama file:
+
+```bash
+for file in migrations/*.sql; do
+  echo "Menjalankan $file"
+  go run migrations/run.go "$file" || exit 1
+done
+```
+
+Migration bukan script reset dan tidak boleh dijalankan ulang sembarangan pada database berisi data. Untuk update berikutnya, jalankan hanya file migration baru yang belum diterapkan. Buat admin pertama tanpa menulis password ke README:
+
+```bash
+go run cmd/seed-admin/main.go admin@example.com 'PASSWORD_ADMIN_YANG_KUAT'
+```
+
+### 3. Build dan jalankan API
+
+```bash
+mkdir -p bin uploads
+go build -o bin/erp-azhan-api ./cmd/api
+chmod 750 bin/erp-azhan-api
+```
+
+Buat service `/etc/systemd/system/erp-azhan-api.service`:
+
+```ini
+[Unit]
+Description=ERP Azhan API
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/erp-azhan
+ExecStart=/www/wwwroot/erp-azhan/bin/erp-azhan-api
+Restart=always
+RestartSec=5
+EnvironmentFile=/www/wwwroot/erp-azhan/.env
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo chown -R www:www /www/wwwroot/erp-azhan
+sudo chmod 640 /www/wwwroot/erp-azhan/.env
+sudo systemctl daemon-reload
+sudo systemctl enable --now erp-azhan-api
+sudo systemctl status erp-azhan-api
+curl http://127.0.0.1:9090/api/health
+```
+
+### 4. Build dashboard
+
+Pilih Node.js 20/22 LTS di Node.js Manager. API produksi harus ditentukan **sebelum** build karena Vite menanam environment ke bundle.
+
+```bash
+cd /www/wwwroot/erp-azhan/frontend/master-dashboard
+printf 'VITE_API_BASE_URL=https://api.example.com\n' > .env.production
+npm ci
+npm run build
+
+cd /www/wwwroot/erp-azhan/frontend/travel-dashboard
+printf 'VITE_API_BASE_URL=https://api.example.com\n' > .env.production
+npm ci
+npm run build
+```
+
+### 5. Buat website dan reverse proxy aaPanel
+
+1. Buat website `api.example.com`; hapus index bawaan lalu atur **Reverse Proxy** ke `http://127.0.0.1:9090`.
+2. Buat website `admin.example.com` dengan document root `/www/wwwroot/erp-azhan/frontend/master-dashboard/dist`.
+3. Buat website `travel.example.com` dengan document root `/www/wwwroot/erp-azhan/frontend/travel-dashboard/dist`.
+4. Untuk kedua SPA dashboard, tambahkan pada konfigurasi Nginx di dalam blok `server`:
+
+```nginx
+location / {
+    try_files $uri $uri/ /index.html;
+}
+```
+
+5. Aktifkan SSL Let's Encrypt untuk ketiga domain dan centang **Force HTTPS**.
+6. Pastikan seluruh origin HTTPS produksi tercantum pada `CORS_ALLOWED_ORIGINS` (dipisahkan koma). Batasi port publik ke `80`, `443`, dan port SSH; port `9090` cukup diakses localhost.
+
+### 6. Permission, backup, dan verifikasi
+
+Direktori `uploads` wajib persisten dan dapat ditulis oleh user service:
+
+```bash
+sudo chown -R www:www /www/wwwroot/erp-azhan/uploads
+sudo find /www/wwwroot/erp-azhan/uploads -type d -exec chmod 750 {} \;
+```
+
+Atur Cron aaPanel untuk backup database dan folder `uploads` setiap hari. Uji deployment:
+
+```bash
+curl -i https://api.example.com/api/health
+curl -I https://admin.example.com
+curl -I https://travel.example.com
+journalctl -u erp-azhan-api -n 100 --no-pager
+```
+
+### 7. Prosedur update
+
+```bash
+cd /www/wwwroot/erp-azhan
+git pull --ff-only origin main
+go mod download
+# Jalankan hanya migration baru yang belum pernah diterapkan.
+go test ./...
+go build -o bin/erp-azhan-api ./cmd/api
+sudo systemctl restart erp-azhan-api
+
+cd frontend/master-dashboard && npm ci && npm run build
+cd ../travel-dashboard && npm ci && npm run build
+```
+
+Jangan menyimpan `.env`, dump database, private key SSL, atau isi `uploads` ke Git.
