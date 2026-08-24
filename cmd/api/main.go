@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -57,19 +58,27 @@ func main() {
 	// ─── Router & Middleware ──────────────────────────────────────────────────
 	r := chi.NewRouter()
 
+	allowedOrigins := []string{
+		"http://localhost:5173",
+		"http://localhost:5174",
+		"http://localhost:3000",
+		"https://localhost:3000",
+		"http://*.azhan.test",
+		"http://*.azhan.test:3000",
+		"https://*.azhan.test",
+		"https://*.azhan.test:3000",
+		"http://*.test",
+		"https://*.test",
+	}
+	if configured := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")); configured != "" {
+		for _, origin := range strings.Split(configured, ",") {
+			if origin = strings.TrimSpace(origin); origin != "" {
+				allowedOrigins = append(allowedOrigins, origin)
+			}
+		}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{
-			"http://localhost:5173",
-			"http://localhost:5174",
-			"http://localhost:3000",
-			"https://localhost:3000",
-			"http://*.azhan.test",
-			"http://*.azhan.test:3000",
-			"https://*.azhan.test",
-			"https://*.azhan.test:3000",
-			"http://*.test",
-			"https://*.test",
-		},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
