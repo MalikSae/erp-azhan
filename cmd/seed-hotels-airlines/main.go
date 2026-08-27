@@ -28,22 +28,22 @@ type airlineSeed struct {
 // Nama hotel nyata. DistanceM adalah estimasi jarak jalan kaki operasional ke
 // Masjidil Haram/Masjid Nabawi dan tetap dapat dikoreksi admin setelah seeding.
 var hotels = []hotelSeed{
-	{"Fairmont Makkah Clock Royal Tower", "mekkah", 5, 100, "/uploads/hotel-logos/fairmont.png"},
-	{"Swissotel Makkah", "mekkah", 5, 150, ""},
-	{"Pullman ZamZam Makkah", "mekkah", 5, 150, ""},
-	{"Makkah Towers", "mekkah", 5, 200, ""},
-	{"Jabal Omar Marriott Hotel Makkah", "mekkah", 5, 650, ""},
-	{"DoubleTree by Hilton Makkah Jabal Omar", "mekkah", 4, 750, "/uploads/hotel-logos/doubletree.png"},
-	{"Anjum Hotel Makkah", "mekkah", 5, 750, "/uploads/hotel-logos/anjum.png"},
-	{"voco Makkah by IHG", "mekkah", 5, 1400, "/uploads/hotel-logos/voco.png"},
-	{"Anwar Al Madinah Mövenpick", "madinah", 5, 100, "/uploads/hotel-logos/movenpick.png"},
-	{"Dallah Taibah Hotel", "madinah", 5, 100, "/uploads/hotel-logos/dallah-taibah.png"},
-	{"Pullman Zamzam Madina", "madinah", 5, 150, ""},
-	{"Frontel Al Harithia", "madinah", 5, 200, ""},
-	{"Millennium Al Aqeeq Hotel", "madinah", 5, 250, ""},
-	{"Saja Al Madinah", "madinah", 4, 600, ""},
-	{"Leader Al Muna Kareem Hotel", "madinah", 4, 500, ""},
-	{"Elaf Taiba Hotel", "madinah", 3, 350, ""},
+	{"Fairmont Makkah Clock Royal Tower", "Makkah", 5, 100, "/uploads/hotel-logos/fairmont.png"},
+	{"Swissotel Makkah", "Makkah", 5, 150, ""},
+	{"Pullman ZamZam Makkah", "Makkah", 5, 150, ""},
+	{"Makkah Towers", "Makkah", 5, 200, ""},
+	{"Jabal Omar Marriott Hotel Makkah", "Makkah", 5, 650, ""},
+	{"DoubleTree by Hilton Makkah Jabal Omar", "Makkah", 4, 750, "/uploads/hotel-logos/doubletree.png"},
+	{"Anjum Hotel Makkah", "Makkah", 5, 750, "/uploads/hotel-logos/anjum.png"},
+	{"voco Makkah by IHG", "Makkah", 5, 1400, "/uploads/hotel-logos/voco.png"},
+	{"Anwar Al Madinah Mövenpick", "Madinah", 5, 100, "/uploads/hotel-logos/movenpick.png"},
+	{"Dallah Taibah Hotel", "Madinah", 5, 100, "/uploads/hotel-logos/dallah-taibah.png"},
+	{"Pullman Zamzam Madina", "Madinah", 5, 150, ""},
+	{"Frontel Al Harithia", "Madinah", 5, 200, ""},
+	{"Millennium Al Aqeeq Hotel", "Madinah", 5, 250, ""},
+	{"Saja Al Madinah", "Madinah", 4, 600, ""},
+	{"Leader Al Muna Kareem Hotel", "Madinah", 4, 500, ""},
+	{"Elaf Taiba Hotel", "Madinah", 3, 350, ""},
 }
 
 var airlines = []airlineSeed{

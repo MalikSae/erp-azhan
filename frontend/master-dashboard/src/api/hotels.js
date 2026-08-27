@@ -5,6 +5,11 @@ export async function listHotels() {
   return response.data;
 }
 
+export async function listHotelCities() {
+  const response = await client.get('/api/admin/hotels/cities');
+  return response.data;
+}
+
 export async function createHotel(payload) {
   const response = await client.post('/api/admin/hotels', payload);
   return response.data;

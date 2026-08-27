@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrNotFound dikembalikan saat row tidak ditemukan.
@@ -47,6 +48,43 @@ func (r *Repository) List(ctx context.Context) ([]Hotel, error) {
 	return hotels, rows.Err()
 }
 
+// ListCities mengambil daftar kota unik dari tabel hotels diurutkan ASC.
+func (r *Repository) ListCities(ctx context.Context) ([]string, error) {
+	const q = `SELECT DISTINCT city FROM hotels WHERE city IS NOT NULL AND city != '' ORDER BY city ASC`
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("hotel.ListCities: %w", err)
+	}
+	defer rows.Close()
+
+	cities := make([]string, 0)
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, fmt.Errorf("hotel.ListCities scan: %w", err)
+		}
+		if c != "" {
+			cities = append(cities, c)
+		}
+	}
+	return cities, rows.Err()
+}
+
+// normalizeCity mengecek apakah kota dengan nama yang sama (case-insensitive) sudah ada di DB.
+// Jika ada, pakai ejaan yang sudah ada di DB. Jika tidak, pakai input user.
+func (r *Repository) normalizeCity(ctx context.Context, city string) string {
+	trimmed := strings.TrimSpace(city)
+	if trimmed == "" {
+		return trimmed
+	}
+	var existingCity string
+	err := r.db.QueryRowContext(ctx, `SELECT city FROM hotels WHERE UPPER(TRIM(city)) = UPPER(TRIM(?)) LIMIT 1`, trimmed).Scan(&existingCity)
+	if err == nil && existingCity != "" {
+		return existingCity
+	}
+	return trimmed
+}
+
 // Create menyisipkan hotel baru. Mengembalikan Hotel lengkap dengan ID & CreatedAt.
 // Cek duplikat case-insensitive dilakukan SEBELUM insert.
 func (r *Repository) Create(ctx context.Context, name, city string, starRating *int, distanceM *int, photoURL *string) (*Hotel, error) {
@@ -56,6 +94,8 @@ func (r *Repository) Create(ctx context.Context, name, city string, starRating *
 	} else if exists {
 		return nil, ErrDuplicate
 	}
+
+	city = r.normalizeCity(ctx, city)
 
 	const q = `INSERT INTO hotels (name, city, star_rating, distance_m, photo_url) VALUES (?, ?, ?, ?, ?)`
 	res, err := r.db.ExecContext(ctx, q, name, city, starRating, distanceM, photoURL)
@@ -85,6 +125,8 @@ func (r *Repository) Update(ctx context.Context, id uint64, name, city string, s
 	} else if exists {
 		return nil, ErrDuplicate
 	}
+
+	city = r.normalizeCity(ctx, city)
 
 	const q = `UPDATE hotels SET name=?, city=?, star_rating=?, distance_m=?, photo_url=? WHERE id=?`
 	if _, err := r.db.ExecContext(ctx, q, name, city, starRating, distanceM, photoURL, id); err != nil {

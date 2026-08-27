@@ -37,6 +37,18 @@ func (h *Handler) ListHotels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, hotels)
 }
 
+// ListCities godoc
+// GET /api/admin/hotels/cities
+// Response 200: array string ([] jika kosong, tidak pernah null)
+func (h *Handler) ListCities(w http.ResponseWriter, r *http.Request) {
+	cities, err := h.repo.ListCities(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar kota hotel")
+		return
+	}
+	writeJSON(w, http.StatusOK, cities)
+}
+
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 // CreateHotel godoc

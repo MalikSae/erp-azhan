@@ -10,7 +10,7 @@ import Select from '../components/ui/Select';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
-import { listHotels, createHotel, updateHotel, deleteHotel } from '../api/hotels';
+import { listHotels, listHotelCities, createHotel, updateHotel, deleteHotel } from '../api/hotels';
 import { uploadMedia } from '../api/media';
 
 const initialForm = {
@@ -44,6 +44,7 @@ const PhotoCell = ({ url, name }) => {
 
 const HotelsPage = () => {
   const [hotels, setHotels] = useState([]);
+  const [cities, setCities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   
@@ -52,6 +53,7 @@ const HotelsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingHotel, setEditingHotel] = useState(null);
   const [formData, setFormData] = useState(initialForm);
+  const [isNewCity, setIsNewCity] = useState(false);
   const [formErrors, setFormErrors] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState(null);
@@ -59,12 +61,16 @@ const HotelsPage = () => {
   
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
-  const fetchHotels = async () => {
+  const fetchHotelsAndCities = async () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const data = await listHotels();
-      setHotels(data);
+      const [hotelsData, citiesData] = await Promise.all([
+        listHotels(),
+        listHotelCities()
+      ]);
+      setHotels(hotelsData || []);
+      setCities(citiesData || []);
     } catch (error) {
       const msg = error.response?.data?.error || "Gagal memuat data hotel.";
       setErrorMessage(msg);
@@ -73,23 +79,36 @@ const HotelsPage = () => {
     }
   };
 
+  const fetchCities = async () => {
+    try {
+      const data = await listHotelCities();
+      setCities(data || []);
+      return data || [];
+    } catch (err) {
+      console.error("Gagal memuat daftar kota:", err);
+      return [];
+    }
+  };
+
   useEffect(() => {
-    fetchHotels();
+    fetchHotelsAndCities();
   }, []);
 
-  const handleOpenModal = (hotel = null) => {
+  const handleOpenModal = async (hotel = null) => {
+    const currentCities = await fetchCities();
+
     if (hotel) {
       setEditingHotel(hotel);
-      
-      const rawCity = (hotel.city || '').toLowerCase();
-      let normalizedCity = '';
-      if (rawCity === 'makkah' || rawCity === 'mekkah') normalizedCity = 'Makkah';
-      else if (rawCity === 'madinah') normalizedCity = 'Madinah';
-      else normalizedCity = hotel.city || '';
-      
+      const cityExists = currentCities.some(c => c.toLowerCase() === (hotel.city || '').toLowerCase());
+      if (hotel.city && !cityExists) {
+        setIsNewCity(true);
+      } else {
+        setIsNewCity(false);
+      }
+
       setFormData({
-        name: hotel.name,
-        city: normalizedCity,
+        name: hotel.name || '',
+        city: hotel.city || '',
         star_rating: hotel.star_rating !== null ? hotel.star_rating.toString() : '',
         distance_m: hotel.distance_m === null ? '' : hotel.distance_m.toString(),
         photo_url: hotel.photo_url || ''
@@ -97,6 +116,7 @@ const HotelsPage = () => {
       setLocalPreview(null);
     } else {
       setEditingHotel(null);
+      setIsNewCity(false);
       setFormData(initialForm);
       setLocalPreview(null);
     }
@@ -108,6 +128,7 @@ const HotelsPage = () => {
     if (!isSubmitting) {
       setIsModalOpen(false);
       setEditingHotel(null);
+      setIsNewCity(false);
       setFormData(initialForm);
       setLocalPreview(null);
     }
@@ -149,8 +170,8 @@ const HotelsPage = () => {
 
     try {
       const payload = {
-        name: formData.name,
-        city: formData.city,
+        name: formData.name.trim(),
+        city: formData.city.trim(),
         star_rating: parseInt(formData.star_rating, 10),
         distance_m: formData.distance_m === '' ? null : parseInt(formData.distance_m, 10),
         photo_url: formData.photo_url === '' ? null : formData.photo_url
@@ -163,7 +184,7 @@ const HotelsPage = () => {
       }
 
       handleCloseModal();
-      fetchHotels();
+      fetchHotelsAndCities();
     } catch (error) {
       const msg = error.response?.data?.error || "Terjadi kesalahan, coba lagi.";
       setFormErrors(msg);
@@ -184,7 +205,7 @@ const HotelsPage = () => {
     try {
       await deleteHotel(deleteConfirmId);
       setDeleteConfirmId(null);
-      fetchHotels();
+      fetchHotelsAndCities();
     } catch (error) {
       setDeleteConfirmId(null);
       if (error.response?.status === 409) {
@@ -199,8 +220,8 @@ const HotelsPage = () => {
 
   const filteredHotels = hotels.filter(hotel => {
     if (cityFilter) {
-      const hCity = (hotel.city || '').toLowerCase().replace('mekkah', 'makkah');
-      const fCity = cityFilter.toLowerCase().replace('mekkah', 'makkah');
+      const hCity = (hotel.city || '').trim().toLowerCase();
+      const fCity = cityFilter.trim().toLowerCase();
       if (hCity !== fCity) {
         return false;
       }
@@ -241,11 +262,10 @@ const HotelsPage = () => {
               onChange={(val) => setCityFilter(val)}
               options={[
                 { value: '', label: 'Semua Kota' },
-                { value: 'Makkah', label: 'Makkah' },
-                { value: 'Madinah', label: 'Madinah' }
+                ...cities.map(c => ({ value: c, label: c }))
               ]}
               placeholder="Pilih Kota"
-              className="!mb-0 min-w-[180px]"
+              className="!mb-0 min-w-44"
             />
           }
           itemsPerPage={10}
@@ -291,27 +311,62 @@ const HotelsPage = () => {
         size="md"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField label="Nama Hotel" required>
-            <Input 
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              placeholder="Contoh: Hilton Makkah"
-            />
-          </FormField>
-          
-          <CustomDropdown
-            label="Kota"
+          <Input 
+            label="Nama Hotel"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
             required
-            value={formData.city}
-            onChange={(val) => handleChange({ target: { name: 'city', value: val }})}
-            options={[
-              { value: 'Makkah', label: 'Makkah' },
-              { value: 'Madinah', label: 'Madinah' }
-            ]}
-            placeholder="Pilih Kota"
+            placeholder="Contoh: Hilton Makkah"
           />
+          
+          {!isNewCity ? (
+            <CustomDropdown
+              label="Kota"
+              required
+              value={formData.city}
+              onChange={(val) => {
+                if (val === '__new__') {
+                  setIsNewCity(true);
+                  setFormData(prev => ({ ...prev, city: '' }));
+                } else {
+                  setFormData(prev => ({ ...prev, city: val }));
+                }
+              }}
+              options={[
+                ...cities.map(c => ({ value: c, label: c })),
+                { value: '__new__', label: '+ Tambah Kota Baru' }
+              ]}
+              placeholder="Pilih Kota"
+            />
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-neutral-700 font-heading">
+                  Kota Baru <span className="text-danger-600">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNewCity(false);
+                    setFormData(prev => ({ ...prev, city: cities[0] || '' }));
+                  }}
+                  className="text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  ← Pilih dari daftar
+                </button>
+              </div>
+              <Input 
+                name="city"
+                value={formData.city}
+                onChange={handleChange}
+                required
+                placeholder="Contoh: Dubai, Istanbul, Doha"
+                className="!mb-0"
+                helperText="Gunakan ejaan yang konsisten (mis. 'Makkah', 'Madinah', 'Dubai', 'Istanbul')."
+              />
+            </div>
+          )}
           
           <CustomDropdown
             label="Rating Bintang"
@@ -328,15 +383,14 @@ const HotelsPage = () => {
             placeholder="Pilih Rating Bintang"
           />
           
-          <FormField label="Jarak ke Masjid (meter)">
-            <Input 
-              type="number"
-              name="distance_m"
-              value={formData.distance_m}
-              onChange={handleChange}
-              placeholder="Contoh: 200 (opsional)"
-            />
-          </FormField>
+          <Input 
+            label="Jarak ke Masjid (meter)"
+            type="number"
+            name="distance_m"
+            value={formData.distance_m}
+            onChange={handleChange}
+            placeholder="Contoh: 200 (opsional)"
+          />
 
           <FormField label="Foto Hotel (Opsional)">
             {(localPreview || formData.photo_url) && (
@@ -353,7 +407,7 @@ const HotelsPage = () => {
                       setLocalPreview(null);
                       setFormData(prev => ({ ...prev, photo_url: '' }));
                     }}
-                    className="absolute -top-2 -right-2 bg-danger-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-[10px]"
+                    className="absolute -top-2 -right-2 bg-danger-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-xs"
                   >
                     X
                   </button>
