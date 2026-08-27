@@ -1,19 +1,43 @@
 import React, { useState } from 'react';
 import FormField from './FormField';
 
-const Input = ({ label, type = 'text', value, onChange, error, required, placeholder, className = '', name, disabled, readOnly, ...props }) => {
+const Input = ({ 
+  label, 
+  type = 'text', 
+  value, 
+  onChange, 
+  error, 
+  helperText,
+  required, 
+  placeholder, 
+  className = '', 
+  name, 
+  disabled, 
+  readOnly, 
+  icon,
+  prefixIcon,
+  list,
+  ...props 
+}) => {
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordField = type === 'password';
   const inputType = isPasswordField && showPassword ? 'text' : type;
 
-  const inputBaseClasses = 'w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors';
+  const activeIcon = prefixIcon || icon;
+  const inputBaseClasses = 'w-full rounded-md border border-neutral-300 py-2 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors';
+  const paddingLeftClass = activeIcon ? 'pl-9 pr-3' : 'px-3';
   const disabledClasses = disabled || readOnly ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : '';
   const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500' : '';
   const paddingRightClass = isPasswordField ? 'pr-10' : '';
 
   return (
-    <FormField label={label} error={error} required={required} className={className}>
+    <FormField label={label} error={error} helperText={helperText} required={required} className={className}>
       <div className="relative">
+        {activeIcon && (
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none flex items-center justify-center">
+            {activeIcon}
+          </div>
+        )}
         <input
           type={inputType}
           name={name}
@@ -23,7 +47,8 @@ const Input = ({ label, type = 'text', value, onChange, error, required, placeho
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
-          className={`${inputBaseClasses} ${errorClasses} ${paddingRightClass} ${disabledClasses}`}
+          list={list}
+          className={`${inputBaseClasses} ${paddingLeftClass} ${errorClasses} ${paddingRightClass} ${disabledClasses}`}
           {...props}
         />
         {isPasswordField && (

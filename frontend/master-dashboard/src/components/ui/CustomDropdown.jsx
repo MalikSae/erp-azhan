@@ -10,7 +10,9 @@ const CustomDropdown = ({
   error, 
   required, 
   className = '',
-  variant = 'light' // 'light' or 'dark'
+  variant = 'light', // 'light' or 'dark'
+  icon,
+  prefixIcon
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -32,15 +34,23 @@ const CustomDropdown = ({
   const selectedOption = options.find(opt => opt.value === value);
 
   const isDark = variant === 'dark';
+  const activeIcon = prefixIcon || icon;
+  const paddingLeftClass = activeIcon ? 'pl-9 pr-3' : 'px-3';
 
   return (
     <FormField label={label} error={error} required={required} className={className}>
-      <div className="relative" ref={dropdownRef}>
+      <div className={`relative ${isOpen ? 'z-50' : 'z-10'}`} ref={dropdownRef}>
+        {activeIcon && (
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none z-1 flex items-center justify-center">
+            {activeIcon}
+          </div>
+        )}
         {/* Dropdown Trigger */}
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between rounded-md border px-3 py-2 text-sm font-body text-left transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500
+          className={`w-full flex items-center justify-between rounded-md border py-2 text-sm font-body text-left transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500
+            ${paddingLeftClass}
             ${error 
               ? 'border-danger-500 focus:border-danger-500' 
               : isDark ? 'border-neutral-700 focus:border-primary-500' : 'border-neutral-300 focus:border-primary-500'
@@ -68,12 +78,14 @@ const CustomDropdown = ({
 
         {/* Dropdown Menu */}
         {isOpen && (
-          <div className={`absolute z-10 w-full mt-1 border rounded-md shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200
+          <div className={`absolute z-50 w-full mt-1 border rounded-md shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200
             ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200'}
           `}>
             <ul className="max-h-60 overflow-y-auto py-1 text-sm font-body">
               {options.length === 0 ? (
-                <li className={`px-3 py-2 text-center ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Tidak ada pilihan</li>
+                <li className={`px-3 py-2 text-center text-xs ${isDark ? 'text-neutral-500' : 'text-neutral-400'} italic`}>
+                  Tidak ada pilihan
+                </li>
               ) : (
                 options.map((opt, idx) => (
                   <li
