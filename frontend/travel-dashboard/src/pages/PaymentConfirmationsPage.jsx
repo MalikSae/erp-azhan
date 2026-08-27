@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { listAllPayments, verifyPayment } from '../api/bookings';
+import { listAllPayments, verifyPayment } from 'shared';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';

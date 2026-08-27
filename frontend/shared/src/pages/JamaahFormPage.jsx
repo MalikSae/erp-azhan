@@ -11,7 +11,7 @@ import Alert from "../components/ui/Alert";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { INDONESIAN_CITIES } from "../data/indonesianCities";
 
-const JamaahFormPage = () => {
+export const JamaahFormPage = ({ showBrandColumn = false }) => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -67,8 +67,6 @@ const JamaahFormPage = () => {
     setSubmitting(true);
     setError(null);
 
-    // Filter empty strings to null for optional fields if needed, 
-    // but the backend should handle it or we pass as is.
     try {
       if (isEdit) {
         await updateJamaah(id, formData);
@@ -97,7 +95,7 @@ const JamaahFormPage = () => {
         onBack={handleBack}
       />
 
-      {error && <Alert variant="error" message={error} onClose={() => setError(null)} />}
+      {error && <Alert variant="error">{error}</Alert>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <MetaBox title="Identitas Jamaah">

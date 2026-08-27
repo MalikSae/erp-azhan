@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getScheduleAdmin } from '../api/schedules';
+import { getScheduleAdmin } from 'shared';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';

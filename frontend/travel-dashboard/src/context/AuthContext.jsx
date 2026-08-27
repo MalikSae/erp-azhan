@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import { getMyBrand } from '../api/brand';
+import { getMyBrand } from 'shared';
 
 const AuthContext = createContext();
 

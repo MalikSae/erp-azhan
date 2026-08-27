@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Banknote, BarChart3, CalendarDays, CheckCircle2, Clock3, Package, Plane, TicketCheck, TrendingUp, UserRoundCheck, UsersRound } from "lucide-react";
-import { listBookings, listPayments } from "../api/bookings";
-import { listJamaah } from "../api/jamaah";
-import { listSchedulesAdmin } from "../api/schedules";
-import { getStokPerlengkapan } from "../api/perlengkapan";
+import { listBookings, listPayments, listJamaah, listSchedulesAdmin, getStokPerlengkapan, getStatusBadgeConfig } from "shared";
 import { useAuth } from "../context/AuthContext";
-import { getStatusBadgeConfig } from "../utils/bookingStatus";
 import Alert from "../components/ui/Alert";
 import Badge from "../components/ui/Badge";
 import LoadingSpinner from "../components/ui/LoadingSpinner";

@@ -1,0 +1,16 @@
+{
+  "name": "erp-azhan-frontend",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "master-dashboard",
+    "travel-dashboard"
+  ],
+  "scripts": {
+    "dev:master": "npm run dev --workspace=master-dashboard",
+    "dev:travel": "npm run dev --workspace=travel-dashboard",
+    "build:master": "npm run build --workspace=master-dashboard",
+    "build:travel": "npm run build --workspace=travel-dashboard",
+    "build": "npm run build --workspaces"
+  }
+}

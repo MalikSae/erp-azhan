@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createBooking } from "../api/bookings";
 import { listJamaah } from "../api/jamaah";
 import { listSchedulesAdmin } from "../api/schedules";
+import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
 import MetaBox from "../components/ui/MetaBox";
 import CustomDropdown from "../components/ui/CustomDropdown";
@@ -10,7 +11,7 @@ import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 
-const BookingFormPage = () => {
+export const BookingFormPage = ({ showBrandColumn = false }) => {
   const navigate = useNavigate();
 
   const [loadingData, setLoadingData] = useState(true);
@@ -19,6 +20,7 @@ const BookingFormPage = () => {
 
   const [jamaahList, setJamaahList] = useState([]);
   const [scheduleList, setScheduleList] = useState([]);
+  const [brandsMap, setBrandsMap] = useState({});
 
   const [formData, setFormData] = useState({
     jamaah_id: "",
@@ -29,14 +31,26 @@ const BookingFormPage = () => {
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const [jamaahRes, schedRes] = await Promise.all([
+        const promises = [
           listJamaah(),
-          listSchedulesAdmin({ status: 'published' }) // only published
-        ]);
+          listSchedulesAdmin({ status: 'published' })
+        ];
+        if (showBrandColumn) {
+          promises.push(listBrands());
+        }
+
+        const [jamaahRes, schedRes, brandsRes] = await Promise.all(promises);
         setJamaahList(jamaahRes || []);
-        // Only keep published schedules if backend didn't filter
         const published = (schedRes || []).filter(s => s.status === 'published');
         setScheduleList(published);
+
+        if (brandsRes) {
+          const bMap = {};
+          brandsRes.forEach(b => {
+            bMap[b.id] = b;
+          });
+          setBrandsMap(bMap);
+        }
       } catch (err) {
         setError("Gagal memuat opsi jamaah/paket.");
       } finally {
@@ -44,12 +58,7 @@ const BookingFormPage = () => {
       }
     };
     fetchOptions();
-  }, []);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  }, [showBrandColumn]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -68,7 +77,7 @@ const BookingFormPage = () => {
         room_type: formData.room_type
       };
       const res = await createBooking(payload);
-      navigate(`/bookings/${res.id}`); // Redirect to detail
+      navigate(`/bookings/${res.id}`);
     } catch (err) {
       setError(err.response?.data?.error || "Gagal membuat booking");
       setSubmitting(false);
@@ -84,7 +93,7 @@ const BookingFormPage = () => {
         onBack={() => navigate(-1)}
       />
 
-      {error && <Alert variant="error" message={error} onClose={() => setError(null)} />}
+      {error && <Alert variant="error">{error}</Alert>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <MetaBox title="Pilih Jamaah dan Paket">
@@ -93,7 +102,7 @@ const BookingFormPage = () => {
               label="Pilih Jamaah"
               name="jamaah_id" 
               value={formData.jamaah_id} 
-              onChange={handleChange} 
+              onChange={(val) => setFormData(prev => ({ ...prev, jamaah_id: val }))} 
               placeholder="-- Pilih Jamaah --"
               options={jamaahList.map(j => ({
                 value: j.id,
@@ -106,12 +115,16 @@ const BookingFormPage = () => {
               label="Pilih Paket (Hanya Publish)"
               name="schedule_id" 
               value={formData.schedule_id} 
-              onChange={handleChange} 
+              onChange={(val) => setFormData(prev => ({ ...prev, schedule_id: val }))} 
               placeholder="-- Pilih Paket --"
-              options={scheduleList.map(s => ({
-                value: s.id,
-                label: `${s.jadwal_nama} - Sisa: ${s.seat_sisa} pax`
-              }))}
+              options={scheduleList.map(s => {
+                const brandName = showBrandColumn && (brandsMap[s.brand_id]?.name || s.brand?.name);
+                const brandPrefix = brandName ? `[${brandName}] ` : '';
+                return {
+                  value: s.id,
+                  label: `${brandPrefix}${s.jadwal_nama} - Sisa: ${s.seat_sisa} pax`
+                };
+              })}
               required
             />
 
@@ -119,7 +132,7 @@ const BookingFormPage = () => {
               label="Tipe Kamar" 
               name="room_type" 
               value={formData.room_type} 
-              onChange={handleChange}
+              onChange={(val) => setFormData(prev => ({ ...prev, room_type: val }))}
               options={[
                 { value: "Quad", label: "Quad" },
                 { value: "Triple", label: "Triple" },
