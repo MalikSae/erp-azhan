@@ -40,10 +40,9 @@ var lockedStatuses = map[string]bool{
 }
 
 // AllowedProgressFields adalah mapping dari key request ke nama kolom database.
-// Catatan: paspor tidak ada di sini karena status paspor computed dari dokumen_jamaah.
+// Catatan: paspor dan tiket tidak ada di sini karena status paspor computed dari dokumen_jamaah dan status tiket computed dari schedules.is_ticket_confirmed.
 var AllowedProgressFields = map[string]string{
 	"visa":              "progress_visa",
-	"tiket":             "progress_tiket",
 	"hotel":             "progress_hotel",
 	"land_arrangement":  "progress_land_arrangement",
 	"manasik":           "progress_manasik",
@@ -52,15 +51,16 @@ var AllowedProgressFields = map[string]string{
 }
 
 // selectBookingFull adalah query SELECT booking dengan JOIN ke jamaah + schedules.
-// Kolom progress_paspor di tabel bookings bersifat VESTIGIAL dan di-override secara dinamis
-// berdasarkan keberadaan dokumen paspor di tabel dokumen_jamaah.
+// Kolom progress_paspor dan progress_tiket di tabel bookings bersifat VESTIGIAL dan di-override secara dinamis
+// berdasarkan keberadaan dokumen paspor di tabel dokumen_jamaah dan schedules.is_ticket_confirmed.
 const selectBookingFull = `
-	SELECT b.id, b.id_booking, b.schedule_id, s.jadwal_nama, s.berangkat_tanggal, b.jamaah_id, j.nama_lengkap,
+	SELECT b.id, b.id_booking, b.schedule_id, s.brand_id, s.jadwal_nama, s.berangkat_tanggal, b.jamaah_id, j.nama_lengkap,
 		b.room_type, b.harga_dasar, b.status, b.is_seat_blocked, b.total_harga, b.diskon, b.diskon_keterangan,
 		b.progress_paspor, b.progress_visa, b.progress_tiket, b.progress_hotel,
 		b.progress_land_arrangement, b.progress_manasik, b.progress_siskopatuh, b.progress_vaksin_meningitis,
 		b.perlengkapan_status, DATE_FORMAT(b.perlengkapan_tanggal, '%Y-%m-%d') AS perlengkapan_tanggal, b.perlengkapan_diberikan_oleh,
-		b.created_by, b.created_at
+		b.created_by, b.created_at,
+		s.is_ticket_confirmed
 	FROM bookings b
 	JOIN jamaah j ON j.id = b.jamaah_id
 	JOIN schedules s ON s.id = b.schedule_id`
@@ -621,21 +621,25 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	var createdBy sql.NullInt64
 	var berangkatTanggal sql.NullString
 	var vestigialPaspor bool
+	var vestigialTiket bool
 	var perlengkapanStatus string
 	var perlengkapanTanggal sql.NullString
 	var perlengkapanDiberikanOleh sql.NullInt64
+	var isTicketConfirmed bool
 
 	err := rows.Scan(
-		&b.ID, &idBooking, &b.ScheduleID, &b.JadwalNama, &berangkatTanggal, &b.JamaahID, &b.NamaJamaah,
+		&b.ID, &idBooking, &b.ScheduleID, &b.BrandID, &b.JadwalNama, &berangkatTanggal, &b.JamaahID, &b.NamaJamaah,
 		&b.RoomType, &hargaDasar, &b.Status, &b.IsSeatBlocked, &totalHarga, &b.Diskon, &diskonKeterangan,
-		&vestigialPaspor, &b.ProgressVisa, &b.ProgressTiket, &b.ProgressHotel,
+		&vestigialPaspor, &b.ProgressVisa, &vestigialTiket, &b.ProgressHotel,
 		&b.ProgressLandArrangement, &b.ProgressManasik, &b.ProgressSiskopatuh, &b.ProgressVaksinMeningitis,
 		&perlengkapanStatus, &perlengkapanTanggal, &perlengkapanDiberikanOleh,
 		&createdBy, &b.CreatedAt,
+		&isTicketConfirmed,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("booking.scanRow: %w", err)
 	}
+	b.ProgressTiket = isTicketConfirmed
 	if idBooking.Valid {
 		b.IDBooking = idBooking.String
 	}

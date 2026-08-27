@@ -355,6 +355,11 @@ func (h *Handler) UpdateBookingProgress(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if _, hasTiket := rawMap["tiket"]; hasTiket {
+		writeError(w, http.StatusBadRequest, "status tiket otomatis mengikuti status konfirmasi di master paket, tidak bisa diubah manual di sini")
+		return
+	}
+
 	updates := make(map[string]bool)
 	for key, rawVal := range rawMap {
 		if _, ok := AllowedProgressFields[key]; !ok {

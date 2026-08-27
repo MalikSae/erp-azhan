@@ -18,6 +18,7 @@ type Booking struct {
 	ID               int64    `json:"id"`
 	IDBooking        string   `json:"id_booking"`
 	ScheduleID       int64    `json:"schedule_id"`
+	BrandID          int64    `json:"brand_id"`
 	JadwalNama       string   `json:"jadwal_nama"`
 	BerangkatTanggal *string  `json:"berangkat_tanggal"`
 	JamaahID         int64    `json:"jamaah_id"`
@@ -32,6 +33,7 @@ type Booking struct {
 	// ProgressPaspor dihitung dinamis dari dokumen_jamaah (kolom DB bookings.progress_paspor bersifat vestigial)
 	ProgressPaspor            bool           `json:"progress_paspor"`
 	ProgressVisa              bool           `json:"progress_visa"`
+	// ProgressTiket dihitung dinamis dari schedules.is_ticket_confirmed (kolom DB bookings.progress_tiket bersifat vestigial)
 	ProgressTiket             bool           `json:"progress_tiket"`
 	ProgressHotel             bool           `json:"progress_hotel"`
 	ProgressLandArrangement   bool           `json:"progress_land_arrangement"`
