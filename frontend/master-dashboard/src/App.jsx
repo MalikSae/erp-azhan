@@ -12,6 +12,7 @@ import ItinerariesPage from './pages/ItinerariesPage';
 import ItineraryFormPage from './pages/ItineraryFormPage';
 import SchedulesPage from './pages/SchedulesPage';
 import ScheduleFormPage from './pages/ScheduleFormPage';
+import CategoriesPage from './pages/CategoriesPage';
 import AddOnsPage from './pages/AddOnsPage';
 import DesignSystemPage from './pages/DesignSystemPage';
 import InventoryPerlengkapanPage from './pages/InventoryPerlengkapanPage';
@@ -27,6 +28,15 @@ import BrandFormPage from './pages/BrandFormPage';
 import BankAccountsPage from './pages/BankAccountsPage';
 import PaymentConfirmationsPage from './pages/PaymentConfirmationsPage';
 
+import {
+  JamaahPage,
+  JamaahDetailPage,
+  JamaahFormPage,
+  BookingsPage,
+  BookingDetailPage,
+  BookingFormPage,
+} from 'shared';
+
 function App() {
   return (
     <AuthProvider>
@@ -40,6 +50,7 @@ function App() {
               <Route path="/" element={<DashboardHome />} />
               <Route path="/hotels" element={<HotelsPage />} />
               <Route path="/airlines" element={<AirlinesPage />} />
+              <Route path="/categories" element={<CategoriesPage />} />
               <Route path="/itineraries" element={<ItinerariesPage />} />
               <Route path="/itineraries/new" element={<ItineraryFormPage />} />
               <Route path="/itineraries/:id/edit" element={<ItineraryFormPage />} />
@@ -47,6 +58,15 @@ function App() {
               <Route path="/schedules/new" element={<ScheduleFormPage />} />
               <Route path="/schedules/:id/edit" element={<ScheduleFormPage />} />
               <Route path="/addons" element={<AddOnsPage />} />
+              
+              {/* Jamaah & Booking (Shared) */}
+              <Route path="/jamaah" element={<JamaahPage showBrandColumn={true} />} />
+              <Route path="/jamaah/new" element={<JamaahFormPage showBrandColumn={true} />} />
+              <Route path="/jamaah/:id" element={<JamaahDetailPage showBrandColumn={true} />} />
+              <Route path="/jamaah/:id/edit" element={<JamaahFormPage showBrandColumn={true} />} />
+              <Route path="/bookings" element={<BookingsPage showBrandColumn={true} />} />
+              <Route path="/bookings/new" element={<BookingFormPage showBrandColumn={true} />} />
+              <Route path="/bookings/:id" element={<BookingDetailPage showBrandColumn={true} />} />
               
               {/* Inventory */}
               <Route path="/inventory/perlengkapan" element={<InventoryPerlengkapanPage />} />

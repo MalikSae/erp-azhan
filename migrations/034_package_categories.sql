@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS package_categories (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    slug VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS category_brands (
+    category_id BIGINT UNSIGNED NOT NULL,
+    brand_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (category_id, brand_id),
+    CONSTRAINT fk_cb_category FOREIGN KEY (category_id) REFERENCES package_categories(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cb_brand FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE schedules ADD COLUMN category_id BIGINT UNSIGNED NULL AFTER brand_id;
+ALTER TABLE schedules ADD CONSTRAINT fk_schedules_category FOREIGN KEY (category_id) REFERENCES package_categories(id) ON DELETE SET NULL;

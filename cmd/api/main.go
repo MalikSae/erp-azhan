@@ -20,6 +20,7 @@ import (
 	"erp-azhan/api/internal/bankaccount"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
+	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
@@ -96,6 +97,9 @@ func main() {
 	airlineRepo := airline.NewRepository(db)
 	airlineHandler := airline.NewHandler(airlineRepo)
 
+	categoryRepo := category.NewRepository(db)
+	categoryHandler := category.NewHandler(categoryRepo)
+
 	addonRepo := addon.NewRepository(db)
 	addonHandler := addon.NewHandler(addonRepo)
 
@@ -146,7 +150,8 @@ func main() {
 	r.With(requireDB(db)).Get("/api/schedules", scheduleHandler.ListSchedulesPublic)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
-	// Public: resolve domain ke brand
+	// Public: categories & brand
+	r.With(requireDB(db)).Get("/api/public/categories", categoryHandler.ListPublicCategories)
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
 
 	// Auth (public)
@@ -185,6 +190,7 @@ func main() {
 
 		// Hotels
 		r.Get("/hotels", hotelHandler.ListHotels)
+		r.Get("/hotels/cities", hotelHandler.ListCities)
 		r.Post("/hotels", hotelHandler.CreateHotel)
 		r.Put("/hotels/{id}", hotelHandler.UpdateHotel)
 		r.Delete("/hotels/{id}", hotelHandler.DeleteHotel)
@@ -194,6 +200,13 @@ func main() {
 		r.Post("/airlines", airlineHandler.CreateAirline)
 		r.Put("/airlines/{id}", airlineHandler.UpdateAirline)
 		r.Delete("/airlines/{id}", airlineHandler.DeleteAirline)
+
+		// Categories
+		r.Get("/categories", categoryHandler.ListCategories)
+		r.Get("/categories/{id}", categoryHandler.GetCategory)
+		r.Post("/categories", categoryHandler.CreateCategory)
+		r.Put("/categories/{id}", categoryHandler.UpdateCategory)
+		r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
 
 		// Add-Ons
 		r.Get("/addons", addonHandler.ListAddOns)
