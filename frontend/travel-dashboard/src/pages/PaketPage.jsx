@@ -7,9 +7,9 @@ import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Badge from '../components/ui/Badge';
 import CustomDropdown from '../components/ui/CustomDropdown';
-import { listSchedulesAdmin } from '../api/schedules';
+import { listSchedulesAdmin } from 'shared';
 import UrgentPackagesBanner from '../components/UrgentPackagesBanner';
-import { Eye } from 'lucide-react';
+import { Eye, Files, Check, Archive, Minus, Zap } from 'lucide-react';
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-';
@@ -86,64 +86,54 @@ const PaketPage = () => {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([value, label]) => ({ value, label }));
   }, [schedules]);
 
-  const filteredSchedules = schedules.filter(s => {
-    if (filterMaskapai) {
-      if (!s.maskapai || String(s.maskapai.id) !== String(filterMaskapai)) return false;
-    }
-    if (filterStatus) {
-      if (s.status !== filterStatus) return false;
-    }
-    if (filterMonth) {
-      if (!s.berangkat_tanggal) return false;
-      const d = new Date(s.berangkat_tanggal);
-      if (isNaN(d.getTime())) return false;
-      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (val !== filterMonth) return false;
-    }
-    return true;
-  });
+  const counts = useMemo(() => {
+    return {
+      all: schedules.length,
+      urgent: schedules.filter(isScheduleUrgent).length,
+      published: schedules.filter(s => s.status === 'published').length,
+      draft: schedules.filter(s => s.status === 'draft').length,
+      archived: schedules.filter(s => s.status === 'archived').length,
+    };
+  }, [schedules, today]);
 
-  const urgentPackages = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  const filteredSchedules = useMemo(() => {
+    return schedules.filter(s => {
+      // 1. Tab Filter
+      if (activeTab === 'urgent') {
+        if (!isScheduleUrgent(s)) return false;
+      } else if (activeTab === 'published') {
+        if (s.status !== 'published') return false;
+      } else if (activeTab === 'draft') {
+        if (s.status !== 'draft') return false;
+      } else if (activeTab === 'archived') {
+        if (s.status !== 'archived') return false;
+      }
 
-    const urgent = schedules.filter(s => {
-      if (!s.is_ticket_confirmed) return false;
-      if (s.status === 'archived') return false;
+      // 2. Maskapai Filter
+      if (filterMaskapai) {
+        if (!s.maskapai || String(s.maskapai.id) !== String(filterMaskapai)) return false;
+      }
 
-      if (!s.berangkat_tanggal) return false;
-      const departDate = new Date(s.berangkat_tanggal);
-      departDate.setHours(0, 0, 0, 0);
-      const daysRemaining = Math.round((departDate - today) / (1000 * 60 * 60 * 24));
-      
-      if (daysRemaining < 0 || daysRemaining > 60) return false;
-      if (!s.seat_sisa || s.seat_sisa <= 0) return false;
+      // 3. Month Filter
+      if (filterMonth) {
+        if (!s.berangkat_tanggal) return false;
+        const d = new Date(s.berangkat_tanggal);
+        if (isNaN(d.getTime())) return false;
+        const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (val !== filterMonth) return false;
+      }
 
       return true;
-    }).map(s => {
-      const departDate = new Date(s.berangkat_tanggal);
-      departDate.setHours(0, 0, 0, 0);
-      const daysRemaining = Math.round((departDate - today) / (1000 * 60 * 60 * 24));
-
-      return {
-        id: s.id,
-        jadwal_nama: s.jadwal_nama,
-        daysRemaining,
-        seat_sisa: s.seat_sisa,
-        seat_total: s.seat_total,
-        rawSchedule: s
-      };
     });
+  }, [schedules, activeTab, filterMaskapai, filterMonth, today]);
 
-    return urgent.sort((a, b) => a.daysRemaining - b.daysRemaining);
-  }, [schedules]);
-
-  const handleOpenDetail = (pkgOrSchedule) => {
-    const id = pkgOrSchedule.id || pkgOrSchedule.rawSchedule?.id;
-    if (id) {
-      navigate(`/paket/${id}`);
-    }
-  };
+  const tabs = [
+    { id: 'all', label: 'Semua Paket', count: counts.all },
+    { id: 'urgent', label: '🚨 Mendesak (<60 Hari)', count: counts.urgent, isUrgent: true },
+    { id: 'published', label: 'Published', count: counts.published },
+    { id: 'draft', label: 'Draft', count: counts.draft },
+    { id: 'archived', label: 'Archived', count: counts.archived },
+  ];
 
   const columns = [
     { 
@@ -184,56 +174,85 @@ const PaketPage = () => {
       }
     },
     { 
-      header: 'Status', 
+      header: 'Publish', 
       key: 'status',
+      align: 'center',
       accessor: (row) => {
-        const label = row.status.charAt(0).toUpperCase() + row.status.slice(1);
-        return <Badge variant={row.status}>{label}</Badge>;
+        if (row.status === 'published') {
+          return (
+            <div className="flex items-center justify-center">
+              <div title="Published" className="w-5 h-5 rounded-full bg-success-500 text-white flex items-center justify-center shadow-2xs">
+                <Check size={12} strokeWidth={3} />
+              </div>
+            </div>
+          );
+        }
+        if (row.status === 'draft') {
+          return (
+            <div className="flex items-center justify-center">
+              <div title="Draft" className="flex items-center justify-center text-neutral-600">
+                <Files size={18} />
+              </div>
+            </div>
+          );
+        }
+        if (row.status === 'archived') {
+          return (
+            <div className="flex items-center justify-center">
+              <div title="Archived" className="flex items-center justify-center text-neutral-400">
+                <Archive size={18} />
+              </div>
+            </div>
+          );
+        }
+        return <div className="text-center text-xs text-neutral-400">-</div>;
       }
     },
     { 
       header: 'Tiket', 
       key: 'tiket',
+      align: 'center',
       sortable: true,
       sortFn: (a, b) => {
         const valA = a.is_ticket_confirmed ? 1 : 0;
         const valB = b.is_ticket_confirmed ? 1 : 0;
         return valA - valB;
       },
-      accessor: (row) => row.is_ticket_confirmed ? (
-        <div title="Confirmed" className="flex items-center text-success-500">
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-          </svg>
-        </div>
-      ) : (
-        <div title="Belum Confirmed" className="flex items-center text-neutral-300">
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-          </svg>
+      accessor: (row) => (
+        <div className="flex items-center justify-center">
+          {row.is_ticket_confirmed ? (
+            <div title="Tiket Confirmed" className="w-5 h-5 rounded-full bg-success-500 text-white flex items-center justify-center shadow-2xs">
+              <Check size={12} strokeWidth={3} />
+            </div>
+          ) : (
+            <div title="Tiket Belum Confirmed" className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-400 flex items-center justify-center shadow-2xs">
+              <Minus size={12} strokeWidth={3} />
+            </div>
+          )}
         </div>
       )
     },
     {
       header: 'Promo',
       key: 'promo',
+      align: 'center',
       sortable: true,
       sortFn: (a, b) => {
         const valA = a.is_promo ? 1 : 0;
         const valB = b.is_promo ? 1 : 0;
         return valA - valB;
       },
-      accessor: (row) => row.is_promo ? (
-        <div title="Promo Aktif" className="flex items-center text-warning-500">
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M11.983 1.907a.75.75 0 0 0-1.292-.656l-8.5 9.5A.75.75 0 0 0 2.75 12h6.572l-1.305 6.093a.75.75 0 0 0 1.292.656l8.5-9.5A.75.75 0 0 0 17.25 8h-6.572l1.305-6.093Z" />
-          </svg>
-        </div>
-      ) : (
-        <div title="Tidak Ada Promo" className="flex items-center text-neutral-300">
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM6.75 9.25a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Z" clipRule="evenodd" />
-          </svg>
+      accessor: (row) => (
+        <div className="flex items-center justify-center">
+          {row.is_promo ? (
+            <div title="Promo Aktif" className="w-5 h-5 rounded-full bg-warning-500 text-white flex items-center justify-center shadow-2xs">
+              <Zap size={11} className="fill-white" />
+            </div>
+          ) : (
+            <div title="Tidak Ada Promo" className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-400 flex items-center justify-center shadow-2xs">
+              <Minus size={12} strokeWidth={3} />
+            </div>
+          )}
         </div>
       )
     },
@@ -246,14 +265,61 @@ const PaketPage = () => {
         const tB = b.berangkat_tanggal ? new Date(b.berangkat_tanggal).getTime() : 0;
         return tA - tB;
       },
-      accessor: (row) => formatDate(row.berangkat_tanggal)
+      accessor: (row) => {
+        const days = getDaysRemaining(row.berangkat_tanggal);
+        const isUrgent = isScheduleUrgent(row);
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-body text-neutral-900">{formatDate(row.berangkat_tanggal)}</span>
+            {isUrgent && days !== null && (
+              <span 
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold text-danger-700 bg-danger-50 border border-danger-200"
+                title="Mendekati keberangkatan & belum penuh"
+              >
+                {days} hr lagi
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     { 
       header: 'Sisa Seat', 
       key: 'seat_sisa',
       sortable: true,
       sortFn: (a, b) => (a.seat_sisa || 0) - (b.seat_sisa || 0),
-      accessor: (row) => row.seat_sisa ?? '-'
+      accessor: (row) => {
+        if (row.seat_sisa === 0) {
+          return (
+            <div className="flex items-center">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-heading tracking-wide bg-success-600 text-white shadow-2xs">
+                Full Booked
+              </span>
+            </div>
+          );
+        }
+        const isUrgent = isScheduleUrgent(row);
+        const filled = (row.seat_total || 0) - (row.seat_sisa || 0);
+        const percent = row.seat_total > 0 ? (filled / row.seat_total) * 100 : 0;
+        return (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1 font-body">
+              <span className={`font-semibold ${isUrgent ? 'text-danger-700 font-bold' : 'text-neutral-900'}`}>
+                {row.seat_sisa ?? '-'}
+              </span>
+              <span className="text-neutral-400 text-xs">/ {row.seat_total ?? '-'} pax</span>
+            </div>
+            {isUrgent && row.seat_total > 0 && (
+              <div className="w-20 h-1.5 bg-neutral-100 rounded-full overflow-hidden mt-1 border border-neutral-200" title={`Terisi ${filled}/${row.seat_total} pax`}>
+                <div 
+                  className="h-full bg-danger-500 rounded-full" 
+                  style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} 
+                />
+              </div>
+            )}
+          </div>
+        );
+      }
     },
     { 
       header: 'Harga Mulai', 
@@ -273,14 +339,43 @@ const PaketPage = () => {
         title="Daftar Paket" 
       />
 
-      <UrgentPackagesBanner 
-        packages={urgentPackages} 
-        onOpenDetail={handleOpenDetail} 
-      />
-
       {errorMessage && (
         <Alert variant="error">{errorMessage}</Alert>
       )}
+
+      {/* Quick Filter Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-3">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const isUrgentTab = tab.id === 'urgent';
+          const hasUrgentCount = isUrgentTab && tab.count > 0;
+
+          let btnClass = 'bg-white text-neutral-600 hover:bg-neutral-100 border border-neutral-200';
+          let badgeClass = 'bg-neutral-100 text-neutral-600';
+
+          if (isActive) {
+            btnClass = isUrgentTab ? 'bg-danger-600 text-white shadow-sm' : 'bg-primary-600 text-white shadow-sm';
+            badgeClass = 'bg-white/20 text-white';
+          } else if (hasUrgentCount) {
+            btnClass = 'bg-danger-50 text-danger-700 hover:bg-danger-100 border border-danger-200';
+            badgeClass = 'bg-danger-200 text-danger-800 font-bold';
+          }
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold font-heading transition-all ${btnClass}`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] ${badgeClass}`}>
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {isLoading ? (
         <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
@@ -293,14 +388,14 @@ const PaketPage = () => {
             data={filteredSchedules}
             itemsPerPage={15}
             searchPlaceholder="Cari paket..."
-            emptyMessage='Belum ada paket untuk travel Anda.'
+            emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket untuk travel Anda.'}
             toolbarActions={
-              <div className="flex flex-col sm:flex-row gap-2 w-full flex-wrap sm:flex-nowrap">
+              <div className="flex flex-wrap items-center gap-2">
                 {/* 1. Jadwal (Bulan) */}
                 <CustomDropdown 
                   value={filterMonth}
                   onChange={(val) => setFilterMonth(val)}
-                  className="!mb-0 w-full sm:w-40"
+                  className="!mb-0 w-40"
                   placeholder="Semua Jadwal"
                   options={[
                     { value: '', label: 'Semua Jadwal' },
@@ -311,24 +406,11 @@ const PaketPage = () => {
                 <CustomDropdown 
                   value={filterMaskapai}
                   onChange={(val) => setFilterMaskapai(val)}
-                  className="!mb-0 w-full sm:w-44"
+                  className="!mb-0 w-44"
                   placeholder="Semua Maskapai"
                   options={[
                     { value: '', label: 'Semua Maskapai' },
                     ...availableMaskapai.map(m => ({ value: m.value, label: m.label }))
-                  ]}
-                />
-                {/* 3. Status */}
-                <CustomDropdown 
-                  value={filterStatus}
-                  onChange={(val) => setFilterStatus(val)}
-                  className="!mb-0 w-full sm:w-36"
-                  placeholder="Semua Status"
-                  options={[
-                    { value: '', label: 'Semua Status' },
-                    { value: 'draft', label: 'Draft' },
-                    { value: 'published', label: 'Published' },
-                    { value: 'archived', label: 'Archived' }
                   ]}
                 />
               </div>
