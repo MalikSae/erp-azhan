@@ -384,6 +384,35 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
+	// Gate 13.5: transit_hotel_ids opsional, tiap elemen harus ada di DB dan tidak boleh sama dengan hotel_mekkah_id atau hotel_madinah_id
+	var finalTransitHotelIDs []int64
+	if req.TransitHotelIDs != nil && len(req.TransitHotelIDs) > 0 {
+		seenTransit := make(map[int64]bool)
+		for _, thID := range req.TransitHotelIDs {
+			if thID <= 0 {
+				continue
+			}
+			if thID == req.HotelMekkahID || thID == req.HotelMadinahID {
+				writeError(w, http.StatusBadRequest, "hotel transit tidak boleh sama dengan hotel Mekkah atau hotel Madinah")
+				return nil, false
+			}
+			if seenTransit[thID] {
+				writeError(w, http.StatusBadRequest, "hotel transit tidak boleh duplikat")
+				return nil, false
+			}
+			seenTransit[thID] = true
+
+			if exists, err := h.repo.HotelExists(ctx, thID); err != nil {
+				writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+				return nil, false
+			} else if !exists {
+				writeError(w, http.StatusBadRequest, "hotel transit tidak valid")
+				return nil, false
+			}
+			finalTransitHotelIDs = append(finalTransitHotelIDs, thID)
+		}
+	}
+
 	// Gate 14: harga_quad, harga_triple, harga_double masing-masing > 0
 	if req.HargaQuad <= 0 {
 		writeError(w, http.StatusBadRequest, "harga_quad harus lebih dari 0")
@@ -396,6 +425,18 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	if req.HargaDouble <= 0 {
 		writeError(w, http.StatusBadRequest, "harga_double harus lebih dari 0")
 		return nil, false
+	}
+
+	// Gate 14.2: Validasi harga_infant (opsional, jika diisi harus >= 0)
+	var finalHargaInfant *float64
+	if req.HargaInfant != nil {
+		if *req.HargaInfant < 0 {
+			writeError(w, http.StatusBadRequest, "harga_infant tidak boleh kurang dari 0")
+			return nil, false
+		}
+		if *req.HargaInfant > 0 {
+			finalHargaInfant = req.HargaInfant
+		}
 	}
 
 	// Gate 14.5: Validasi harga_coret
@@ -417,6 +458,17 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 			return nil, false
 		} else if !exists {
 			writeError(w, http.StatusBadRequest, "itinerary_id tidak valid")
+			return nil, false
+		}
+	}
+
+	// Gate 15.2: category_id opsional, jika dikirim harus ada di DB
+	if req.CategoryID != nil && *req.CategoryID > 0 {
+		if exists, err := h.repo.CategoryExists(ctx, *req.CategoryID); err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return nil, false
+		} else if !exists {
+			writeError(w, http.StatusBadRequest, "category_id tidak valid")
 			return nil, false
 		}
 	}
@@ -462,6 +514,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	return &ScheduleInput{
 		BrandID:                  finalBrandID,
+		CategoryID:               req.CategoryID,
 		JadwalNama:               strings.TrimSpace(req.JadwalNama),
 		Status:                   reqStatus,
 		IsPromo:                  req.IsPromo,
@@ -483,9 +536,11 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		TransitBandara:           strings.TrimSpace(req.TransitBandara),
 		HotelMekkahID:            req.HotelMekkahID,
 		HotelMadinahID:           req.HotelMadinahID,
+		TransitHotelIDs:          finalTransitHotelIDs,
 		HargaQuad:                req.HargaQuad,
 		HargaTriple:              req.HargaTriple,
 		HargaDouble:              req.HargaDouble,
+		HargaInfant:              finalHargaInfant,
 		HargaCoret:               finalHargaCoret,
 		ItineraryID:              req.ItineraryID,
 		IncludeItems:             includeItems,
@@ -506,7 +561,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		// Tangkap MySQL FK constraint violation (error 1451) — defensive
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh paket lain")
+			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih ada jamaah yang booking paket ini")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("terjadi kesalahan internal: %v", err))

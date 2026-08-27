@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrNotFound dikembalikan saat schedule tidak ditemukan.
@@ -17,6 +18,9 @@ const selectFull = `
 	SELECT
 		s.id,
 		s.brand_id,
+		s.category_id,
+		COALESCE(cat.name, '') AS category_name,
+		COALESCE(cat.slug, '') AS category_slug,
 		s.jadwal_nama,
 		s.status,
 		s.is_promo,
@@ -49,6 +53,7 @@ const selectFull = `
 		s.harga_quad,
 		s.harga_triple,
 		s.harga_double,
+		s.harga_infant,
 		s.harga_coret,
 		s.itinerary_id,
 		(
@@ -64,6 +69,7 @@ const selectFull = `
 		s.created_at,
 		s.updated_at
 	FROM schedules s
+	LEFT JOIN package_categories cat ON cat.id = s.category_id
 	LEFT JOIN airlines a ON a.id = s.maskapai_id
 	LEFT JOIN hotels hm ON hm.id = s.hotel_mekkah_id
 	LEFT JOIN hotels hmd ON hmd.id = s.hotel_madinah_id`
@@ -83,10 +89,11 @@ func NewRepository(db *sql.DB) *Repository {
 // List mengambil semua schedule (semua status), ringkas, diurutkan created_at DESC.
 func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListItem, error) {
 	q := `
-		SELECT s.id, s.brand_id, s.jadwal_nama, s.status, s.is_promo, s.is_ticket_confirmed, s.is_direct_flight,
+		SELECT s.id, s.brand_id, s.category_id, COALESCE(cat.name, ''), COALESCE(cat.slug, ''),
+			s.jadwal_nama, s.status, s.is_promo, s.is_ticket_confirmed, s.is_direct_flight,
 			s.maskapai_id, COALESCE(a.name, ''), a.logo_url,
 			DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d') AS berangkat_tanggal,
-			s.seat_total, s.seat_sisa, s.harga_quad, s.harga_triple, s.harga_double,
+			s.seat_total, s.seat_sisa, s.harga_quad, s.harga_triple, s.harga_double, s.harga_infant,
 			(
 				SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('id', ao.id, 'name', ao.name)), '[]')
 				FROM schedule_add_ons sao
@@ -94,6 +101,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 				WHERE sao.schedule_id = s.id
 			) AS add_ons
 		FROM schedules s
+		LEFT JOIN package_categories cat ON cat.id = s.category_id
 		LEFT JOIN airlines a ON a.id = s.maskapai_id
 		WHERE 1=1`
 
@@ -119,11 +127,30 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 		var maskapaiName string
 		var maskapaiLogo *string
 
-		if err := rows.Scan(&item.ID, &item.BrandID, &item.JadwalNama, &item.Status, &item.IsPromo, &item.IsTicketConfirmed, &item.IsDirectFlight,
+		var categoryID sql.NullInt64
+		var categoryName, categorySlug string
+		var hargaInfant sql.NullFloat64
+
+		if err := rows.Scan(&item.ID, &item.BrandID, &categoryID, &categoryName, &categorySlug,
+			&item.JadwalNama, &item.Status, &item.IsPromo, &item.IsTicketConfirmed, &item.IsDirectFlight,
 			&maskapaiID, &maskapaiName, &maskapaiLogo,
 			&item.BerangkatTanggal, &item.SeatTotal, &item.SeatSisa,
-			&item.HargaQuad, &item.HargaTriple, &item.HargaDouble, &addOnsJSON); err != nil {
+			&item.HargaQuad, &item.HargaTriple, &item.HargaDouble, &hargaInfant, &addOnsJSON); err != nil {
 			return nil, fmt.Errorf("schedule.List scan: %w", err)
+		}
+
+		if categoryID.Valid {
+			item.CategoryID = &categoryID.Int64
+			item.Category = &CategoryRef{
+				ID:   categoryID.Int64,
+				Name: categoryName,
+				Slug: categorySlug,
+			}
+		}
+
+		if hargaInfant.Valid {
+			v := hargaInfant.Float64
+			item.HargaInfant = &v
 		}
 
 		if maskapaiID != nil && *maskapaiID > 0 {
@@ -138,8 +165,38 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 		if len(addOnsJSON) > 0 {
 			_ = json.Unmarshal(addOnsJSON, &item.AddOns)
 		}
+
+		th, _ := r.GetTransitHotelsByScheduleID(ctx, item.ID)
+		item.TransitHotels = th
+
 		items = append(items, item)
 	}
+
+	if len(items) > 0 {
+		ids := make([]any, len(items))
+		placeholders := make([]string, len(items))
+		for i, it := range items {
+			ids[i] = it.ID
+			placeholders[i] = "?"
+		}
+		bQuery := fmt.Sprintf(`SELECT schedule_id, COUNT(*) FROM bookings WHERE schedule_id IN (%s) GROUP BY schedule_id`, strings.Join(placeholders, ","))
+		bRows, err := r.db.QueryContext(ctx, bQuery, ids...)
+		if err == nil {
+			defer bRows.Close()
+			bCountMap := make(map[int64]int)
+			for bRows.Next() {
+				var schedID int64
+				var count int
+				if err := bRows.Scan(&schedID, &count); err == nil {
+					bCountMap[schedID] = count
+				}
+			}
+			for i := range items {
+				items[i].BookingCount = bCountMap[items[i].ID]
+			}
+		}
+	}
+
 	return items, rows.Err()
 }
 
@@ -158,6 +215,8 @@ func (r *Repository) ListPublic(ctx context.Context, brandID int64) ([]*PublicSc
 		if err != nil {
 			return nil, err
 		}
+		th, _ := r.GetTransitHotelsByScheduleID(ctx, s.ID)
+		s.TransitHotels = th
 		items = append(items, s.ToPublic())
 	}
 	return items, rows.Err()
@@ -185,24 +244,24 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 
 	const q = `
 		INSERT INTO schedules (
-			brand_id, jadwal_nama, status, is_promo, is_ticket_confirmed, is_direct_flight, seat_total, seat_sisa,
+			brand_id, category_id, jadwal_nama, status, is_promo, is_ticket_confirmed, is_direct_flight, seat_total, seat_sisa,
 			maskapai_id, berangkat_tanggal, berangkat_jam, berangkat_kode_penerbangan, berangkat_bandara_asal, berangkat_bandara_tujuan,
 			pulang_tanggal, pulang_jam, pulang_kode_penerbangan, pulang_bandara_asal, pulang_bandara_tujuan, transit_bandara,
 			hotel_mekkah_id, hotel_madinah_id,
-			harga_quad, harga_triple, harga_double, harga_coret,
+			harga_quad, harga_triple, harga_double, harga_infant, harga_coret,
 			itinerary_id, include_items, exclude_items,
 			brosur_url, brosur_thumb_url
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	res, err := tx.ExecContext(ctx, q,
-		inp.BrandID, inp.JadwalNama, inp.Status, inp.IsPromo, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
+		inp.BrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
 		nullInt64(inp.MaskapaiID),
 		inp.BerangkatTanggal, nullString(inp.BerangkatJam), nullString(inp.BerangkatKodePenerbangan),
 		nullString(inp.BerangkatBandaraAsal), nullString(inp.BerangkatBandaraTujuan),
 		inp.PulangTanggal, nullString(inp.PulangJam), nullString(inp.PulangKodePenerbangan),
 		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
-		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaCoret,
+		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret,
 		inp.ItineraryID, includeJSON, excludeJSON,
 		nullString(inp.BrosurURL), nullString(inp.BrosurThumbURL),
 	)
@@ -222,6 +281,10 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 				return nil, fmt.Errorf("schedule.Create addon: %w", err)
 			}
 		}
+	}
+
+	if err := r.UpdateTransitHotels(ctx, tx, id, inp.TransitHotelIDs); err != nil {
+		return nil, fmt.Errorf("schedule.Create transit hotels: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -250,24 +313,24 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 
 	const q = `
 		UPDATE schedules SET
-			brand_id=?, jadwal_nama=?, status=COALESCE(NULLIF(?, ''), status), is_promo=?, is_ticket_confirmed=?, is_direct_flight=?, seat_total=?, seat_sisa=?,
+			brand_id=?, category_id=?, jadwal_nama=?, status=COALESCE(NULLIF(?, ''), status), is_promo=?, is_ticket_confirmed=?, is_direct_flight=?, seat_total=?, seat_sisa=?,
 			maskapai_id=?, berangkat_tanggal=?, berangkat_jam=?, berangkat_kode_penerbangan=?, berangkat_bandara_asal=?, berangkat_bandara_tujuan=?,
 			pulang_tanggal=?, pulang_jam=?, pulang_kode_penerbangan=?, pulang_bandara_asal=?, pulang_bandara_tujuan=?, transit_bandara=?,
 			hotel_mekkah_id=?, hotel_madinah_id=?,
-			harga_quad=?, harga_triple=?, harga_double=?, harga_coret=?,
+			harga_quad=?, harga_triple=?, harga_double=?, harga_infant=?, harga_coret=?,
 			itinerary_id=?, include_items=?, exclude_items=?,
 			brosur_url=?, brosur_thumb_url=?
 		WHERE id=?`
 
 	_, err = tx.ExecContext(ctx, q,
-		finalBrandID, inp.JadwalNama, inp.Status, inp.IsPromo, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
+		finalBrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
 		nullInt64(inp.MaskapaiID),
 		inp.BerangkatTanggal, nullString(inp.BerangkatJam), nullString(inp.BerangkatKodePenerbangan),
 		nullString(inp.BerangkatBandaraAsal), nullString(inp.BerangkatBandaraTujuan),
 		inp.PulangTanggal, nullString(inp.PulangJam), nullString(inp.PulangKodePenerbangan),
 		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
-		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaCoret,
+		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret,
 		inp.ItineraryID, includeJSON, excludeJSON,
 		nullString(inp.BrosurURL), nullString(inp.BrosurThumbURL),
 		id,
@@ -286,6 +349,10 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 				return nil, fmt.Errorf("schedule.Update insert addon: %w", err)
 			}
 		}
+	}
+
+	if err := r.UpdateTransitHotels(ctx, tx, id, inp.TransitHotelIDs); err != nil {
+		return nil, fmt.Errorf("schedule.Update transit hotels: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -382,6 +449,13 @@ func (r *Repository) AddOnExists(ctx context.Context, id int64) (bool, error) {
 	return count > 0, err
 }
 
+// CategoryExists memeriksa apakah category dengan id tersebut ada.
+func (r *Repository) CategoryExists(ctx context.Context, id int64) (bool, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories WHERE id=?`, id).Scan(&count)
+	return count > 0, err
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 func (r *Repository) exists(ctx context.Context, id int64, brandID *int64) error {
@@ -423,13 +497,76 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 		}
 		return nil, ErrNotFound
 	}
-	return scanRow(rows)
+	s, err := scanRow(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	th, _ := r.GetTransitHotelsByScheduleID(ctx, s.ID)
+	s.TransitHotels = th
+
+	var bCount int
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id = ?`, s.ID).Scan(&bCount)
+	s.BookingCount = bCount
+
+	return s, nil
+}
+
+// GetTransitHotelsByScheduleID mengambil daftar hotel transit untuk schedule tertentu terurut ASC.
+func (r *Repository) GetTransitHotelsByScheduleID(ctx context.Context, scheduleID int64) ([]TransitHotel, error) {
+	q := `
+		SELECT sth.hotel_id, h.name, COALESCE(h.city, ''), COALESCE(h.star_rating, 0), h.photo_url
+		FROM schedule_transit_hotels sth
+		JOIN hotels h ON h.id = sth.hotel_id
+		WHERE sth.schedule_id = ?
+		ORDER BY sth.urutan ASC`
+
+	rows, err := r.db.QueryContext(ctx, q, scheduleID)
+	if err != nil {
+		return nil, fmt.Errorf("schedule.GetTransitHotelsByScheduleID: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]TransitHotel, 0)
+	for rows.Next() {
+		var th TransitHotel
+		var photoURL sql.NullString
+		if err := rows.Scan(&th.HotelID, &th.Nama, &th.Kota, &th.StarRating, &photoURL); err != nil {
+			return nil, fmt.Errorf("schedule.GetTransitHotelsByScheduleID scan: %w", err)
+		}
+		if photoURL.Valid && photoURL.String != "" {
+			th.PhotoURL = &photoURL.String
+		}
+		items = append(items, th)
+	}
+	return items, rows.Err()
+}
+
+// UpdateTransitHotels memperbarui relasi hotel transit menggunakan pola replace-all (DELETE + INSERT).
+func (r *Repository) UpdateTransitHotels(ctx context.Context, tx *sql.Tx, scheduleID int64, hotelIDs []int64) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM schedule_transit_hotels WHERE schedule_id = ?`, scheduleID); err != nil {
+		return fmt.Errorf("schedule.UpdateTransitHotels delete: %w", err)
+	}
+
+	for i, hid := range hotelIDs {
+		if hid <= 0 {
+			continue
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO schedule_transit_hotels (schedule_id, hotel_id, urutan) VALUES (?, ?, ?)`, scheduleID, hid, i+1)
+		if err != nil {
+			return fmt.Errorf("schedule.UpdateTransitHotels insert: %w", err)
+		}
+	}
+	return nil
 }
 
 // scanRow mem-scan satu baris dari *sql.Rows (hasil selectFull) ke *Schedule.
 func scanRow(rows *sql.Rows) (*Schedule, error) {
 	var (
 		s              Schedule
+		categoryID     sql.NullInt64
+		categoryName   string
+		categorySlug   string
 		maskapaiID     sql.NullInt64
 		maskapaiName   string
 		maskapaiLogo   sql.NullString
@@ -441,6 +578,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		hmdName        string
 		hmdStar        int
 		hmdDist        sql.NullInt64
+		hargaInfant    sql.NullFloat64
 		hargaCoret     sql.NullFloat64
 		itineraryID    sql.NullInt64
 		addOnsJSON     []byte
@@ -449,7 +587,8 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 	)
 
 	err := rows.Scan(
-		&s.ID, &s.BrandID, &s.JadwalNama, &s.Status, &s.IsPromo, &s.IsTicketConfirmed, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
+		&s.ID, &s.BrandID, &categoryID, &categoryName, &categorySlug,
+		&s.JadwalNama, &s.Status, &s.IsPromo, &s.IsTicketConfirmed, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
 		&maskapaiID, &maskapaiName, &maskapaiLogo,
 		&s.BerangkatTanggal, &s.BerangkatJam, &s.BerangkatKodePenerbangan,
 		&s.BerangkatBandaraAsal, &s.BerangkatBandaraTujuan,
@@ -457,13 +596,22 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		&s.PulangBandaraAsal, &s.PulangBandaraTujuan, &s.TransitBandara,
 		&hotelMekkahID, &hmName, &hmStar, &hmDist,
 		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist,
-		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaCoret,
+		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret,
 		&itineraryID, &addOnsJSON, &includeJSON, &excludeJSON,
 		&s.BrosurURL, &s.BrosurThumbURL,
 		&s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("schedule.scanRow: %w", err)
+	}
+
+	if categoryID.Valid {
+		s.CategoryID = &categoryID.Int64
+		s.Category = &CategoryRef{
+			ID:   categoryID.Int64,
+			Name: categoryName,
+			Slug: categorySlug,
+		}
 	}
 
 	// Maskapai ref (nullable FK)
@@ -496,6 +644,12 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		}
 	}
 
+	// Harga Infant nullable
+	if hargaInfant.Valid {
+		v := hargaInfant.Float64
+		s.HargaInfant = &v
+	}
+
 	// Harga Coret nullable
 	if hargaCoret.Valid {
 		v := hargaCoret.Float64
@@ -525,6 +679,13 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 }
 
 // ─── SQL null helpers ─────────────────────────────────────────────────────────
+
+func nullInt64Ptr(v *int64) sql.NullInt64 {
+	if v == nil || *v == 0 {
+		return sql.NullInt64{Valid: false}
+	}
+	return sql.NullInt64{Int64: *v, Valid: true}
+}
 
 func nullInt64(v int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: v, Valid: v != 0}
