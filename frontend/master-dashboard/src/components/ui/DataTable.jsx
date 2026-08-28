@@ -12,7 +12,8 @@ const DataTable = ({
   itemsPerPage = 10,
   emptyMessage = "Tidak ada data",
   renderCell,
-  toolbarActions
+  toolbarActions,
+  onRowClick
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,14 +77,14 @@ const DataTable = ({
   }, [filteredData, pagination, currentPage, itemsPerPage]);
 
   return (
-    <div className="w-full bg-white rounded-lg border border-neutral-200 shadow-sm overflow-visible">
+    <div className="w-full bg-white rounded-2xl border border-neutral-200/80 shadow-card overflow-hidden">
       {/* Header / Toolbar */}
       {(searchable || toolbarActions) && (
-        <div className="p-4 border-b border-neutral-200 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-neutral-50/50 gap-4">
+        <div className="p-4 border-b border-neutral-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white gap-4">
           <div className="w-full max-w-sm relative">
             {searchable && (
               <>
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <svg className="h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
@@ -93,7 +94,7 @@ const DataTable = ({
                   placeholder={searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-md border border-neutral-300 pl-10 pr-3 py-2 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body bg-white"
+                  className="w-full rounded-xl border border-neutral-200/90 pl-10 pr-3.5 py-2 text-xs md:text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs font-body bg-white transition-all"
                 />
               </>
             )}
@@ -114,15 +115,16 @@ const DataTable = ({
         renderCell={renderCell}
         sortConfig={sortConfig}
         onSort={handleSort}
+        onRowClick={onRowClick}
       />
 
       {/* Footer / Pagination */}
       {pagination && filteredData.length > 0 && (
-        <div className="p-4 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between bg-neutral-50/50 gap-4">
-          <div className="text-sm text-neutral-500 font-body text-center sm:text-left">
-            Menampilkan <span className="font-medium text-neutral-900">{(currentPage - 1) * itemsPerPage + 1}</span> hingga <span className="font-medium text-neutral-900">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> dari <span className="font-medium text-neutral-900">{filteredData.length}</span> entri
+        <div className="p-4 border-t border-neutral-200/80 flex flex-col sm:flex-row items-center justify-between bg-white gap-4">
+          <div className="text-xs md:text-sm text-neutral-500 font-body text-center sm:text-left">
+            Menampilkan <span className="font-semibold text-neutral-900">{(currentPage - 1) * itemsPerPage + 1}</span> hingga <span className="font-semibold text-neutral-900">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> dari <span className="font-semibold text-neutral-900">{filteredData.length}</span> entri
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1.5 items-center">
             <Button 
               variant="secondary" 
               size="sm" 
@@ -150,7 +152,7 @@ const DataTable = ({
                 return getPageNumbers().map((page, index) => {
                   if (page === '...') {
                     return (
-                      <span key={`ellipsis-${index}`} className="px-2 text-neutral-400">
+                      <span key={`ellipsis-${index}`} className="px-2 text-neutral-400 text-xs font-bold">
                         ...
                       </span>
                     );
@@ -158,10 +160,10 @@ const DataTable = ({
                   return (
                     <Button
                       key={page}
-                      variant={currentPage === page ? "primary" : "ghost"}
+                      variant={currentPage === page ? "dark" : "ghost"}
                       size="sm"
                       onClick={() => setCurrentPage(page)}
-                      className="w-9 px-0"
+                      className={`w-8 h-8 p-0 text-xs ${currentPage === page ? 'shadow-2xs font-bold' : 'text-neutral-600 hover:bg-neutral-100'}`}
                     >
                       {page}
                     </Button>

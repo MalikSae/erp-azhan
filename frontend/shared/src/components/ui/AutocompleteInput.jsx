@@ -7,6 +7,7 @@ const AutocompleteInput = ({
   name,
   value = '',
   onChange,
+  onSelect,
   options = [],
   placeholder = 'Ketik nama kota/kabupaten...',
   error,
@@ -24,17 +25,20 @@ const AutocompleteInput = ({
   const listRef = useRef(null);
   const inputRef = useRef(null);
 
-  const query = (value || '').trim().toLowerCase();
-  const hasMinChars = query.length >= minChars;
+  const query = String(value ?? '').trim().toLowerCase();
+  const hasMinChars = minChars === 0 ? true : query.length >= minChars;
 
   // Filter options berdasarkan input
   const filteredOptions = useMemo(() => {
     if (!hasMinChars) {
       return [];
     }
+    if (!query) {
+      return options.slice(0, maxSuggestions);
+    }
     return options
       .filter((opt) => {
-        const text = typeof opt === 'string' ? opt : opt.label;
+        const text = typeof opt === 'string' ? opt : (opt.label || String(opt.value || ''));
         return text.toLowerCase().includes(query);
       })
       .slice(0, maxSuggestions);
@@ -52,7 +56,10 @@ const AutocompleteInput = ({
   }, []);
 
   const handleSelect = (selectedVal) => {
-    const val = typeof selectedVal === 'string' ? selectedVal : selectedVal.value || selectedVal.label;
+    if (onSelect) {
+      onSelect(selectedVal);
+    }
+    const val = typeof selectedVal === 'string' ? selectedVal : (selectedVal?.label || String(selectedVal?.value ?? ''));
     if (onChange) {
       onChange({ target: { name, value: val } });
     }
@@ -96,9 +103,9 @@ const AutocompleteInput = ({
     }
   }, [highlightedIndex]);
 
-  const inputBaseClasses = 'h-11 w-full min-w-0 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors';
+  const inputBaseClasses = 'h-11 w-full min-w-0 rounded-xl border border-neutral-200/90 bg-white px-3.5 text-xs md:text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs font-body transition-all';
   const disabledClasses = disabled || readOnly ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : '';
-  const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500' : '';
+  const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20' : '';
 
   return (
     <FormField label={label} error={error} required={required} className={className}>
@@ -136,9 +143,12 @@ const AutocompleteInput = ({
                 if (onChange) {
                   onChange({ target: { name, value: '' } });
                 }
+                if (onSelect) {
+                  onSelect(null);
+                }
                 inputRef.current?.focus();
               }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 rounded-full cursor-pointer"
               tabIndex={-1}
             >
               <X size={14} />
@@ -147,36 +157,35 @@ const AutocompleteInput = ({
         </div>
 
         {/* Dropdown Suggestions */}
-        {isOpen && !disabled && !readOnly && hasMinChars && filteredOptions.length > 0 && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-200 rounded-md shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-            <ul ref={listRef} className="max-h-60 overflow-y-auto py-1 text-sm font-body divide-y divide-neutral-50">
-              {filteredOptions.map((opt, idx) => {
-                const labelText = typeof opt === 'string' ? opt : opt.label;
-                const isSelected = labelText === value;
-                const isHighlighted = idx === highlightedIndex;
+        {isOpen && hasMinChars && filteredOptions.length > 0 && (
+          <ul
+            ref={listRef}
+            className="absolute z-50 mt-1.5 max-h-60 w-full overflow-auto rounded-xl bg-white py-1.5 text-xs md:text-sm shadow-card border border-neutral-200/80 focus:outline-none"
+            role="listbox"
+          >
+            {filteredOptions.map((opt, idx) => {
+              const text = typeof opt === 'string' ? opt : opt.label;
+              const isHighlighted = idx === highlightedIndex;
 
-                return (
-                  <li
-                    key={idx}
-                    onMouseDown={(e) => {
-                      // Gunakan onMouseDown agar tidak ter-trigger blur duluan
-                      e.preventDefault();
-                      handleSelect(opt);
-                    }}
-                    onMouseEnter={() => setHighlightedIndex(idx)}
-                    className={`px-3.5 py-2 cursor-pointer transition-colors
-                      ${isHighlighted || isSelected
-                        ? 'bg-primary-50 text-primary-900 font-medium'
-                        : 'text-neutral-700 hover:bg-neutral-50'
-                      }
-                    `}
-                  >
-                    <span className="truncate block">{labelText}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+              return (
+                <li
+                  key={idx}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleSelect(opt);
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  className={`cursor-pointer select-none px-3.5 py-2.5 transition-colors ${
+                    isHighlighted ? 'bg-neutral-100 text-neutral-900 font-bold' : 'text-neutral-700 hover:bg-neutral-50'
+                  }`}
+                  role="option"
+                  aria-selected={isHighlighted}
+                >
+                  {text}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </FormField>

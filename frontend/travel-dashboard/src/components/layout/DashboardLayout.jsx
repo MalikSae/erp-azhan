@@ -14,7 +14,7 @@ const DashboardLayout = () => {
   return (
     <div 
       className="h-screen bg-neutral-50 flex overflow-hidden font-body"
-      style={{ '--brand-primary': brandInfo?.primary_color || '#CC904A' }}
+      style={{ '--brand-primary': brandInfo?.primary_color || '#FED853' }}
     >
       <Sidebar isOpen={isSidebarOpen} closeDrawer={closeSidebar} />
       <div className="flex-1 min-w-0 ml-0 md:ml-56 flex flex-col h-screen">

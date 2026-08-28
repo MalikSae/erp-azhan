@@ -127,7 +127,7 @@ const BrandsPage = () => {
             }
             if (key === 'kode_brand') {
               return row.kode_brand ? (
-                <span className="font-mono text-xs font-bold text-primary-700 bg-primary-50 border border-primary-200 px-2 py-0.5 rounded">
+                <span className="font-mono text-xs font-bold text-neutral-800 bg-neutral-100 border border-neutral-200/90 px-2 py-0.5 rounded-lg">
                   {row.kode_brand}
                 </span>
               ) : (

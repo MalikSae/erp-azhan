@@ -350,11 +350,11 @@ const PaketPage = () => {
           const isUrgentTab = tab.id === 'urgent';
           const hasUrgentCount = isUrgentTab && tab.count > 0;
 
-          let btnClass = 'bg-white text-neutral-600 hover:bg-neutral-100 border border-neutral-200';
+          let btnClass = 'bg-white text-neutral-600 hover:bg-neutral-50 border border-neutral-200/90';
           let badgeClass = 'bg-neutral-100 text-neutral-600';
 
           if (isActive) {
-            btnClass = isUrgentTab ? 'bg-danger-600 text-white shadow-sm' : 'bg-primary-600 text-white shadow-sm';
+            btnClass = isUrgentTab ? 'bg-danger-600 text-white shadow-2xs font-bold' : 'bg-[#181C1F] text-white shadow-2xs font-bold';
             badgeClass = 'bg-white/20 text-white';
           } else if (hasUrgentCount) {
             btnClass = 'bg-danger-50 text-danger-700 hover:bg-danger-100 border border-danger-200';

@@ -8,7 +8,6 @@ import (
 
 func main() {
 	godotenv.Load(".env")
-	brandID := int64(2)
-	acc, _ := identity.GenerateAccessToken(8, &brandID)
+	acc, _ := identity.GenerateAccessToken(1, nil)
 	fmt.Println(acc)
 }

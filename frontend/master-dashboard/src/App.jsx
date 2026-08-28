@@ -11,6 +11,7 @@ import AirlinesPage from './pages/AirlinesPage';
 import ItinerariesPage from './pages/ItinerariesPage';
 import ItineraryFormPage from './pages/ItineraryFormPage';
 import SchedulesPage from './pages/SchedulesPage';
+import ScheduleDetailPage from './pages/ScheduleDetailPage';
 import ScheduleFormPage from './pages/ScheduleFormPage';
 import CategoriesPage from './pages/CategoriesPage';
 import AddOnsPage from './pages/AddOnsPage';
@@ -56,6 +57,7 @@ function App() {
               <Route path="/itineraries/:id/edit" element={<ItineraryFormPage />} />
               <Route path="/schedules" element={<SchedulesPage />} />
               <Route path="/schedules/new" element={<ScheduleFormPage />} />
+              <Route path="/schedules/:id" element={<ScheduleDetailPage />} />
               <Route path="/schedules/:id/edit" element={<ScheduleFormPage />} />
               <Route path="/addons" element={<AddOnsPage />} />
               

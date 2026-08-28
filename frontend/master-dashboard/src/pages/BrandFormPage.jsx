@@ -15,7 +15,7 @@ const initialFormData = {
   kode_brand: '',
   name: '',
   domain: '',
-  primary_color: '#CC904A',
+  primary_color: '#FED853',
   logo_url: '',
   icon_url: '',
   whatsapp_number: '',
@@ -58,7 +58,7 @@ const BrandFormPage = () => {
             kode_brand: data.kode_brand || '',
             name: data.name || '',
             domain: data.domain || '',
-            primary_color: data.primary_color || '#CC904A',
+            primary_color: data.primary_color || '#FED853',
             logo_url: data.logo_url || '',
             icon_url: data.icon_url || '',
             whatsapp_number: data.whatsapp_number || '',
@@ -255,15 +255,15 @@ const BrandFormPage = () => {
                   <input
                     type="color"
                     name="primary_color"
-                    value={formData.primary_color || '#CC904A'}
+                    value={formData.primary_color || '#FED853'}
                     onChange={handleChange}
-                    className="w-10 h-10 p-1 bg-pure-white border border-neutral-200 rounded cursor-pointer"
+                    className="w-10 h-10 p-1 bg-white border border-neutral-200 rounded-xl cursor-pointer"
                   />
                   <Input
                     name="primary_color"
                     value={formData.primary_color}
                     onChange={handleChange}
-                    placeholder="#CC904A"
+                    placeholder="#FED853"
                     className="font-mono uppercase"
                   />
                 </div>

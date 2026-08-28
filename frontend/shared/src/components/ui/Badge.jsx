@@ -81,8 +81,8 @@ const Badge = ({ variant = 'draft', icon, showIcon = true, hideIcon = false, chi
     archived: 'bg-neutral-100 text-neutral-700 border border-neutral-200',
     neutral: 'bg-neutral-100 text-neutral-700 border border-neutral-200',
     
-    primary: 'bg-primary-50 text-primary-700 border border-primary-200',
-    promo: 'bg-primary-50 text-primary-700 border border-primary-200',
+    primary: 'bg-primary-100 text-neutral-900 border border-amber-200 font-bold',
+    promo: 'bg-primary-100 text-neutral-900 border border-amber-200 font-bold',
   };
 
   const selectedVariant = variants[variant] || variants.draft;

@@ -302,11 +302,11 @@ const SchedulesPage = () => {
           const isUrgentTab = tab.id === 'urgent';
           const hasUrgentCount = isUrgentTab && tab.count > 0;
 
-          let btnClass = 'bg-white text-neutral-600 hover:bg-neutral-100 border border-neutral-200';
+          let btnClass = 'bg-white text-neutral-600 hover:bg-neutral-50 border border-neutral-200/90';
           let badgeClass = 'bg-neutral-100 text-neutral-600';
 
           if (isActive) {
-            btnClass = isUrgentTab ? 'bg-danger-600 text-white shadow-sm' : 'bg-primary-600 text-white shadow-sm';
+            btnClass = isUrgentTab ? 'bg-danger-600 text-white shadow-2xs font-bold' : 'bg-sidebar-bg text-white shadow-2xs font-bold';
             badgeClass = 'bg-white/20 text-white';
           } else if (hasUrgentCount) {
             btnClass = 'bg-danger-50 text-danger-700 hover:bg-danger-100 border border-danger-200';
@@ -339,6 +339,7 @@ const SchedulesPage = () => {
             columns={columns}
             data={filteredSchedules}
             itemsPerPage={15}
+            onRowClick={(row) => navigate(`/schedules/${row.id}`)}
             emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.'}
             toolbarActions={
               <div className="flex flex-wrap items-center gap-2">
@@ -490,7 +491,10 @@ const SchedulesPage = () => {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => navigate(`/schedules/${row.id}/edit`)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/schedules/${row.id}/edit`);
+                    }}
                     className="!px-2"
                     title="Edit"
                   >
@@ -500,6 +504,7 @@ const SchedulesPage = () => {
                     <button 
                       type="button"
                       disabled
+                      onClick={(e) => e.stopPropagation()}
                       title={`Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`}
                       className="text-neutral-300 opacity-40 cursor-not-allowed ml-1"
                     >
@@ -510,7 +515,10 @@ const SchedulesPage = () => {
                   ) : (
                     <button 
                       type="button"
-                      onClick={() => handleDeleteClick(row.id)} 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClick(row.id);
+                      }} 
                       title="Hapus"
                       className="text-neutral-400 hover:text-danger-600 transition-colors ml-1 cursor-pointer"
                     >

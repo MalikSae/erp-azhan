@@ -44,39 +44,39 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
 
         {/* Modal Dialog */}
         <div 
-          className={`bg-white rounded-xl shadow-xl ${sizeClasses[size]} relative z-50 overflow-visible animate-in fade-in zoom-in-95 duration-200 my-8`}
-        role="dialog"
-        aria-modal="true"
-      >
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between bg-white">
-          <h3 className="text-lg font-semibold font-heading text-neutral-900">
-            {title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 p-1.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
-            aria-label="Close modal"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-6 py-4">
-          {children}
-        </div>
-
-        {/* Footer */}
-        {footer && (
-          <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex justify-end gap-3 rounded-b-xl">
-            {footer}
+          className={`bg-white rounded-2xl shadow-2xl border border-neutral-200/80 ${sizeClasses[size]} relative z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8`}
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Header */}
+          <div className="px-6 py-4.5 border-b border-neutral-200/80 flex items-center justify-between bg-white">
+            <h3 className="text-base md:text-lg font-bold font-heading text-neutral-900">
+              {title}
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 p-1.5 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500/60"
+              aria-label="Close modal"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-        )}
+
+          {/* Body */}
+          <div className="p-6">
+            {children}
+          </div>
+
+          {/* Footer */}
+          {footer && (
+            <div className="px-6 py-3.5 bg-neutral-50/70 border-t border-neutral-200/80 flex items-center justify-end gap-3">
+              {footer}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </div>
   );
 };
