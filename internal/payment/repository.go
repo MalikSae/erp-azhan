@@ -253,9 +253,8 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	var totalHarga sql.NullFloat64
 	var currentStatus string
-	var scheduleID int64
-	err := tx.QueryRowContext(ctx, `SELECT total_harga, status, schedule_id FROM bookings WHERE id=? FOR UPDATE`, bookingID).
-		Scan(&totalHarga, &currentStatus, &scheduleID)
+	err := tx.QueryRowContext(ctx, `SELECT total_harga, status FROM bookings WHERE id=? FOR UPDATE`, bookingID).
+		Scan(&totalHarga, &currentStatus)
 	if err != nil {
 		return err
 	}
@@ -289,12 +288,9 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 	}
 
 	if targetStatus != currentStatus {
-		if currentStatus == "baru" && (targetStatus == "dp" || targetStatus == "lunas") {
-			_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa = GREATEST(0, seat_sisa - 1) WHERE id=?`, scheduleID)
-			if err != nil {
-				return err
-			}
-		}
+		// Kursi sudah direservasi saat CreateBooking (booking/repository.go), bukan di sini.
+		// Payment murni mencatat uang masuk & mengubah status transaksi, tidak lagi
+		// punya efek samping ke kuota kursi.
 		_, err = tx.ExecContext(ctx, `UPDATE bookings SET status=? WHERE id=?`, targetStatus, bookingID)
 		if err != nil {
 			return err
