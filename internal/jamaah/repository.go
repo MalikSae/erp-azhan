@@ -15,9 +15,9 @@ import (
 
 // Sentinel errors
 var (
-	ErrNotFound           = errors.New("data tidak ditemukan")
-	ErrDuplicateNIK       = errors.New("NIK sudah terdaftar")
-	ErrKodeBrandNotSet    = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
+	ErrNotFound        = errors.New("data tidak ditemukan")
+	ErrDuplicateNIK    = errors.New("NIK sudah terdaftar")
+	ErrKodeBrandNotSet = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
 )
 
 const kodeJamaahCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -134,7 +134,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		no_paspor, tempat_paspor_keluar,
 		DATE_FORMAT(paspor_berlaku_sampai, '%Y-%m-%d') AS paspor_berlaku_sampai,
 		no_hp, email, pekerjaan, pendidikan_terakhir, penjamin_kesehatan, no_asuransi_bpjs,
-		alamat, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat,
+		alamat, kota, catatan, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat,
 		created_at
 		FROM jamaah WHERE id=?`
 
@@ -152,7 +152,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		&j.NoPaspor, &j.TempatPasporKeluar,
 		&j.PasporBerlakuSampai,
 		&j.NoHP, &j.Email, &j.Pekerjaan, &j.PendidikanTerakhir, &j.PenjaminKesehatan, &j.NoAsuransiBPJS,
-		&j.Alamat, &j.EmergencyNama, &j.EmergencyNIK, &j.EmergencyHP, &j.EmergencyHubungan, &j.EmergencyAlamat,
+		&j.Alamat, &j.Kota, &j.Catatan, &j.EmergencyNama, &j.EmergencyNIK, &j.EmergencyHP, &j.EmergencyHubungan, &j.EmergencyAlamat,
 		&j.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -188,14 +188,14 @@ func (r *Repository) Create(ctx context.Context, brandID int64, req *CreateJamaa
 		brand_id, id_jamaah, kode_jamaah, nama_lengkap, nama_ayah_kandung, nik, tempat_lahir, tanggal_lahir,
 		no_paspor, tempat_paspor_keluar, paspor_berlaku_sampai,
 		no_hp, email, pekerjaan, pendidikan_terakhir, penjamin_kesehatan, no_asuransi_bpjs,
-		alamat, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		alamat, kota, catatan, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	res, err := tx.ExecContext(ctx, q,
 		brandID, idJamaah, kodeJamaah, req.NamaLengkap, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
 		req.NoPaspor, req.TempatPasporKeluar, req.PasporBerlakuSampai,
 		req.NoHP, req.Email, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan, req.NoAsuransiBPJS,
-		req.Alamat, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
+		req.Alamat, req.Kota, req.Catatan, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
 	)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
@@ -229,14 +229,14 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 		brand_id=?, nama_lengkap=?, nama_ayah_kandung=?, nik=?, tempat_lahir=?, tanggal_lahir=?,
 		no_paspor=?, tempat_paspor_keluar=?, paspor_berlaku_sampai=?,
 		no_hp=?, email=?, pekerjaan=?, pendidikan_terakhir=?, penjamin_kesehatan=?, no_asuransi_bpjs=?,
-		alamat=?, emergency_nama=?, emergency_nik=?, emergency_hp=?, emergency_hubungan=?, emergency_alamat=?
+		alamat=?, kota=?, catatan=?, emergency_nama=?, emergency_nik=?, emergency_hp=?, emergency_hubungan=?, emergency_alamat=?
 		WHERE id=?`
 
 	_, err := r.db.ExecContext(ctx, q,
 		finalBrandID, req.NamaLengkap, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
 		req.NoPaspor, req.TempatPasporKeluar, req.PasporBerlakuSampai,
 		req.NoHP, req.Email, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan, req.NoAsuransiBPJS,
-		req.Alamat, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
+		req.Alamat, req.Kota, req.Catatan, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
 		id,
 	)
 	if err != nil {
@@ -249,6 +249,27 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 	return r.GetByID(ctx, id, brandID)
 }
 
+// ─── Update Catatan ───────────────────────────────────────────────────────────
+
+// UpdateCatatan memperbarui field catatan saja.
+func (r *Repository) UpdateCatatan(ctx context.Context, id int64, brandID *int64, catatan *string) error {
+	if err := r.exists(ctx, id, brandID); err != nil {
+		return err
+	}
+	q := `UPDATE jamaah SET catatan=? WHERE id=?`
+	var args []interface{}
+	args = append(args, catatan, id)
+	if brandID != nil {
+		q = `UPDATE jamaah SET catatan=? WHERE id=? AND brand_id=?`
+		args = append(args, *brandID)
+	}
+	_, err := r.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("update catatan: %w", err)
+	}
+	return nil
+}
+
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 // Delete menghapus jamaah. Verify brand match + tangkap FK 1451.
@@ -258,6 +279,209 @@ func (r *Repository) Delete(ctx context.Context, id int64, brandID *int64) error
 	}
 	_, err := r.db.ExecContext(ctx, `DELETE FROM jamaah WHERE id=?`, id)
 	return err
+}
+
+// ─── Relasi Kekerabatan Methods ───────────────────────────────────────────────
+
+// ListRelasi mengambil semua relasi jamaah dua arah dan memetakan label kebalikannya.
+func (r *Repository) ListRelasi(ctx context.Context, jamaahID int64, brandID *int64) ([]JamaahRelasiItem, error) {
+	if err := r.exists(ctx, jamaahID, brandID); err != nil {
+		return nil, err
+	}
+
+	q := `
+	SELECT r.id, r.jamaah_id, r.relasi_jamaah_id, j.nama_lengkap, COALESCE(j.id_jamaah, ''), j.nik, r.hubungan, r.keterangan, r.created_at, TRUE AS is_asal
+	FROM jamaah_relasi r
+	JOIN jamaah j ON j.id = r.relasi_jamaah_id
+	WHERE r.jamaah_id = ?
+	UNION ALL
+	SELECT r.id, r.relasi_jamaah_id, r.jamaah_id, j.nama_lengkap, COALESCE(j.id_jamaah, ''), j.nik, r.hubungan, r.keterangan, r.created_at, FALSE AS is_asal
+	FROM jamaah_relasi r
+	JOIN jamaah j ON j.id = r.jamaah_id
+	WHERE r.relasi_jamaah_id = ?
+	ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, q, jamaahID, jamaahID)
+	if err != nil {
+		return nil, fmt.Errorf("list relasi: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]JamaahRelasiItem, 0)
+	for rows.Next() {
+		var item JamaahRelasiItem
+		var rawHubungan string
+		var nikNull sql.NullString
+		if err := rows.Scan(
+			&item.ID,
+			&item.JamaahID,
+			&item.RelasiJamaahID,
+			&item.NamaRelasi,
+			&item.IDJamaahRelasi,
+			&nikNull,
+			&rawHubungan,
+			&item.Keterangan,
+			&item.CreatedAt,
+			&item.IsAsal,
+		); err != nil {
+			return nil, fmt.Errorf("scan relasi: %w", err)
+		}
+
+		if nikNull.Valid {
+			item.NIKRelasi = &nikNull.String
+		}
+		item.HubunganAsli = rawHubungan
+		if item.IsAsal {
+			item.Hubungan = rawHubungan
+		} else {
+			if inv, ok := HubunganInverseMap[rawHubungan]; ok {
+				item.Hubungan = inv
+			} else {
+				item.Hubungan = rawHubungan
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
+// CreateRelasi menambahkan relasi baru dengan validasi brand, pencegahan diri sendiri, dan pencegahan duplikasi dua arah.
+func (r *Repository) CreateRelasi(ctx context.Context, jamaahID int64, brandID *int64, req *CreateRelasiRequest) (*JamaahRelasiItem, error) {
+	if jamaahID == req.RelasiJamaahID {
+		return nil, errors.New("tidak dapat menambahkan relasi ke diri sendiri")
+	}
+
+	isValidHubungan := false
+	for _, h := range ValidHubunganList {
+		if h == req.Hubungan {
+			isValidHubungan = true
+			break
+		}
+	}
+	if !isValidHubungan {
+		return nil, errors.New("hubungan tidak valid")
+	}
+
+	// 1. Validasi jamaah subjek
+	var subjekBrandID int64
+	var subjekNama string
+	err := r.db.QueryRowContext(ctx, "SELECT brand_id, nama_lengkap FROM jamaah WHERE id = ?", jamaahID).Scan(&subjekBrandID, &subjekNama)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("check subjek jamaah: %w", err)
+	}
+
+	// Verify brand scoping jika scoped admin
+	if brandID != nil && *brandID != subjekBrandID {
+		return nil, ErrNotFound
+	}
+
+	// 2. Validasi jamaah target
+	var targetBrandID int64
+	var targetNama string
+	var targetIDJamaah sql.NullString
+	var targetNIK sql.NullString
+	err = r.db.QueryRowContext(ctx, "SELECT brand_id, nama_lengkap, id_jamaah, nik FROM jamaah WHERE id = ?", req.RelasiJamaahID).Scan(
+		&targetBrandID, &targetNama, &targetIDJamaah, &targetNIK,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, errors.New("jamaah target tidak ditemukan")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("check target jamaah: %w", err)
+	}
+
+	// Pastikan 1 brand yang sama
+	if subjekBrandID != targetBrandID {
+		return nil, errors.New("hanya dapat menambahkan relasi antar jamaah dalam brand yang sama")
+	}
+
+	// 3. Validasi duplikasi dua arah (A-B atau B-A)
+	var (
+		existingID       int64
+		existingA        int64
+		existingB        int64
+		existingHubungan string
+	)
+	checkQ := `SELECT id, jamaah_id, relasi_jamaah_id, hubungan FROM jamaah_relasi
+		WHERE (jamaah_id = ? AND relasi_jamaah_id = ?)
+		   OR (jamaah_id = ? AND relasi_jamaah_id = ?)
+		LIMIT 1`
+	err = r.db.QueryRowContext(ctx, checkQ, jamaahID, req.RelasiJamaahID, req.RelasiJamaahID, jamaahID).Scan(
+		&existingID, &existingA, &existingB, &existingHubungan,
+	)
+	if err == nil {
+		// Sudah ada relasi
+		displayHubungan := existingHubungan
+		if existingB == jamaahID {
+			if inv, ok := HubunganInverseMap[existingHubungan]; ok {
+				displayHubungan = inv
+			}
+		}
+		return nil, fmt.Errorf("Relasi antara %s dan %s sudah tercatat sebagai %s", subjekNama, targetNama, displayHubungan)
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("check existing relasi: %w", err)
+	}
+
+	// 4. Insert relasi
+	insertQ := `INSERT INTO jamaah_relasi (jamaah_id, relasi_jamaah_id, hubungan, keterangan) VALUES (?, ?, ?, ?)`
+	res, err := r.db.ExecContext(ctx, insertQ, jamaahID, req.RelasiJamaahID, req.Hubungan, req.Keterangan)
+	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return nil, errors.New("relasi sudah terdaftar")
+		}
+		return nil, fmt.Errorf("insert relasi: %w", err)
+	}
+
+	insertID, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("last insert id: %w", err)
+	}
+
+	item := &JamaahRelasiItem{
+		ID:             insertID,
+		JamaahID:       jamaahID,
+		RelasiJamaahID: req.RelasiJamaahID,
+		NamaRelasi:     targetNama,
+		IDJamaahRelasi: targetIDJamaah.String,
+		Hubungan:       req.Hubungan,
+		HubunganAsli:   req.Hubungan,
+		IsAsal:         true,
+		Keterangan:     req.Keterangan,
+		CreatedAt:      time.Now(),
+	}
+	if targetNIK.Valid {
+		item.NIKRelasi = &targetNIK.String
+	}
+
+	return item, nil
+}
+
+// DeleteRelasi menghapus baris relasi baik subjek sebagai pembuat maupun penerima.
+func (r *Repository) DeleteRelasi(ctx context.Context, jamaahID int64, relasiID int64, brandID *int64) error {
+	if err := r.exists(ctx, jamaahID, brandID); err != nil {
+		return err
+	}
+
+	q := `DELETE FROM jamaah_relasi WHERE id = ? AND (jamaah_id = ? OR relasi_jamaah_id = ?)`
+	res, err := r.db.ExecContext(ctx, q, relasiID, jamaahID, jamaahID)
+	if err != nil {
+		return fmt.Errorf("delete relasi: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
