@@ -83,3 +83,18 @@ export const updateBookingProgress = async (bookingId, updates) => {
   return data;
 };
 
+export const updatePaxProgress = async (bookingId, paxId, updates) => {
+  const { data } = await api.put(`/api/admin/bookings/${bookingId}/pax/${paxId}/progress`, updates);
+  return data;
+};
+
+export const cancelBookingPax = async (bookingId, paxId) => {
+  const { data } = await api.put(`/api/admin/bookings/${bookingId}/pax/${paxId}/cancel`);
+  return data;
+};
+
+export const updatePaxRoomType = async (bookingId, paxId, roomType) => {
+  const { data } = await api.put(`/api/admin/bookings/${bookingId}/pax/${paxId}/room-type`, { room_type: roomType });
+  return data;
+};
+

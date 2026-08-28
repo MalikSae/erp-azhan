@@ -133,7 +133,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
           <button
             type="button"
             onClick={() => navigate(`/bookings/${row.id}`)}
-            className="font-mono text-sm font-semibold text-neutral-900 hover:text-primary-600 hover:underline transition-colors"
+            className="font-mono text-xs font-bold text-neutral-800 bg-neutral-100 px-2.5 py-1 rounded-lg border border-neutral-200/90 hover:bg-neutral-200/80 hover:border-neutral-300 transition-colors cursor-pointer"
           >
             {row.id_booking || `ID: ${row.id}`}
           </button>
@@ -143,21 +143,24 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
         header: "Jamaah", 
         key: "nama_jamaah",
         accessor: (row) => (
-          row.jamaah_id ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/jamaah/${row.jamaah_id}`);
-              }}
-              className="font-medium text-neutral-900 hover:text-primary-600 hover:underline text-left transition-colors font-body"
-              title="Lihat Detail Jamaah"
-            >
-              {row.nama_jamaah || row.jamaah?.nama_lengkap || `ID: ${row.jamaah_id}`}
-            </button>
-          ) : (
-            <span className="text-neutral-700 font-body">{row.nama_jamaah || "-"}</span>
-          )
+          <div className="flex flex-col items-start">
+            {row.jamaah_id ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/jamaah/${row.jamaah_id}`);
+                }}
+                className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body leading-tight"
+                title="Lihat Detail Jamaah"
+              >
+                {row.nama_jamaah || row.jamaah?.nama_lengkap || `ID: ${row.jamaah_id}`}
+              </button>
+            ) : (
+              <span className="text-neutral-700 font-body leading-tight">{row.nama_jamaah || "-"}</span>
+            )}
+            <span className="text-[11px] text-neutral-400 font-body mt-0.5 font-medium">(PIC)</span>
+          </div>
         )
       },
     ];
@@ -187,7 +190,27 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
       { 
         header: "Kamar", 
         key: "room_type", 
-        accessor: (row) => (row.room_type || row.tipe_kamar || '-').toUpperCase() 
+        accessor: (row) => {
+          const roomLabel = (row.room_type || row.tipe_kamar || '-').toUpperCase();
+          const extraPax = (row.pax_count || 1) - 1;
+          if (extraPax <= 0) {
+            return (
+              <span className="font-semibold text-neutral-900 font-body">
+                {roomLabel}
+              </span>
+            );
+          }
+          return (
+            <div className="flex flex-col items-start">
+              <span className="font-semibold text-neutral-900 font-body leading-tight">
+                {roomLabel}
+              </span>
+              <span className="text-[11px] text-neutral-400 font-body mt-0.5 font-medium">
+                +{extraPax} pax lainnya
+              </span>
+            </div>
+          );
+        }
       },
       { 
         header: "Total Harga", 
@@ -227,8 +250,9 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
             size="sm" 
             onClick={() => navigate(`/bookings/${row.id}`)}
             title="Detail"
+            className="p-1.5 text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg"
           >
-            <Eye size={16} className="text-primary-600" />
+            <Eye size={16} />
           </Button>
         )
       }
