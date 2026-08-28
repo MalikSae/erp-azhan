@@ -1,0 +1,17 @@
+-- Seed master maskapai awal dengan kode IATA
+INSERT INTO airlines (name, code, logo_url) VALUES
+('QATAR AIRWAYS', 'QR', NULL),
+('TURKISH AIRLINES', 'TK', NULL),
+('FLYNAS', 'XY', NULL),
+('MALAYSIA AIRLINES', 'MH', NULL),
+('SINGAPORE AIRLINES', 'SQ', NULL),
+('SCOOT', 'TR', NULL),
+('ROYAL BRUNEI AIRLINES', 'BI', NULL),
+('BATIK AIR', 'ID', NULL),
+('CITILINK', 'QG', NULL),
+('PELITA AIR', 'IP', NULL),
+('AIRASIA X', 'D7', NULL),
+('KUWAIT AIRWAYS', 'KU', NULL),
+('GULF AIR', 'GF', NULL),
+('EGYPTAIR', 'MS', NULL)
+ON DUPLICATE KEY UPDATE code = VALUES(code);

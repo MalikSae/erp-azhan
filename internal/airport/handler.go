@@ -1,4 +1,4 @@
-package airline
+package airport
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-// Handler menyimpan dependency untuk semua HTTP handler airline.
+// Handler menyimpan dependency untuk semua HTTP handler airport.
 type Handler struct {
 	repo *Repository
 }
@@ -23,120 +23,88 @@ func NewHandler(repo *Repository) *Handler {
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
-// ListAirlines godoc
-// GET /api/admin/airlines
-// Response 200: array Airline ([] jika kosong)
-func (h *Handler) ListAirlines(w http.ResponseWriter, r *http.Request) {
-	airlines, err := h.repo.List(r.Context())
+// ListAirports godoc
+// GET /api/admin/airports
+// Query params: ?search=
+// Response 200: array Airport ([] jika kosong)
+func (h *Handler) ListAirports(w http.ResponseWriter, r *http.Request) {
+	search := r.URL.Query().Get("search")
+	airports, err := h.repo.List(r.Context(), search)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data maskapai")
+		writeError(w, http.StatusInternalServerError, "gagal mengambil data bandara")
 		return
 	}
-	writeJSON(w, http.StatusOK, airlines)
+	writeJSON(w, http.StatusOK, airports)
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
-// CreateAirline godoc
-// POST /api/admin/airlines
-// Response 201: Airline baru
-func (h *Handler) CreateAirline(w http.ResponseWriter, r *http.Request) {
-	var req CreateAirlineRequest
+// CreateAirport godoc
+// POST /api/admin/airports
+// Response 201: Airport baru
+func (h *Handler) CreateAirport(w http.ResponseWriter, r *http.Request) {
+	var req CreateAirportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
 
-	name, ok := validateAirlineInput(w, req.Name)
+	name, code, city, ok := validateAirportInput(w, req.Name, req.Code, req.City)
 	if !ok {
 		return
 	}
 
-	var code *string
-	if req.Code != nil && strings.TrimSpace(*req.Code) != "" {
-		trimmedCode := strings.TrimSpace(*req.Code)
-		if len(trimmedCode) != 2 {
-			writeError(w, http.StatusBadRequest, "kode IATA harus 2 karakter")
-			return
-		}
-		upperCode := strings.ToUpper(trimmedCode)
-		code = &upperCode
-	}
-
-	var logoURL *string
-	if req.LogoURL != nil && strings.TrimSpace(*req.LogoURL) != "" {
-		val := strings.TrimSpace(*req.LogoURL)
-		logoURL = &val
-	}
-
-	airline, err := h.repo.Create(r.Context(), name, code, logoURL)
+	airport, err := h.repo.Create(r.Context(), name, code, city)
 	if err != nil {
-		handleAirlineRepoError(w, err)
+		handleAirportRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, airline)
+	writeJSON(w, http.StatusCreated, airport)
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
-// UpdateAirline godoc
-// PUT /api/admin/airlines/{id}
-// Response 200: Airline yang sudah diupdate
-func (h *Handler) UpdateAirline(w http.ResponseWriter, r *http.Request) {
+// UpdateAirport godoc
+// PUT /api/admin/airports/{id}
+// Response 200: Airport yang sudah diupdate
+func (h *Handler) UpdateAirport(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
 
-	var req UpdateAirlineRequest
+	var req UpdateAirportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
 
-	name, ok := validateAirlineInput(w, req.Name)
+	name, code, city, ok := validateAirportInput(w, req.Name, req.Code, req.City)
 	if !ok {
 		return
 	}
 
-	var code *string
-	if req.Code != nil && strings.TrimSpace(*req.Code) != "" {
-		trimmedCode := strings.TrimSpace(*req.Code)
-		if len(trimmedCode) != 2 {
-			writeError(w, http.StatusBadRequest, "kode IATA harus 2 karakter")
-			return
-		}
-		upperCode := strings.ToUpper(trimmedCode)
-		code = &upperCode
-	}
-
-	var logoURL *string
-	if req.LogoURL != nil && strings.TrimSpace(*req.LogoURL) != "" {
-		val := strings.TrimSpace(*req.LogoURL)
-		logoURL = &val
-	}
-
-	airline, err := h.repo.Update(r.Context(), id, name, code, logoURL)
+	airport, err := h.repo.Update(r.Context(), id, name, code, city)
 	if err != nil {
-		handleAirlineRepoError(w, err)
+		handleAirportRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, airline)
+	writeJSON(w, http.StatusOK, airport)
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
-// DeleteAirline godoc
-// DELETE /api/admin/airlines/{id}
+// DeleteAirport godoc
+// DELETE /api/admin/airports/{id}
 // Response 200: {"message": "berhasil dihapus"}
-func (h *Handler) DeleteAirline(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteAirport(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
 
 	if err := h.repo.Delete(r.Context(), id); err != nil {
-		handleAirlineRepoError(w, err)
+		handleAirportRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
@@ -144,35 +112,51 @@ func (h *Handler) DeleteAirline(w http.ResponseWriter, r *http.Request) {
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
-// validateAirlineInput memvalidasi dan menormalisasi input nama maskapai.
-// Mengembalikan (normalizedName, ok). Jika ok=false, response sudah ditulis.
-func validateAirlineInput(w http.ResponseWriter, rawName string) (string, bool) {
-	// Gate 1: name wajib
-	if strings.TrimSpace(rawName) == "" {
-		writeError(w, http.StatusBadRequest, "name wajib diisi")
-		return "", false
+func validateAirportInput(w http.ResponseWriter, rawName string, rawCode string, rawCity string) (string, string, string, bool) {
+	name := strings.TrimSpace(rawName)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "nama bandara wajib diisi")
+		return "", "", "", false
 	}
 
-	// Gate 2: normalisasi
-	name := strings.ToUpper(strings.TrimSpace(rawName))
+	code := strings.ToUpper(strings.TrimSpace(rawCode))
+	if code == "" {
+		writeError(w, http.StatusBadRequest, "kode bandara wajib diisi")
+		return "", "", "", false
+	}
+	if len(code) > 4 {
+		writeError(w, http.StatusBadRequest, "kode bandara maksimal 4 karakter")
+		return "", "", "", false
+	}
 
-	return name, true
+	city := strings.TrimSpace(rawCity)
+	if city == "" {
+		writeError(w, http.StatusBadRequest, "kota bandara wajib diisi")
+		return "", "", "", false
+	}
+
+	return name, code, city, true
 }
 
 // ─── Error handling ───────────────────────────────────────────────────────────
 
-func handleAirlineRepoError(w http.ResponseWriter, err error) {
+func handleAirportRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
-	case errors.Is(err, ErrDuplicate):
-		writeError(w, http.StatusConflict, "maskapai dengan nama ini sudah ada")
+	case errors.Is(err, ErrDuplicateCode):
+		writeError(w, http.StatusConflict, "Kode bandara sudah digunakan")
 	default:
-		// Tangkap MySQL FK constraint violation (error 1451)
 		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh paket lain")
-			return
+		if errors.As(err, &mysqlErr) {
+			if mysqlErr.Number == 1062 {
+				writeError(w, http.StatusConflict, "Kode bandara sudah digunakan")
+				return
+			}
+			if mysqlErr.Number == 1451 {
+				writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh data lain")
+				return
+			}
 		}
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 	}

@@ -25,7 +25,7 @@ func NewRepository(db *sql.DB) *Repository {
 
 // List mengambil semua maskapai, diurutkan by name ASC.
 func (r *Repository) List(ctx context.Context) ([]Airline, error) {
-	const q = `SELECT id, name, logo_url, created_at FROM airlines ORDER BY name ASC`
+	const q = `SELECT id, name, code, logo_url, created_at FROM airlines ORDER BY name ASC`
 
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
@@ -36,7 +36,7 @@ func (r *Repository) List(ctx context.Context) ([]Airline, error) {
 	airlines := make([]Airline, 0) // pastikan tidak nil → serialisasi jadi []
 	for rows.Next() {
 		var a Airline
-		if err := rows.Scan(&a.ID, &a.Name, &a.LogoURL, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Code, &a.LogoURL, &a.CreatedAt); err != nil {
 			return nil, fmt.Errorf("airline.List scan: %w", err)
 		}
 		airlines = append(airlines, a)
@@ -45,15 +45,15 @@ func (r *Repository) List(ctx context.Context) ([]Airline, error) {
 }
 
 // Create menyisipkan maskapai baru. Mengembalikan Airline lengkap dengan ID & CreatedAt.
-func (r *Repository) Create(ctx context.Context, name string, logoURL *string) (*Airline, error) {
+func (r *Repository) Create(ctx context.Context, name string, code *string, logoURL *string) (*Airline, error) {
 	if exists, err := r.nameExists(ctx, name, 0); err != nil {
 		return nil, err
 	} else if exists {
 		return nil, ErrDuplicate
 	}
 
-	const q = `INSERT INTO airlines (name, logo_url) VALUES (?, ?)`
-	res, err := r.db.ExecContext(ctx, q, name, logoURL)
+	const q = `INSERT INTO airlines (name, code, logo_url) VALUES (?, ?, ?)`
+	res, err := r.db.ExecContext(ctx, q, name, code, logoURL)
 	if err != nil {
 		return nil, fmt.Errorf("airline.Create: %w", err)
 	}
@@ -67,7 +67,7 @@ func (r *Repository) Create(ctx context.Context, name string, logoURL *string) (
 }
 
 // Update memperbarui maskapai berdasarkan id.
-func (r *Repository) Update(ctx context.Context, id uint64, name string, logoURL *string) (*Airline, error) {
+func (r *Repository) Update(ctx context.Context, id uint64, name string, code *string, logoURL *string) (*Airline, error) {
 	// Pastikan row ada
 	if _, err := r.getByID(ctx, id); err != nil {
 		return nil, err
@@ -80,8 +80,8 @@ func (r *Repository) Update(ctx context.Context, id uint64, name string, logoURL
 		return nil, ErrDuplicate
 	}
 
-	const q = `UPDATE airlines SET name=?, logo_url=? WHERE id=?`
-	if _, err := r.db.ExecContext(ctx, q, name, logoURL, id); err != nil {
+	const q = `UPDATE airlines SET name=?, code=?, logo_url=? WHERE id=?`
+	if _, err := r.db.ExecContext(ctx, q, name, code, logoURL, id); err != nil {
 		return nil, fmt.Errorf("airline.Update: %w", err)
 	}
 
@@ -103,9 +103,9 @@ func (r *Repository) Delete(ctx context.Context, id uint64) error {
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 func (r *Repository) getByID(ctx context.Context, id uint64) (*Airline, error) {
-	const q = `SELECT id, name, logo_url, created_at FROM airlines WHERE id=?`
+	const q = `SELECT id, name, code, logo_url, created_at FROM airlines WHERE id=?`
 	var a Airline
-	err := r.db.QueryRowContext(ctx, q, id).Scan(&a.ID, &a.Name, &a.LogoURL, &a.CreatedAt)
+	err := r.db.QueryRowContext(ctx, q, id).Scan(&a.ID, &a.Name, &a.Code, &a.LogoURL, &a.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
