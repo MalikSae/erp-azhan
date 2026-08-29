@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -21,6 +23,8 @@ import (
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
 	"erp-azhan/api/internal/category"
+	"erp-azhan/api/internal/crmdeal"
+	"erp-azhan/api/internal/crmuser"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
@@ -127,6 +131,13 @@ func main() {
 
 	paymentRepo := payment.NewRepository(db)
 	paymentHandler := payment.NewHandler(paymentRepo)
+	crmDealRepo := crmdeal.NewRepository(db)
+	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
+	crmUserRepo := crmuser.NewRepository(db)
+	crmUserHandler := crmuser.NewHandler(crmUserRepo)
+	if db != nil {
+		go runSeatHoldExpiry(crmDealRepo)
+	}
 
 	dokumenRepo := dokumen.NewRepository(db)
 	dokumenHandler := dokumen.NewHandler(dokumenRepo)
@@ -185,8 +196,17 @@ func main() {
 		// Guard: tolak semua admin request jika DB tidak tersedia, LALU validasi auth token JWT
 		r.Use(requireDB(db))
 		r.Use(identity.RequireAuth)
+		r.Use(identity.RequireAdminOrCRMAccess)
 
 		r.Get("/my-brand", brandHandler.GetMyBrand)
+
+		r.Route("/crm/users", func(r chi.Router) {
+			r.Use(identity.RequireAdminRole)
+			r.Get("/", crmUserHandler.List)
+			r.Post("/", crmUserHandler.Create)
+			r.Put("/{id}", crmUserHandler.Update)
+			r.Put("/{id}/password", crmUserHandler.ResetPassword)
+		})
 
 		// Hotels
 		r.Get("/hotels", hotelHandler.ListHotels)
@@ -277,6 +297,7 @@ func main() {
 		r.Get("/bookings/{id}", bookingHandler.GetBooking)
 		r.Post("/bookings", bookingHandler.CreateBooking)
 		r.Put("/bookings/{id}/status", bookingHandler.UpdateBookingStatus)
+		r.Put("/bookings/{id}/seat-block", bookingHandler.BlockSeat)
 		r.Delete("/bookings/{id}/seat-block", bookingHandler.CancelSeatBlock)
 		r.Post("/bookings/{id}/addons", bookingHandler.AddBookingAddon)
 		r.Delete("/bookings/{id}/addons/{addon_id}", bookingHandler.DeleteBookingAddon)
@@ -306,6 +327,9 @@ func main() {
 		r.Put("/payments/{id}/status", paymentHandler.UpdatePaymentStatus)
 		r.Delete("/payments/{id}", paymentHandler.DeletePayment)
 
+		// CRM: konversi lead menjadi jamaah, booking, seat hold/payment dalam satu transaksi.
+		r.Post("/crm/deals", crmDealHandler.ProcessDeal)
+
 		// Analytics lintas brand (Super Admin Only)
 		r.With(brand.RequireSuperAdmin).Get("/analytics/transactions-30-days", paymentHandler.ListDailyBrandTransactions)
 	})
@@ -317,6 +341,25 @@ func main() {
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("[ERROR] Server gagal berjalan: %v", err)
 		os.Exit(1)
+	}
+}
+
+func runSeatHoldExpiry(repo *crmdeal.Repository) {
+	release := func() {
+		count, err := repo.ReleaseExpiredSeatHolds(context.Background())
+		if err != nil {
+			log.Printf("[WARN] Gagal melepas seat hold kedaluwarsa: %v", err)
+			return
+		}
+		if count > 0 {
+			log.Printf("[INFO] Seat hold kedaluwarsa dilepas: %d booking", count)
+		}
+	}
+	release()
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		release()
 	}
 }
 

@@ -32,12 +32,13 @@ func getRefreshTTL() time.Duration {
 }
 
 // GenerateAccessToken membuat token access baru
-func GenerateAccessToken(adminUserID int64, brandID *int64) (string, error) {
+func GenerateAccessToken(adminUserID int64, brandID *int64, role string) (string, error) {
 	now := time.Now()
 	ttl := getAccessTTL()
 	claims := jwt.MapClaims{
 		"sub":      adminUserID,
 		"brand_id": brandID,
+		"role":     role,
 		"type":     "access",
 		"jti":      uuid.New().String(),
 		"exp":      now.Add(ttl).Unix(),
@@ -63,7 +64,7 @@ func GenerateRefreshToken(adminUserID int64) (string, error) {
 }
 
 // ValidateToken memvalidasi signature, exp, dan type token.
-func ValidateToken(tokenString string, expectedType string) (int64, *int64, error) {
+func ValidateToken(tokenString string, expectedType string) (int64, *int64, string, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("metode signing tidak valid: %v", token.Header["alg"])
@@ -72,22 +73,22 @@ func ValidateToken(tokenString string, expectedType string) (int64, *int64, erro
 	})
 
 	if err != nil {
-		return 0, nil, fmt.Errorf("token tidak valid atau kedaluwarsa: %w", err)
+		return 0, nil, "", fmt.Errorf("token tidak valid atau kedaluwarsa: %w", err)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return 0, nil, errors.New("token tidak valid")
+		return 0, nil, "", errors.New("token tidak valid")
 	}
 
 	tokenType, ok := claims["type"].(string)
 	if !ok || tokenType != expectedType {
-		return 0, nil, errors.New("tipe token salah")
+		return 0, nil, "", errors.New("tipe token salah")
 	}
 
 	subFloat, ok := claims["sub"].(float64)
 	if !ok {
-		return 0, nil, errors.New("sub claim tidak valid")
+		return 0, nil, "", errors.New("sub claim tidak valid")
 	}
 
 	var parsedBrandID *int64
@@ -98,7 +99,8 @@ func ValidateToken(tokenString string, expectedType string) (int64, *int64, erro
 		}
 	}
 
-	return int64(subFloat), parsedBrandID, nil
+	role, _ := claims["role"].(string)
+	return int64(subFloat), parsedBrandID, role, nil
 }
 
 // GeneratePortalToken membuat token autentikasi khusus Portal Jamaah (24 jam).
@@ -145,4 +147,3 @@ func ValidatePortalToken(tokenString string) (int64, error) {
 
 	return int64(subFloat), nil
 }
-

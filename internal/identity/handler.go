@@ -97,7 +97,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Email = strings.TrimSpace(req.Email)
+	// Email akun disimpan dalam bentuk lowercase. Normalisasi juga saat login
+	// supaya kredensial tetap bekerja walau pengguna mengetik huruf kapital.
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if req.Email == "" || req.Password == "" {
 		writeError(w, http.StatusBadRequest, "email dan password wajib diisi")
 		return
@@ -114,6 +116,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 		return
 	}
+	if !user.IsActive {
+		h.recordFailedLogin(ip)
+		writeError(w, http.StatusUnauthorized, "email atau password salah")
+		return
+	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		h.recordFailedLogin(ip)
@@ -124,7 +131,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Sukses
 	h.recordSuccessLogin(ip)
 
-	accessToken, err := GenerateAccessToken(user.ID, user.BrandID)
+	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateAccessToken: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal membuat access token")
@@ -141,6 +148,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	ttl := int(getAccessTTL().Seconds())
 
 	writeJSON(w, http.StatusOK, TokenResponse{
+		UserID:       user.ID,
+		DisplayName:  user.DisplayName,
+		Role:         user.Role,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    ttl,
@@ -162,7 +172,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adminUserID, _, err := ValidateToken(req.RefreshToken, "refresh")
+	adminUserID, _, _, err := ValidateToken(req.RefreshToken, "refresh")
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
 		return
@@ -179,7 +189,12 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := GenerateAccessToken(user.ID, user.BrandID)
+	if !user.IsActive {
+		writeError(w, http.StatusUnauthorized, "user tidak ditemukan")
+		return
+	}
+
+	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role)
 	if err != nil {
 		log.Printf("[ERROR] identity.Refresh GenerateAccessToken: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal membuat access token")
@@ -189,9 +204,12 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	ttl := int(getAccessTTL().Seconds())
 
 	writeJSON(w, http.StatusOK, TokenResponse{
-		AccessToken:  accessToken,
-		ExpiresIn:    ttl,
-		TokenType:    "Bearer",
+		UserID:      user.ID,
+		DisplayName: user.DisplayName,
+		Role:        user.Role,
+		AccessToken: accessToken,
+		ExpiresIn:   ttl,
+		TokenType:   "Bearer",
 	})
 }
 

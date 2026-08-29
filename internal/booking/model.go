@@ -15,24 +15,26 @@ type BookingAddon struct {
 
 // Booking adalah response lengkap admin — JOIN nama jamaah + jadwal_nama schedule.
 type Booking struct {
-	ID               int64    `json:"id"`
-	IDBooking        string   `json:"id_booking"`
-	ScheduleID       int64    `json:"schedule_id"`
-	BrandID          int64    `json:"brand_id"`
-	JadwalNama       string   `json:"jadwal_nama"`
-	BerangkatTanggal *string  `json:"berangkat_tanggal"`
-	JamaahID         int64    `json:"jamaah_id"`
-	NamaJamaah       string   `json:"nama_jamaah"`
-	RoomType         string   `json:"room_type"`
-	HargaDasar       *float64 `json:"harga_dasar"`
-	Status           string   `json:"status"`
-	IsSeatBlocked    bool     `json:"is_seat_blocked"`
-	TotalHarga       *float64 `json:"total_harga"`
-	Diskon           float64  `json:"diskon"`
-	DiskonKeterangan *string  `json:"diskon_keterangan"`
+	ID                int64    `json:"id"`
+	IDBooking         string   `json:"id_booking"`
+	ScheduleID        int64    `json:"schedule_id"`
+	BrandID           int64    `json:"brand_id"`
+	JadwalNama        string   `json:"jadwal_nama"`
+	BerangkatTanggal  *string  `json:"berangkat_tanggal"`
+	JamaahID          int64    `json:"jamaah_id"`
+	NamaJamaah        string   `json:"nama_jamaah"`
+	RoomType          string   `json:"room_type"`
+	SeatCount         int      `json:"seat_count"`
+	HargaDasar        *float64 `json:"harga_dasar"`
+	Status            string   `json:"status"`
+	IsSeatBlocked     bool     `json:"is_seat_blocked"`
+	SeatHoldExpiresAt *string  `json:"seat_hold_expires_at,omitempty"`
+	TotalHarga        *float64 `json:"total_harga"`
+	Diskon            float64  `json:"diskon"`
+	DiskonKeterangan  *string  `json:"diskon_keterangan"`
 	// ProgressPaspor dihitung dinamis dari dokumen_jamaah (kolom DB bookings.progress_paspor bersifat vestigial)
-	ProgressPaspor            bool           `json:"progress_paspor"`
-	ProgressVisa              bool           `json:"progress_visa"`
+	ProgressPaspor bool `json:"progress_paspor"`
+	ProgressVisa   bool `json:"progress_visa"`
 	// ProgressTiket dihitung dinamis dari schedules.is_ticket_confirmed (kolom DB bookings.progress_tiket bersifat vestigial)
 	ProgressTiket             bool           `json:"progress_tiket"`
 	ProgressHotel             bool           `json:"progress_hotel"`
@@ -62,6 +64,10 @@ type CreateBookingRequest struct {
 // UpdateBookingStatusRequest adalah payload untuk PUT /api/admin/bookings/{id}/status.
 type UpdateBookingStatusRequest struct {
 	Status string `json:"status"`
+}
+
+type SeatBlockRequest struct {
+	ExpiresAt string `json:"expires_at"`
 }
 
 // AddBookingAddonRequest adalah payload untuk POST /api/admin/bookings/{id}/addons.

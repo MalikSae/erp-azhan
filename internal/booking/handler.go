@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler booking.
@@ -207,6 +210,40 @@ func (h *Handler) CancelSeatBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, b)
+}
+
+// BlockSeat menahan kursi tanpa membuat payment.
+// PUT /api/admin/bookings/{id}/seat-block
+func (h *Handler) BlockSeat(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if _, err := uuid.Parse(idempotencyKey); err != nil {
+		writeError(w, http.StatusBadRequest, "Idempotency-Key UUID wajib diisi")
+		return
+	}
+	var req SeatBlockRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
+	expiresAt, err := time.Parse(time.RFC3339, req.ExpiresAt)
+	if err != nil || !expiresAt.After(time.Now().Add(time.Minute)) {
+		writeError(w, http.StatusBadRequest, "expires_at harus RFC3339 dan berada di masa depan")
+		return
+	}
+	if _, err := h.repo.GetByID(r.Context(), id, identity.GetBrandID(r.Context())); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	booking, err := h.repo.BlockSeat(r.Context(), id, expiresAt, idempotencyKey)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, booking)
 }
 
 // ─── Addons & Diskon ──────────────────────────────────────────────────────────
@@ -435,6 +472,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "status tidak valid")
 	case errors.Is(err, ErrSeatBelumDiblokir):
 		writeError(w, http.StatusConflict, "kursi booking ini sudah tidak diblokir")
+	case errors.Is(err, ErrSeatSudahDiblokir):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrTemplatePerlengkapanBelumDiatur):
 		writeError(w, http.StatusBadRequest, "template set perlengkapan belum diatur untuk brand ini")
 	case errors.Is(err, ErrPerlengkapanSudahDiberikan):

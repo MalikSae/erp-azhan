@@ -9,9 +9,10 @@ import (
 
 // Sentinel errors
 var (
-	ErrNotFound      = errors.New("data tidak ditemukan")
-	ErrCannotDelete  = errors.New("tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
-	ErrInvalidStatus = errors.New("status tidak valid")
+	ErrNotFound        = errors.New("data tidak ditemukan")
+	ErrCannotDelete    = errors.New("tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
+	ErrInvalidStatus   = errors.New("status tidak valid")
+	ErrSeatUnavailable = errors.New("kursi tidak mencukupi untuk mengonfirmasi pembayaran")
 )
 
 // Repository mengelola semua query ke tabel payments.
@@ -254,8 +255,10 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 	var totalHarga sql.NullFloat64
 	var currentStatus string
 	var scheduleID int64
-	err := tx.QueryRowContext(ctx, `SELECT total_harga, status, schedule_id FROM bookings WHERE id=? FOR UPDATE`, bookingID).
-		Scan(&totalHarga, &currentStatus, &scheduleID)
+	var isSeatBlocked bool
+	var seatCount int
+	err := tx.QueryRowContext(ctx, `SELECT total_harga,status,schedule_id,is_seat_blocked,seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID).
+		Scan(&totalHarga, &currentStatus, &scheduleID, &isSeatBlocked, &seatCount)
 	if err != nil {
 		return err
 	}
@@ -289,13 +292,24 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 	}
 
 	if targetStatus != currentStatus {
-		if currentStatus == "baru" && (targetStatus == "dp" || targetStatus == "lunas") {
-			_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa = GREATEST(0, seat_sisa - 1) WHERE id=?`, scheduleID)
+		if currentStatus == "baru" && (targetStatus == "dp" || targetStatus == "lunas") && !isSeatBlocked {
+			var seatRemaining int
+			if err = tx.QueryRowContext(ctx, `SELECT seat_sisa FROM schedules WHERE id=? FOR UPDATE`, scheduleID).Scan(&seatRemaining); err != nil {
+				return err
+			}
+			if seatRemaining < seatCount {
+				return ErrSeatUnavailable
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=seat_sisa-? WHERE id=?`, seatCount, scheduleID)
 			if err != nil {
 				return err
 			}
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE bookings SET status=? WHERE id=?`, targetStatus, bookingID)
+		_, err = tx.ExecContext(ctx,
+			`UPDATE bookings SET status=?,is_seat_blocked=IF(? IN ('dp','lunas'),TRUE,is_seat_blocked),
+			 seat_hold_expires_at=IF(? IN ('dp','lunas'),NULL,seat_hold_expires_at),
+			 seat_hold_key=IF(? IN ('dp','lunas'),NULL,seat_hold_key) WHERE id=?`,
+			targetStatus, targetStatus, targetStatus, targetStatus, bookingID)
 		if err != nil {
 			return err
 		}
