@@ -10,7 +10,10 @@ import {
   addBookingAddon, 
   deleteBookingAddon, 
   updateBookingDiskon, 
-  updateBookingProgress 
+  updateBookingProgress,
+  updatePaxProgress,
+  cancelBookingPax,
+  updatePaxRoomType
 } from "../api/bookings";
 import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengkapan";
 import { getJamaah } from "../api/jamaah";
@@ -31,7 +34,7 @@ import CustomDropdown from "../components/ui/CustomDropdown";
 import CurrencyInput from "../components/ui/CurrencyInput";
 import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
-import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig } from "lucide-react";
+import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Users, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -52,13 +55,9 @@ const formatTanggal = (dateStr) => {
   }
 };
 
-const PROGRESS_MANUAL_ITEMS = [
-  { key: 'visa', label: 'Visa' },
-  { key: 'siskopatuh', label: 'Siskopatuh' },
+const PROGRESS_HEADER_MANUAL_ITEMS = [
   { key: 'hotel', label: 'Hotel' },
   { key: 'land_arrangement', label: 'Land Arrangement' },
-  { key: 'manasik', label: 'Manasik' },
-  { key: 'vaksin_meningitis', label: 'Vaksin Meningitis' },
 ];
 
 export const BookingDetailPage = ({ showBrandColumn = false }) => {
@@ -99,6 +98,17 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [perlengkapanLoading, setPerlengkapanLoading] = useState(false);
   const [perlengkapanError, setPerlengkapanError] = useState(null);
   const [isBatalkanModalOpen, setIsBatalkanModalOpen] = useState(false);
+
+  // Pax Action Modal State
+  const [isChangeRoomModalOpen, setIsChangeRoomModalOpen] = useState(false);
+  const [selectedPaxForRoomChange, setSelectedPaxForRoomChange] = useState(null);
+  const [newRoomType, setNewRoomType] = useState("Quad");
+  const [changeRoomError, setChangeRoomError] = useState(null);
+  const [changeRoomSubmitting, setChangeRoomSubmitting] = useState(false);
+
+  const [isCancelPaxModalOpen, setIsCancelPaxModalOpen] = useState(false);
+  const [selectedPaxForCancel, setSelectedPaxForCancel] = useState(null);
+  const [cancelPaxSubmitting, setCancelPaxSubmitting] = useState(false);
 
   const fetchAll = async () => {
     try {
@@ -205,6 +215,52 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     }
   };
 
+  // ─── Pax Action Handlers ───────────────────────────────────────────────────
+  const handleOpenChangeRoom = (pax) => {
+    setSelectedPaxForRoomChange(pax);
+    setNewRoomType(pax.room_type || "Quad");
+    setChangeRoomError(null);
+    setIsChangeRoomModalOpen(true);
+  };
+
+  const handleChangeRoomSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedPaxForRoomChange || !newRoomType) return;
+    setChangeRoomSubmitting(true);
+    setChangeRoomError(null);
+    try {
+      await updatePaxRoomType(id, selectedPaxForRoomChange.id, newRoomType);
+      setIsChangeRoomModalOpen(false);
+      setSelectedPaxForRoomChange(null);
+      fetchAll();
+    } catch (err) {
+      setChangeRoomError(err.response?.data?.error || "Gagal mengubah tipe kamar pax");
+    } finally {
+      setChangeRoomSubmitting(false);
+    }
+  };
+
+  const handleOpenCancelPax = (pax) => {
+    setSelectedPaxForCancel(pax);
+    setIsCancelPaxModalOpen(true);
+  };
+
+  const handleCancelPaxSubmit = async () => {
+    if (!selectedPaxForCancel) return;
+    setCancelPaxSubmitting(true);
+    try {
+      await cancelBookingPax(id, selectedPaxForCancel.id);
+      setIsCancelPaxModalOpen(false);
+      setSelectedPaxForCancel(null);
+      fetchAll();
+    } catch (err) {
+      setError(err.response?.data?.error || "Gagal membatalkan pax");
+      setIsCancelPaxModalOpen(false);
+    } finally {
+      setCancelPaxSubmitting(false);
+    }
+  };
+
   // Perhitungan Keuangan
   const hargaDasar = booking?.harga_dasar ? parseFloat(booking.harga_dasar) : (parseFloat(booking?.total_harga) || 0);
   const addons = booking?.addons || [];
@@ -300,12 +356,18 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       const progressField = `progress_${key}`;
       const updated = { ...prev, [progressField]: newValue };
 
-      // Recalculate computed siap_berangkat (paspor dinamis + tiket dinamis + 6 toggle manual)
-      const allDone = Boolean(updated.progress_paspor) && Boolean(updated.progress_tiket) && PROGRESS_MANUAL_ITEMS.every((item) => {
-        if (item.key === key) return newValue;
-        return Boolean(updated[`progress_${item.key}`]);
+      const headerLengkap = Boolean(updated.progress_tiket) && Boolean(updated.progress_hotel) && Boolean(updated.progress_land_arrangement);
+      let activePaxCount = 0;
+      let allPaxLengkap = true;
+      (updated.pax || []).forEach((p) => {
+        if (p.pax_status !== 'aktif') return;
+        activePaxCount++;
+        const manasikReq = p.pax_type === 'infant' ? true : Boolean(p.progress_manasik);
+        const pLengkap = Boolean(p.progress_paspor) && Boolean(p.progress_visa) && Boolean(p.progress_siskopatuh) && Boolean(p.progress_vaksin_meningitis) && manasikReq;
+        if (!pLengkap) allPaxLengkap = false;
       });
-      updated.siap_berangkat = allDone;
+
+      updated.siap_berangkat = (activePaxCount > 0) && headerLengkap && allPaxLengkap;
       return updated;
     });
 
@@ -313,7 +375,48 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       const res = await updateBookingProgress(id, { [key]: newValue });
       setBooking(res);
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal memperbarui progress keberangkatan");
+      setError(err.response?.data?.error || "Gagal memperbarui progress paket");
+      fetchAll();
+    }
+  };
+
+  const handleTogglePaxProgress = async (paxId, key, currentValue) => {
+    const newValue = !currentValue;
+    const progressField = `progress_${key}`;
+
+    // Optimistic Update
+    setBooking((prev) => {
+      if (!prev) return prev;
+      const updatedPax = (prev.pax || []).map((p) => {
+        if (p.id === paxId) {
+          return { ...p, [progressField]: newValue };
+        }
+        return p;
+      });
+
+      const headerLengkap = Boolean(prev.progress_tiket) && Boolean(prev.progress_hotel) && Boolean(prev.progress_land_arrangement);
+      let activePaxCount = 0;
+      let allPaxLengkap = true;
+      updatedPax.forEach((p) => {
+        if (p.pax_status !== 'aktif') return;
+        activePaxCount++;
+        const manasikReq = p.pax_type === 'infant' ? true : Boolean(p.progress_manasik);
+        const pLengkap = Boolean(p.progress_paspor) && Boolean(p.progress_visa) && Boolean(p.progress_siskopatuh) && Boolean(p.progress_vaksin_meningitis) && manasikReq;
+        if (!pLengkap) allPaxLengkap = false;
+      });
+
+      return {
+        ...prev,
+        pax: updatedPax,
+        siap_berangkat: (activePaxCount > 0) && headerLengkap && allPaxLengkap
+      };
+    });
+
+    try {
+      const res = await updatePaxProgress(id, paxId, { [key]: newValue });
+      setBooking(res);
+    } catch (err) {
+      setError(err.response?.data?.error || "Gagal memperbarui checklist pax");
       fetchAll();
     }
   };
@@ -395,6 +498,11 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [statusVariant, statusLabel] = getStatusBadgeConfig(booking.status);
   const seatLockInfo = getSeatLockIcon(booking.status, booking.is_seat_blocked);
 
+  const paxList = booking.pax || [];
+  const activePaxList = paxList.filter((p) => p.pax_status === 'aktif');
+  const regularActiveCount = activePaxList.filter((p) => p.pax_type !== 'infant').length;
+  const infantActiveCount = activePaxList.filter((p) => p.pax_type === 'infant').length;
+
   return (
     <div className="w-full space-y-6">
       {error && <Alert variant="error">{error}</Alert>}
@@ -454,11 +562,11 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Kolom Kiri: Detail Paket & Jamaah (2 span) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Section: Paket & Kamar */}
+          {/* Section: Informasi Paket */}
           <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-neutral-200">
               <Plane size={18} className="text-primary-600" />
-              <h3 className="font-semibold text-neutral-900 font-heading">Informasi Paket & Kamar</h3>
+              <h3 className="font-semibold text-neutral-900 font-heading">Informasi Paket</h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -469,54 +577,217 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 <span className="block text-xs text-neutral-500 font-body">Tanggal Keberangkatan</span>
                 <p className="text-sm font-semibold text-neutral-900 font-body">{formatTanggal(booking.berangkat_tanggal)}</p>
               </div>
-              <div>
-                <span className="block text-xs text-neutral-500 font-body">Tipe Kamar</span>
-                <p className="text-sm font-semibold text-neutral-900 font-body">{(booking.room_type || "-").toUpperCase()}</p>
-              </div>
-              <div>
-                <span className="block text-xs text-neutral-500 font-body">Harga Dasar Paket</span>
-                <p className="text-sm font-semibold text-neutral-900 font-body">{formatRupiah(hargaDasar)}</p>
-              </div>
             </div>
           </div>
 
-          {/* Section: Jamaah Info */}
+          {/* Section: Daftar Jamaah (Pax) */}
           <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-neutral-200">
               <div className="flex items-center gap-2">
-                <User size={18} className="text-primary-600" />
-                <h3 className="font-semibold text-neutral-900 font-heading">Data Jamaah</h3>
+                <Users size={18} className="text-primary-600" />
+                <h3 className="font-semibold text-neutral-900 font-heading">Daftar Jamaah (Pax)</h3>
               </div>
-              {booking.jamaah_id && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigate(`/jamaah/${booking.jamaah_id}`)}
-                  className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1"
-                >
-                  <span>Lihat Profil Lengkap</span>
-                  <ExternalLink size={12} />
-                </Button>
-              )}
+              <span className="text-xs text-neutral-500 font-body">
+                {activePaxList.length} pax aktif ({regularActiveCount} reguler, {infantActiveCount} infant) dari total {paxList.length} pax
+              </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <span className="block text-xs text-neutral-500 font-body">Nama Lengkap</span>
-                <p className="text-sm font-semibold text-neutral-900 font-body">{booking.nama_jamaah || jamaah?.nama_lengkap || "-"}</p>
+
+            {paxList.length === 0 ? (
+              <p className="text-xs text-neutral-500 font-body">Tidak ada data pax.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-6 sm:mx-0">
+                <table className="w-full text-left text-sm font-body">
+                  <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
+                    <tr>
+                      <th className="py-3 px-4">Nama Jamaah</th>
+                      <th className="py-3 px-3">Tipe</th>
+                      <th className="py-3 px-3">Kamar</th>
+                      <th className="py-3 px-3">Harga</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-4 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {paxList.map((pax) => {
+                      const isPic = Number(pax.jamaah_id) === Number(booking.pic_jamaah_id);
+                      const isBatal = pax.pax_status === 'batal';
+
+                      return (
+                        <tr key={pax.id} className={isBatal ? "bg-neutral-50/70 opacity-60" : "hover:bg-neutral-50/50"}>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/jamaah/${pax.jamaah_id}`)}
+                                className={`font-semibold hover:text-primary-600 hover:underline text-left transition-colors font-body ${
+                                  isBatal ? "line-through text-neutral-500" : "text-neutral-900"
+                                }`}
+                                title="Lihat Profil Jamaah"
+                              >
+                                {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
+                              </button>
+                              {isPic && (
+                                <Badge variant="primary" showIcon={false}>
+                                  PIC
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            {pax.pax_type === 'infant' ? (
+                              <Badge variant="warning" showIcon={false}>Infant</Badge>
+                            ) : (
+                              <Badge variant="neutral" showIcon={false}>Reguler</Badge>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="font-medium text-neutral-800">
+                              {pax.pax_type === 'infant' ? '-' : (pax.room_type || '-')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-neutral-900">
+                            {formatRupiah(pax.harga_pax)}
+                          </td>
+                          <td className="py-3 px-3">
+                            {pax.pax_status === 'aktif' ? (
+                              <Badge variant="success" showIcon={false}>Aktif</Badge>
+                            ) : (
+                              <Badge variant="danger" showIcon={false}>Batal</Badge>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {pax.pax_status === 'aktif' && (
+                              <div className="flex items-center justify-end gap-1.5">
+                                {pax.pax_type === 'reguler' && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-xs text-primary-600 hover:text-primary-700 h-7 px-2"
+                                    onClick={() => handleOpenChangeRoom(pax)}
+                                  >
+                                    Ganti Kamar
+                                  </Button>
+                                )}
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-xs text-danger-600 hover:bg-danger-50 h-7 px-2"
+                                    onClick={() => handleOpenCancelPax(pax)}
+                                  >
+                                    Batalkan
+                                  </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <div>
-                <span className="block text-xs text-neutral-500 font-body">NIK</span>
-                <p className="text-sm font-semibold text-neutral-900 font-body">{jamaah?.nik || "-"}</p>
-              </div>
-              <div>
-                <span className="block text-xs text-neutral-500 font-body">No HP / WhatsApp</span>
-                <p className="text-sm font-semibold text-neutral-900 font-body">{jamaah?.no_hp || "-"}</p>
-              </div>
-              <div>
-                <span className="block text-xs text-neutral-500 font-body">Nomor Paspor</span>
-                <p className="text-sm font-semibold text-neutral-900 font-body">{jamaah?.no_paspor || "-"}</p>
-              </div>
+            )}
+          </div>
+
+          {/* Section: Checklist Dokumen & Kesiapan Jamaah */}
+          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-neutral-200">
+              <Shield size={18} className="text-primary-600" />
+              <h3 className="font-semibold text-neutral-900 font-heading">Checklist Dokumen & Kesiapan Jamaah</h3>
             </div>
+
+            {activePaxList.length === 0 ? (
+              <p className="text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-6 sm:mx-0">
+                <table className="w-full text-left text-sm font-body">
+                  <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
+                    <tr>
+                      <th className="py-3 px-4">Nama Jamaah</th>
+                      <th className="py-3 px-3 text-center">Paspor</th>
+                      <th className="py-3 px-3 text-center">Vaksin Meningitis</th>
+                      <th className="py-3 px-3 text-center">Visa</th>
+                      <th className="py-3 px-3 text-center">Siskopatuh</th>
+                      <th className="py-3 px-3 text-center">Manasik</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {activePaxList.map((pax) => {
+                      const isPic = Number(pax.jamaah_id) === Number(booking.pic_jamaah_id);
+                      return (
+                        <tr key={pax.id} className="hover:bg-neutral-50/50">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-neutral-900 font-body">
+                                {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
+                              </span>
+                              {isPic && (
+                                <Badge variant="primary" showIcon={false}>PIC</Badge>
+                              )}
+                              {pax.pax_type === 'infant' && (
+                                <Badge variant="warning" showIcon={false}>Infant</Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex justify-center">
+                              {pax.progress_paspor ? (
+                                <span title="Paspor sudah diunggah" className="text-success-600 inline-flex items-center gap-1 text-xs font-medium">
+                                  <CheckCircle size={18} />
+                                </span>
+                              ) : (
+                                <span title="Paspor belum diunggah" className="text-neutral-400 inline-flex items-center gap-1 text-xs font-medium">
+                                  <X size={18} />
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex justify-center">
+                              <Toggle
+                                id={`toggle-vaksin-${pax.id}`}
+                                checked={Boolean(pax.progress_vaksin_meningitis)}
+                                onChange={() => handleTogglePaxProgress(pax.id, 'vaksin_meningitis', Boolean(pax.progress_vaksin_meningitis))}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex justify-center">
+                              <Toggle
+                                id={`toggle-visa-${pax.id}`}
+                                checked={Boolean(pax.progress_visa)}
+                                onChange={() => handleTogglePaxProgress(pax.id, 'visa', Boolean(pax.progress_visa))}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex justify-center">
+                              <Toggle
+                                id={`toggle-siskopatuh-${pax.id}`}
+                                checked={Boolean(pax.progress_siskopatuh)}
+                                onChange={() => handleTogglePaxProgress(pax.id, 'siskopatuh', Boolean(pax.progress_siskopatuh))}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex justify-center">
+                              {pax.pax_type === 'infant' ? (
+                                <span className="text-xs text-neutral-400 font-semibold font-body">N/A</span>
+                              ) : (
+                                <Toggle
+                                  id={`toggle-manasik-${pax.id}`}
+                                  checked={Boolean(pax.progress_manasik)}
+                                  onChange={() => handleTogglePaxProgress(pax.id, 'manasik', Boolean(pax.progress_manasik))}
+                                />
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Section: Add-ons & Diskon */}
@@ -686,12 +957,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </div>
           </div>
 
-          {/* Progress Keberangkatan Card */}
+          {/* Progress Paket Card */}
           <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-neutral-200">
               <div className="flex items-center gap-2">
                 <Shield size={18} className="text-primary-600" />
-                <h3 className="font-semibold text-neutral-900 font-heading">Progress Keberangkatan</h3>
+                <h3 className="font-semibold text-neutral-900 font-heading">Progress Paket</h3>
               </div>
               {booking.siap_berangkat ? (
                 <Badge variant="success" className="px-2 py-0.5 text-xs font-semibold">
@@ -705,21 +976,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </div>
 
             <div className="space-y-3">
-              {/* 1. Paspor Read-only */}
-              <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-md border border-neutral-200">
-                <div>
-                  <span className="text-sm font-medium font-body text-neutral-800 block">Paspor</span>
-                  <span className="text-xs text-neutral-500 font-body block">(otomatis dari dokumen)</span>
-                </div>
-                <Toggle
-                  id="toggle-paspor-detail"
-                  checked={Boolean(booking.progress_paspor)}
-                  disabled={true}
-                  onChange={() => {}}
-                />
-              </div>
-
-              {/* 2. Tiket Maskapai Read-only */}
+              {/* 1. Tiket Maskapai Read-only */}
               <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-md border border-neutral-200">
                 <div>
                   <span className="text-sm font-medium font-body text-neutral-800 block">Tiket Maskapai</span>
@@ -733,20 +990,25 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 />
               </div>
 
-              {/* 3. Toggle Manual Items */}
-              {PROGRESS_MANUAL_ITEMS.map((item) => {
-                const isChecked = Boolean(booking[`progress_${item.key}`]);
-                return (
-                  <div key={item.key} className="flex items-center justify-between p-3 bg-white rounded-md border border-neutral-200">
-                    <span className="text-sm font-medium font-body text-neutral-800">{item.label}</span>
-                    <Toggle
-                      id={`toggle-${item.key}-detail`}
-                      checked={isChecked}
-                      onChange={() => handleToggleProgress(item.key, isChecked)}
-                    />
-                  </div>
-                );
-              })}
+              {/* 2. Hotel */}
+              <div className="flex items-center justify-between p-3 bg-white rounded-md border border-neutral-200">
+                <span className="text-sm font-medium font-body text-neutral-800">Hotel</span>
+                <Toggle
+                  id="toggle-hotel-detail"
+                  checked={Boolean(booking.progress_hotel)}
+                  onChange={() => handleToggleProgress('hotel', Boolean(booking.progress_hotel))}
+                />
+              </div>
+
+              {/* 3. Land Arrangement */}
+              <div className="flex items-center justify-between p-3 bg-white rounded-md border border-neutral-200">
+                <span className="text-sm font-medium font-body text-neutral-800">Land Arrangement</span>
+                <Toggle
+                  id="toggle-land_arrangement-detail"
+                  checked={Boolean(booking.progress_land_arrangement)}
+                  onChange={() => handleToggleProgress('land_arrangement', Boolean(booking.progress_land_arrangement))}
+                />
+              </div>
             </div>
           </div>
 
@@ -1035,6 +1297,52 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           <Button variant="ghost" onClick={() => setCancelConfirmModal(false)}>Batal</Button>
           <Button variant="danger" onClick={() => executeStatusChange("batal")}>
             Ya, Batalkan Booking
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Modal: Ganti Tipe Kamar Pax */}
+      <Modal
+        isOpen={isChangeRoomModalOpen}
+        onClose={() => setIsChangeRoomModalOpen(false)}
+        title={`Ganti Tipe Kamar - ${selectedPaxForRoomChange?.nama_jamaah || ''}`}
+      >
+        {changeRoomError && <Alert variant="error" className="mb-4">{changeRoomError}</Alert>}
+        <form onSubmit={handleChangeRoomSubmit} className="space-y-4">
+          <CustomDropdown
+            label="Pilih Tipe Kamar Baru"
+            name="new_room_type"
+            value={newRoomType}
+            onChange={(val) => setNewRoomType(val)}
+            options={[
+              { value: "Quad", label: "Quad (4 orang)" },
+              { value: "Triple", label: "Triple (3 orang)" },
+              { value: "Double", label: "Double (2 orang)" }
+            ]}
+            required
+          />
+          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
+            <Button type="button" variant="ghost" onClick={() => setIsChangeRoomModalOpen(false)}>Batal</Button>
+            <Button type="submit" variant="primary" disabled={changeRoomSubmitting}>
+              {changeRoomSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Batalkan Pax */}
+      <Modal
+        isOpen={isCancelPaxModalOpen}
+        onClose={() => setIsCancelPaxModalOpen(false)}
+        title="Konfirmasi Pembatalan Pax"
+      >
+        <p className="text-neutral-600 font-body text-sm mb-6 leading-relaxed">
+          Batalkan pax <strong>{selectedPaxForCancel?.nama_jamaah}</strong> dari booking ini? Kuota kursi yang terpakai akan otomatis dikembalikan jika booking masih dalam status kursi terkunci. Perubahan tagihan (jika ada) perlu disesuaikan manual.
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button variant="ghost" onClick={() => setIsCancelPaxModalOpen(false)}>Batal</Button>
+          <Button variant="danger" disabled={cancelPaxSubmitting} onClick={handleCancelPaxSubmit}>
+            {cancelPaxSubmitting ? "Memproses..." : "Ya, Batalkan Pax"}
           </Button>
         </div>
       </Modal>

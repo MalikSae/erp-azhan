@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --brand-primary: #CC904A;
+  --brand-primary: #FED853;
 }
 
 @layer base {
@@ -14,13 +14,13 @@
 
 @layer utilities {
   .bg-brand {
-    background-color: var(--brand-primary, #CC904A);
+    background-color: var(--brand-primary, #FED853);
   }
   .text-brand {
-    color: var(--brand-primary, #CC904A);
+    color: var(--brand-primary, #FED853);
   }
   .border-brand {
-    border-color: var(--brand-primary, #CC904A);
+    border-color: var(--brand-primary, #FED853);
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;

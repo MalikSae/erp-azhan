@@ -25,6 +25,9 @@ var (
 	ErrPerlengkapanBelumDiberikan      = errors.New("perlengkapan belum pernah diberikan untuk booking ini")
 	ErrKodeBrandNotSet                 = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
 	ErrGenerateIDBookingFailed         = errors.New("gagal generate ID Booking unik, coba lagi")
+	ErrPaxAlreadyCancelled             = errors.New("pax sudah dalam status batal")
+	ErrCannotChangeInfantRoom          = errors.New("tidak bisa mengubah tipe kamar untuk infant")
+	ErrCannotChangeCancelledPaxRoom    = errors.New("tidak bisa mengubah tipe kamar untuk pax yang sudah batal")
 )
 
 type ErrStokKurang struct {
@@ -35,39 +38,67 @@ func (e *ErrStokKurang) Error() string {
 	return e.Message
 }
 
+type ErrSeatNotEnough struct {
+	Message string
+}
+
+func (e *ErrSeatNotEnough) Error() string {
+	return e.Message
+}
+
 // Status yang menandakan kursi sudah terkunci (pernah dp/lebih).
 var lockedStatuses = map[string]bool{
 	"dp":    true,
 	"lunas": true,
 }
 
-// AllowedProgressFields adalah mapping dari key request ke nama kolom database.
-// Catatan: paspor dan tiket tidak ada di sini karena status paspor computed dari dokumen_jamaah dan status tiket computed dari schedules.is_ticket_confirmed.
-var AllowedProgressFields = map[string]string{
+var (
+	ErrPaxBatal      = errors.New("tidak dapat mengubah progress untuk pax yang sudah dibatalkan")
+	ErrManasikInfant = errors.New("Manasik tidak berlaku untuk infant")
+)
+
+// AllowedHeaderProgressFields adalah mapping dari key request header ke nama kolom bookings.
+var AllowedHeaderProgressFields = map[string]string{
+	"hotel":            "progress_hotel",
+	"land_arrangement": "progress_land_arrangement",
+}
+
+// AllowedPaxProgressFields adalah mapping dari key request pax ke nama kolom booking_pax.
+var AllowedPaxProgressFields = map[string]string{
 	"visa":              "progress_visa",
-	"hotel":             "progress_hotel",
-	"land_arrangement":  "progress_land_arrangement",
-	"manasik":           "progress_manasik",
 	"siskopatuh":        "progress_siskopatuh",
+	"manasik":           "progress_manasik",
 	"vaksin_meningitis": "progress_vaksin_meningitis",
 }
 
-// selectBookingFull adalah query SELECT booking dengan JOIN ke jamaah + schedules.
-// Kolom progress_paspor dan progress_tiket di tabel bookings bersifat VESTIGIAL dan di-override secara dinamis
-// berdasarkan keberadaan dokumen paspor di tabel dokumen_jamaah dan schedules.is_ticket_confirmed.
+// selectBookingFull adalah query SELECT booking dengan JOIN ke jamaah + schedules + primary pax.
 const selectBookingFull = `
-	SELECT b.id, b.id_booking, b.schedule_id, s.brand_id, s.jadwal_nama, s.berangkat_tanggal, b.jamaah_id, j.nama_lengkap,
-		b.room_type, b.seat_count, b.harga_dasar, b.status, b.is_seat_blocked, b.seat_hold_expires_at, b.total_harga, b.diskon, b.diskon_keterangan,
-		b.progress_paspor, b.progress_visa, b.progress_tiket, b.progress_hotel,
-		b.progress_land_arrangement, b.progress_manasik, b.progress_siskopatuh, b.progress_vaksin_meningitis,
+	SELECT b.id, b.id_booking, b.schedule_id, s.brand_id, s.jadwal_nama, s.berangkat_tanggal,
+		b.pic_jamaah_id, j.nama_lengkap,
+		COALESCE(bp.room_type, 'Quad') AS room_type,
+		bp.harga_pax,
+		b.seat_count, b.status, b.is_seat_blocked, b.seat_hold_expires_at,
+		b.total_harga, b.diskon, b.diskon_keterangan,
+		COALESCE(bp.progress_visa, FALSE) AS progress_visa,
+		b.progress_hotel,
+		b.progress_land_arrangement,
+		COALESCE(bp.progress_manasik, FALSE) AS progress_manasik,
+		COALESCE(bp.progress_siskopatuh, FALSE) AS progress_siskopatuh,
+		COALESCE(bp.progress_vaksin_meningitis, FALSE) AS progress_vaksin_meningitis,
 		b.perlengkapan_status, DATE_FORMAT(b.perlengkapan_tanggal, '%Y-%m-%d') AS perlengkapan_tanggal, b.perlengkapan_diberikan_oleh,
+		b.perlengkapan_jumlah_pax,
 		b.created_by, b.created_at,
-		s.is_ticket_confirmed
+		s.is_ticket_confirmed,
+		COALESCE(bp.jamaah_id, b.pic_jamaah_id) AS primary_jamaah_id,
+		(SELECT COUNT(*) FROM booking_pax WHERE booking_id = b.id AND pax_status = 'aktif') AS pax_count
 	FROM bookings b
-	JOIN jamaah j ON j.id = b.jamaah_id
-	JOIN schedules s ON s.id = b.schedule_id`
+	JOIN jamaah j ON j.id = b.pic_jamaah_id
+	JOIN schedules s ON s.id = b.schedule_id
+	LEFT JOIN booking_pax bp ON bp.id = (
+		SELECT MIN(id) FROM booking_pax WHERE booking_id = b.id AND pax_status = 'aktif'
+	)`
 
-// Repository mengelola semua query ke tabel bookings.
+// Repository mengelola semua query ke tabel bookings dan booking_pax.
 type Repository struct {
 	db *sql.DB
 }
@@ -88,8 +119,8 @@ func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64) 
 		args = append(args, *brandID)
 	}
 	if jamaahID != nil {
-		q += " AND b.jamaah_id = ?"
-		args = append(args, *jamaahID)
+		q += " AND (b.pic_jamaah_id = ? OR EXISTS (SELECT 1 FROM booking_pax bp2 WHERE bp2.booking_id = b.id AND bp2.jamaah_id = ?))"
+		args = append(args, *jamaahID, *jamaahID)
 	}
 	q += " ORDER BY b.created_at DESC"
 
@@ -118,7 +149,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64) 
 
 // ─── GetByID ──────────────────────────────────────────────────────────────────
 
-// GetByID mengambil booking lengkap, verify brand via schedule, beserta daftar addons.
+// GetByID mengambil booking lengkap, verify brand via schedule, beserta daftar pax dan addons.
 func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Booking, error) {
 	q := selectBookingFull + " WHERE b.id=?"
 	var args []interface{}
@@ -150,6 +181,12 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 		return nil, err
 	}
 	b.ProgressPaspor = hasPaspor
+
+	paxList, err := r.ListPaxByBookingID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	b.Pax = paxList
 	computeSiapBerangkat(b)
 
 	addons, err := r.ListAddons(ctx, id)
@@ -158,6 +195,48 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 	}
 	b.Addons = addons
 	return b, nil
+}
+
+// ListPaxByBookingID mengambil semua pax untuk sebuah booking.
+func (r *Repository) ListPaxByBookingID(ctx context.Context, bookingID int64) ([]BookingPax, error) {
+	const q = `
+		SELECT bp.id, bp.booking_id, bp.jamaah_id, j.nama_lengkap, bp.pax_type, bp.room_type,
+			bp.harga_pax, bp.counts_for_seat, bp.pax_status,
+			bp.progress_visa, bp.progress_siskopatuh, bp.progress_manasik, bp.progress_vaksin_meningitis,
+			bp.created_at, bp.updated_at
+		FROM booking_pax bp
+		JOIN jamaah j ON j.id = bp.jamaah_id
+		WHERE bp.booking_id = ?
+		ORDER BY bp.id ASC`
+
+	rows, err := r.db.QueryContext(ctx, q, bookingID)
+	if err != nil {
+		return nil, fmt.Errorf("booking.ListPax: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]BookingPax, 0)
+	for rows.Next() {
+		var p BookingPax
+		var roomType sql.NullString
+		if err := rows.Scan(
+			&p.ID, &p.BookingID, &p.JamaahID, &p.NamaJamaah, &p.PaxType, &roomType,
+			&p.HargaPax, &p.CountsForSeat, &p.PaxStatus,
+			&p.ProgressVisa, &p.ProgressSiskopatuh, &p.ProgressManasik, &p.ProgressVaksinMeningitis,
+			&p.CreatedAt, &p.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("booking.ListPax scan: %w", err)
+		}
+		if roomType.Valid {
+			p.RoomType = &roomType.String
+		}
+		hasPaspor, err := r.checkPasporUploaded(ctx, p.JamaahID)
+		if err == nil {
+			p.ProgressPaspor = hasPaspor
+		}
+		items = append(items, p)
+	}
+	return items, rows.Err()
 }
 
 // GenerateIDBooking generates a 6-character unique booking ID: {kode_brand (2 chars)}{4 random chars from charset}.
@@ -217,59 +296,302 @@ func (r *Repository) GenerateIDBooking(ctx context.Context, tx *sql.Tx, brandID 
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
-// CreateBooking membuat booking baru dengan status='baru' (dipaksa server).
-// Tidak mengurangi seat_sisa — kursi baru berkurang saat status jadi 'dp'.
-func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingRequest, createdBy int64, autoHarga *float64) (*Booking, error) {
+// CreateBooking membuat booking baru dengan dukungan multi-pax.
+func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingRequest, createdBy int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Create tx: %w", err)
 	}
 	defer tx.Rollback()
 
+	// 1. Lock schedule row
 	var brandID int64
-	err = tx.QueryRowContext(ctx, `SELECT brand_id FROM schedules WHERE id = ?`, req.ScheduleID).Scan(&brandID)
+	var seatSisa int
+	var hargaQuad, hargaTriple, hargaDouble float64
+	var hargaInfant sql.NullFloat64
+
+	err = tx.QueryRowContext(ctx, `
+		SELECT brand_id, seat_sisa, harga_quad, harga_triple, harga_double, harga_infant 
+		FROM schedules 
+		WHERE id = ? FOR UPDATE`, req.ScheduleID).
+		Scan(&brandID, &seatSisa, &hargaQuad, &hargaTriple, &hargaDouble, &hargaInfant)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("booking.Create find schedule brand: %w", err)
+		return nil, fmt.Errorf("booking.Create find schedule: %w", err)
 	}
 
+	// 2. Hitung jumlah pax reguler
+	regularCount := 0
+	for _, p := range req.Pax {
+		if p.PaxType == "reguler" {
+			regularCount++
+		}
+	}
+
+	// 3. Validasi kuota kursi
+	if seatSisa < regularCount {
+		return nil, &ErrSeatNotEnough{
+			Message: fmt.Sprintf("Kuota kursi tidak mencukupi, sisa %d kursi", seatSisa),
+		}
+	}
+
+	// 4. Update schedules seat_sisa jika ada pax reguler
+	if regularCount > 0 {
+		_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa = seat_sisa - ? WHERE id = ?`, regularCount, req.ScheduleID)
+		if err != nil {
+			return nil, fmt.Errorf("booking.Create decrement seat: %w", err)
+		}
+	}
+
+	// 5. Generate id_booking
 	idBooking, err := r.GenerateIDBooking(ctx, tx, brandID)
 	if err != nil {
 		return nil, err
 	}
 
-	totalHarga := req.TotalHarga
-	if totalHarga == nil {
-		totalHarga = autoHarga
+	// 6. Insert header ke bookings
+	picID := req.PicJamaahID
+	if picID == 0 && len(req.Pax) > 0 {
+		picID = req.Pax[0].JamaahID
 	}
-	hargaDasar := totalHarga
+	isSeatBlocked := regularCount > 0
 
-	const q = `INSERT INTO bookings (id_booking, schedule_id, jamaah_id, room_type, harga_dasar, status, total_harga, created_by)
-		VALUES (?, ?, ?, ?, ?, 'baru', ?, ?)`
+	const qBooking = `INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, status, is_seat_blocked, created_by)
+		VALUES (?, ?, ?, 'baru', ?, ?)`
 
-	res, err := tx.ExecContext(ctx, q, idBooking, req.ScheduleID, req.JamaahID, req.RoomType, hargaDasar, totalHarga, createdBy)
+	res, err := tx.ExecContext(ctx, qBooking, idBooking, req.ScheduleID, picID, isSeatBlocked, createdBy)
 	if err != nil {
-		return nil, fmt.Errorf("booking.Create: %w", err)
+		return nil, fmt.Errorf("booking.Create insert header: %w", err)
 	}
 
-	id, err := res.LastInsertId()
+	bookingID, err := res.LastInsertId()
 	if err != nil {
 		return nil, fmt.Errorf("booking.Create LastInsertId: %w", err)
+	}
+
+	// 7. Insert detail booking_pax
+	const qPax = `INSERT INTO booking_pax (booking_id, jamaah_id, pax_type, room_type, harga_pax, counts_for_seat, pax_status)
+		VALUES (?, ?, ?, ?, ?, ?, 'aktif')`
+
+	for _, p := range req.Pax {
+		var hargaPax float64
+		var countsForSeat bool
+		var roomTypeVal *string
+
+		if p.PaxType == "infant" {
+			if !hargaInfant.Valid {
+				return nil, fmt.Errorf("paket ini tidak memiliki harga infant")
+			}
+			hargaPax = hargaInfant.Float64
+			countsForSeat = false
+			roomTypeVal = nil
+		} else {
+			countsForSeat = true
+			if p.RoomType == nil {
+				return nil, fmt.Errorf("room_type untuk pax reguler wajib diisi")
+			}
+			rt := *p.RoomType
+			roomTypeVal = &rt
+			switch rt {
+			case "Quad":
+				hargaPax = hargaQuad
+			case "Triple":
+				hargaPax = hargaTriple
+			case "Double":
+				hargaPax = hargaDouble
+			default:
+				return nil, fmt.Errorf("room_type tidak valid: %s", rt)
+			}
+		}
+
+		_, err = tx.ExecContext(ctx, qPax, bookingID, p.JamaahID, p.PaxType, roomTypeVal, hargaPax, countsForSeat)
+		if err != nil {
+			return nil, fmt.Errorf("booking.Create insert pax: %w", err)
+		}
+	}
+
+	// 8. Recalculate total harga
+	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.Create recalc: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("booking.Create commit: %w", err)
 	}
 
-	return r.GetByID(ctx, id, nil)
+	return r.GetByID(ctx, bookingID, nil)
+}
+
+// ─── Cancel Pax ───────────────────────────────────────────────────────────────
+
+// CancelPax membatalkan status satu pax pada booking dan mengembalikan kuota kursi jika eligible.
+func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64, brandID *int64) (*Booking, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("booking.CancelPax tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Verify booking & brand
+	var scheduleID int64
+	var scheduleBrandID int64
+	var isSeatBlocked bool
+	err = tx.QueryRowContext(ctx, `
+		SELECT b.schedule_id, s.brand_id, b.is_seat_blocked
+		FROM bookings b
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&scheduleID, &scheduleBrandID, &isSeatBlocked)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("booking.CancelPax verify booking: %w", err)
+	}
+	if brandID != nil && *brandID != scheduleBrandID {
+		return nil, ErrNotFound
+	}
+
+	// 2. Lock and get pax status
+	var paxStatus string
+	var countsForSeat bool
+	err = tx.QueryRowContext(ctx, `
+		SELECT pax_status, counts_for_seat
+		FROM booking_pax
+		WHERE id = ? AND booking_id = ? FOR UPDATE`, paxID, bookingID).Scan(&paxStatus, &countsForSeat)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("booking.CancelPax get pax: %w", err)
+	}
+	if paxStatus == "batal" {
+		return nil, ErrPaxAlreadyCancelled
+	}
+
+	// 3. Update status pax
+	_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal' WHERE id = ?`, paxID)
+	if err != nil {
+		return nil, fmt.Errorf("booking.CancelPax update status: %w", err)
+	}
+
+	// 4. Restore seat if counts_for_seat is true and seat was blocked
+	if countsForSeat && isSeatBlocked {
+		_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa = LEAST(seat_total, seat_sisa + 1) WHERE id = ?`, scheduleID)
+		if err != nil {
+			return nil, fmt.Errorf("booking.CancelPax restore seat: %w", err)
+		}
+	}
+
+	// 5. Cek active pax
+	var activePaxCount int
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM booking_pax WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID).Scan(&activePaxCount)
+	if err != nil {
+		return nil, fmt.Errorf("booking.CancelPax check active count: %w", err)
+	}
+	if activePaxCount == 0 {
+		_, err = tx.ExecContext(ctx, `UPDATE bookings SET status = 'batal', is_seat_blocked = FALSE WHERE id = ?`, bookingID)
+		if err != nil {
+			return nil, fmt.Errorf("booking.CancelPax cancel booking: %w", err)
+		}
+	}
+
+	// 6. Commit (tanpa recalculate total harga)
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("booking.CancelPax commit: %w", err)
+	}
+
+	return r.GetByID(ctx, bookingID, brandID)
+}
+
+// ─── Update Pax Room Type ─────────────────────────────────────────────────────
+
+// UpdatePaxRoomType mengubah tipe kamar satu pax dan memperbarui total_harga booking secara otomatis.
+func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, paxID int64, newRoomType string, brandID *int64) (*Booking, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("booking.UpdatePaxRoomType tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Verify booking & brand
+	var scheduleID int64
+	var scheduleBrandID int64
+	err = tx.QueryRowContext(ctx, `
+		SELECT b.schedule_id, s.brand_id
+		FROM bookings b
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&scheduleID, &scheduleBrandID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("booking.UpdatePaxRoomType verify booking: %w", err)
+	}
+	if brandID != nil && *brandID != scheduleBrandID {
+		return nil, ErrNotFound
+	}
+
+	// 2. Lock and verify pax
+	var paxType, paxStatus string
+	err = tx.QueryRowContext(ctx, `
+		SELECT pax_type, pax_status
+		FROM booking_pax
+		WHERE id = ? AND booking_id = ? FOR UPDATE`, paxID, bookingID).Scan(&paxType, &paxStatus)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("booking.UpdatePaxRoomType get pax: %w", err)
+	}
+	if paxType == "infant" {
+		return nil, ErrCannotChangeInfantRoom
+	}
+	if paxStatus == "batal" {
+		return nil, ErrCannotChangeCancelledPaxRoom
+	}
+
+	// 3. Lookup new price from schedule
+	var col string
+	switch newRoomType {
+	case "Quad":
+		col = "harga_quad"
+	case "Triple":
+		col = "harga_triple"
+	case "Double":
+		col = "harga_double"
+	default:
+		return nil, fmt.Errorf("room_type tidak valid: %s", newRoomType)
+	}
+
+	var newHarga float64
+	qPrice := fmt.Sprintf("SELECT %s FROM schedules WHERE id = ?", col)
+	if err := tx.QueryRowContext(ctx, qPrice, scheduleID).Scan(&newHarga); err != nil {
+		return nil, fmt.Errorf("booking.UpdatePaxRoomType lookup price: %w", err)
+	}
+
+	// 4. Update booking_pax
+	_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET room_type = ?, harga_pax = ? WHERE id = ?`, newRoomType, newHarga, paxID)
+	if err != nil {
+		return nil, fmt.Errorf("booking.UpdatePaxRoomType update pax: %w", err)
+	}
+
+	// 5. Recalculate total_harga
+	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.UpdatePaxRoomType recalc: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("booking.UpdatePaxRoomType commit: %w", err)
+	}
+
+	return r.GetByID(ctx, bookingID, brandID)
 }
 
 // ─── UpdateBookingStatus ──────────────────────────────────────────────────────
 
-// UpdateBookingStatus mengubah status booking + logika seat_sisa kritis.
-// Semua dalam 1 transaction dengan SELECT ... FOR UPDATE pada schedule.
+// UpdateBookingStatus mengubah status booking + logika seat_sisa.
 func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, newStatus string) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -281,10 +603,9 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 	var oldStatus string
 	var isSeatBlocked bool
 	var scheduleID int64
-	var seatCount int
 	err = tx.QueryRowContext(ctx,
-		`SELECT status, schedule_id, is_seat_blocked, seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID,
-	).Scan(&oldStatus, &scheduleID, &isSeatBlocked, &seatCount)
+		`SELECT status, schedule_id, is_seat_blocked FROM bookings WHERE id=? FOR UPDATE`, bookingID,
+	).Scan(&oldStatus, &scheduleID, &isSeatBlocked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -292,7 +613,16 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 		return nil, fmt.Errorf("booking.UpdateStatus get old: %w", err)
 	}
 
-	// 2. Lock schedule row untuk cek/ubah seat_sisa
+	// 2. Hitung jumlah pax reguler aktif
+	var activeRegularPax int
+	err = tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM booking_pax 
+		WHERE booking_id = ? AND counts_for_seat = TRUE AND pax_status = 'aktif'`, bookingID).Scan(&activeRegularPax)
+	if err != nil {
+		return nil, fmt.Errorf("booking.UpdateStatus count regular pax: %w", err)
+	}
+
+	// 3. Lock schedule row untuk cek/ubah seat_sisa
 	var seatSisa int
 	err = tx.QueryRowContext(ctx,
 		`SELECT seat_sisa FROM schedules WHERE id=? FOR UPDATE`, scheduleID,
@@ -301,43 +631,49 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 		return nil, fmt.Errorf("booking.UpdateStatus lock schedule: %w", err)
 	}
 
-	// 3. Logic seat_sisa
+	// 4. Logic seat_sisa
 	newIsLocked := lockedStatuses[newStatus]
 
 	if newStatus == "batal" && isSeatBlocked {
-		// Kembalikan kursi: status lama sudah terkunci, sekarang dibatalkan
-		_, err = tx.ExecContext(ctx,
-			`UPDATE schedules SET seat_sisa = LEAST(seat_total, seat_sisa + ?) WHERE id=?`, seatCount, scheduleID)
-		if err != nil {
-			return nil, fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
+		if activeRegularPax > 0 {
+			_, err = tx.ExecContext(ctx,
+				`UPDATE schedules SET seat_sisa = LEAST(seat_total, seat_sisa + ?) WHERE id=?`, activeRegularPax, scheduleID)
+			if err != nil {
+				return nil, fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
+			}
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE,seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID)
 		if err != nil {
 			return nil, fmt.Errorf("booking.UpdateStatus clear seat block: %w", err)
 		}
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status='batal' WHERE booking_id=?`, bookingID)
+		if err != nil {
+			return nil, fmt.Errorf("booking.UpdateStatus cancel pax: %w", err)
+		}
 	} else if newIsLocked && oldStatus == "baru" && !isSeatBlocked {
-		// Transisi PERTAMA KALI ke status terkunci (baru→dp, baru→lunas, dst)
-		if seatSisa < seatCount {
+		if seatSisa < activeRegularPax {
 			return nil, ErrSeatHabis
 		}
-		_, err = tx.ExecContext(ctx,
-			`UPDATE schedules SET seat_sisa = seat_sisa - ? WHERE id=?`, seatCount, scheduleID)
-		if err != nil {
-			return nil, fmt.Errorf("booking.UpdateStatus decrement seat: %w", err)
-		}
-		_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=TRUE WHERE id=?`, bookingID)
-		if err != nil {
-			return nil, fmt.Errorf("booking.UpdateStatus mark seat block: %w", err)
+		if activeRegularPax > 0 {
+			_, err = tx.ExecContext(ctx,
+				`UPDATE schedules SET seat_sisa = seat_sisa - ? WHERE id=?`, activeRegularPax, scheduleID)
+			if err != nil {
+				return nil, fmt.Errorf("booking.UpdateStatus decrement seat: %w", err)
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=TRUE WHERE id=?`, bookingID)
+			if err != nil {
+				return nil, fmt.Errorf("booking.UpdateStatus mark seat block: %w", err)
+			}
 		}
 	}
-	// else: transisi lain (dp→lunas, dll) → seat_sisa tidak berubah
-	if newIsLocked && isSeatBlocked {
+	// DP/Lunas mengubah hold sementara menjadi reservasi tanpa kedaluwarsa.
+	if newIsLocked {
 		if _, err = tx.ExecContext(ctx, `UPDATE bookings SET seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID); err != nil {
 			return nil, fmt.Errorf("booking.UpdateStatus clear seat expiry: %w", err)
 		}
 	}
 
-	// 4. Update status booking
+	// 5. Update status booking
 	_, err = tx.ExecContext(ctx,
 		`UPDATE bookings SET status=? WHERE id=?`, newStatus, bookingID)
 	if err != nil {
@@ -361,8 +697,7 @@ func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Boo
 
 	var scheduleID int64
 	var isBlocked bool
-	var seatCount int
-	err = tx.QueryRowContext(ctx, `SELECT schedule_id, is_seat_blocked, seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&scheduleID, &isBlocked, &seatCount)
+	err = tx.QueryRowContext(ctx, `SELECT schedule_id, is_seat_blocked FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&scheduleID, &isBlocked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -372,8 +707,18 @@ func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Boo
 	if !isBlocked {
 		return nil, ErrSeatBelumDiblokir
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=LEAST(seat_total, seat_sisa + ?) WHERE id=?`, seatCount, scheduleID); err != nil {
-		return nil, fmt.Errorf("booking.CancelSeatBlock restore seat: %w", err)
+	var activeRegularPax int
+	err = tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM booking_pax 
+		WHERE booking_id = ? AND counts_for_seat = TRUE AND pax_status = 'aktif'`, bookingID).Scan(&activeRegularPax)
+	if err != nil {
+		return nil, fmt.Errorf("booking.CancelSeatBlock count regular pax: %w", err)
+	}
+
+	if activeRegularPax > 0 {
+		if _, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=LEAST(seat_total, seat_sisa + ?) WHERE id=?`, activeRegularPax, scheduleID); err != nil {
+			return nil, fmt.Errorf("booking.CancelSeatBlock restore seat: %w", err)
+		}
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE,seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.CancelSeatBlock update: %w", err)
@@ -446,11 +791,13 @@ func (r *Repository) BlockSeat(ctx context.Context, bookingID int64, expiresAt t
 func (r *Repository) recalculateTotalTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	const q = `
 		UPDATE bookings
-		SET total_harga = GREATEST(0, COALESCE(harga_dasar, 0) + (
+		SET total_harga = GREATEST(0, (
+			SELECT COALESCE(SUM(harga_pax), 0) FROM booking_pax WHERE booking_id = ?
+		) + (
 			SELECT COALESCE(SUM(nominal), 0) FROM booking_addons WHERE booking_id = ?
 		) - diskon)
 		WHERE id = ?`
-	if _, err := tx.ExecContext(ctx, q, bookingID, bookingID); err != nil {
+	if _, err := tx.ExecContext(ctx, q, bookingID, bookingID, bookingID); err != nil {
 		return err
 	}
 
@@ -569,9 +916,9 @@ func (r *Repository) UpdateDiskon(ctx context.Context, bookingID int64, diskon f
 	return tx.Commit()
 }
 
-// ─── Existence checks (dipakai handler) ───────────────────────────────────────
+// ─── Existence checks ─────────────────────────────────────────────────────────
 
-// ScheduleExistsForBrand memeriksa apakah schedule_id ada (dan brand cocok kalau scoped).
+// ScheduleExistsForBrand memeriksa apakah schedule_id ada.
 func (r *Repository) ScheduleExistsForBrand(ctx context.Context, scheduleID int64, brandID *int64) (bool, error) {
 	q := `SELECT COUNT(*) FROM schedules WHERE id=?`
 	var args []interface{}
@@ -585,7 +932,7 @@ func (r *Repository) ScheduleExistsForBrand(ctx context.Context, scheduleID int6
 	return count > 0, err
 }
 
-// JamaahExistsForBrand memeriksa apakah jamaah_id ada (dan brand cocok kalau scoped).
+// JamaahExistsForBrand memeriksa apakah jamaah_id ada.
 func (r *Repository) JamaahExistsForBrand(ctx context.Context, jamaahID int64, brandID *int64) (bool, error) {
 	q := `SELECT COUNT(*) FROM jamaah WHERE id=?`
 	var args []interface{}
@@ -624,7 +971,7 @@ func (r *Repository) GetScheduleHarga(ctx context.Context, scheduleID int64, roo
 	return &harga, nil
 }
 
-// UpdateProgress melakukan partial update terhadap kolom progress_* pada sebuah booking.
+// UpdateProgress melakukan update terhadap kolom progress header (hotel, land_arrangement).
 func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandID *int64, updates map[string]bool) (*Booking, error) {
 	if len(updates) == 0 {
 		return r.GetByID(ctx, bookingID, brandID)
@@ -635,29 +982,81 @@ func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandI
 		return nil, err
 	}
 
-	var setClauses []string
-	var args []interface{}
+	var headerSetClauses []string
+	var headerArgs []interface{}
 
 	for key, val := range updates {
-		colName, ok := AllowedProgressFields[key]
+		colName, ok := AllowedHeaderProgressFields[key]
 		if !ok {
-			return nil, fmt.Errorf("item progress tidak valid: %s", key)
+			return nil, fmt.Errorf("item progress '%s' tidak valid atau gunakan endpoint progress per-pax untuk item ini", key)
 		}
-		setClauses = append(setClauses, fmt.Sprintf("%s = ?", colName))
-		args = append(args, val)
+		headerSetClauses = append(headerSetClauses, fmt.Sprintf("%s = ?", colName))
+		headerArgs = append(headerArgs, val)
 	}
 
-	args = append(args, bookingID)
-	q := fmt.Sprintf("UPDATE bookings SET %s WHERE id = ?", strings.Join(setClauses, ", "))
-
-	if _, err := r.db.ExecContext(ctx, q, args...); err != nil {
-		return nil, fmt.Errorf("booking.UpdateProgress: %w", err)
+	if len(headerSetClauses) > 0 {
+		headerArgs = append(headerArgs, bookingID)
+		qHeader := fmt.Sprintf("UPDATE bookings SET %s WHERE id = ?", strings.Join(headerSetClauses, ", "))
+		if _, err := r.db.ExecContext(ctx, qHeader, headerArgs...); err != nil {
+			return nil, fmt.Errorf("booking.UpdateProgress: %w", err)
+		}
 	}
 
 	return r.GetByID(ctx, bookingID, brandID)
 }
 
-// checkPasporUploaded memeriksa apakah jamaah memiliki dokumen paspor yang sudah diupload (file_url tidak null/kosong).
+// UpdatePaxProgress melakukan update terhadap kolom progress individual pax (visa, siskopatuh, manasik, vaksin_meningitis).
+func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, paxID int64, brandID *int64, updates map[string]bool) (*Booking, error) {
+	if len(updates) == 0 {
+		return r.GetByID(ctx, bookingID, brandID)
+	}
+
+	// Verify booking existence & brand
+	if _, err := r.GetByID(ctx, bookingID, brandID); err != nil {
+		return nil, err
+	}
+
+	// Verify pax existence & status
+	var paxType, paxStatus string
+	err := r.db.QueryRowContext(ctx, `SELECT pax_type, pax_status FROM booking_pax WHERE id = ? AND booking_id = ?`, paxID, bookingID).Scan(&paxType, &paxStatus)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("booking.UpdatePaxProgress verify pax: %w", err)
+	}
+
+	if paxStatus != "aktif" {
+		return nil, ErrPaxBatal
+	}
+
+	var setClauses []string
+	var args []interface{}
+
+	for key, val := range updates {
+		colName, ok := AllowedPaxProgressFields[key]
+		if !ok {
+			return nil, fmt.Errorf("item progress pax '%s' tidak valid", key)
+		}
+		if key == "manasik" && paxType == "infant" {
+			return nil, ErrManasikInfant
+		}
+		setClauses = append(setClauses, fmt.Sprintf("%s = ?", colName))
+		args = append(args, val)
+	}
+
+	if len(setClauses) > 0 {
+		args = append(args, paxID, bookingID)
+		q := fmt.Sprintf("UPDATE booking_pax SET %s WHERE id = ? AND booking_id = ?", strings.Join(setClauses, ", "))
+		if _, err := r.db.ExecContext(ctx, q, args...); err != nil {
+			return nil, fmt.Errorf("booking.UpdatePaxProgress update: %w", err)
+		}
+	}
+
+	return r.GetByID(ctx, bookingID, brandID)
+}
+
+// checkPasporUploaded memeriksa apakah jamaah memiliki dokumen paspor yang sudah diupload.
 func (r *Repository) checkPasporUploaded(ctx context.Context, jamaahID int64) (bool, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx, `
@@ -672,8 +1071,26 @@ func (r *Repository) checkPasporUploaded(ctx context.Context, jamaahID int64) (b
 }
 
 func computeSiapBerangkat(b *Booking) {
-	b.SiapBerangkat = b.ProgressPaspor && b.ProgressVisa && b.ProgressTiket && b.ProgressHotel &&
-		b.ProgressLandArrangement && b.ProgressManasik && b.ProgressSiskopatuh && b.ProgressVaksinMeningitis
+	headerLengkap := b.ProgressTiket && b.ProgressHotel && b.ProgressLandArrangement
+	activePaxCount := 0
+	allPaxLengkap := true
+
+	for _, p := range b.Pax {
+		if p.PaxStatus != "aktif" {
+			continue
+		}
+		activePaxCount++
+		manasikReq := true
+		if p.PaxType != "infant" {
+			manasikReq = p.ProgressManasik
+		}
+		paxLengkap := p.ProgressPaspor && p.ProgressVisa && p.ProgressSiskopatuh && p.ProgressVaksinMeningitis && manasikReq
+		if !paxLengkap {
+			allPaxLengkap = false
+		}
+	}
+
+	b.SiapBerangkat = (activePaxCount > 0) && headerLengkap && allPaxLengkap
 }
 
 // ─── Internal scan helper ─────────────────────────────────────────────────────
@@ -686,27 +1103,36 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	var diskonKeterangan sql.NullString
 	var createdBy sql.NullInt64
 	var berangkatTanggal sql.NullString
-	var vestigialPaspor bool
-	var vestigialTiket bool
 	var perlengkapanStatus string
 	var perlengkapanTanggal sql.NullString
 	var perlengkapanDiberikanOleh sql.NullInt64
 	var isTicketConfirmed bool
 	var seatHoldExpiresAt sql.NullTime
+	var roomType sql.NullString
+	var perlengkapanJumlahPax sql.NullInt64
 
 	err := rows.Scan(
-		&b.ID, &idBooking, &b.ScheduleID, &b.BrandID, &b.JadwalNama, &berangkatTanggal, &b.JamaahID, &b.NamaJamaah,
-		&b.RoomType, &b.SeatCount, &hargaDasar, &b.Status, &b.IsSeatBlocked, &seatHoldExpiresAt, &totalHarga, &b.Diskon, &diskonKeterangan,
-		&vestigialPaspor, &b.ProgressVisa, &vestigialTiket, &b.ProgressHotel,
-		&b.ProgressLandArrangement, &b.ProgressManasik, &b.ProgressSiskopatuh, &b.ProgressVaksinMeningitis,
+		&b.ID, &idBooking, &b.ScheduleID, &b.BrandID, &b.JadwalNama, &berangkatTanggal,
+		&b.PicJamaahID, &b.NamaJamaah,
+		&roomType, &hargaDasar,
+		&b.SeatCount, &b.Status, &b.IsSeatBlocked, &seatHoldExpiresAt,
+		&totalHarga, &b.Diskon, &diskonKeterangan,
+		&b.ProgressVisa, &b.ProgressHotel, &b.ProgressLandArrangement,
+		&b.ProgressManasik, &b.ProgressSiskopatuh, &b.ProgressVaksinMeningitis,
 		&perlengkapanStatus, &perlengkapanTanggal, &perlengkapanDiberikanOleh,
+		&perlengkapanJumlahPax,
 		&createdBy, &b.CreatedAt,
 		&isTicketConfirmed,
+		&b.JamaahID,
+		&b.PaxCount,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("booking.scanRow: %w", err)
 	}
 	b.ProgressTiket = isTicketConfirmed
+	if roomType.Valid {
+		b.RoomType = roomType.String
+	}
 	if idBooking.Valid {
 		b.IDBooking = idBooking.String
 	}
@@ -736,14 +1162,19 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	if perlengkapanDiberikanOleh.Valid {
 		b.PerlengkapanDiberikanOleh = &perlengkapanDiberikanOleh.Int64
 	}
+	if perlengkapanJumlahPax.Valid {
+		v := int(perlengkapanJumlahPax.Int64)
+		b.PerlengkapanJumlahPax = &v
+	}
 	computeSiapBerangkat(&b)
 	b.Addons = make([]BookingAddon, 0)
+	b.Pax = make([]BookingPax, 0)
 	return &b, nil
 }
 
 // ─── Perlengkapan Distribusi ──────────────────────────────────────────────────
 
-// MarkPerlengkapanDiberikan mendistribusikan perlengkapan sesuai template set brand dalam 1 transaction.
+// MarkPerlengkapanDiberikan mendistribusikan perlengkapan sesuai template set brand dikalikan pax non-infant aktif.
 func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID int64, adminID int64, brandID *int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -779,7 +1210,19 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		return nil, ErrPerlengkapanSudahDiberikan
 	}
 
-	// 2. Ambil template set global & stok untuk brand tersebut dengan row lock FOR UPDATE
+	// 2. Hitung jumlah pax reguler aktif (infant tidak dapat jatah perlengkapan)
+	var jumlahPaxEligible int
+	err = tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM booking_pax 
+		WHERE booking_id = ? AND pax_status = 'aktif' AND pax_type = 'reguler'`, bookingID).Scan(&jumlahPaxEligible)
+	if err != nil {
+		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan count eligible pax: %w", err)
+	}
+	if jumlahPaxEligible == 0 {
+		return nil, errors.New("tidak ada pax reguler aktif untuk didistribusikan perlengkapan")
+	}
+
+	// 3. Ambil template set global & stok untuk brand tersebut dengan row lock FOR UPDATE
 	qSet := `
 		SELECT t.perlengkapan_item_id, t.qty, i.nama, s.stok_tersedia
 		FROM perlengkapan_set_template t
@@ -816,11 +1259,12 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		return nil, ErrTemplatePerlengkapanBelumDiatur
 	}
 
-	// 3. Cek apakah ada stok yang kurang
+	// 4. Cek apakah ada stok yang kurang untuk kebutuhan (item.Qty * jumlahPaxEligible)
 	var kurangItems []string
 	for _, item := range setItems {
-		if item.StokTersedia < item.Qty {
-			kurangItems = append(kurangItems, fmt.Sprintf("%s (tersedia %d, butuh %d)", item.Nama, item.StokTersedia, item.Qty))
+		butuh := item.Qty * jumlahPaxEligible
+		if item.StokTersedia < butuh {
+			kurangItems = append(kurangItems, fmt.Sprintf("%s (tersedia %d, butuh %d)", item.Nama, item.StokTersedia, butuh))
 		}
 	}
 	if len(kurangItems) > 0 {
@@ -829,23 +1273,25 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		}
 	}
 
-	// 4. Potong stok untuk setiap item di set pada tabel perlengkapan_stok
+	// 5. Potong stok untuk setiap item di set pada tabel perlengkapan_stok
 	for _, item := range setItems {
-		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia - ? WHERE brand_id = ? AND perlengkapan_item_id = ?", item.Qty, scheduleBrandID, item.ItemID)
+		butuh := item.Qty * jumlahPaxEligible
+		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia - ? WHERE brand_id = ? AND perlengkapan_item_id = ?", butuh, scheduleBrandID, item.ItemID)
 		if err != nil {
 			return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan potong stok: %w", err)
 		}
 	}
 
-	// 5. Update status perlengkapan pada booking
+	// 6. Update status perlengkapan pada booking beserta perlengkapan_jumlah_pax
 	qUpdateBooking := `
 		UPDATE bookings
 		SET perlengkapan_status = 'sudah_diberikan',
 		    perlengkapan_tanggal = CURDATE(),
-		    perlengkapan_diberikan_oleh = ?
+		    perlengkapan_diberikan_oleh = ?,
+		    perlengkapan_jumlah_pax = ?
 		WHERE id = ?
 	`
-	if _, err := tx.ExecContext(ctx, qUpdateBooking, adminID, bookingID); err != nil {
+	if _, err := tx.ExecContext(ctx, qUpdateBooking, adminID, jumlahPaxEligible, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan update booking: %w", err)
 	}
 
@@ -856,7 +1302,7 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 	return r.GetByID(ctx, bookingID, brandID)
 }
 
-// BatalkanPerlengkapan membatalkan status perlengkapan dan mengembalikan stok item ke database.
+// BatalkanPerlengkapan membatalkan status perlengkapan dan mengembalikan stok item ke database sesuai jumlah pax tersimpan.
 func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, brandID *int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -864,18 +1310,19 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 	}
 	defer tx.Rollback()
 
-	// 1. Ambil booking existing & brand_id
+	// 1. Ambil booking existing, brand_id, dan perlengkapan_jumlah_pax
 	var (
-		perlengkapanStatus string
-		scheduleBrandID    int64
+		perlengkapanStatus    string
+		scheduleBrandID       int64
+		perlengkapanJumlahPax sql.NullInt64
 	)
 	qBooking := `
-		SELECT b.perlengkapan_status, s.brand_id
+		SELECT b.perlengkapan_status, s.brand_id, b.perlengkapan_jumlah_pax
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id = ?
 	`
-	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&perlengkapanStatus, &scheduleBrandID)
+	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&perlengkapanStatus, &scheduleBrandID, &perlengkapanJumlahPax)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -889,6 +1336,12 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 
 	if perlengkapanStatus != "sudah_diberikan" {
 		return nil, ErrPerlengkapanBelumDiberikan
+	}
+
+	// Ambil jumlah pax tersimpan (fallback 1 untuk data legacy)
+	jumlahPaxTersimpan := 1
+	if perlengkapanJumlahPax.Valid && perlengkapanJumlahPax.Int64 > 0 {
+		jumlahPaxTersimpan = int(perlengkapanJumlahPax.Int64)
 	}
 
 	// 2. Ambil template set dengan row lock FOR UPDATE
@@ -919,20 +1372,22 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 		return nil, fmt.Errorf("booking.BatalkanPerlengkapan rows: %w", err)
 	}
 
-	// 3. Kembalikan stok item ke tabel perlengkapan_stok
+	// 3. Kembalikan stok item ke tabel perlengkapan_stok (item.Qty * jumlahPaxTersimpan)
 	for _, item := range setItems {
-		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", item.Qty, scheduleBrandID, item.ItemID)
+		kembalikan := item.Qty * jumlahPaxTersimpan
+		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", kembalikan, scheduleBrandID, item.ItemID)
 		if err != nil {
 			return nil, fmt.Errorf("booking.BatalkanPerlengkapan kembalikan stok: %w", err)
 		}
 	}
 
-	// 4. Reset booking status perlengkapan
+	// 4. Reset booking status perlengkapan dan perlengkapan_jumlah_pax
 	qUpdateBooking := `
 		UPDATE bookings
 		SET perlengkapan_status = 'belum_diberikan',
 		    perlengkapan_tanggal = NULL,
-		    perlengkapan_diberikan_oleh = NULL
+		    perlengkapan_diberikan_oleh = NULL,
+		    perlengkapan_jumlah_pax = NULL
 		WHERE id = ?
 	`
 	if _, err := tx.ExecContext(ctx, qUpdateBooking, bookingID); err != nil {

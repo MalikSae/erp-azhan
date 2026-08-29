@@ -19,6 +19,7 @@ import (
 	"erp-azhan/api/internal/addon"
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/airline"
+	"erp-azhan/api/internal/airport"
 	"erp-azhan/api/internal/bankaccount"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
@@ -100,6 +101,9 @@ func main() {
 
 	airlineRepo := airline.NewRepository(db)
 	airlineHandler := airline.NewHandler(airlineRepo)
+
+	airportRepo := airport.NewRepository(db)
+	airportHandler := airport.NewHandler(airportRepo)
 
 	categoryRepo := category.NewRepository(db)
 	categoryHandler := category.NewHandler(categoryRepo)
@@ -221,6 +225,12 @@ func main() {
 		r.Put("/airlines/{id}", airlineHandler.UpdateAirline)
 		r.Delete("/airlines/{id}", airlineHandler.DeleteAirline)
 
+		// Airports
+		r.Get("/airports", airportHandler.ListAirports)
+		r.Post("/airports", airportHandler.CreateAirport)
+		r.Put("/airports/{id}", airportHandler.UpdateAirport)
+		r.Delete("/airports/{id}", airportHandler.DeleteAirport)
+
 		// Categories
 		r.Get("/categories", categoryHandler.ListCategories)
 		r.Get("/categories/{id}", categoryHandler.GetCategory)
@@ -285,7 +295,13 @@ func main() {
 		r.Get("/jamaah/{id}", jamaahHandler.GetJamaah)
 		r.Post("/jamaah", jamaahHandler.CreateJamaah)
 		r.Put("/jamaah/{id}", jamaahHandler.UpdateJamaah)
+		r.Put("/jamaah/{id}/catatan", jamaahHandler.UpdateCatatan)
 		r.Delete("/jamaah/{id}", jamaahHandler.DeleteJamaah)
+
+		// Relasi Kekerabatan Jamaah
+		r.Get("/jamaah/{id}/relasi", jamaahHandler.ListRelasi)
+		r.Post("/jamaah/{id}/relasi", jamaahHandler.CreateRelasi)
+		r.Delete("/jamaah/{id}/relasi/{relasi_id}", jamaahHandler.DeleteRelasi)
 
 		// Dokumen Jamaah
 		r.Get("/jamaah/{jamaah_id}/dokumen", dokumenHandler.ListDokumen)
@@ -303,6 +319,9 @@ func main() {
 		r.Delete("/bookings/{id}/addons/{addon_id}", bookingHandler.DeleteBookingAddon)
 		r.Put("/bookings/{id}/diskon", bookingHandler.UpdateBookingDiskon)
 		r.Put("/bookings/{id}/progress", bookingHandler.UpdateBookingProgress)
+		r.Put("/bookings/{id}/pax/{pax_id}/progress", bookingHandler.UpdatePaxProgress)
+		r.Put("/bookings/{id}/pax/{pax_id}/cancel", bookingHandler.CancelPax)
+		r.Put("/bookings/{id}/pax/{pax_id}/room-type", bookingHandler.UpdatePaxRoomType)
 		r.Put("/bookings/{id}/perlengkapan/distribusi", bookingHandler.DistribusiPerlengkapan)
 		r.Delete("/bookings/{id}/perlengkapan/distribusi", bookingHandler.BatalkanPerlengkapan)
 

@@ -106,6 +106,7 @@ Repo: github.com/MalikSae/erp-azhan
 - **SEMUA kerja WAJIB di branch `dev-malik`** — JANGAN PERNAH commit/push langsung ke `main`. Cek branch aktif (`git branch --show-current`) di awal sesi; kalau bukan `dev-malik`, `git checkout dev-malik` dulu (buat dari `main` kalau belum ada lokal).
 - Commit lokal boleh dilakukan rutin setelah unit kerja selesai (pesan deskriptif, Bahasa Indonesia/Inggris bebas tapi jelas).
 - **`git push` WAJIB minta konfirmasi eksplisit dari user setiap kali** — TIDAK PERNAH push otomatis tanpa ditanya dulu, meski sudah pernah diizinkan sebelumnya di sesi yang sama.
+- **Setiap kali diminta commit & push, selalu cek status KEDUA repo (erp-azhan dan azhan-microsite), meskipun perubahan sesi ini cuma menyentuh satu repo — laporkan status repo yang tidak ada perubahan apa adanya (bersih), jangan diabaikan begitu saja.**
 
 ---
 

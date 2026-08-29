@@ -111,48 +111,138 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gate 3: jamaah_id wajib
-	if req.JamaahID == 0 {
-		writeError(w, http.StatusBadRequest, "jamaah_id wajib diisi")
+	// PIC Jamaah ID fallback
+	picID := req.PicJamaahID
+	if picID == 0 {
+		picID = req.JamaahID
+	}
+	if picID == 0 && len(req.Pax) > 0 {
+		picID = req.Pax[0].JamaahID
+	}
+	if picID == 0 {
+		writeError(w, http.StatusBadRequest, "pic_jamaah_id wajib diisi")
 		return
 	}
+	req.PicJamaahID = picID
 
-	// Gate 4: jamaah exist & brand cocok
-	exists, err = h.repo.JamaahExistsForBrand(r.Context(), req.JamaahID, brandID)
+	// Gate 3: PIC jamaah exist & brand cocok
+	exists, err = h.repo.JamaahExistsForBrand(r.Context(), picID, brandID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusBadRequest, "jamaah_id tidak valid atau bukan milik brand Anda")
+		writeError(w, http.StatusBadRequest, "pic_jamaah_id tidak valid atau bukan milik brand Anda")
 		return
 	}
 
-	// Gate 5: room_type valid enum
-	if !validRoomTypes[req.RoomType] {
-		writeError(w, http.StatusBadRequest, "room_type tidak valid, harus Quad/Triple/Double")
+	// Gate 4: minimal 1 pax dalam array
+	if len(req.Pax) == 0 {
+		writeError(w, http.StatusBadRequest, "pax minimal 1 orang")
 		return
 	}
 
-	// Auto-snapshot harga kalau total_harga tidak dikirim
-	var autoHarga *float64
-	if req.TotalHarga == nil {
-		h, err := h.repo.GetScheduleHarga(r.Context(), req.ScheduleID, req.RoomType)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "gagal mengambil harga schedule")
+	// Gate 5: Validasi setiap item pax
+	for i, p := range req.Pax {
+		if p.JamaahID == 0 {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("jamaah_id pada pax urutan %d wajib diisi", i+1))
 			return
 		}
-		autoHarga = h
+		exists, err := h.repo.JamaahExistsForBrand(r.Context(), p.JamaahID, brandID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return
+		}
+		if !exists {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("jamaah_id %d pada pax urutan %d tidak valid atau bukan milik brand Anda", p.JamaahID, i+1))
+			return
+		}
+
+		if p.PaxType != "reguler" && p.PaxType != "infant" {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("pax_type pada pax urutan %d tidak valid, harus 'reguler' atau 'infant'", i+1))
+			return
+		}
+
+		if p.PaxType == "infant" {
+			if p.RoomType != nil && strings.TrimSpace(*p.RoomType) != "" {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("pax_type infant pada urutan %d tidak boleh memilih room_type (harus null)", i+1))
+				return
+			}
+		} else if p.PaxType == "reguler" {
+			if p.RoomType == nil || !validRoomTypes[*p.RoomType] {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("room_type untuk pax reguler pada urutan %d harus salah satu dari Quad, Triple, atau Double", i+1))
+				return
+			}
+		}
 	}
 
 	createdBy := identity.GetAdminUserID(r.Context())
 
-	b, err := h.repo.CreateBooking(r.Context(), &req, createdBy, autoHarga)
+	b, err := h.repo.CreateBooking(r.Context(), &req, createdBy)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, b)
+}
+
+// ─── Cancel Pax ───────────────────────────────────────────────────────────────
+
+// CancelPax godoc
+// PUT /api/admin/bookings/{id}/pax/{pax_id}/cancel
+func (h *Handler) CancelPax(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	paxID, ok := parsePaxID(w, r)
+	if !ok {
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	b, err := h.repo.CancelPax(r.Context(), id, paxID, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
+}
+
+// ─── Update Pax Room Type ─────────────────────────────────────────────────────
+
+// UpdatePaxRoomType godoc
+// PUT /api/admin/bookings/{id}/pax/{pax_id}/room-type
+func (h *Handler) UpdatePaxRoomType(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	paxID, ok := parsePaxID(w, r)
+	if !ok {
+		return
+	}
+
+	var req UpdatePaxRoomTypeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
+
+	if !validRoomTypes[req.RoomType] {
+		writeError(w, http.StatusBadRequest, "room_type tidak valid, harus salah satu dari Quad, Triple, atau Double")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	b, err := h.repo.UpdatePaxRoomType(r.Context(), id, paxID, req.RoomType, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
 }
 
 // ─── Update Status ────────────────────────────────────────────────────────────
@@ -173,12 +263,13 @@ func (h *Handler) UpdateBookingStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Validasi enum status
 	if !validStatuses[req.Status] {
-		writeError(w, http.StatusBadRequest, "status tidak valid, harus baru/dp/lunas/batal")
+		writeError(w, http.StatusBadRequest, "status tidak valid, harus salah satu dari: baru, dp, lunas, batal")
 		return
 	}
 
-	// Verify brand access: ambil booking dulu, cek via schedule brand
 	brandID := identity.GetBrandID(r.Context())
+
+	// Verifikasi booking exists dan milik brand (jika brand admin)
 	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
 		handleRepoError(w, err)
 		return
@@ -189,26 +280,34 @@ func (h *Handler) UpdateBookingStatus(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, b)
 }
 
-// CancelSeatBlock melepaskan blok kursi tanpa membatalkan booking.
+// ─── Cancel Seat Block ────────────────────────────────────────────────────────
+
+// CancelSeatBlock godoc
 // DELETE /api/admin/bookings/{id}/seat-block
 func (h *Handler) CancelSeatBlock(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
+
 	brandID := identity.GetBrandID(r.Context())
+
+	// Verifikasi booking exists dan milik brand
 	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
 		handleRepoError(w, err)
 		return
 	}
+
 	b, err := h.repo.CancelSeatBlock(r.Context(), id)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -256,24 +355,28 @@ func (h *Handler) AddBookingAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	brandID := identity.GetBrandID(r.Context())
-	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
-		handleRepoError(w, err)
-		return
-	}
-
 	var req AddBookingAddonRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "format JSON tidak valid")
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
 
+	req.Nama = strings.TrimSpace(req.Nama)
 	if req.Nama == "" {
-		writeError(w, http.StatusBadRequest, "nama add-on wajib diisi")
+		writeError(w, http.StatusBadRequest, "nama addon wajib diisi")
 		return
 	}
+
 	if req.Nominal <= 0 {
-		writeError(w, http.StatusBadRequest, "nominal add-on harus lebih dari 0")
+		writeError(w, http.StatusBadRequest, "nominal harus lebih besar dari 0")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	// Verifikasi booking exists dan milik brand
+	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
+		handleRepoError(w, err)
 		return
 	}
 
@@ -282,12 +385,13 @@ func (h *Handler) AddBookingAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.repo.GetByID(r.Context(), id, brandID)
+	b, err := h.repo.GetByID(r.Context(), id, brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, updated)
+
+	writeJSON(w, http.StatusCreated, b)
 }
 
 // DeleteBookingAddon godoc
@@ -298,14 +402,16 @@ func (h *Handler) DeleteBookingAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addonRaw := chi.URLParam(r, "addon_id")
-	addonID, err := strconv.ParseInt(addonRaw, 10, 64)
+	rawAddonID := chi.URLParam(r, "addon_id")
+	addonID, err := strconv.ParseInt(rawAddonID, 10, 64)
 	if err != nil || addonID <= 0 {
 		writeError(w, http.StatusBadRequest, "addon_id tidak valid")
 		return
 	}
 
 	brandID := identity.GetBrandID(r.Context())
+
+	// Verifikasi booking exists dan milik brand
 	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
 		handleRepoError(w, err)
 		return
@@ -316,13 +422,16 @@ func (h *Handler) DeleteBookingAddon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.repo.GetByID(r.Context(), id, brandID)
+	b, err := h.repo.GetByID(r.Context(), id, brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, updated)
+
+	writeJSON(w, http.StatusOK, b)
 }
+
+// ─── Diskon ───────────────────────────────────────────────────────────────────
 
 // UpdateBookingDiskon godoc
 // PUT /api/admin/bookings/{id}/diskon
@@ -332,20 +441,22 @@ func (h *Handler) UpdateBookingDiskon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	brandID := identity.GetBrandID(r.Context())
-	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
-		handleRepoError(w, err)
-		return
-	}
-
 	var req UpdateDiskonRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "format JSON tidak valid")
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
 
 	if req.Diskon < 0 {
-		writeError(w, http.StatusBadRequest, "nilai diskon tidak boleh negatif")
+		writeError(w, http.StatusBadRequest, "diskon tidak boleh negatif")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	// Verifikasi booking exists dan milik brand
+	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
+		handleRepoError(w, err)
 		return
 	}
 
@@ -354,13 +465,16 @@ func (h *Handler) UpdateBookingDiskon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.repo.GetByID(r.Context(), id, brandID)
+	b, err := h.repo.GetByID(r.Context(), id, brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, updated)
+
+	writeJSON(w, http.StatusOK, b)
 }
+
+// ─── Progress Checklists ──────────────────────────────────────────────────────
 
 // UpdateBookingProgress godoc
 // PUT /api/admin/bookings/{id}/progress
@@ -371,48 +485,81 @@ func (h *Handler) UpdateBookingProgress(w http.ResponseWriter, r *http.Request) 
 	}
 
 	brandID := identity.GetBrandID(r.Context())
-	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
+
+	var body map[string]bool
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid, format: {\"key\": bool}")
+		return
+	}
+
+	for key := range body {
+		if key == "paspor" {
+			writeError(w, http.StatusBadRequest, "status paspor tidak bisa diubah manual, status otomatis tercentang jika dokumen paspor sudah diunggah")
+			return
+		}
+		if key == "tiket" {
+			writeError(w, http.StatusBadRequest, "status tiket tidak bisa diubah manual, status otomatis tercentang jika status tiket jadwal sudah confirmed")
+			return
+		}
+		if _, ok := AllowedPaxProgressFields[key]; ok {
+			writeError(w, http.StatusBadRequest, "Gunakan endpoint progress per-pax untuk item ini")
+			return
+		}
+		if _, ok := AllowedHeaderProgressFields[key]; !ok {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("field progress '%s' tidak valid", key))
+			return
+		}
+	}
+
+	updated, err := h.repo.UpdateProgress(r.Context(), id, brandID, body)
+	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
 
-	var rawMap map[string]json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&rawMap); err != nil {
-		writeError(w, http.StatusBadRequest, "format JSON tidak valid")
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// UpdatePaxProgress godoc
+// PUT /api/admin/bookings/{id}/pax/{pax_id}/progress
+func (h *Handler) UpdatePaxProgress(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
 		return
 	}
 
-	if len(rawMap) == 0 {
-		writeError(w, http.StatusBadRequest, "request body tidak boleh kosong")
-		return
-	}
-
-	if _, hasPaspor := rawMap["paspor"]; hasPaspor {
-		writeError(w, http.StatusBadRequest, "status paspor otomatis mengikuti dokumen jamaah, tidak bisa diubah manual di sini")
-		return
-	}
-
-	if _, hasTiket := rawMap["tiket"]; hasTiket {
-		writeError(w, http.StatusBadRequest, "status tiket otomatis mengikuti status konfirmasi di master paket, tidak bisa diubah manual di sini")
-		return
-	}
-
-	updates := make(map[string]bool)
-	for key, rawVal := range rawMap {
-		if _, ok := AllowedProgressFields[key]; !ok {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("item progress tidak valid: %s", key))
-			return
-		}
-		var b bool
-		if err := json.Unmarshal(rawVal, &b); err != nil {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("nilai untuk '%s' harus berupa boolean", key))
-			return
-		}
-		updates[key] = b
-	}
-
-	updated, err := h.repo.UpdateProgress(r.Context(), id, brandID, updates)
+	paxIDStr := chi.URLParam(r, "pax_id")
+	paxID, err := strconv.ParseInt(paxIDStr, 10, 64)
 	if err != nil {
+		writeError(w, http.StatusBadRequest, "pax_id tidak valid")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	var body map[string]bool
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid, format: {\"key\": bool}")
+		return
+	}
+
+	for key := range body {
+		if key == "paspor" {
+			writeError(w, http.StatusBadRequest, "status paspor tidak bisa diubah manual, status otomatis tercentang jika dokumen paspor sudah diunggah")
+			return
+		}
+		if _, ok := AllowedPaxProgressFields[key]; !ok {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("field progress pax '%s' tidak valid", key))
+			return
+		}
+	}
+
+	updated, err := h.repo.UpdatePaxProgress(r.Context(), id, paxID, brandID, body)
+	if err != nil {
+		if errors.Is(err, ErrPaxBatal) || errors.Is(err, ErrManasikInfant) {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		handleRepoError(w, err)
 		return
 	}
@@ -463,11 +610,20 @@ func (h *Handler) BatalkanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 
 func handleRepoError(w http.ResponseWriter, err error) {
 	var errStok *ErrStokKurang
+	var errSeatNotEnough *ErrSeatNotEnough
 	switch {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrSeatHabis):
 		writeError(w, http.StatusConflict, "kursi sudah habis, tidak bisa konfirmasi DP")
+	case errors.As(err, &errSeatNotEnough):
+		writeError(w, http.StatusBadRequest, errSeatNotEnough.Message)
+	case errors.Is(err, ErrPaxAlreadyCancelled):
+		writeError(w, http.StatusBadRequest, "pax sudah dalam status batal")
+	case errors.Is(err, ErrCannotChangeInfantRoom):
+		writeError(w, http.StatusBadRequest, "tidak bisa mengubah tipe kamar untuk infant")
+	case errors.Is(err, ErrCannotChangeCancelledPaxRoom):
+		writeError(w, http.StatusBadRequest, "tidak bisa mengubah tipe kamar untuk pax yang sudah batal")
 	case errors.Is(err, ErrInvalidStatus):
 		writeError(w, http.StatusBadRequest, "status tidak valid")
 	case errors.Is(err, ErrSeatBelumDiblokir):
@@ -487,7 +643,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.As(err, &errStok):
 		writeError(w, http.StatusConflict, errStok.Message)
 	default:
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("terjadi kesalahan internal: %v", err))
+		writeError(w, http.StatusBadRequest, err.Error())
 	}
 }
 
@@ -498,6 +654,16 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
 		writeError(w, http.StatusBadRequest, "id tidak valid")
+		return 0, false
+	}
+	return id, true
+}
+
+func parsePaxID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := chi.URLParam(r, "pax_id")
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "pax_id tidak valid")
 		return 0, false
 	}
 	return id, true

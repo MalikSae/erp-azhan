@@ -43,6 +43,11 @@ const ScheduleFormPage = () => {
   const [includeItemsText, setIncludeItemsText] = useState('');
   const [excludeItemsText, setExcludeItemsText] = useState('');
 
+  const [berangkatFlightNo, setBerangkatFlightNo] = useState('');
+  const [berangkatIsCustom, setBerangkatIsCustom] = useState(false);
+  const [pulangFlightNo, setPulangFlightNo] = useState('');
+  const [pulangIsCustom, setPulangIsCustom] = useState(false);
+
   const [formData, setFormData] = useState({
     jadwal_nama: '',
     is_promo: false,
@@ -161,6 +166,42 @@ const ScheduleFormPage = () => {
             };
           };
 
+          const parseInitialFlightCode = (rawCode, airlineCode) => {
+            if (!rawCode) {
+              return { isCustom: false, flightNo: '', fullValue: '' };
+            }
+            const rawStr = String(rawCode).trim();
+            const upperStr = rawStr.toUpperCase();
+
+            if (!airlineCode) {
+              return { isCustom: true, flightNo: '', fullValue: rawStr };
+            }
+
+            const noSpaces = upperStr.replace(/\s+/g, '');
+            const prefix = airlineCode.toUpperCase();
+
+            if (noSpaces.startsWith(prefix)) {
+              const rest = noSpaces.slice(prefix.length).replace(/^[^\d]+/, '');
+              if (/^\d*$/.test(rest)) {
+                return { isCustom: false, flightNo: rest, fullValue: prefix + rest };
+              }
+            }
+
+            return { isCustom: true, flightNo: '', fullValue: rawStr };
+          };
+
+          const schedAirlineId = scheduleData.maskapai?.id || scheduleData.maskapai_id;
+          const schedAirline = (airlines || []).find(a => String(a.id) === String(schedAirlineId));
+          const schedAirlineCode = schedAirline?.code ? schedAirline.code.trim().toUpperCase() : '';
+
+          const parsedBerangkat = parseInitialFlightCode(scheduleData.berangkat_kode_penerbangan, schedAirlineCode);
+          setBerangkatFlightNo(parsedBerangkat.flightNo);
+          setBerangkatIsCustom(parsedBerangkat.isCustom);
+
+          const parsedPulang = parseInitialFlightCode(scheduleData.pulang_kode_penerbangan, schedAirlineCode);
+          setPulangFlightNo(parsedPulang.flightNo);
+          setPulangIsCustom(parsedPulang.isCustom);
+
           const parsedTransit = parseTransitData(scheduleData.transit_bandara);
           const initialTransitHotelIDs = (scheduleData.transit_hotels || []).map(th => th.hotel_id);
 
@@ -174,12 +215,12 @@ const ScheduleFormPage = () => {
             maskapai_id: scheduleData.maskapai?.id || scheduleData.maskapai_id || '',
             berangkat_tanggal: scheduleData.berangkat_tanggal ? scheduleData.berangkat_tanggal.split('T')[0] : '',
             berangkat_jam: scheduleData.berangkat_jam || '',
-            berangkat_kode_penerbangan: scheduleData.berangkat_kode_penerbangan || '',
+            berangkat_kode_penerbangan: parsedBerangkat.fullValue || scheduleData.berangkat_kode_penerbangan || '',
             berangkat_bandara_asal: scheduleData.berangkat_bandara_asal || '',
             berangkat_bandara_tujuan: scheduleData.berangkat_bandara_tujuan || '',
             pulang_tanggal: scheduleData.pulang_tanggal ? scheduleData.pulang_tanggal.split('T')[0] : '',
             pulang_jam: scheduleData.pulang_jam || '',
-            pulang_kode_penerbangan: scheduleData.pulang_kode_penerbangan || '',
+            pulang_kode_penerbangan: parsedPulang.fullValue || scheduleData.pulang_kode_penerbangan || '',
             pulang_bandara_asal: scheduleData.pulang_bandara_asal || '',
             pulang_bandara_tujuan: scheduleData.pulang_bandara_tujuan || '',
             transit_bandara: scheduleData.transit_bandara || '',
@@ -421,6 +462,48 @@ const ScheduleFormPage = () => {
     }));
   };
 
+  const selectedAirline = airlineOptions.find(a => String(a.id) === String(formData.maskapai_id));
+  const currentAirlineCode = selectedAirline?.code ? selectedAirline.code.trim().toUpperCase() : '';
+
+  const handleMaskapaiChange = (val) => {
+    const newAirline = airlineOptions.find(a => String(a.id) === String(val));
+    const newCode = newAirline?.code ? newAirline.code.trim().toUpperCase() : '';
+
+    setFormData(prev => {
+      const updatedBerangkat = (!berangkatIsCustom && newCode)
+        ? (newCode + berangkatFlightNo)
+        : prev.berangkat_kode_penerbangan;
+      const updatedPulang = (!pulangIsCustom && newCode)
+        ? (newCode + pulangFlightNo)
+        : prev.pulang_kode_penerbangan;
+
+      return {
+        ...prev,
+        maskapai_id: val,
+        berangkat_kode_penerbangan: updatedBerangkat,
+        pulang_kode_penerbangan: updatedPulang
+      };
+    });
+  };
+
+  const handleBerangkatFlightNoChange = (e) => {
+    const num = e.target.value.replace(/\D/g, '').slice(0, 5);
+    setBerangkatFlightNo(num);
+    setFormData(prev => ({
+      ...prev,
+      berangkat_kode_penerbangan: currentAirlineCode ? (currentAirlineCode + num) : num
+    }));
+  };
+
+  const handlePulangFlightNoChange = (e) => {
+    const num = e.target.value.replace(/\D/g, '').slice(0, 5);
+    setPulangFlightNo(num);
+    setFormData(prev => ({
+      ...prev,
+      pulang_kode_penerbangan: currentAirlineCode ? (currentAirlineCode + num) : num
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -460,8 +543,18 @@ const ScheduleFormPage = () => {
 
       const finalTransit = transitParts.join(' | ');
 
+      const finalBerangkatKode = (!berangkatIsCustom && currentAirlineCode)
+        ? (currentAirlineCode + berangkatFlightNo)
+        : (formData.berangkat_kode_penerbangan || '').trim();
+
+      const finalPulangKode = (!pulangIsCustom && currentAirlineCode)
+        ? (currentAirlineCode + pulangFlightNo)
+        : (formData.pulang_kode_penerbangan || '').trim();
+
       const payload = {
         ...formData,
+        berangkat_kode_penerbangan: finalBerangkatKode,
+        pulang_kode_penerbangan: finalPulangKode,
         transit_bandara: finalTransit,
         is_promo: !!formData.is_promo,
         is_ticket_confirmed: !!formData.is_ticket_confirmed,
@@ -651,10 +744,10 @@ const ScheduleFormPage = () => {
                       label="Maskapai"
                       className="!mb-0"
                       value={formData.maskapai_id}
-                      onChange={(val) => handleChange({ target: { name: 'maskapai_id', value: val } })}
+                      onChange={(val) => handleMaskapaiChange(val)}
                       required
                       placeholder="-- Pilih Maskapai --"
-                      options={airlineOptions.map(a => ({ value: a.id, label: a.name }))}
+                      options={airlineOptions.map(a => ({ value: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
                       prefixIcon={
                         <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -727,19 +820,44 @@ const ScheduleFormPage = () => {
                         </svg>
                       }
                     />
-                    <Input
-                      label="Kode Penerbangan"
-                      className="!mb-0"
-                      name="berangkat_kode_penerbangan"
-                      value={formData.berangkat_kode_penerbangan}
-                      onChange={handleChange}
-                      placeholder="mis. SV 822"
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                      }
-                    />
+                    {!berangkatIsCustom && currentAirlineCode ? (
+                      <div className="space-y-1">
+                        <label className="block text-sm font-medium text-neutral-700 font-body">
+                          Kode Penerbangan <span className="text-danger-600">*</span>
+                        </label>
+                        <div className="flex rounded-md shadow-sm">
+                          <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-neutral-300 bg-neutral-100 text-neutral-700 font-mono font-bold text-sm select-none">
+                            {currentAirlineCode}
+                          </span>
+                          <input
+                            type="text"
+                            name="berangkat_flight_no"
+                            value={berangkatFlightNo}
+                            onChange={handleBerangkatFlightNoChange}
+                            placeholder="mis. 822"
+                            maxLength={5}
+                            inputMode="numeric"
+                            className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-neutral-300 focus:ring-primary-500 focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder-neutral-400"
+                            required
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <Input
+                        label="Kode Penerbangan"
+                        className="!mb-0"
+                        name="berangkat_kode_penerbangan"
+                        value={formData.berangkat_kode_penerbangan}
+                        onChange={handleChange}
+                        placeholder="mis. SV 822"
+                        required
+                        prefixIcon={
+                          <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          </svg>
+                        }
+                      />
+                    )}
                   </div>
 
                   {/* Baris 2: Bandara Asal & Tujuan */}
@@ -889,19 +1007,44 @@ const ScheduleFormPage = () => {
                         </svg>
                       }
                     />
-                    <Input
-                      label="Kode Penerbangan"
-                      className="!mb-0"
-                      name="pulang_kode_penerbangan"
-                      value={formData.pulang_kode_penerbangan}
-                      onChange={handleChange}
-                      placeholder="mis. SV 823"
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                      }
-                    />
+                    {!pulangIsCustom && currentAirlineCode ? (
+                      <div className="space-y-1">
+                        <label className="block text-sm font-medium text-neutral-700 font-body">
+                          Kode Penerbangan <span className="text-danger-600">*</span>
+                        </label>
+                        <div className="flex rounded-md shadow-sm">
+                          <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-neutral-300 bg-neutral-100 text-neutral-700 font-mono font-bold text-sm select-none">
+                            {currentAirlineCode}
+                          </span>
+                          <input
+                            type="text"
+                            name="pulang_flight_no"
+                            value={pulangFlightNo}
+                            onChange={handlePulangFlightNoChange}
+                            placeholder="mis. 823"
+                            maxLength={5}
+                            inputMode="numeric"
+                            className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-neutral-300 focus:ring-primary-500 focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder-neutral-400"
+                            required
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <Input
+                        label="Kode Penerbangan"
+                        className="!mb-0"
+                        name="pulang_kode_penerbangan"
+                        value={formData.pulang_kode_penerbangan}
+                        onChange={handleChange}
+                        placeholder="mis. SV 823"
+                        required
+                        prefixIcon={
+                          <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          </svg>
+                        }
+                      />
+                    )}
                   </div>
 
                   {/* Baris 2: Bandara Asal & Tujuan */}

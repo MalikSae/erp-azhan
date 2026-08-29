@@ -1,29 +1,41 @@
 import React from 'react';
 import Button from './Button';
+import { ArrowLeft } from 'lucide-react';
 
-const PageHeader = ({ title, actionLabel, onAction, onBack }) => {
+const PageHeader = ({ title, actionLabel, onAction, secondaryActionLabel, onSecondaryAction, onBack, subtitle, children }) => {
   return (
-    <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-3">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
       <div className="flex items-center gap-3">
         {onBack && (
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={onBack} 
-            className="!px-2" 
+            className="!p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-xl" 
             aria-label="Kembali"
           >
-            <svg className="w-5 h-5 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
+            <ArrowLeft size={18} />
           </Button>
         )}
-        <h1 className="text-xl md:text-2xl font-heading font-semibold text-neutral-900">{title}</h1>
+        <div>
+          <h1 className="text-xl md:text-2xl font-heading font-extrabold text-neutral-900 tracking-tight">{title}</h1>
+          {subtitle && <p className="mt-0.5 text-xs md:text-sm text-neutral-500 font-body">{subtitle}</p>}
+        </div>
       </div>
-      {actionLabel && (
-        <Button variant="primary" onClick={onAction} className="w-full md:w-auto">
-          {actionLabel}
-        </Button>
+      {(actionLabel || secondaryActionLabel || children) && (
+        <div className="flex w-full gap-2.5 md:w-auto items-center flex-wrap">
+          {children}
+          {secondaryActionLabel && (
+            <Button variant="secondary" onClick={onSecondaryAction} className="flex-1 md:flex-none">
+              {secondaryActionLabel}
+            </Button>
+          )}
+          {actionLabel && (
+            <Button variant="primary" onClick={onAction} className="flex-1 md:flex-none">
+              {actionLabel}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

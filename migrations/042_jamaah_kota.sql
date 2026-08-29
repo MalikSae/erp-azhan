@@ -1,0 +1,1 @@
+ALTER TABLE jamaah ADD COLUMN kota VARCHAR(100) AFTER alamat;

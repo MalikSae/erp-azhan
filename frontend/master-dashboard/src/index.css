@@ -5,6 +5,7 @@
 @layer base {
   body {
     @apply font-body text-neutral-800 antialiased;
+    background-color: theme('colors.page.bg', #F6F8FA);
   }
 }
 
@@ -15,6 +16,21 @@
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  /* Custom dark scrollbar for sidebar */
+  .scrollbar-dark::-webkit-scrollbar {
+    width: 5px;
+  }
+  .scrollbar-dark::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-dark::-webkit-scrollbar-thumb {
+    background: #2D3339;
+    border-radius: 4px;
+  }
+  .scrollbar-dark::-webkit-scrollbar-thumb:hover {
+    background: #3A424A;
   }
 }
 

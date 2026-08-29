@@ -293,6 +293,16 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 
 	if targetStatus != currentStatus {
 		if currentStatus == "baru" && (targetStatus == "dp" || targetStatus == "lunas") && !isSeatBlocked {
+			var activeRegularPax int
+			if err = tx.QueryRowContext(ctx, `
+				SELECT COUNT(*) FROM booking_pax
+				WHERE booking_id=? AND counts_for_seat=TRUE AND pax_status='aktif'`, bookingID,
+			).Scan(&activeRegularPax); err != nil {
+				return err
+			}
+			if activeRegularPax > seatCount {
+				seatCount = activeRegularPax
+			}
 			var seatRemaining int
 			if err = tx.QueryRowContext(ctx, `SELECT seat_sisa FROM schedules WHERE id=? FOR UPDATE`, scheduleID).Scan(&seatRemaining); err != nil {
 				return err

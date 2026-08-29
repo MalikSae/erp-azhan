@@ -11,7 +11,7 @@ const Alert = ({ variant = 'error', children, className = '' }) => {
   const selectedVariant = variants[variant] || variants.error;
 
   return (
-    <div className={`p-4 rounded-md border font-body text-sm ${selectedVariant} ${className}`}>
+    <div className={`p-4 rounded-xl border font-body text-xs md:text-sm shadow-2xs ${selectedVariant} ${className}`}>
       {children}
     </div>
   );

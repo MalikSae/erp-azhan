@@ -87,7 +87,7 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
           <button
             type="button"
             onClick={() => navigate(`/jamaah/${row.id}`)}
-            className="font-mono text-xs font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded border border-primary-200 hover:bg-primary-100 transition-colors"
+            className="font-mono text-xs font-bold text-neutral-800 bg-neutral-100 px-2.5 py-1 rounded-lg border border-neutral-200/90 hover:bg-neutral-200/80 hover:border-neutral-300 transition-colors cursor-pointer"
             title="Lihat Detail Jamaah"
           >
             {row.id_jamaah || "-"}
@@ -101,7 +101,7 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
           <button
             type="button"
             onClick={() => navigate(`/jamaah/${row.id}`)}
-            className="font-medium text-neutral-900 hover:text-primary-600 hover:underline text-left transition-colors font-body"
+            className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body"
             title="Lihat Detail Jamaah"
           >
             {row.nama_lengkap}
@@ -127,22 +127,24 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
       header: "Aksi",
       key: "aksi",
       accessor: (row) => (
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => navigate(`/jamaah/${row.id}`)}
             title="Lihat Detail"
+            className="p-1.5 text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg"
           >
-            <Eye size={16} className="text-primary-600" />
+            <Eye size={16} />
           </Button>
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => handleDeleteClick(row)}
             title="Hapus"
+            className="p-1.5 text-danger-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg"
           >
-            <Trash2 size={16} className="text-danger-600" />
+            <Trash2 size={16} />
           </Button>
         </div>
       )

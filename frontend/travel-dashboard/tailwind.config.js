@@ -9,16 +9,17 @@ export default {
     extend: {
       colors: {
         primary: {
-          50: '#FAF2E8',
-          100: '#F3E0C9',
-          200: '#E6C29C',
-          300: '#DAA372',
-          400: '#D2954F',
-          500: '#CC904A',
-          600: '#B87A3A',
-          700: '#96622F',
-          800: '#744C25',
-          900: '#52371A',
+          50: '#FEFDF0',
+          100: '#FEF7D6',
+          200: '#FDEE9F',
+          300: '#FCE366',
+          400: '#FBD836',
+          500: '#FED853',
+          600: '#F5CD3E',
+          700: '#E5BD2C',
+          800: '#D4AA1E',
+          900: '#B89014',
+          950: '#8A6A0B',
         },
         neutral: {
           50: '#FAFAFA',
@@ -67,7 +68,36 @@ export default {
           700: '#b91c1c',
           800: '#991b1b',
           900: '#7f1d1d',
+        },
+        sidebar: {
+          bg: '#181C1F',
+          surface: '#22272B',
+          hover: '#292F34',
+          active: '#FED853',
+          activeText: '#14171A',
+          muted: '#8C95A0',
+          border: '#2A3036'
+        },
+        brand: {
+          dark: '#14171A'
+        },
+        page: {
+          bg: '#F6F8FA'
+        },
+        accent: {
+          gold: '#FED853',
+          'gold-hover': '#F5CD3E',
+          'gold-light': '#FEF7D6',
         }
+      },
+      borderRadius: {
+        'xl': '0.75rem', // 12px
+        '2xl': '1rem',   // 16px
+        '3xl': '1.5rem', // 24px
+      },
+      boxShadow: {
+        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
+        'card-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05)',
       },
       fontFamily: {
         heading: ["DM Sans", "sans-serif"],

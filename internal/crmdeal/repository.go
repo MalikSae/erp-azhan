@@ -160,9 +160,9 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 
 	result, err := tx.ExecContext(ctx,
 		`INSERT INTO bookings
-		 (id_booking,schedule_id,jamaah_id,room_type,seat_count,harga_dasar,status,is_seat_blocked,seat_hold_expires_at,seat_hold_key,total_harga,created_by)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-		bookingCode, req.ScheduleID, jamaahID, req.RoomType, req.Pax, totalPrice, bookingStatus,
+		 (id_booking,schedule_id,pic_jamaah_id,seat_count,status,is_seat_blocked,seat_hold_expires_at,seat_hold_key,total_harga,created_by)
+		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		bookingCode, req.ScheduleID, jamaahID, req.Pax, bookingStatus,
 		isSeatBlocked, holdExpiry, holdKey, totalPrice, createdBy,
 	)
 	if err != nil {
@@ -171,6 +171,19 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 	bookingID, err := result.LastInsertId()
 	if err != nil {
 		return nil, fmt.Errorf("booking id: %w", err)
+	}
+
+	// CRM saat ini menerima jumlah pax dan satu PIC. Simpan satu detail per kursi
+	// agar invariant booking_pax tetap sama dengan seat_count setelah migrasi multi-pax.
+	for range req.Pax {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO booking_pax
+			 (booking_id,jamaah_id,pax_type,room_type,harga_pax,counts_for_seat,pax_status)
+			 VALUES (?,?,'reguler',?,?,TRUE,'aktif')`,
+			bookingID, jamaahID, req.RoomType, unitPrice,
+		); err != nil {
+			return nil, fmt.Errorf("create booking pax: %w", err)
+		}
 	}
 
 	if isSeatBlocked {

@@ -11,7 +11,7 @@ const Alert = ({ variant = 'error', message, children, className = '', onClose }
   const selectedVariant = variants[variant] || variants.error;
 
   return (
-    <div className={`p-4 rounded-md border font-body text-sm flex items-center justify-between ${selectedVariant} ${className}`}>
+    <div className={`p-4 rounded-xl border font-body text-xs md:text-sm flex items-center justify-between shadow-2xs ${selectedVariant} ${className}`}>
       <div>{children || message}</div>
       {onClose && (
         <button 
