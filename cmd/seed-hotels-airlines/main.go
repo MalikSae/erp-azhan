@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -22,43 +23,52 @@ type hotelSeed struct {
 
 type airlineSeed struct {
 	Name    string
+	Code    string
 	LogoURL string
 }
 
 // Nama hotel nyata. DistanceM adalah estimasi jarak jalan kaki operasional ke
 // Masjidil Haram/Masjid Nabawi dan tetap dapat dikoreksi admin setelah seeding.
 var hotels = []hotelSeed{
-	{"Fairmont Makkah Clock Royal Tower", "mekkah", 5, 100, "/uploads/hotel-logos/fairmont.png"},
-	{"Swissotel Makkah", "mekkah", 5, 150, ""},
-	{"Pullman ZamZam Makkah", "mekkah", 5, 150, ""},
-	{"Makkah Towers", "mekkah", 5, 200, ""},
-	{"Jabal Omar Marriott Hotel Makkah", "mekkah", 5, 650, ""},
-	{"DoubleTree by Hilton Makkah Jabal Omar", "mekkah", 4, 750, "/uploads/hotel-logos/doubletree.png"},
-	{"Anjum Hotel Makkah", "mekkah", 5, 750, "/uploads/hotel-logos/anjum.png"},
-	{"voco Makkah by IHG", "mekkah", 5, 1400, "/uploads/hotel-logos/voco.png"},
-	{"Anwar Al Madinah Mövenpick", "madinah", 5, 100, "/uploads/hotel-logos/movenpick.png"},
-	{"Dallah Taibah Hotel", "madinah", 5, 100, "/uploads/hotel-logos/dallah-taibah.png"},
-	{"Pullman Zamzam Madina", "madinah", 5, 150, ""},
-	{"Frontel Al Harithia", "madinah", 5, 200, ""},
-	{"Millennium Al Aqeeq Hotel", "madinah", 5, 250, ""},
-	{"Saja Al Madinah", "madinah", 4, 600, ""},
-	{"Leader Al Muna Kareem Hotel", "madinah", 4, 500, ""},
-	{"Elaf Taiba Hotel", "madinah", 3, 350, ""},
+	{"Fairmont Makkah Clock Royal Tower", "Makkah", 5, 100, "/uploads/hotel-logos/fairmont.png"},
+	{"Swissotel Makkah", "Makkah", 5, 150, ""},
+	{"Pullman ZamZam Makkah", "Makkah", 5, 150, ""},
+	{"Makkah Towers", "Makkah", 5, 200, ""},
+	{"Jabal Omar Marriott Hotel Makkah", "Makkah", 5, 650, ""},
+	{"DoubleTree by Hilton Makkah Jabal Omar", "Makkah", 4, 750, "/uploads/hotel-logos/doubletree.png"},
+	{"Anjum Hotel Makkah", "Makkah", 5, 750, "/uploads/hotel-logos/anjum.png"},
+	{"voco Makkah by IHG", "Makkah", 5, 1400, "/uploads/hotel-logos/voco.png"},
+	{"Anwar Al Madinah Mövenpick", "Madinah", 5, 100, "/uploads/hotel-logos/movenpick.png"},
+	{"Dallah Taibah Hotel", "Madinah", 5, 100, "/uploads/hotel-logos/dallah-taibah.png"},
+	{"Pullman Zamzam Madina", "Madinah", 5, 150, ""},
+	{"Frontel Al Harithia", "Madinah", 5, 200, ""},
+	{"Millennium Al Aqeeq Hotel", "Madinah", 5, 250, ""},
+	{"Saja Al Madinah", "Madinah", 4, 600, ""},
+	{"Leader Al Muna Kareem Hotel", "Madinah", 4, 500, ""},
+	{"Elaf Taiba Hotel", "Madinah", 3, 350, ""},
 }
 
 var airlines = []airlineSeed{
-	{"Garuda Indonesia", "/uploads/airline-logos/248e6902-020f-4062-914b-e0dd44d8e5f8.webp"},
-	{"Saudia", "/uploads/airline-logos/7426450f-d7a1-4486-9623-2e9d3b8b192a.webp"},
-	{"Emirates", "/uploads/airline-logos/181837fa-a756-456f-891c-6f3af052723e.webp"},
-	{"Qatar Airways", ""},
-	{"Etihad Airways", ""},
-	{"Oman Air", "/uploads/airline-logos/49bdd0d0-f27a-4102-8435-d65ffbaad645.webp"},
-	{"Turkish Airlines", ""},
-	{"Malaysia Airlines", ""},
-	{"Royal Brunei Airlines", ""},
-	{"Lion Air", "/uploads/airline-logos/f28d8537-8eab-43e4-a265-ca08a3609a7b.webp"},
-	{"Batik Air", ""},
-	{"AirAsia X", ""},
+	{"Garuda Indonesia", "GA", "/uploads/airline-logos/248e6902-020f-4062-914b-e0dd44d8e5f8.webp"},
+	{"Saudia", "SV", "/uploads/airline-logos/7426450f-d7a1-4486-9623-2e9d3b8b192a.webp"},
+	{"Emirates", "EK", "/uploads/airline-logos/181837fa-a756-456f-891c-6f3af052723e.webp"},
+	{"Etihad Airways", "EY", "/uploads/airline-logos/95392369-fe88-4207-87f8-b7bd9074b765.webp"},
+	{"Qatar Airways", "QR", ""},
+	{"Oman Air", "WY", "/uploads/airline-logos/49bdd0d0-f27a-4102-8435-d65ffbaad645.webp"},
+	{"Turkish Airlines", "TK", ""},
+	{"Flynas", "XY", ""},
+	{"Malaysia Airlines", "MH", ""},
+	{"Singapore Airlines", "SQ", ""},
+	{"Scoot", "TR", ""},
+	{"Royal Brunei Airlines", "BI", ""},
+	{"Lion Air", "JT", "/uploads/airline-logos/f28d8537-8eab-43e4-a265-ca08a3609a7b.webp"},
+	{"Batik Air", "ID", ""},
+	{"Citilink", "QG", ""},
+	{"Pelita Air", "IP", ""},
+	{"AirAsia X", "D7", ""},
+	{"Kuwait Airways", "KU", ""},
+	{"Gulf Air", "GF", ""},
+	{"EgyptAir", "MS", ""},
 }
 
 func main() {
@@ -95,7 +105,7 @@ func main() {
 	fmt.Println("SEED MASTER HOTEL & MASKAPAI SELESAI")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Printf("Hotel    : %d dibuat, %d logo dilengkapi, %d sudah sesuai/dilewati\n", hotelCreated, hotelUpdated, hotelSkipped)
-	fmt.Printf("Maskapai : %d dibuat, %d logo dilengkapi, %d sudah sesuai/dilewati\n", airlineCreated, airlineUpdated, airlineSkipped)
+	fmt.Printf("Maskapai : %d dibuat, %d diperbarui (kode/logo), %d sudah sesuai/dilewati\n", airlineCreated, airlineUpdated, airlineSkipped)
 	fmt.Println("Logo yang belum tersedia dapat diunggah melalui dashboard.")
 }
 
@@ -133,12 +143,35 @@ func seedHotels(ctx context.Context, tx *sql.Tx) (created, updated, skipped int)
 func seedAirlines(ctx context.Context, tx *sql.Tx) (created, updated, skipped int) {
 	for _, item := range airlines {
 		var id uint64
+		var code sql.NullString
 		var logoURL sql.NullString
-		err := tx.QueryRowContext(ctx, `SELECT id, logo_url FROM airlines WHERE UPPER(name)=UPPER(?) LIMIT 1`, item.Name).Scan(&id, &logoURL)
+		nameUpper := strings.ToUpper(strings.TrimSpace(item.Name))
+		err := tx.QueryRowContext(ctx, `SELECT id, code, logo_url FROM airlines WHERE UPPER(name)=? LIMIT 1`, nameUpper).Scan(&id, &code, &logoURL)
 		if err == nil {
+			needUpdate := false
+			newCode := code.String
+			newLogo := logoURL.String
+
+			if item.Code != "" && (!code.Valid || code.String == "") {
+				newCode = item.Code
+				needUpdate = true
+			}
 			if item.LogoURL != "" && (!logoURL.Valid || logoURL.String == "") {
-				if _, err := tx.ExecContext(ctx, `UPDATE airlines SET logo_url=? WHERE id=?`, item.LogoURL, id); err != nil {
-					log.Fatalf("[ERROR] memperbarui logo maskapai %q: %v", item.Name, err)
+				newLogo = item.LogoURL
+				needUpdate = true
+			}
+
+			if needUpdate {
+				var finalCode any
+				if newCode != "" {
+					finalCode = newCode
+				}
+				var finalLogo any
+				if newLogo != "" {
+					finalLogo = newLogo
+				}
+				if _, err := tx.ExecContext(ctx, `UPDATE airlines SET code=?, logo_url=? WHERE id=?`, finalCode, finalLogo, id); err != nil {
+					log.Fatalf("[ERROR] memperbarui maskapai %q: %v", item.Name, err)
 				}
 				updated++
 				continue
@@ -149,11 +182,16 @@ func seedAirlines(ctx context.Context, tx *sql.Tx) (created, updated, skipped in
 		if err != sql.ErrNoRows {
 			log.Fatalf("[ERROR] memeriksa maskapai %q: %v", item.Name, err)
 		}
+
+		var seedCode any
+		if item.Code != "" {
+			seedCode = item.Code
+		}
 		var seedLogo any
 		if item.LogoURL != "" {
 			seedLogo = item.LogoURL
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO airlines (name, logo_url) VALUES (?, ?)`, item.Name, seedLogo); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO airlines (name, code, logo_url) VALUES (?, ?, ?)`, nameUpper, seedCode, seedLogo); err != nil {
 			log.Fatalf("[ERROR] menambah maskapai %q: %v", item.Name, err)
 		}
 		created++

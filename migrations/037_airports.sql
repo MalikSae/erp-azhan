@@ -1,0 +1,37 @@
+CREATE TABLE IF NOT EXISTS airports (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    code VARCHAR(4) NOT NULL UNIQUE,
+    city VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO airports (name, code, city) VALUES
+('Soekarno-Hatta International Airport', 'CGK', 'Tangerang (Jakarta)'),
+('Juanda International Airport', 'SUB', 'Surabaya'),
+('Kualanamu International Airport', 'KNO', 'Medan'),
+('Sultan Hasanuddin International Airport', 'UPG', 'Makassar'),
+('Adi Soemarmo International Airport', 'SOC', 'Solo'),
+('Sultan Iskandar Muda International Airport', 'BTJ', 'Banda Aceh'),
+('Sultan Mahmud Badaruddin II Airport', 'PLM', 'Palembang'),
+('Hang Nadim International Airport', 'BTH', 'Batam'),
+('Sultan Syarif Kasim II Airport', 'PKU', 'Pekanbaru'),
+('Husein Sastranegara International Airport', 'BDO', 'Bandung'),
+('Lombok International Airport', 'LOP', 'Praya, Lombok'),
+('Sultan Aji Muhammad Sulaiman Sepinggan Airport', 'BPN', 'Balikpapan'),
+('Sultan Thaha Airport', 'DJB', 'Jambi'),
+('Minangkabau International Airport', 'PDG', 'Padang'),
+('Achmad Yani International Airport', 'SRG', 'Semarang'),
+('Yogyakarta International Airport', 'YIA', 'Kulon Progo (Yogyakarta)'),
+('King Abdulaziz International Airport', 'JED', 'Jeddah'),
+('Prince Mohammad bin Abdulaziz International Airport', 'MED', 'Madinah'),
+('King Khalid International Airport', 'RUH', 'Riyadh'),
+('King Fahd International Airport', 'DMM', 'Dammam'),
+('Dubai International Airport', 'DXB', 'Dubai'),
+('Abu Dhabi International Airport', 'AUH', 'Abu Dhabi'),
+('Hamad International Airport', 'DOH', 'Doha'),
+('Istanbul Airport', 'IST', 'Istanbul'),
+('Kuala Lumpur International Airport', 'KUL', 'Kuala Lumpur'),
+('Kuwait International Airport', 'KWI', 'Kuwait City'),
+('Muscat International Airport', 'MCT', 'Muscat');

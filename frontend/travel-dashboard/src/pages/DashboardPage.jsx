@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Banknote, BarChart3, CalendarDays, CheckCircle2, Clock3, Package, Plane, TicketCheck, TrendingUp, UserRoundCheck, UsersRound } from "lucide-react";
-import { listBookings, listPayments } from "../api/bookings";
-import { listJamaah } from "../api/jamaah";
-import { listSchedulesAdmin } from "../api/schedules";
-import { getStokPerlengkapan } from "../api/perlengkapan";
+import { listBookings, listPayments, listJamaah, listSchedulesAdmin, getStokPerlengkapan, getStatusBadgeConfig } from "shared";
 import { useAuth } from "../context/AuthContext";
 import Alert from "../components/ui/Alert";
 import Badge from "../components/ui/Badge";
@@ -20,12 +17,6 @@ const formatCompactRupiah = (value) => {
 };
 const formatDate = (value) => value ? new Date(value).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "-";
 const daysUntil = (value) => Math.ceil((new Date(value).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86400000);
-
-const statusBadge = (status) => {
-  const config = { baru: ["warning", "Baru"], dp: ["primary", "DP"], lunas: ["success", "Lunas"], batal: ["archived", "Batal"], dokumen_lengkap: ["success", "Dokumen Lengkap"], siap_berangkat: ["success", "Siap Berangkat"] };
-  const [variant, label] = config[status] || ["neutral", status];
-  return <Badge variant={variant}>{label}</Badge>;
-};
 
 function MetricCard({ label, value, note, icon: Icon, tone = "primary", onClick }) {
   const tones = { primary: "bg-primary-50 text-primary-700", success: "bg-success-50 text-success-700", warning: "bg-warning-50 text-warning-800", danger: "bg-danger-50 text-danger-700" };
@@ -160,7 +151,7 @@ const DashboardPage = () => {
       })}</div></section>
     </div>
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm lg:col-span-2"><div className="p-4 pb-3"><SectionHeader title="Booking Terbaru" subtitle="Aktivitas reservasi jamaah terkini" action="Lihat semua" onAction={() => navigate("/bookings")} /></div><div className="overflow-x-auto"><table className="min-w-full text-left"><thead><tr className="border-y border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wider text-neutral-500"><th className="px-4 py-2 font-semibold">Jamaah</th><th className="px-3 py-2 font-semibold">Paket</th><th className="px-3 py-2 font-semibold">Tagihan</th><th className="px-4 py-2 font-semibold">Status</th></tr></thead><tbody className="divide-y divide-neutral-100">{recentBookings.map((booking) => <tr key={booking.id} onClick={() => navigate(`/bookings/${booking.id}`)} className="cursor-pointer hover:bg-neutral-50"><td className="px-4 py-2.5"><p className="text-xs font-semibold text-neutral-900">{booking.nama_jamaah}</p><p className="mt-0.5 text-xs text-neutral-400">INV-{String(booking.id).padStart(5, "0")}</p></td><td className="max-w-48 truncate px-3 py-2.5 text-xs text-neutral-600">{booking.jadwal_nama}</td><td className="px-3 py-2.5 text-xs font-semibold text-neutral-700">{formatRupiah(booking.total_harga)}</td><td className="px-4 py-2.5">{statusBadge(booking.status)}</td></tr>)}</tbody></table></div>{recentBookings.length === 0 && <p className="py-8 text-center text-sm text-neutral-400">Belum ada booking.</p>}</section>
+      <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm lg:col-span-2"><div className="p-4 pb-3"><SectionHeader title="Booking Terbaru" subtitle="Aktivitas reservasi jamaah terkini" action="Lihat semua" onAction={() => navigate("/bookings")} /></div><div className="overflow-x-auto"><table className="min-w-full text-left"><thead><tr className="border-y border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wider text-neutral-500"><th className="px-4 py-2 font-semibold">Jamaah</th><th className="px-3 py-2 font-semibold">Paket</th><th className="px-3 py-2 font-semibold">Tagihan</th><th className="px-4 py-2 font-semibold">Status</th></tr></thead><tbody className="divide-y divide-neutral-100">{recentBookings.map((booking) => <tr key={booking.id} onClick={() => navigate(`/bookings/${booking.id}`)} className="cursor-pointer hover:bg-neutral-50"><td className="px-4 py-2.5"><p className="text-xs font-semibold text-neutral-900">{booking.nama_jamaah}</p><p className="mt-0.5 text-xs font-mono text-neutral-400">{booking.id_booking || `ID: ${booking.id}`}</p></td><td className="max-w-48 truncate px-3 py-2.5 text-xs text-neutral-600">{booking.jadwal_nama}</td><td className="px-3 py-2.5 text-xs font-semibold text-neutral-700">{formatRupiah(booking.total_harga)}</td><td className="px-4 py-2.5">{(() => { const [v, l] = getStatusBadgeConfig(booking.status); return <Badge variant={v} hideIcon={true}>{l}</Badge>; })()}</td></tr>)}</tbody></table></div>{recentBookings.length === 0 && <p className="py-8 text-center text-sm text-neutral-400">Belum ada booking.</p>}</section>
       <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"><SectionHeader title="Kesiapan Perlengkapan" subtitle="Stok terendah yang perlu dipantau" action="Kelola stok" onAction={() => navigate("/stok-perlengkapan")} /><div className="mt-3 space-y-2.5">{lowStock.map((item) => { const isLow = item.stok_tersedia <= 40; return <div key={item.perlengkapan_item_id} className="flex items-center gap-3"><span className={`flex h-8 w-8 items-center justify-center rounded-md ${isLow ? "bg-warning-50 text-warning-700" : "bg-neutral-100 text-neutral-600"}`}><Package size={15} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-neutral-700">{item.nama_item}</p><p className="mt-0.5 text-xs text-neutral-400">{item.qty_per_set} item per set</p></div><span className={`text-sm font-bold ${isLow ? "text-warning-700" : "text-neutral-800"}`}>{item.stok_tersedia}</span></div>; })}</div><div className="mt-4 rounded-md bg-neutral-50 px-3 py-2.5"><div className="flex items-center gap-2 text-xs text-neutral-600"><Clock3 size={13} className="text-primary-600" /><span>Estimasi set lengkap tersedia</span></div><p className="mt-0.5 text-lg font-bold text-neutral-900">{data.stock.length ? Math.min(...data.stock.map((item) => Math.floor(item.stok_tersedia / Math.max(1, item.qty_per_set)))) : 0} set</p></div></section>
     </div>
   </div>;

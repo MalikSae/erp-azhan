@@ -19,37 +19,36 @@ trigger: always_on
 
 ## 2. Warna (Color Tokens)
 
-Basis warna: `#CC904A` (amber/bronze hangat).
+Basis warna brand: **Warm Amber Gold** (`#FED853`) dengan aksen UI modern **Altezza Travel**: Dark Charcoal Sidebar (`#181C1F`) + Warm Amber Gold Active Pill (`#FED853`).
 
+### 2.1 Token Sidebar & Navigasi Gelap (Altezza Style)
 | Token | Hex | Pemakaian |
 |---|---|---|
-| `primary-50` | `#FAF2E8` | Background highlight lembut |
-| `primary-100` | `#F3E0C9` | |
-| `primary-200` | `#E6C29C` | |
-| `primary-300` | `#DAA372` | |
-| `primary-400` | `#D2954F` | |
-| `primary-500` | `#CC904A` | Basis (referensi asli) |
-| `primary-600` | `#B87A3A` | **Aksen utama** — tombol, active nav, link |
-| `primary-700` | `#96622F` | Hover state |
-| `primary-800` | `#744C25` | |
-| `primary-900` | `#52371A` | |
-| `neutral-50` | `#FAFAFA` | Background halaman |
-| `neutral-100` | `#F4F4F5` | |
-| `neutral-200` | `#E4E4E7` | Border |
-| `neutral-300` | `#D4D4D8` | |
-| `neutral-400` | `#A1A1AA` | |
-| `neutral-500` | `#71717A` | Teks sekunder |
-| `neutral-600` | `#52525B` | |
-| `neutral-700` | `#3F3F46` | |
-| `neutral-800` | `#27272A` | |
-| `neutral-900` | `#18181B` | Teks utama (hitam lembut, bukan `#000000` murni — lebih nyaman dibaca) |
-| `pure-white` | `#FFFFFF` | Anchor absolut — background card, teks di atas warna gelap |
-| `pure-black` | `#000000` | Anchor absolut — dipakai sangat jarang, BUKAN default teks |
-| `success-*` | skala hijau | Badge status "published", pesan sukses |
-| `warning-*` | skala **kuning-emas** (hue ~45°, mis. `warning-600: #D97706`) | Badge "draft"/"promo" — SENGAJA digeser dari amber murni supaya tidak mirip dengan `primary` |
-| `danger-*` | skala merah | Error, tombol delete, validasi gagal |
+| `sidebar.bg` | `#181C1F` | Background sidebar utama |
+| `sidebar.surface` | `#22272B` | Permukaan card/grup dalam sidebar |
+| `sidebar.hover` | `#292F34` | Hover item menu sidebar |
+| `sidebar.border` | `#2A3036` | Border pemisah pada sidebar gelap |
+| `sidebar.active` | `#FED853` | **Active Nav Pill** (Warm Amber Gold) |
+| `sidebar.activeText` | `#14171A` | Teks di atas active gold pill |
+| `sidebar.muted` | `#8C95A0` | Teks/label grup menu yang tidak aktif |
 
-Semua didefinisikan sebagai scale 50-900 di `tailwind.config.js theme.extend.colors` — JANGAN pakai warna Tailwind bawaan langsung di komponen, selalu lewat nama semantik (`primary-600`, `success-600`, dst).
+### 2.2 Token Brand & Status
+| Token | Hex | Pemakaian |
+|---|---|---|
+| `primary-50` / `primary-soft` | `#FEFDF0` | Background highlight lembut / tint putih-krem |
+| `primary-100` / `accent-gold-light` | `#FEF7D6` | Background badge emas muda / soft highlight |
+| `primary-500` / `accent-gold` | `#FED853` | **Basis Utama Brand ERP, Primary Button, & Active Pill** |
+| `primary-600` / `accent-gold-hover` | `#F5CD3E` | Hover state tombol primary emas |
+| `brand-dark` | `#14171A` | Teks kontras di atas tombol/pill emas |
+| `neutral-50` | `#FAFAFA` | Background card terang |
+| `neutral-100` | `#F4F4F5` | Background badge netral / placeholder |
+| `neutral-200` | `#E4E4E7` | Border card & form |
+| `neutral-500` | `#71717A` | Teks sekunder / caption |
+| `neutral-900` | `#18181B` | Teks utama |
+| `page.bg` | `#F6F8FA` | Background halaman dashboard (soft slate) |
+| `success-*` | skala hijau | Badge "published" / "terverifikasi", pesan sukses |
+| `warning-*` | skala kuning-emas | Badge "draft" / "perlu review" / "pending" |
+| `danger-*` | skala merah | Error, tombol delete, validasi gagal, batal |
 
 ---
 

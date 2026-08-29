@@ -162,6 +162,114 @@ func (h *Handler) DeleteJamaah(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
 }
 
+// ─── Update Catatan ───────────────────────────────────────────────────────────
+
+// UpdateCatatan godoc
+// PUT /api/admin/jamaah/{id}/catatan
+func (h *Handler) UpdateCatatan(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	var req UpdateCatatanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "format data tidak valid")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	if err := h.repo.UpdateCatatan(r.Context(), id, brandID, req.Catatan); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "catatan berhasil disimpan"})
+}
+
+// ─── Relasi Kekerabatan ───────────────────────────────────────────────────────
+
+// ListRelasi godoc
+// GET /api/admin/jamaah/{id}/relasi
+func (h *Handler) ListRelasi(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	items, err := h.repo.ListRelasi(r.Context(), id, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, items)
+}
+
+// CreateRelasi godoc
+// POST /api/admin/jamaah/{id}/relasi
+func (h *Handler) CreateRelasi(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	var req CreateRelasiRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "format data tidak valid")
+		return
+	}
+
+	req.Hubungan = strings.TrimSpace(req.Hubungan)
+	if req.RelasiJamaahID <= 0 {
+		writeError(w, http.StatusBadRequest, "pilih jamaah target relasi")
+		return
+	}
+	if req.Hubungan == "" {
+		writeError(w, http.StatusBadRequest, "pilih jenis hubungan kekerabatan")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	item, err := h.repo.CreateRelasi(r.Context(), id, brandID, &req)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(w, http.StatusNotFound, "data jamaah tidak ditemukan")
+			return
+		}
+		// Kirim pesan error bisnis yang jelas (mis. duplikasi relasi, beda brand, relasi diri sendiri)
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, item)
+}
+
+// DeleteRelasi godoc
+// DELETE /api/admin/jamaah/{id}/relasi/{relasi_id}
+func (h *Handler) DeleteRelasi(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	rawRelasiID := chi.URLParam(r, "relasi_id")
+	relasiID, err := strconv.ParseInt(rawRelasiID, 10, 64)
+	if err != nil || relasiID <= 0 {
+		writeError(w, http.StatusBadRequest, "id relasi tidak valid")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	if err := h.repo.DeleteRelasi(r.Context(), id, relasiID, brandID); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "relasi berhasil dihapus"})
+}
+
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 func handleRepoError(w http.ResponseWriter, err error) {

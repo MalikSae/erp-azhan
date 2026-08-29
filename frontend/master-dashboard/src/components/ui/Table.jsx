@@ -1,23 +1,39 @@
 import React from 'react';
 import EmptyState from './EmptyState';
 
-const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell, sortConfig, onSort }) => {
+const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell, sortConfig, onSort, onRowClick }) => {
   if (!data || data.length === 0) {
     return <EmptyState message={emptyMessage} />;
   }
 
+  const getCellContent = (row, col, rowIndex) => {
+    if (renderCell) {
+      return renderCell(row, col.key || col.accessor, rowIndex);
+    }
+    if (typeof col.accessor === 'function') {
+      return col.accessor(row, rowIndex);
+    }
+    if (typeof col.accessor === 'string') {
+      return row[col.accessor];
+    }
+    if (col.key) {
+      return row[col.key];
+    }
+    return null;
+  };
+
   return (
     <div className="overflow-x-auto w-full">
-      <table className="w-full text-left text-sm font-body text-neutral-900 border-collapse min-w-[800px]">
-        <thead className="bg-neutral-50 text-neutral-600 font-medium border-b border-neutral-200">
+      <table className="w-full text-left text-xs md:text-sm font-body text-neutral-900 border-collapse min-w-full">
+        <thead className="bg-neutral-50/80 text-neutral-500 font-heading text-[11px] font-bold uppercase tracking-wider border-b border-neutral-200/80">
           <tr>
             {columns.map((col, idx) => (
               <th 
                 key={idx} 
-                className={`px-4 py-3 whitespace-nowrap ${col.sortable ? 'cursor-pointer select-none hover:bg-neutral-100' : ''}`}
+                className={`px-4 py-3.5 whitespace-nowrap ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''} ${col.sortable ? 'cursor-pointer select-none hover:bg-neutral-100/70' : ''}`}
                 onClick={() => col.sortable && onSort && onSort(col.key)}
               >
-                <div className="flex items-center gap-1">
+                <div className={`flex items-center gap-1.5 ${col.align === 'center' ? 'justify-center' : col.align === 'right' ? 'justify-end' : ''}`}>
                   {col.header}
                   {col.sortable && (
                     <span className="inline-flex flex-col w-3">
@@ -34,12 +50,16 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-neutral-100">
           {data.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
+            <tr 
+              key={rowIndex} 
+              onClick={() => onRowClick && onRowClick(row, rowIndex)}
+              className={`hover:bg-neutral-50/70 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+            >
               {columns.map((col, colIndex) => (
-                <td key={colIndex} className="px-4 py-4 whitespace-nowrap">
-                  {renderCell ? renderCell(row, col.key) : row[col.key]}
+                <td key={colIndex} className={`px-4 py-4 whitespace-nowrap ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''}`}>
+                  {getCellContent(row, col, rowIndex)}
                 </td>
               ))}
             </tr>

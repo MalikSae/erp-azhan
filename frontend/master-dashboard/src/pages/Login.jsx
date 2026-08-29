@@ -111,11 +111,11 @@ const Login = () => {
           <div>
             <h2 className="text-4xl md:text-5xl font-bold font-heading leading-tight mb-6">
               Bersama Menuju <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-200 to-primary-400">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-500 to-primary-600">
                 Azhan Maju, Besar & Berkah
               </span>
             </h2>
-            <p className="text-lg text-primary-100 max-w-md opacity-90 font-light leading-relaxed">
+            <p className="text-lg text-amber-100/90 max-w-md font-light leading-relaxed">
               Satu langkah hari ini, membawa kita lebih dekat pada masa depan yang lebih baik.
             </p>
           </div>

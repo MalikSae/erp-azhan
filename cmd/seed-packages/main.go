@@ -121,7 +121,7 @@ func main() {
 		err = db.QueryRow("SELECT id FROM hotels WHERE UPPER(name) = UPPER(?)", rec.HotelMekkah).Scan(&hotelMekkahID)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				res, err := db.Exec("INSERT INTO hotels (name, city) VALUES (?, 'mekkah')", strings.ToUpper(rec.HotelMekkah))
+				res, err := db.Exec("INSERT INTO hotels (name, city) VALUES (?, 'Makkah')", strings.ToUpper(rec.HotelMekkah))
 				if err != nil {
 					errorSkips = append(errorSkips, fmt.Sprintf("Baris %d: gagal insert hotel mekkah %s: %v", totalProcessed, rec.HotelMekkah, err))
 					continue

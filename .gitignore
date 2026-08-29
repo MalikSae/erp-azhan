@@ -27,3 +27,4 @@ Thumbs.db
 !/uploads/brand-logos/
 !/uploads/brand-logos/**
 /scratch/
+.runlogs/

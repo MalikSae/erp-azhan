@@ -9,9 +9,10 @@ import (
 
 // Sentinel errors
 var (
-	ErrNotFound      = errors.New("data tidak ditemukan")
-	ErrCannotDelete  = errors.New("tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
-	ErrInvalidStatus = errors.New("status tidak valid")
+	ErrNotFound        = errors.New("data tidak ditemukan")
+	ErrCannotDelete    = errors.New("tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
+	ErrInvalidStatus   = errors.New("status tidak valid")
+	ErrSeatUnavailable = errors.New("kursi tidak mencukupi untuk mengonfirmasi pembayaran")
 )
 
 // Repository mengelola semua query ke tabel payments.
@@ -127,7 +128,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Pa
 }
 
 func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string) ([]Payment, error) {
-	q := `SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.created_at,j.nama_lengkap,s.jadwal_nama,br.name FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN jamaah j ON j.id=b.jamaah_id JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE 1=1`
+	q := `SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.created_at,j.nama_lengkap,s.jadwal_nama,br.name,b.id_booking FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN jamaah j ON j.id=b.jamaah_id JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE 1=1`
 	args := []any{}
 	if brandID != nil {
 		q += " AND s.brand_id=?"
@@ -146,8 +147,12 @@ func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string)
 	items := []Payment{}
 	for rows.Next() {
 		var p Payment
-		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.CreatedAt, &p.JamaahName, &p.ScheduleName, &p.BrandName); err != nil {
+		var bookingIDBooking sql.NullString
+		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.CreatedAt, &p.JamaahName, &p.ScheduleName, &p.BrandName, &bookingIDBooking); err != nil {
 			return nil, err
+		}
+		if bookingIDBooking.Valid {
+			p.BookingIDBooking = bookingIDBooking.String
 		}
 		items = append(items, p)
 	}
@@ -250,8 +255,10 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 	var totalHarga sql.NullFloat64
 	var currentStatus string
 	var scheduleID int64
-	err := tx.QueryRowContext(ctx, `SELECT total_harga, status, schedule_id FROM bookings WHERE id=? FOR UPDATE`, bookingID).
-		Scan(&totalHarga, &currentStatus, &scheduleID)
+	var isSeatBlocked bool
+	var seatCount int
+	err := tx.QueryRowContext(ctx, `SELECT total_harga,status,schedule_id,is_seat_blocked,seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID).
+		Scan(&totalHarga, &currentStatus, &scheduleID, &isSeatBlocked, &seatCount)
 	if err != nil {
 		return err
 	}
@@ -285,13 +292,34 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 	}
 
 	if targetStatus != currentStatus {
-		if currentStatus == "baru" && (targetStatus == "dp" || targetStatus == "lunas") {
-			_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa = GREATEST(0, seat_sisa - 1) WHERE id=?`, scheduleID)
+		if currentStatus == "baru" && (targetStatus == "dp" || targetStatus == "lunas") && !isSeatBlocked {
+			var activeRegularPax int
+			if err = tx.QueryRowContext(ctx, `
+				SELECT COUNT(*) FROM booking_pax
+				WHERE booking_id=? AND counts_for_seat=TRUE AND pax_status='aktif'`, bookingID,
+			).Scan(&activeRegularPax); err != nil {
+				return err
+			}
+			if activeRegularPax > seatCount {
+				seatCount = activeRegularPax
+			}
+			var seatRemaining int
+			if err = tx.QueryRowContext(ctx, `SELECT seat_sisa FROM schedules WHERE id=? FOR UPDATE`, scheduleID).Scan(&seatRemaining); err != nil {
+				return err
+			}
+			if seatRemaining < seatCount {
+				return ErrSeatUnavailable
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=seat_sisa-? WHERE id=?`, seatCount, scheduleID)
 			if err != nil {
 				return err
 			}
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE bookings SET status=? WHERE id=?`, targetStatus, bookingID)
+		_, err = tx.ExecContext(ctx,
+			`UPDATE bookings SET status=?,is_seat_blocked=IF(? IN ('dp','lunas'),TRUE,is_seat_blocked),
+			 seat_hold_expires_at=IF(? IN ('dp','lunas'),NULL,seat_hold_expires_at),
+			 seat_hold_key=IF(? IN ('dp','lunas'),NULL,seat_hold_key) WHERE id=?`,
+			targetStatus, targetStatus, targetStatus, targetStatus, bookingID)
 		if err != nil {
 			return err
 		}

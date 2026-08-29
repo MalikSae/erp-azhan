@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -17,9 +19,13 @@ import (
 	"erp-azhan/api/internal/addon"
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/airline"
+	"erp-azhan/api/internal/airport"
 	"erp-azhan/api/internal/bankaccount"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
+	"erp-azhan/api/internal/category"
+	"erp-azhan/api/internal/crmdeal"
+	"erp-azhan/api/internal/crmuser"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
@@ -96,6 +102,12 @@ func main() {
 	airlineRepo := airline.NewRepository(db)
 	airlineHandler := airline.NewHandler(airlineRepo)
 
+	airportRepo := airport.NewRepository(db)
+	airportHandler := airport.NewHandler(airportRepo)
+
+	categoryRepo := category.NewRepository(db)
+	categoryHandler := category.NewHandler(categoryRepo)
+
 	addonRepo := addon.NewRepository(db)
 	addonHandler := addon.NewHandler(addonRepo)
 
@@ -123,6 +135,13 @@ func main() {
 
 	paymentRepo := payment.NewRepository(db)
 	paymentHandler := payment.NewHandler(paymentRepo)
+	crmDealRepo := crmdeal.NewRepository(db)
+	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
+	crmUserRepo := crmuser.NewRepository(db)
+	crmUserHandler := crmuser.NewHandler(crmUserRepo)
+	if db != nil {
+		go runSeatHoldExpiry(crmDealRepo)
+	}
 
 	dokumenRepo := dokumen.NewRepository(db)
 	dokumenHandler := dokumen.NewHandler(dokumenRepo)
@@ -146,7 +165,8 @@ func main() {
 	r.With(requireDB(db)).Get("/api/schedules", scheduleHandler.ListSchedulesPublic)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
-	// Public: resolve domain ke brand
+	// Public: categories & brand
+	r.With(requireDB(db)).Get("/api/public/categories", categoryHandler.ListPublicCategories)
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
 
 	// Auth (public)
@@ -180,11 +200,21 @@ func main() {
 		// Guard: tolak semua admin request jika DB tidak tersedia, LALU validasi auth token JWT
 		r.Use(requireDB(db))
 		r.Use(identity.RequireAuth)
+		r.Use(identity.RequireAdminOrCRMAccess)
 
 		r.Get("/my-brand", brandHandler.GetMyBrand)
 
+		r.Route("/crm/users", func(r chi.Router) {
+			r.Use(identity.RequireAdminRole)
+			r.Get("/", crmUserHandler.List)
+			r.Post("/", crmUserHandler.Create)
+			r.Put("/{id}", crmUserHandler.Update)
+			r.Put("/{id}/password", crmUserHandler.ResetPassword)
+		})
+
 		// Hotels
 		r.Get("/hotels", hotelHandler.ListHotels)
+		r.Get("/hotels/cities", hotelHandler.ListCities)
 		r.Post("/hotels", hotelHandler.CreateHotel)
 		r.Put("/hotels/{id}", hotelHandler.UpdateHotel)
 		r.Delete("/hotels/{id}", hotelHandler.DeleteHotel)
@@ -194,6 +224,19 @@ func main() {
 		r.Post("/airlines", airlineHandler.CreateAirline)
 		r.Put("/airlines/{id}", airlineHandler.UpdateAirline)
 		r.Delete("/airlines/{id}", airlineHandler.DeleteAirline)
+
+		// Airports
+		r.Get("/airports", airportHandler.ListAirports)
+		r.Post("/airports", airportHandler.CreateAirport)
+		r.Put("/airports/{id}", airportHandler.UpdateAirport)
+		r.Delete("/airports/{id}", airportHandler.DeleteAirport)
+
+		// Categories
+		r.Get("/categories", categoryHandler.ListCategories)
+		r.Get("/categories/{id}", categoryHandler.GetCategory)
+		r.Post("/categories", categoryHandler.CreateCategory)
+		r.Put("/categories/{id}", categoryHandler.UpdateCategory)
+		r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
 
 		// Add-Ons
 		r.Get("/addons", addonHandler.ListAddOns)
@@ -252,7 +295,13 @@ func main() {
 		r.Get("/jamaah/{id}", jamaahHandler.GetJamaah)
 		r.Post("/jamaah", jamaahHandler.CreateJamaah)
 		r.Put("/jamaah/{id}", jamaahHandler.UpdateJamaah)
+		r.Put("/jamaah/{id}/catatan", jamaahHandler.UpdateCatatan)
 		r.Delete("/jamaah/{id}", jamaahHandler.DeleteJamaah)
+
+		// Relasi Kekerabatan Jamaah
+		r.Get("/jamaah/{id}/relasi", jamaahHandler.ListRelasi)
+		r.Post("/jamaah/{id}/relasi", jamaahHandler.CreateRelasi)
+		r.Delete("/jamaah/{id}/relasi/{relasi_id}", jamaahHandler.DeleteRelasi)
 
 		// Dokumen Jamaah
 		r.Get("/jamaah/{jamaah_id}/dokumen", dokumenHandler.ListDokumen)
@@ -264,11 +313,15 @@ func main() {
 		r.Get("/bookings/{id}", bookingHandler.GetBooking)
 		r.Post("/bookings", bookingHandler.CreateBooking)
 		r.Put("/bookings/{id}/status", bookingHandler.UpdateBookingStatus)
+		r.Put("/bookings/{id}/seat-block", bookingHandler.BlockSeat)
 		r.Delete("/bookings/{id}/seat-block", bookingHandler.CancelSeatBlock)
 		r.Post("/bookings/{id}/addons", bookingHandler.AddBookingAddon)
 		r.Delete("/bookings/{id}/addons/{addon_id}", bookingHandler.DeleteBookingAddon)
 		r.Put("/bookings/{id}/diskon", bookingHandler.UpdateBookingDiskon)
 		r.Put("/bookings/{id}/progress", bookingHandler.UpdateBookingProgress)
+		r.Put("/bookings/{id}/pax/{pax_id}/progress", bookingHandler.UpdatePaxProgress)
+		r.Put("/bookings/{id}/pax/{pax_id}/cancel", bookingHandler.CancelPax)
+		r.Put("/bookings/{id}/pax/{pax_id}/room-type", bookingHandler.UpdatePaxRoomType)
 		r.Put("/bookings/{id}/perlengkapan/distribusi", bookingHandler.DistribusiPerlengkapan)
 		r.Delete("/bookings/{id}/perlengkapan/distribusi", bookingHandler.BatalkanPerlengkapan)
 
@@ -293,6 +346,9 @@ func main() {
 		r.Put("/payments/{id}/status", paymentHandler.UpdatePaymentStatus)
 		r.Delete("/payments/{id}", paymentHandler.DeletePayment)
 
+		// CRM: konversi lead menjadi jamaah, booking, seat hold/payment dalam satu transaksi.
+		r.Post("/crm/deals", crmDealHandler.ProcessDeal)
+
 		// Analytics lintas brand (Super Admin Only)
 		r.With(brand.RequireSuperAdmin).Get("/analytics/transactions-30-days", paymentHandler.ListDailyBrandTransactions)
 	})
@@ -304,6 +360,25 @@ func main() {
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("[ERROR] Server gagal berjalan: %v", err)
 		os.Exit(1)
+	}
+}
+
+func runSeatHoldExpiry(repo *crmdeal.Repository) {
+	release := func() {
+		count, err := repo.ReleaseExpiredSeatHolds(context.Background())
+		if err != nil {
+			log.Printf("[WARN] Gagal melepas seat hold kedaluwarsa: %v", err)
+			return
+		}
+		if count > 0 {
+			log.Printf("[INFO] Seat hold kedaluwarsa dilepas: %d booking", count)
+		}
+	}
+	release()
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		release()
 	}
 }
 

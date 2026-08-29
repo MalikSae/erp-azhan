@@ -52,13 +52,24 @@ func (h *Handler) CreateAirline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var code *string
+	if req.Code != nil && strings.TrimSpace(*req.Code) != "" {
+		trimmedCode := strings.TrimSpace(*req.Code)
+		if len(trimmedCode) != 2 {
+			writeError(w, http.StatusBadRequest, "kode IATA harus 2 karakter")
+			return
+		}
+		upperCode := strings.ToUpper(trimmedCode)
+		code = &upperCode
+	}
+
 	var logoURL *string
 	if req.LogoURL != nil && strings.TrimSpace(*req.LogoURL) != "" {
 		val := strings.TrimSpace(*req.LogoURL)
 		logoURL = &val
 	}
 
-	airline, err := h.repo.Create(r.Context(), name, logoURL)
+	airline, err := h.repo.Create(r.Context(), name, code, logoURL)
 	if err != nil {
 		handleAirlineRepoError(w, err)
 		return
@@ -88,13 +99,24 @@ func (h *Handler) UpdateAirline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var code *string
+	if req.Code != nil && strings.TrimSpace(*req.Code) != "" {
+		trimmedCode := strings.TrimSpace(*req.Code)
+		if len(trimmedCode) != 2 {
+			writeError(w, http.StatusBadRequest, "kode IATA harus 2 karakter")
+			return
+		}
+		upperCode := strings.ToUpper(trimmedCode)
+		code = &upperCode
+	}
+
 	var logoURL *string
 	if req.LogoURL != nil && strings.TrimSpace(*req.LogoURL) != "" {
 		val := strings.TrimSpace(*req.LogoURL)
 		logoURL = &val
 	}
 
-	airline, err := h.repo.Update(r.Context(), id, name, logoURL)
+	airline, err := h.repo.Update(r.Context(), id, name, code, logoURL)
 	if err != nil {
 		handleAirlineRepoError(w, err)
 		return

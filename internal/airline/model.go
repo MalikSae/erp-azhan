@@ -6,6 +6,7 @@ import "time"
 type Airline struct {
 	ID        uint64    `json:"id"`
 	Name      string    `json:"name"`
+	Code      *string   `json:"code"`
 	LogoURL   *string   `json:"logo_url"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -13,11 +14,13 @@ type Airline struct {
 // CreateAirlineRequest adalah payload untuk POST /api/admin/airlines.
 type CreateAirlineRequest struct {
 	Name    string  `json:"name"`
+	Code    *string `json:"code"`
 	LogoURL *string `json:"logo_url"`
 }
 
 // UpdateAirlineRequest adalah payload untuk PUT /api/admin/airlines/{id}.
 type UpdateAirlineRequest struct {
 	Name    string  `json:"name"`
+	Code    *string `json:"code"`
 	LogoURL *string `json:"logo_url"`
 }

@@ -12,7 +12,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     { name: "Stok Perlengkapan", path: "/stok-perlengkapan", icon: Boxes },
     { name: "Kelola Jamaah", path: "/jamaah", icon: Users },
     { name: "Kelola Booking", path: "/bookings", icon: CalendarDays },
-    { name: "Konfirmasi Pembayaran", path: "/payments", icon: Banknote },
+    { name: "Pembayaran", path: "/payments", icon: Banknote },
   ];
 
   const logoSrc = brandInfo?.logo_url

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Files, Check, Archive, Minus, Zap } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -16,25 +17,24 @@ import UrgentPackagesBanner from '../components/UrgentPackagesBanner';
 const BrandCell = ({ brand }) => {
   const [imageError, setImageError] = useState(false);
   
-  if (!brand) return null;
+  if (!brand) return <span>-</span>;
   
   const showInitial = !brand.icon_url || imageError;
   
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center" title={brand.name}>
       {showInitial ? (
-        <div className="w-6 h-6 shrink-0 rounded-full bg-neutral-200 flex items-center justify-center text-xs font-bold text-neutral-600 uppercase">
+        <div className="w-7 h-7 shrink-0 rounded-full bg-neutral-200 border border-neutral-300 flex items-center justify-center text-xs font-bold text-neutral-700 uppercase font-heading">
           {brand.name.charAt(0)}
         </div>
       ) : (
         <img 
           src={brand.icon_url.startsWith('http') ? brand.icon_url : `${import.meta.env.VITE_API_BASE_URL}${brand.icon_url.startsWith('/') ? '' : '/'}${brand.icon_url}`} 
           alt={brand.name} 
-          className="w-6 h-6 shrink-0 rounded-full object-cover bg-neutral-100" 
+          className="w-7 h-7 shrink-0 rounded-full object-cover bg-neutral-100 border border-neutral-200" 
           onError={() => setImageError(true)}
         />
       )}
-      <span>{brand.name}</span>
     </div>
   );
 };
@@ -57,6 +57,15 @@ const getMinPrice = (row) => {
   return Math.min(...prices);
 };
 
+const generateRandomCode = (length = 6) => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 const SchedulesPage = () => {
   const navigate = useNavigate();
   const [schedules, setSchedules] = useState([]);
@@ -66,10 +75,37 @@ const SchedulesPage = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [confirmCode, setConfirmCode] = useState('');
+  const [inputConfirmCode, setInputConfirmCode] = useState('');
 
-  const [filterStatus, setFilterStatus] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
   const [filterBrandId, setFilterBrandId] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
+
+  const today = useMemo(() => {
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    return t;
+  }, []);
+
+  const isScheduleUrgent = (s) => {
+    if (!s.is_ticket_confirmed) return false;
+    if (s.status === 'archived') return false;
+    if (!s.berangkat_tanggal) return false;
+    const departDate = new Date(s.berangkat_tanggal);
+    departDate.setHours(0, 0, 0, 0);
+    const daysRemaining = Math.round((departDate - today) / (1000 * 60 * 60 * 24));
+    if (daysRemaining < 0 || daysRemaining > 60) return false;
+    if (!s.seat_sisa || s.seat_sisa <= 0) return false;
+    return true;
+  };
+
+  const getDaysRemaining = (dateStr) => {
+    if (!dateStr) return null;
+    const departDate = new Date(dateStr);
+    departDate.setHours(0, 0, 0, 0);
+    return Math.round((departDate - today) / (1000 * 60 * 60 * 24));
+  };
 
   const fetchSchedules = async () => {
     setIsLoading(true);
@@ -99,15 +135,24 @@ const SchedulesPage = () => {
 
   const handleDeleteClick = (id) => {
     setDeleteConfirmId(id);
+    setConfirmCode(generateRandomCode(6));
+    setInputConfirmCode('');
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteConfirmId(null);
+    setConfirmCode('');
+    setInputConfirmCode('');
   };
 
   const handleConfirmDelete = async () => {
+    if (inputConfirmCode !== confirmCode) return;
     try {
       await deleteSchedule(deleteConfirmId);
-      setDeleteConfirmId(null);
+      handleCloseDeleteModal();
       fetchSchedules();
     } catch (error) {
-      setDeleteConfirmId(null);
+      handleCloseDeleteModal();
       if (error.response?.status === 409) {
         setErrorMessage(error.response?.data?.error || "Tidak bisa dihapus, data ini sedang digunakan.");
       } else {
@@ -132,67 +177,68 @@ const SchedulesPage = () => {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([value, label]) => ({ value, label }));
   }, [schedules]);
 
-  const filteredSchedules = schedules.filter(s => {
-    if (filterStatus) {
-      if (s.status !== filterStatus) return false;
-    }
-    if (filterBrandId) {
-      if (String(s.brand_id) !== filterBrandId) return false;
-    }
-    if (filterMonth) {
-      if (!s.berangkat_tanggal) return false;
-      const d = new Date(s.berangkat_tanggal);
-      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (val !== filterMonth) return false;
-    }
-    return true;
-  });
+  const counts = useMemo(() => {
+    const base = filterBrandId 
+      ? schedules.filter(s => String(s.brand_id) === filterBrandId)
+      : schedules;
 
-  const urgentPackages = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    return {
+      all: base.length,
+      urgent: base.filter(isScheduleUrgent).length,
+      published: base.filter(s => s.status === 'published').length,
+      draft: base.filter(s => s.status === 'draft').length,
+      archived: base.filter(s => s.status === 'archived').length,
+    };
+  }, [schedules, filterBrandId, today]);
 
-    const urgent = schedules.filter(s => {
-      if (!s.is_ticket_confirmed) return false;
-      if (s.status === 'archived') return false;
-      if (filterBrandId && String(s.brand_id) !== filterBrandId) return false;
+  const filteredSchedules = useMemo(() => {
+    return schedules.filter(s => {
+      // 1. Tab Filter
+      if (activeTab === 'urgent') {
+        if (!isScheduleUrgent(s)) return false;
+      } else if (activeTab === 'published') {
+        if (s.status !== 'published') return false;
+      } else if (activeTab === 'draft') {
+        if (s.status !== 'draft') return false;
+      } else if (activeTab === 'archived') {
+        if (s.status !== 'archived') return false;
+      }
 
-      if (!s.berangkat_tanggal) return false;
-      const departDate = new Date(s.berangkat_tanggal);
-      departDate.setHours(0, 0, 0, 0);
-      const daysRemaining = Math.round((departDate - today) / (1000 * 60 * 60 * 24));
-      
-      if (daysRemaining < 0 || daysRemaining > 60) return false;
-      if (!s.seat_sisa || s.seat_sisa <= 0) return false;
+      // 2. Brand Filter
+      if (filterBrandId && String(s.brand_id) !== filterBrandId) {
+        return false;
+      }
+
+      // 3. Month Filter
+      if (filterMonth) {
+        if (!s.berangkat_tanggal) return false;
+        const d = new Date(s.berangkat_tanggal);
+        const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (val !== filterMonth) return false;
+      }
 
       return true;
-    }).map(s => {
-      const departDate = new Date(s.berangkat_tanggal);
-      departDate.setHours(0, 0, 0, 0);
-      const daysRemaining = Math.round((departDate - today) / (1000 * 60 * 60 * 24));
-
-      return {
-        id: s.id,
-        jadwal_nama: s.jadwal_nama,
-        brand_name: brandsMap[s.brand_id]?.name || 'Unknown',
-        daysRemaining,
-        seat_sisa: s.seat_sisa,
-        seat_total: s.seat_total
-      };
     });
+  }, [schedules, activeTab, filterBrandId, filterMonth, today]);
 
-    return urgent.sort((a, b) => a.daysRemaining - b.daysRemaining);
-  }, [schedules, brandsMap, filterBrandId]);
+  const tabs = [
+    { id: 'all', label: 'Semua Paket', count: counts.all },
+    { id: 'urgent', label: '🚨 Mendesak (<60 Hari)', count: counts.urgent, isUrgent: true },
+    { id: 'published', label: 'Published', count: counts.published },
+    { id: 'draft', label: 'Draft', count: counts.draft },
+    { id: 'archived', label: 'Archived', count: counts.archived },
+  ];
 
   const columns = [
     { header: 'Brand', key: 'brand' }
   ];
   columns.push(
     { header: 'Nama Paket', key: 'jadwal_nama' },
-    { header: 'Status', key: 'status' },
+    { header: 'Publish', key: 'status', align: 'center' },
     { 
       header: 'Tiket', 
       key: 'tiket',
+      align: 'center',
       sortable: true,
       sortFn: (a, b) => {
         const valA = a.is_ticket_confirmed ? 1 : 0;
@@ -203,6 +249,7 @@ const SchedulesPage = () => {
     {
       header: 'Promo',
       key: 'promo',
+      align: 'center',
       sortable: true,
       sortFn: (a, b) => {
         const valA = a.is_promo ? 1 : 0;
@@ -244,11 +291,43 @@ const SchedulesPage = () => {
         onAction={() => navigate('/schedules/new')}
       />
 
-      <UrgentPackagesBanner packages={urgentPackages} />
-
       {errorMessage && (
         <Alert variant="error">{errorMessage}</Alert>
       )}
+
+      {/* Quick Filter Tabs (Option 3) */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-3">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const isUrgentTab = tab.id === 'urgent';
+          const hasUrgentCount = isUrgentTab && tab.count > 0;
+
+          let btnClass = 'bg-white text-neutral-600 hover:bg-neutral-50 border border-neutral-200/90';
+          let badgeClass = 'bg-neutral-100 text-neutral-600';
+
+          if (isActive) {
+            btnClass = isUrgentTab ? 'bg-danger-600 text-white shadow-2xs font-bold' : 'bg-sidebar-bg text-white shadow-2xs font-bold';
+            badgeClass = 'bg-white/20 text-white';
+          } else if (hasUrgentCount) {
+            btnClass = 'bg-danger-50 text-danger-700 hover:bg-danger-100 border border-danger-200';
+            badgeClass = 'bg-danger-200 text-danger-800 font-bold';
+          }
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold font-heading transition-all ${btnClass}`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] ${badgeClass}`}>
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {isLoading ? (
         <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
@@ -260,25 +339,14 @@ const SchedulesPage = () => {
             columns={columns}
             data={filteredSchedules}
             itemsPerPage={15}
-            emptyMessage='Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.'
+            onRowClick={(row) => navigate(`/schedules/${row.id}`)}
+            emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.'}
             toolbarActions={
-              <div className="flex flex-col sm:flex-row gap-2 w-full">
-                <CustomDropdown 
-                  value={filterStatus}
-                  onChange={(val) => setFilterStatus(val)}
-                  className="!mb-0 w-full sm:w-40"
-                  placeholder="Semua Status"
-                  options={[
-                    { value: '', label: 'Semua Status' },
-                    { value: 'draft', label: 'Draft' },
-                    { value: 'published', label: 'Published' },
-                    { value: 'archived', label: 'Archived' }
-                  ]}
-                />
+              <div className="flex flex-wrap items-center gap-2">
                 <CustomDropdown 
                   value={filterBrandId}
                   onChange={(val) => setFilterBrandId(val)}
-                  className="!mb-0 w-full sm:w-40"
+                  className="!mb-0 w-40"
                   placeholder="Semua Brand"
                   options={[
                     { value: '', label: 'Semua Brand' },
@@ -288,7 +356,7 @@ const SchedulesPage = () => {
                 <CustomDropdown 
                   value={filterMonth}
                   onChange={(val) => setFilterMonth(val)}
-                  className="!mb-0 w-full sm:w-40"
+                  className="!mb-0 w-40"
                   placeholder="Semua Bulan"
                   options={[
                     { value: '', label: 'Semua Bulan' },
@@ -302,66 +370,163 @@ const SchedulesPage = () => {
                 return <BrandCell brand={brandsMap[row.brand_id]} />;
               }
             if (key === 'status') {
-              const label = row.status.charAt(0).toUpperCase() + row.status.slice(1);
-              return <Badge variant={row.status}>{label}</Badge>;
+              if (row.status === 'published') {
+                return (
+                  <div className="flex items-center justify-center">
+                    <div title="Published" className="w-5 h-5 rounded-full bg-success-500 text-white flex items-center justify-center shadow-2xs">
+                      <Check size={12} strokeWidth={3} />
+                    </div>
+                  </div>
+                );
+              }
+              if (row.status === 'draft') {
+                return (
+                  <div className="flex items-center justify-center">
+                    <div title="Draft" className="flex items-center justify-center text-neutral-600">
+                      <Files size={18} />
+                    </div>
+                  </div>
+                );
+              }
+              if (row.status === 'archived') {
+                return (
+                  <div className="flex items-center justify-center">
+                    <div title="Archived" className="flex items-center justify-center text-neutral-400">
+                      <Archive size={18} />
+                    </div>
+                  </div>
+                );
+              }
+              return <div className="text-center text-xs text-neutral-400">-</div>;
             }
             if (key === 'tiket') {
-              return row.is_ticket_confirmed ? (
-                <div title="Confirmed" className="flex items-center text-success-500">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-              ) : (
-                <div title="Belum Confirmed" className="flex items-center text-neutral-300">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                  </svg>
+              return (
+                <div className="flex items-center justify-center">
+                  {row.is_ticket_confirmed ? (
+                    <div title="Tiket Confirmed" className="w-5 h-5 rounded-full bg-success-500 text-white flex items-center justify-center shadow-2xs">
+                      <Check size={12} strokeWidth={3} />
+                    </div>
+                  ) : (
+                    <div title="Tiket Belum Confirmed" className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-400 flex items-center justify-center shadow-2xs">
+                      <Minus size={12} strokeWidth={3} />
+                    </div>
+                  )}
                 </div>
               );
             }
             if (key === 'promo') {
-              return row.is_promo ? (
-                <div title="Promo Aktif" className="flex items-center text-warning-500">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M11.983 1.907a.75.75 0 0 0-1.292-.656l-8.5 9.5A.75.75 0 0 0 2.75 12h6.572l-1.305 6.093a.75.75 0 0 0 1.292.656l8.5-9.5A.75.75 0 0 0 17.25 8h-6.572l1.305-6.093Z" />
-                  </svg>
-                </div>
-              ) : (
-                <div title="Tidak Ada Promo" className="flex items-center text-neutral-300">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM6.75 9.25a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Z" clipRule="evenodd" />
-                  </svg>
+              return (
+                <div className="flex items-center justify-center">
+                  {row.is_promo ? (
+                    <div title="Promo Aktif" className="w-5 h-5 rounded-full bg-warning-500 text-white flex items-center justify-center shadow-2xs">
+                      <Zap size={11} className="fill-white" />
+                    </div>
+                  ) : (
+                    <div title="Tidak Ada Promo" className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-400 flex items-center justify-center shadow-2xs">
+                      <Minus size={12} strokeWidth={3} />
+                    </div>
+                  )}
                 </div>
               );
             }
-            if (key === 'berangkat_tanggal') return formatDate(row.berangkat_tanggal);
+            if (key === 'berangkat_tanggal') {
+              const days = getDaysRemaining(row.berangkat_tanggal);
+              const isUrgent = isScheduleUrgent(row);
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="font-body text-neutral-900">{formatDate(row.berangkat_tanggal)}</span>
+                  {isUrgent && days !== null && (
+                    <span 
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold text-danger-700 bg-danger-50 border border-danger-200"
+                      title="Mendekati keberangkatan & belum penuh"
+                    >
+                      {days} hr lagi
+                    </span>
+                  )}
+                </div>
+              );
+            }
+
+            if (key === 'seat_sisa') {
+              if (row.seat_sisa === 0) {
+                return (
+                  <div className="flex items-center">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-heading tracking-wide bg-success-600 text-white shadow-2xs">
+                      Full Booked
+                    </span>
+                  </div>
+                );
+              }
+              const isUrgent = isScheduleUrgent(row);
+              const filled = (row.seat_total || 0) - (row.seat_sisa || 0);
+              const percent = row.seat_total > 0 ? (filled / row.seat_total) * 100 : 0;
+              return (
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1 font-body">
+                    <span className={`font-semibold ${isUrgent ? 'text-danger-700 font-bold' : 'text-neutral-900'}`}>
+                      {row.seat_sisa ?? '-'}
+                    </span>
+                    <span className="text-neutral-400 text-xs">/ {row.seat_total ?? '-'} pax</span>
+                  </div>
+                  {isUrgent && row.seat_total > 0 && (
+                    <div className="w-20 h-1.5 bg-neutral-100 rounded-full overflow-hidden mt-1 border border-neutral-200" title={`Terisi ${filled}/${row.seat_total} pax`}>
+                      <div 
+                        className="h-full bg-danger-500 rounded-full" 
+                        style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} 
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            }
 
             if (key === 'harga') {
                const minPrice = getMinPrice(row);
                return minPrice > 0 ? formatCurrency(minPrice) : '-';
             }
             if (key === 'aksi') {
+              const hasBookings = (row.booking_count || 0) > 0;
               return (
                 <div className="flex gap-2 items-center">
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => navigate(`/schedules/${row.id}/edit`)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/schedules/${row.id}/edit`);
+                    }}
                     className="!px-2"
                     title="Edit"
                   >
                     Edit
                   </Button>
-                  <button 
-                    onClick={() => handleDeleteClick(row.id)} 
-                    title="Hapus"
-                    className="text-neutral-400 hover:text-danger-600 transition-colors ml-1"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  {hasBookings ? (
+                    <button 
+                      type="button"
+                      disabled
+                      onClick={(e) => e.stopPropagation()}
+                      title={`Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`}
+                      className="text-neutral-300 opacity-40 cursor-not-allowed ml-1"
+                    >
+                      <svg className="w-5 h-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClick(row.id);
+                      }} 
+                      title="Hapus"
+                      className="text-neutral-400 hover:text-danger-600 transition-colors ml-1 cursor-pointer"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               );
             }
@@ -374,19 +539,51 @@ const SchedulesPage = () => {
       {/* Delete Confirmation Modal */}
       <Modal
         isOpen={deleteConfirmId !== null}
-        onClose={() => setDeleteConfirmId(null)}
+        onClose={handleCloseDeleteModal}
         title="Hapus Paket?"
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDeleteConfirmId(null)}>Batal</Button>
-            <Button variant="danger" onClick={handleConfirmDelete}>Hapus</Button>
+            <Button variant="ghost" onClick={handleCloseDeleteModal}>Batal</Button>
+            <Button 
+              variant="danger" 
+              onClick={handleConfirmDelete}
+              disabled={!confirmCode || inputConfirmCode !== confirmCode}
+            >
+              Hapus
+            </Button>
           </>
         }
       >
-        <p className="text-neutral-600 font-body">
-          Yakin ingin menghapus <strong>{scheduleToDelete?.jadwal_nama}</strong>? Tindakan ini tidak bisa dibatalkan.
-        </p>
+        <div className="space-y-4 font-body">
+          <p className="text-neutral-600 text-sm">
+            Yakin ingin menghapus <strong>{scheduleToDelete?.jadwal_nama}</strong>? Tindakan ini tidak bisa dibatalkan.
+          </p>
+
+          <div className="bg-neutral-100 border border-neutral-200 rounded-md p-3 text-center">
+            <span className="text-xs text-neutral-500 block mb-1">Kode Konfirmasi:</span>
+            <span className="font-mono text-xl font-bold tracking-widest text-neutral-800 select-all">
+              {confirmCode}
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-neutral-700 mb-1">
+              Ketik ulang kode di atas:
+            </label>
+            <input
+              type="text"
+              value={inputConfirmCode}
+              onChange={(e) => setInputConfirmCode(e.target.value)}
+              placeholder="Ketik kode di atas untuk konfirmasi"
+              className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-md focus:outline-none focus:ring-1 focus:ring-danger-500 focus:border-danger-500 font-mono tracking-wider text-neutral-900 bg-white"
+              autoFocus
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              Ketik persis sama termasuk huruf besar/kecil
+            </p>
+          </div>
+        </div>
       </Modal>
     </div>
   );

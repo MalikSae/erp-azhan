@@ -63,7 +63,7 @@ const defaultIcons = {
   ),
 };
 
-const Badge = ({ variant = 'draft', icon, showIcon = true, children, className = '' }) => {
+const Badge = ({ variant = 'draft', icon, showIcon = true, hideIcon = false, children, className = '' }) => {
   const variants = {
     // Pastel Soft Tint Style
     published: 'bg-success-50 text-success-700 border border-success-200',
@@ -87,12 +87,13 @@ const Badge = ({ variant = 'draft', icon, showIcon = true, children, className =
 
   const selectedVariant = variants[variant] || variants.draft;
   const badgeIcon = icon !== undefined ? icon : (defaultIcons[variant] || null);
+  const isIconVisible = hideIcon ? false : showIcon;
 
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold font-heading tracking-wide ${selectedVariant} ${className}`}
     >
-      {showIcon && badgeIcon}
+      {isIconVisible && badgeIcon}
       <span>{children}</span>
     </span>
   );
