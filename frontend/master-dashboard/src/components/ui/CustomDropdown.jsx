@@ -10,6 +10,7 @@ const CustomDropdown = ({
   error, 
   required, 
   className = '',
+  disabled = false,
   variant = 'light', // 'light' or 'dark'
   icon,
   prefixIcon
@@ -31,11 +32,25 @@ const CustomDropdown = ({
     };
   }, []);
 
-  const selectedOption = options.find(opt => opt.value === value);
+  const selectedOption = options.find(opt => String(opt.value) === String(value));
 
   const isDark = variant === 'dark';
   const activeIcon = prefixIcon || icon;
-  const paddingLeftClass = activeIcon ? 'pl-9 pr-3' : 'px-3';
+  const paddingLeftClass = activeIcon ? 'pl-9 pr-3' : 'px-3.5';
+
+  const getBadgeClasses = (variantType) => {
+    switch (variantType) {
+      case 'danger':
+        return 'bg-danger-100 text-danger-700 border border-danger-200/60';
+      case 'warning':
+        return 'bg-amber-100 text-amber-800 border border-amber-200/60';
+      case 'neutral':
+        return 'bg-neutral-100 text-neutral-700 border border-neutral-200/60';
+      case 'success':
+      default:
+        return 'bg-emerald-100 text-emerald-800 border border-emerald-200/60';
+    }
+  };
 
   return (
     <FormField label={label} error={error} required={required} className={className}>
@@ -48,9 +63,11 @@ const CustomDropdown = ({
         {/* Dropdown Trigger */}
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between rounded-xl border py-2.5 text-xs md:text-sm font-body text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs
+          disabled={disabled}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          className={`h-11 w-full min-w-0 flex items-center justify-between rounded-xl border text-xs md:text-sm font-body text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs
             ${paddingLeftClass}
+            ${disabled ? 'bg-neutral-50 text-neutral-400 border-neutral-200 cursor-not-allowed' : isDark ? 'bg-neutral-800' : 'bg-white cursor-pointer'}
             ${error 
               ? 'border-danger-500 focus:border-danger-500' 
               : isDark ? 'border-neutral-700' : 'border-neutral-200/90'
@@ -60,14 +77,20 @@ const CustomDropdown = ({
               ? (isDark ? 'text-neutral-400' : 'text-neutral-400') 
               : (isDark ? 'text-white' : 'text-neutral-900 font-medium')
             }
-            ${isDark ? 'bg-neutral-800' : 'bg-white'}
           `}
         >
-          <span className="truncate">
-            {selectedOption ? selectedOption.label : placeholder}
-          </span>
+          <div className="flex items-center justify-between gap-2 min-w-0 flex-1 mr-2">
+            <span className="truncate">
+              {selectedOption ? selectedOption.label : placeholder}
+            </span>
+            {selectedOption?.badge && (
+              <span className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-bold ${getBadgeClasses(selectedOption.badgeVariant)}`}>
+                {selectedOption.badge}
+              </span>
+            )}
+          </div>
           <svg 
-            className={`w-4 h-4 transition-transform duration-200 ${isDark ? 'text-neutral-500' : 'text-neutral-400'} ${isOpen ? 'transform rotate-180' : ''}`} 
+            className={`w-4 h-4 transition-transform duration-200 shrink-0 ${isDark ? 'text-neutral-500' : 'text-neutral-400'} ${isOpen ? 'transform rotate-180' : ''}`} 
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24"
@@ -77,8 +100,8 @@ const CustomDropdown = ({
         </button>
 
         {/* Dropdown Menu */}
-        {isOpen && (
-          <div className={`absolute z-50 w-full mt-1.5 border rounded-xl shadow-card overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150
+        {isOpen && !disabled && (
+          <div className={`absolute z-50 min-w-full w-max max-w-lg mt-1.5 border rounded-xl shadow-card overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150
             ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200/80'}
           `}>
             <ul className="max-h-60 overflow-y-auto py-1 text-xs md:text-sm font-body">
@@ -95,13 +118,20 @@ const CustomDropdown = ({
                       setIsOpen(false);
                     }}
                     className={`px-3.5 py-2.5 cursor-pointer transition-colors
-                      ${opt.value === value 
+                      ${String(opt.value) === String(value)
                         ? (isDark ? 'bg-neutral-700 text-primary-500 font-bold' : 'bg-primary-100 text-neutral-900 font-bold')
                         : (isDark ? 'text-neutral-300 hover:bg-neutral-700' : 'text-neutral-700 hover:bg-neutral-50')
                       }
                     `}
                   >
-                    {opt.label}
+                    <div className="flex items-center justify-between gap-3 w-full">
+                      <span className="truncate">{opt.label}</span>
+                      {opt.badge && (
+                        <span className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-bold ${getBadgeClasses(opt.badgeVariant)}`}>
+                          {opt.badge}
+                        </span>
+                      )}
+                    </div>
                   </li>
                 ))
               )}

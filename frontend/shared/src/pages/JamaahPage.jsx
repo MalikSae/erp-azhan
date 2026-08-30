@@ -5,6 +5,7 @@ import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
 import DataTable from "../components/ui/DataTable";
 import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 import Alert from "../components/ui/Alert";
 import Modal from "../components/ui/Modal";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
@@ -21,6 +22,7 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
   const [error, setError] = useState(null);
 
   const [filterBrandId, setFilterBrandId] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
@@ -74,12 +76,28 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
   };
 
   const filteredData = useMemo(() => {
-    if (!showBrandColumn || !filterBrandId) return data;
-    return data.filter(j => j.brand_id?.toString() === filterBrandId);
-  }, [data, showBrandColumn, filterBrandId]);
+    return data.filter(j => {
+      if (showBrandColumn && filterBrandId && j.brand_id?.toString() !== filterBrandId) return false;
+      if (filterStatus && j.status !== filterStatus) return false;
+      return true;
+    });
+  }, [data, showBrandColumn, filterBrandId, filterStatus]);
 
   const columns = useMemo(() => {
-    const cols = [
+    const cols = [];
+
+    if (showBrandColumn) {
+      cols.push({
+        header: "Brand",
+        key: "brand_id",
+        accessor: (row) => {
+          const brand = brandsMap[row.brand_id];
+          return <BrandCell brand={brand} brandId={row.brand_id} />;
+        }
+      });
+    }
+
+    cols.push(
       {
         header: "ID Jamaah",
         key: "id_jamaah",
@@ -110,18 +128,19 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
       },
       { header: "NIK", key: "nik", accessor: "nik" },
       { header: "No HP", key: "no_hp", accessor: "no_hp" },
-    ];
-
-    if (showBrandColumn) {
-      cols.push({
-        header: "Brand",
-        key: "brand_id",
+      {
+        header: "Status",
+        key: "status",
         accessor: (row) => {
-          const brand = brandsMap[row.brand_id];
-          return <BrandCell brand={brand} brandId={row.brand_id} />;
+          const isDraft = row.status === 'draft';
+          return (
+            <Badge variant={isDraft ? 'draft' : 'success'}>
+              {isDraft ? 'Draft' : 'Aktif'}
+            </Badge>
+          );
         }
-      });
-    }
+      }
+    );
 
     cols.push({
       header: "Aksi",
@@ -173,21 +192,34 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
             columns={columns}
             data={filteredData}
             itemsPerPage={15}
-            searchPlaceholder="Cari data..."
+            searchPlaceholder="Cari nama, NIK, atau nomor HP..."
             emptyMessage='Belum ada data jamaah. Klik "+ Tambah Jamaah" untuk menambahkan.'
             toolbarActions={
-              showBrandColumn && brands.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {showBrandColumn && brands.length > 0 && (
+                  <CustomDropdown
+                    value={filterBrandId}
+                    onChange={(val) => setFilterBrandId(val)}
+                    options={[
+                      { value: '', label: 'Semua Brand' },
+                      ...brands.map(b => ({ value: b.id.toString(), label: b.name }))
+                    ]}
+                    placeholder="Semua Brand"
+                    className="!mb-0 min-w-40"
+                  />
+                )}
                 <CustomDropdown
-                  value={filterBrandId}
-                  onChange={(val) => setFilterBrandId(val)}
+                  value={filterStatus}
+                  onChange={(val) => setFilterStatus(val)}
                   options={[
-                    { value: '', label: 'Semua Brand' },
-                    ...brands.map(b => ({ value: b.id.toString(), label: b.name }))
+                    { value: '', label: 'Semua Status' },
+                    { value: 'aktif', label: 'Aktif' },
+                    { value: 'draft', label: 'Draft' }
                   ]}
-                  placeholder="Filter Brand"
-                  className="!mb-0 min-w-40"
+                  placeholder="Semua Status"
+                  className="!mb-0 w-36"
                 />
-              ) : null
+              </div>
             }
           />
         </div>

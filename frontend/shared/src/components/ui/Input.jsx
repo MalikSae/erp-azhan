@@ -23,6 +23,7 @@ const Input = ({ label, type = 'text', value, onChange, error, required, placeho
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
+          aria-invalid={!!error}
           className={`${inputBaseClasses} ${errorClasses} ${paddingRightClass} ${disabledClasses}`}
           {...props}
         />

@@ -69,6 +69,7 @@ function App() {
               <Route path="/bookings" element={<BookingsPage showBrandColumn={true} />} />
               <Route path="/bookings/new" element={<BookingFormPage showBrandColumn={true} />} />
               <Route path="/bookings/:id" element={<BookingDetailPage showBrandColumn={true} />} />
+              <Route path="/bookings/:id/edit" element={<BookingFormPage showBrandColumn={true} />} />
               
               {/* Inventory */}
               <Route path="/inventory/perlengkapan" element={<InventoryPerlengkapanPage />} />

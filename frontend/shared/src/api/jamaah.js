@@ -1,7 +1,7 @@
 import api from './client';
 
-export const listJamaah = async () => {
-  const { data } = await api.get('/api/admin/jamaah');
+export const listJamaah = async (params = {}) => {
+  const { data } = await api.get('/api/admin/jamaah', { params });
   return data;
 };
 

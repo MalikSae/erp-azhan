@@ -150,6 +150,7 @@ const AddOnsPage = () => {
           data={addons}
           itemsPerPage={10}
           emptyMessage='Belum ada add-on. Klik "+ Tambah Add-On" untuk menambahkan.'
+          searchPlaceholder="Cari nama layanan atau add-on..."
           renderCell={(row, key) => {
             if (key === 'aksi') return (
               <div className="flex gap-3">
