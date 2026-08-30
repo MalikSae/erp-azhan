@@ -42,6 +42,7 @@ function App() {
           <Route path="/bookings" element={<BookingsPage showBrandColumn={false} />} />
           <Route path="/bookings/new" element={<BookingFormPage showBrandColumn={false} />} />
           <Route path="/bookings/:id" element={<BookingDetailPage showBrandColumn={false} />} />
+          <Route path="/bookings/:id/edit" element={<BookingFormPage showBrandColumn={false} />} />
           <Route path="/payments" element={<PaymentConfirmationsPage />} />
         </Route>
       </Route>

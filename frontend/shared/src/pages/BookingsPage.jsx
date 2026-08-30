@@ -28,6 +28,21 @@ const formatTanggal = (dateStr) => {
   }
 };
 
+const formatPaxDetail = (row) => {
+  const reg = row.regular_pax_count ?? (row.pax ? row.pax.filter(p => p.pax_type !== 'infant').length : 0);
+  const inf = row.infant_pax_count ?? (row.pax ? row.pax.filter(p => p.pax_type === 'infant').length : 0);
+
+  if (reg === 0 && inf === 0) {
+    const total = row.pax_count || 1;
+    return `${total} reguler`;
+  }
+
+  if (inf > 0) {
+    return `${reg} reguler, ${inf} infant`;
+  }
+  return `${reg} reguler`;
+};
+
 export const BookingsPage = ({ showBrandColumn = false }) => {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
@@ -125,14 +140,27 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
   }, [data, showBrandColumn, filterBrandId, filterStatus, filterSeat, filterDate]);
 
   const columns = useMemo(() => {
-    const cols = [
+    const cols = [];
+
+    if (showBrandColumn) {
+      cols.push({
+        header: "Brand",
+        key: "brand_id",
+        accessor: (row) => {
+          const brand = brandsMap[row.brand_id];
+          return <BrandCell brand={brand} brandId={row.brand_id} />;
+        }
+      });
+    }
+
+    cols.push(
       {
         header: "ID Booking",
         key: "id_booking",
         accessor: (row) => (
           <button
             type="button"
-            onClick={() => navigate(`/bookings/${row.id}`)}
+            onClick={() => navigate(row.status === 'draft' ? `/bookings/${row.id}/edit` : `/bookings/${row.id}`)}
             className="font-mono text-xs font-bold text-neutral-800 bg-neutral-100 px-2.5 py-1 rounded-lg border border-neutral-200/90 hover:bg-neutral-200/80 hover:border-neutral-300 transition-colors cursor-pointer"
           >
             {row.id_booking || `ID: ${row.id}`}
@@ -159,63 +187,41 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
             ) : (
               <span className="text-neutral-700 font-body leading-tight">{row.nama_jamaah || "-"}</span>
             )}
-            <span className="text-[11px] text-neutral-400 font-body mt-0.5 font-medium">(PIC)</span>
           </div>
         )
       },
-    ];
-
-    if (showBrandColumn) {
-      cols.push({
-        header: "Brand",
-        key: "brand_id",
-        accessor: (row) => {
-          const brand = brandsMap[row.brand_id];
-          return <BrandCell brand={brand} brandId={row.brand_id} />;
-        }
-      });
-    }
-
-    cols.push(
       { 
         header: "Paket", 
         key: "jadwal_nama", 
-        accessor: (row) => row.jadwal_nama || row.schedule?.jadwal_nama || `ID: ${row.schedule_id}` 
+        accessor: (row) => (
+          <div className="flex flex-col items-start min-w-[150px]">
+            <span className="font-semibold text-neutral-900 font-body leading-tight">
+              {row.jadwal_nama || row.schedule?.jadwal_nama || `ID: ${row.schedule_id}`}
+            </span>
+            {row.berangkat_tanggal && (
+              <span className="text-xs text-neutral-500 font-body mt-0.5">
+                {formatTanggal(row.berangkat_tanggal)}
+              </span>
+            )}
+          </div>
+        )
       },
       { 
-        header: "Tgl Berangkat", 
-        key: "berangkat_tanggal", 
-        accessor: (row) => formatTanggal(row.berangkat_tanggal) 
-      },
-      { 
-        header: "Kamar", 
-        key: "room_type", 
+        header: "Total Tagihan", 
+        key: "total_harga", 
         accessor: (row) => {
-          const roomLabel = (row.room_type || row.tipe_kamar || '-').toUpperCase();
-          const extraPax = (row.pax_count || 1) - 1;
-          if (extraPax <= 0) {
-            return (
-              <span className="font-semibold text-neutral-900 font-body">
-                {roomLabel}
-              </span>
-            );
-          }
+          const paxText = formatPaxDetail(row);
           return (
-            <div className="flex flex-col items-start">
+            <div className="flex flex-col items-start min-w-[130px]">
               <span className="font-semibold text-neutral-900 font-body leading-tight">
-                {roomLabel}
+                {formatRupiah(row.total_harga)}
               </span>
-              <span className="text-[11px] text-neutral-400 font-body mt-0.5 font-medium">
-                +{extraPax} pax lainnya
+              <span className="text-xs text-neutral-500 font-body mt-0.5">
+                {paxText}
               </span>
             </div>
           );
         }
-      },
-      { 
-        header: "Total Harga", 
-        key: "total_harga", 
-        accessor: (row) => formatRupiah(row.total_harga) 
       },
       {
         header: "Status",
@@ -248,8 +254,8 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => navigate(`/bookings/${row.id}`)}
-            title="Detail"
+            onClick={() => navigate(row.status === 'draft' ? `/bookings/${row.id}/edit` : `/bookings/${row.id}`)}
+            title={row.status === 'draft' ? "Lanjutkan Draft" : "Detail"}
             className="p-1.5 text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg"
           >
             <Eye size={16} />
@@ -281,7 +287,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
             columns={columns}
             data={filteredBookings}
             itemsPerPage={15}
-            searchPlaceholder="Cari data..."
+            searchPlaceholder="Cari no. booking, nama jamaah, atau paket..."
             emptyMessage={filterBrandId || filterStatus || filterSeat || filterDate ? "Data booking tidak ditemukan" : "Belum ada data booking. Klik \"Buat Booking Baru\" untuk menambahkan."}
             toolbarActions={
               <div className="flex flex-wrap items-center gap-2">
@@ -305,6 +311,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
                   placeholder="Semua Status"
                   options={[
                     { value: '', label: 'Semua Status' },
+                    { value: 'draft', label: 'Draft' },
                     { value: 'baru', label: 'Baru' },
                     { value: 'dp', label: 'DP' },
                     { value: 'lunas', label: 'Lunas' },

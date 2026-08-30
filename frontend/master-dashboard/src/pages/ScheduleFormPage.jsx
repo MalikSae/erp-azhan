@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../components/ui/PageHeader';
 import FormField from '../components/ui/FormField';
 import Input from '../components/ui/Input';
 import Textarea from '../components/ui/Textarea';
 import CustomDropdown from '../components/ui/CustomDropdown';
+import AutocompleteInput from '../components/ui/AutocompleteInput';
 import Button from '../components/ui/Button';
 import Alert from '../components/ui/Alert';
 import MetaBox from '../components/ui/MetaBox';
@@ -15,6 +16,7 @@ import Toggle from '../components/ui/Toggle';
 import { getSchedule, createSchedule, updateSchedule } from '../api/schedules';
 import { listHotels } from '../api/hotels';
 import { listAirlines } from '../api/airlines';
+import { listAirports } from '../api/airports';
 import { listCategories } from '../api/categories';
 import { listItineraries } from '../api/itineraries';
 import { listBrands } from '../api/brands';
@@ -35,6 +37,7 @@ const ScheduleFormPage = () => {
   // Lookups
   const [hotelOptions, setHotelOptions] = useState([]);
   const [airlineOptions, setAirlineOptions] = useState([]);
+  const [airportOptions, setAirportOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [itineraryOptions, setItineraryOptions] = useState([]);
   const [brandOptions, setBrandOptions] = useState([]);
@@ -99,7 +102,8 @@ const ScheduleFormPage = () => {
           listCategories(),
           listItineraries(),
           listBrands(),
-          listAddOns()
+          listAddOns(),
+          listAirports()
         ];
 
         const results = await Promise.all(promises);
@@ -109,6 +113,7 @@ const ScheduleFormPage = () => {
         const itineraries = results[3];
         const brands = results[4] || [];
         const addons = results[5] || [];
+        const airports = results[6] || [];
 
         setHotelOptions(hotels || []);
         setAirlineOptions(airlines || []);
@@ -116,6 +121,7 @@ const ScheduleFormPage = () => {
         setItineraryOptions(itineraries || []);
         setBrandOptions(brands || []);
         setAddOnOptions(addons || []);
+        setAirportOptions(airports || []);
 
         if (isEditMode) {
           const scheduleData = await getSchedule(id);
@@ -504,6 +510,13 @@ const ScheduleFormPage = () => {
     }));
   };
 
+  const airportDropdownOptions = useMemo(() => {
+    return airportOptions.map(a => ({
+      value: a.code,
+      label: a.city ? `${a.code} - ${a.city}` : a.code
+    }));
+  }, [airportOptions]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -740,13 +753,15 @@ const ScheduleFormPage = () => {
                 {/* Bagian 1: Data Maskapai */}
                 <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
                   <div className="flex-1 min-w-[240px]">
-                    <CustomDropdown
+                    <AutocompleteInput
                       label="Maskapai"
                       className="!mb-0"
+                      name="maskapai_id"
                       value={formData.maskapai_id}
-                      onChange={(val) => handleMaskapaiChange(val)}
+                      onChange={(e) => handleMaskapaiChange(e.target.value)}
+                      onSelect={(opt) => handleMaskapaiChange(opt ? opt.value : '')}
                       required
-                      placeholder="-- Pilih Maskapai --"
+                      placeholder="Ketik / cari maskapai..."
                       options={airlineOptions.map(a => ({ value: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
                       prefixIcon={
                         <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -862,13 +877,15 @@ const ScheduleFormPage = () => {
 
                   {/* Baris 2: Bandara Asal & Tujuan */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
+                    <AutocompleteInput
                       label="Bandara Asal"
                       className="!mb-0"
                       name="berangkat_bandara_asal"
                       value={formData.berangkat_bandara_asal}
-                      onChange={handleChange}
-                      placeholder="mis. CGK (Jakarta)"
+                      onChange={(e) => setFormData(prev => ({ ...prev, berangkat_bandara_asal: e.target.value }))}
+                      onSelect={(opt) => setFormData(prev => ({ ...prev, berangkat_bandara_asal: opt?.value || '' }))}
+                      placeholder="Ketik kode / kota (mis. CGK / Jakarta)"
+                      options={airportDropdownOptions}
                       prefixIcon={
                         <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -876,13 +893,15 @@ const ScheduleFormPage = () => {
                         </svg>
                       }
                     />
-                    <Input
+                    <AutocompleteInput
                       label="Bandara Tujuan Akhir"
                       className="!mb-0"
                       name="berangkat_bandara_tujuan"
                       value={formData.berangkat_bandara_tujuan}
-                      onChange={handleChange}
-                      placeholder="mis. JED (Jeddah)"
+                      onChange={(e) => setFormData(prev => ({ ...prev, berangkat_bandara_tujuan: e.target.value }))}
+                      onSelect={(opt) => setFormData(prev => ({ ...prev, berangkat_bandara_tujuan: opt?.value || '' }))}
+                      placeholder="Ketik kode / kota (mis. JED / Jeddah)"
+                      options={airportDropdownOptions}
                       prefixIcon={
                         <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -909,12 +928,15 @@ const ScheduleFormPage = () => {
                           <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-end gap-3 pb-2.5 border-b border-neutral-100 last:border-b-0">
                             <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <div className="sm:col-span-2">
-                                <Input
+                                <AutocompleteInput
                                   label={`Bandara Transit ${formData.transit_items_berangkat.length > 1 ? `#${idx + 1}` : ''}`}
                                   className="!mb-0"
+                                  name={`transit_berangkat_${idx}`}
                                   value={item.bandara}
                                   onChange={(e) => handleTransitBerangkatChange(idx, 'bandara', e.target.value)}
-                                  placeholder="mis. KUL atau DOH"
+                                  onSelect={(opt) => handleTransitBerangkatChange(idx, 'bandara', opt?.value || '')}
+                                  placeholder="Ketik kode / kota (mis. KUL / DOH)"
+                                  options={airportDropdownOptions}
                                   prefixIcon={
                                     <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1049,13 +1071,15 @@ const ScheduleFormPage = () => {
 
                   {/* Baris 2: Bandara Asal & Tujuan */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
+                    <AutocompleteInput
                       label="Bandara Asal"
                       className="!mb-0"
                       name="pulang_bandara_asal"
                       value={formData.pulang_bandara_asal}
-                      onChange={handleChange}
-                      placeholder="mis. MED (Madinah)"
+                      onChange={(e) => setFormData(prev => ({ ...prev, pulang_bandara_asal: e.target.value }))}
+                      onSelect={(opt) => setFormData(prev => ({ ...prev, pulang_bandara_asal: opt?.value || '' }))}
+                      placeholder="Ketik kode / kota (mis. MED / Madinah)"
+                      options={airportDropdownOptions}
                       prefixIcon={
                         <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1063,13 +1087,15 @@ const ScheduleFormPage = () => {
                         </svg>
                       }
                     />
-                    <Input
+                    <AutocompleteInput
                       label="Bandara Tujuan Akhir"
                       className="!mb-0"
                       name="pulang_bandara_tujuan"
                       value={formData.pulang_bandara_tujuan}
-                      onChange={handleChange}
-                      placeholder="mis. CGK (Jakarta)"
+                      onChange={(e) => setFormData(prev => ({ ...prev, pulang_bandara_tujuan: e.target.value }))}
+                      onSelect={(opt) => setFormData(prev => ({ ...prev, pulang_bandara_tujuan: opt?.value || '' }))}
+                      placeholder="Ketik kode / kota (mis. CGK / Jakarta)"
+                      options={airportDropdownOptions}
                       prefixIcon={
                         <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1096,12 +1122,15 @@ const ScheduleFormPage = () => {
                           <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-end gap-3 pb-2.5 border-b border-neutral-100 last:border-b-0">
                             <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <div className="sm:col-span-2">
-                                <Input
+                                <AutocompleteInput
                                   label={`Bandara Transit ${formData.transit_items_pulang.length > 1 ? `#${idx + 1}` : ''}`}
                                   className="!mb-0"
+                                  name={`transit_pulang_${idx}`}
                                   value={item.bandara}
                                   onChange={(e) => handleTransitPulangChange(idx, 'bandara', e.target.value)}
-                                  placeholder="mis. DOH atau DXB"
+                                  onSelect={(opt) => handleTransitPulangChange(idx, 'bandara', opt?.value || '')}
+                                  placeholder="Ketik kode / kota (mis. DOH / DXB)"
+                                  options={airportDropdownOptions}
                                   prefixIcon={
                                     <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1172,14 +1201,16 @@ const ScheduleFormPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Hotel Mekkah */}
                   <div>
-                    <CustomDropdown
+                    <AutocompleteInput
                       label="Hotel Mekkah"
                       className="!mb-0"
+                      name="hotel_mekkah_id"
                       value={formData.hotel_mekkah_id}
-                      onChange={(val) => handleChange({ target: { name: 'hotel_mekkah_id', value: val } })}
+                      onChange={(e) => handleChange({ target: { name: 'hotel_mekkah_id', value: e.target.value } })}
+                      onSelect={(opt) => handleChange({ target: { name: 'hotel_mekkah_id', value: opt ? opt.value : '' } })}
                       required
-                      placeholder="-- Pilih Hotel --"
-                      options={mekkahHotels.map(h => ({ value: h.id, label: `${h.name} (${h.star_rating ? `${h.star_rating} Bintang` : 'Hotel'})` }))}
+                      placeholder="Ketik / cari hotel di Mekkah..."
+                      options={mekkahHotels.map(h => ({ value: h.id, label: h.star_rating ? `${h.name} (${'★'.repeat(h.star_rating)})` : h.name }))}
                       prefixIcon={
                         <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1191,14 +1222,16 @@ const ScheduleFormPage = () => {
 
                   {/* Hotel Madinah */}
                   <div>
-                    <CustomDropdown
+                    <AutocompleteInput
                       label="Hotel Madinah"
                       className="!mb-0"
+                      name="hotel_madinah_id"
                       value={formData.hotel_madinah_id}
-                      onChange={(val) => handleChange({ target: { name: 'hotel_madinah_id', value: val } })}
+                      onChange={(e) => handleChange({ target: { name: 'hotel_madinah_id', value: e.target.value } })}
+                      onSelect={(opt) => handleChange({ target: { name: 'hotel_madinah_id', value: opt ? opt.value : '' } })}
                       required
-                      placeholder="-- Pilih Hotel --"
-                      options={madinahHotels.map(h => ({ value: h.id, label: `${h.name} (${h.star_rating ? `${h.star_rating} Bintang` : 'Hotel'})` }))}
+                      placeholder="Ketik / cari hotel di Madinah..."
+                      options={madinahHotels.map(h => ({ value: h.id, label: h.star_rating ? `${h.name} (${'★'.repeat(h.star_rating)})` : h.name }))}
                       prefixIcon={
                         <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1217,11 +1250,17 @@ const ScheduleFormPage = () => {
 
                   {/* Selector Dropdown */}
                   <div className="w-full sm:w-2/3">
-                    <CustomDropdown
+                    <AutocompleteInput
                       className="!mb-0"
+                      name="add_transit_hotel"
                       value=""
-                      onChange={(val) => handleAddTransitHotel(val)}
-                      placeholder="Tambah Hotel Transit..."
+                      onChange={(e) => {
+                        if (e.target.value) handleAddTransitHotel(e.target.value);
+                      }}
+                      onSelect={(opt) => {
+                        if (opt) handleAddTransitHotel(opt.value);
+                      }}
+                      placeholder="Ketik / cari hotel transit..."
                       options={hotelOptions
                         .filter(h => 
                           h.id !== parseInt(formData.hotel_mekkah_id, 10) &&
@@ -1230,7 +1269,7 @@ const ScheduleFormPage = () => {
                         )
                         .map(h => ({ 
                           value: h.id, 
-                          label: `${h.name} — ${h.city || 'Lainnya'} (${h.star_rating ? `${h.star_rating}★` : 'Hotel'})` 
+                          label: `${h.name} — ${h.city || 'Lainnya'}${h.star_rating ? ` (${'★'.repeat(h.star_rating)})` : ''}` 
                         }))
                       }
                       prefixIcon={
@@ -1248,7 +1287,7 @@ const ScheduleFormPage = () => {
                         const hotel = hotelOptions.find(h => h.id === thId);
                         const hotelName = hotel ? hotel.name : `Hotel #${thId}`;
                         const hotelCity = hotel ? hotel.city : '';
-                        const hotelStar = hotel?.star_rating ? `${hotel.star_rating}★` : null;
+                        const hotelStar = hotel?.star_rating ? '★'.repeat(hotel.star_rating) : null;
 
                         return (
                           <span
@@ -1263,7 +1302,7 @@ const ScheduleFormPage = () => {
                               <span className="text-neutral-500">({hotelCity})</span>
                             )}
                             {hotelStar && (
-                              <span className="text-amber-600 font-semibold">{hotelStar}</span>
+                              <span className="text-amber-500 font-bold">{hotelStar}</span>
                             )}
                             <button
                               type="button"

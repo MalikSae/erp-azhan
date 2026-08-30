@@ -42,7 +42,7 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
               return (
                 <th 
                   key={idx} 
-                  className={`px-4 py-3.5 whitespace-nowrap ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''} ${isSortable ? 'cursor-pointer select-none hover:bg-neutral-100/70' : ''}`}
+                  className={`px-3 py-3 ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''} ${isSortable ? 'cursor-pointer select-none hover:bg-neutral-100/70' : ''}`}
                   onClick={() => isSortable && onSort && onSort(sortKey)}
                 >
                   <div className={`flex items-center gap-1.5 ${col.align === 'center' ? 'justify-center' : col.align === 'right' ? 'justify-end' : ''}`}>
@@ -67,7 +67,7 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
           {data.map((row, rowIndex) => (
             <tr key={rowIndex} className="hover:bg-neutral-50/70 transition-colors">
               {columns.map((col, colIndex) => (
-                <td key={colIndex} className={`px-4 py-4 whitespace-nowrap ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''}`}>
+                <td key={colIndex} className={`px-3 py-3 ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''}`}>
                   {getCellContent(row, col, rowIndex)}
                 </td>
               ))}

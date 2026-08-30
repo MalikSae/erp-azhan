@@ -341,6 +341,7 @@ const SchedulesPage = () => {
             itemsPerPage={15}
             onRowClick={(row) => navigate(`/schedules/${row.id}`)}
             emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.'}
+            searchPlaceholder="Cari nama paket atau brand..."
             toolbarActions={
               <div className="flex flex-wrap items-center gap-2">
                 <CustomDropdown 

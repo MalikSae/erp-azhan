@@ -270,6 +270,7 @@ const HotelsPage = () => {
           }
           itemsPerPage={10}
           emptyMessage='Belum ada hotel. Klik "+ Tambah Hotel" untuk menambahkan.'
+          searchPlaceholder="Cari nama hotel atau kota..."
           renderCell={(row, key) => {
             if (key === 'photo_url') {
               return <PhotoCell url={row.photo_url} name={row.name} />;

@@ -199,7 +199,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
 
     try {
       setLoadingCandidates(true);
-      const allJamaah = await listJamaah();
+      const allJamaah = await listJamaah({ status: "aktif" });
       // Filter: brand sama & exclude diri sendiri
       const currentBrandId = jamaah?.brand_id;
       const currentId = Number(id);
@@ -317,6 +317,9 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
             title={jamaah.nama_lengkap}
             onBack={() => navigate("/jamaah")}
           />
+          <Badge variant={jamaah.status === 'draft' ? 'draft' : 'success'}>
+            {jamaah.status === 'draft' ? 'Draft' : 'Aktif'}
+          </Badge>
           {showBrandColumn && (brand || jamaah.brand_id) && (
             <div className="mt-1">
               <BrandCell brand={brand} brandId={jamaah.brand_id} showText={true} />
@@ -463,7 +466,8 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
             <div className="space-y-4">
               <InfoItem label="Nomor Paspor" value={jamaah.no_paspor} />
               <InfoItem label="Kantor Imigrasi Penerbit" value={jamaah.tempat_paspor_keluar} />
-              <InfoItem label="Masa Berlaku Paspor" value={formatTanggal(jamaah.paspor_berlaku_sampai)} />
+              <InfoItem label="Tanggal Dikeluarkan (Issued Date)" value={formatTanggal(jamaah.tanggal_paspor_keluar)} />
+              <InfoItem label="Masa Berlaku Paspor (Expiry Date)" value={formatTanggal(jamaah.paspor_berlaku_sampai)} />
             </div>
           </MetaBox>
 

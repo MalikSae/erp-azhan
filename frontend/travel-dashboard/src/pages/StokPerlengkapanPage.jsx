@@ -100,7 +100,7 @@ const StokPerlengkapanPage = () => {
           data={stokList}
           itemsPerPage={15}
           emptyMessage="Belum ada data stok perlengkapan untuk travel Anda."
-          searchPlaceholder="Cari data..."
+          searchPlaceholder="Cari nama atau kode perlengkapan..."
           renderCell={renderCell}
         />
       )}

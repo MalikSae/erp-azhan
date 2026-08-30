@@ -121,6 +121,7 @@ const BrandsPage = () => {
           data={brands}
           itemsPerPage={10}
           emptyMessage='Belum ada brand. Klik "+ Tambah Brand" untuk menambahkan.'
+          searchPlaceholder="Cari nama brand, kode, atau domain..."
           renderCell={(row, key) => {
             if (key === 'logo_url') {
               return <LogoCell url={row.logo_url} name={row.name} />;

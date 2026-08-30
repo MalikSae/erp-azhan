@@ -177,7 +177,7 @@ const InventoryStokPerlengkapanPage = () => {
           data={filteredData}
           itemsPerPage={15}
           emptyMessage="Belum ada data stok perlengkapan."
-          searchPlaceholder="Cari data..."
+          searchPlaceholder="Cari nama atau kode perlengkapan..."
           toolbarActions={
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <CustomDropdown

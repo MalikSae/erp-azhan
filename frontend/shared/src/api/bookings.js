@@ -23,6 +23,21 @@ export const createBooking = async (payload) => {
   return data;
 };
 
+export const createDraftBooking = async (payload) => {
+  const { data } = await api.post('/api/admin/bookings/draft', payload);
+  return data;
+};
+
+export const updateDraftBooking = async (id, payload) => {
+  const { data } = await api.put(`/api/admin/bookings/${id}/draft`, payload);
+  return data;
+};
+
+export const finalizeBooking = async (id) => {
+  const { data } = await api.post(`/api/admin/bookings/${id}/finalize`);
+  return data;
+};
+
 export const updateBookingStatus = async (id, status) => {
   const { data } = await api.put(`/api/admin/bookings/${id}/status`, { status });
   return data;

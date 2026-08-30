@@ -416,8 +416,8 @@ const PaketDetailPage = () => {
                   {schedule.hotel_mekkah?.name || '-'}
                 </p>
                 {schedule.hotel_mekkah?.star_rating > 0 ? (
-                  <p className="text-xs text-warning-600 font-semibold">
-                    {'★'.repeat(schedule.hotel_mekkah.star_rating)} ({schedule.hotel_mekkah.star_rating} Bintang)
+                  <p className="text-xs text-amber-500 font-bold tracking-wider">
+                    {'★'.repeat(schedule.hotel_mekkah.star_rating)}
                   </p>
                 ) : null}
                 {schedule.hotel_mekkah?.distance_m !== null && schedule.hotel_mekkah?.distance_m !== undefined ? (
@@ -437,8 +437,8 @@ const PaketDetailPage = () => {
                   {schedule.hotel_madinah?.name || '-'}
                 </p>
                 {schedule.hotel_madinah?.star_rating > 0 ? (
-                  <p className="text-xs text-warning-600 font-semibold">
-                    {'★'.repeat(schedule.hotel_madinah.star_rating)} ({schedule.hotel_madinah.star_rating} Bintang)
+                  <p className="text-xs text-amber-500 font-bold tracking-wider">
+                    {'★'.repeat(schedule.hotel_madinah.star_rating)}
                   </p>
                 ) : null}
                 {schedule.hotel_madinah?.distance_m !== null && schedule.hotel_madinah?.distance_m !== undefined ? (

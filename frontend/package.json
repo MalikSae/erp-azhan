@@ -11,6 +11,6 @@
     "dev:travel": "npm run dev --workspace=travel-dashboard",
     "build:master": "npm run build --workspace=master-dashboard",
     "build:travel": "npm run build --workspace=travel-dashboard",
-    "build": "npm run build --workspaces"
+    "build": "npm run build:master && npm run build:travel"
   }
 }

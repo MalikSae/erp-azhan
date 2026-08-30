@@ -174,14 +174,15 @@ const CategoriesPage = () => {
       ) : (
         <DataTable
           columns={[
-            { header: 'Kategori', key: 'name', sortable: true },
             { header: 'Brand Berlaku', key: 'brands' },
+            { header: 'Kategori', key: 'name', sortable: true },
             { header: 'Jumlah Paket', key: 'package_count', sortable: true },
             { header: 'Status', key: 'is_active', sortable: true },
             { header: 'Aksi', key: 'aksi' },
           ]}
           data={categories}
           emptyMessage='Belum ada data kategori paket. Klik "+ Tambah Kategori" untuk menambahkan.'
+          searchPlaceholder="Cari nama atau slug kategori..."
           renderCell={(row, key) => {
             if (key === 'name') {
               return (

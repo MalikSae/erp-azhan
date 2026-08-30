@@ -85,6 +85,7 @@ const ItinerariesPage = () => {
           data={itineraries}
           itemsPerPage={10}
           emptyMessage='Belum ada itinerary. Klik "+ Tambah Itinerary" untuk menambahkan.'
+          searchPlaceholder="Cari judul itinerary..."
           renderCell={(row, key) => {
             if (key === 'aksi') return (
               <div className="flex gap-3">

@@ -165,6 +165,7 @@ const InventoryPerlengkapanPage = () => {
           data={items}
           itemsPerPage={10}
           emptyMessage='Belum ada item perlengkapan di katalog. Klik "+ Tambah Item" untuk menambahkan.'
+          searchPlaceholder="Cari nama item perlengkapan..."
           renderCell={(row, key) => {
             if (key === 'nama') {
               return (

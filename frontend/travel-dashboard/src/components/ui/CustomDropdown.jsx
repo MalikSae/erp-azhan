@@ -60,6 +60,20 @@ const CustomDropdown = ({
     setIsOpen(false);
   };
 
+  const getBadgeClasses = (variantType) => {
+    switch (variantType) {
+      case 'danger':
+        return 'bg-danger-100 text-danger-700 border border-danger-200/60';
+      case 'warning':
+        return 'bg-amber-100 text-amber-800 border border-amber-200/60';
+      case 'neutral':
+        return 'bg-neutral-100 text-neutral-700 border border-neutral-200/60';
+      case 'success':
+      default:
+        return 'bg-emerald-100 text-emerald-800 border border-emerald-200/60';
+    }
+  };
+
   return (
     <FormField label={label} error={error} required={required} className={className}>
       <div className="relative" ref={dropdownRef}>
@@ -67,25 +81,34 @@ const CustomDropdown = ({
         <button
           type="button"
           disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
           onClick={() => !disabled && setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between rounded-md border px-3 py-2 text-sm font-body text-left transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500
+          className={`h-11 w-full min-w-0 flex items-center justify-between rounded-xl border px-3.5 text-xs md:text-sm font-body text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs
             ${disabled ? 'bg-neutral-50 text-neutral-400 border-neutral-200 cursor-not-allowed' : isDark ? 'bg-neutral-800' : 'bg-white cursor-pointer'}
             ${error 
               ? 'border-danger-500 focus:border-danger-500' 
-              : isDark ? 'border-neutral-700 focus:border-primary-500' : 'border-neutral-300 focus:border-primary-500'
+              : isDark ? 'border-neutral-700' : 'border-neutral-200/90'
             }
-            ${isOpen ? 'border-primary-500 ring-1 ring-primary-500' : ''}
+            ${isOpen ? 'border-neutral-400 ring-2 ring-primary-500/40' : ''}
             ${!selectedOption 
-              ? (isDark ? 'text-neutral-400' : 'text-neutral-500') 
-              : (isDark ? 'text-white' : 'text-neutral-900')
+              ? (isDark ? 'text-neutral-400' : 'text-neutral-400') 
+              : (isDark ? 'text-white' : 'text-neutral-900 font-medium')
             }
           `}
         >
-          <span className="truncate">
-            {selectedOption ? selectedOption.label : placeholder}
-          </span>
+          <div className="flex items-center justify-between gap-2 min-w-0 flex-1 mr-2">
+            <span className="truncate">
+              {selectedOption ? selectedOption.label : placeholder}
+            </span>
+            {selectedOption?.badge && (
+              <span className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-bold ${getBadgeClasses(selectedOption.badgeVariant)}`}>
+                {selectedOption.badge}
+              </span>
+            )}
+          </div>
           <svg 
-            className={`w-4 h-4 transition-transform duration-200 shrink-0 ml-2 ${isDark ? 'text-neutral-500' : 'text-neutral-400'} ${isOpen ? 'transform rotate-180 text-primary-600' : ''}`} 
+            className={`w-4 h-4 transition-transform duration-200 shrink-0 ${isDark ? 'text-neutral-500' : 'text-neutral-400'} ${isOpen ? 'transform rotate-180 text-neutral-800' : ''}`} 
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24"
@@ -96,12 +119,12 @@ const CustomDropdown = ({
 
         {/* Dropdown Menu */}
         {isOpen && !disabled && (
-          <div className={`absolute z-30 w-full mt-1 border rounded-md shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200
-            ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200'}
+          <div className={`absolute z-30 min-w-full w-max max-w-lg mt-1.5 border rounded-xl shadow-card overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150
+            ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200/80'}
           `}>
-            <ul className="max-h-60 overflow-y-auto py-1 text-sm font-body">
+            <ul className="max-h-60 overflow-y-auto py-1 text-xs md:text-sm font-body">
               {normalizedOptions.length === 0 ? (
-                <li className={`px-3 py-2 text-center ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Tidak ada pilihan</li>
+                <li className={`px-3.5 py-2.5 text-center text-xs whitespace-nowrap ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Tidak ada pilihan</li>
               ) : (
                 normalizedOptions.map((opt, idx) => {
                   const isSelected = String(opt.value) === String(value);
@@ -109,14 +132,22 @@ const CustomDropdown = ({
                     <li
                       key={idx}
                       onClick={() => handleSelect(opt.value)}
-                      className={`px-3 py-2 cursor-pointer transition-colors
+                      title={typeof opt.label === 'string' ? opt.label : undefined}
+                      className={`px-3.5 py-2.5 cursor-pointer transition-colors
                         ${isSelected 
-                          ? (isDark ? 'bg-primary-500 text-white font-medium' : 'bg-primary-50 text-primary-700 font-medium')
-                          : (isDark ? 'text-neutral-300 hover:bg-neutral-700' : 'text-neutral-700 hover:bg-neutral-100')
+                          ? (isDark ? 'bg-neutral-700 text-primary-500 font-bold' : 'bg-primary-100 text-neutral-900 font-bold')
+                          : (isDark ? 'text-neutral-300 hover:bg-neutral-700' : 'text-neutral-700 hover:bg-neutral-50')
                         }
                       `}
                     >
-                      {opt.label}
+                      <div className="flex items-center justify-between gap-3 w-full">
+                        <span className="truncate">{opt.label}</span>
+                        {opt.badge && (
+                          <span className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-bold ${getBadgeClasses(opt.badgeVariant)}`}>
+                            {opt.badge}
+                          </span>
+                        )}
+                      </div>
                     </li>
                   );
                 })
