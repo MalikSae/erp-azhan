@@ -51,7 +51,10 @@ SELECT
   created_at
 FROM bookings;
 
--- 1c. ALTER TABLE bookings — drop FK lama, rename jamaah_id ke pic_jamaah_id, add FK baru, dan drop kolom yang pindah ke detail
+-- 1c. ALTER TABLE bookings — drop FK lama, rename jamaah_id ke pic_jamaah_id, add FK baru, dan drop kolom yang pindah ke detail.
+-- progress_paspor dan progress_tiket sengaja dipertahankan sebagai data legacy karena
+-- sumber kebenaran baru berasal dari dokumen_jamaah dan schedules.is_ticket_confirmed.
+-- Menyimpan kedua kolom lama mencegah hilangnya riwayat progres booking existing.
 ALTER TABLE bookings DROP FOREIGN KEY bookings_ibfk_2;
 
 ALTER TABLE bookings
@@ -59,8 +62,6 @@ ALTER TABLE bookings
   ADD CONSTRAINT fk_bookings_pic_jamaah FOREIGN KEY (pic_jamaah_id) REFERENCES jamaah(id) ON DELETE RESTRICT,
   DROP COLUMN room_type,
   DROP COLUMN harga_dasar,
-  DROP COLUMN progress_paspor,
-  DROP COLUMN progress_tiket,
   DROP COLUMN progress_visa,
   DROP COLUMN progress_siskopatuh,
   DROP COLUMN progress_manasik,
