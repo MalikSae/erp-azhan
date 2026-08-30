@@ -17,6 +17,7 @@ type Jamaah struct {
 	TanggalLahir        *string    `json:"tanggal_lahir"`
 	NoPaspor            *string    `json:"no_paspor"`
 	TempatPasporKeluar  *string    `json:"tempat_paspor_keluar"`
+	TanggalPasporKeluar *string    `json:"tanggal_paspor_keluar"`
 	PasporBerlakuSampai *string    `json:"paspor_berlaku_sampai"`
 	NoHP                *string    `json:"no_hp"`
 	Email               *string    `json:"email"`
@@ -27,6 +28,7 @@ type Jamaah struct {
 	Alamat              *string    `json:"alamat"`
 	Kota                *string    `json:"kota"`
 	Catatan             *string    `json:"catatan"`
+	Status              string     `json:"status"`
 	EmergencyNama       *string    `json:"emergency_nama"`
 	EmergencyNIK        *string    `json:"emergency_nik"`
 	EmergencyHP         *string    `json:"emergency_hp"`
@@ -37,15 +39,17 @@ type Jamaah struct {
 
 // JamaahListItem adalah ringkasan untuk endpoint list.
 type JamaahListItem struct {
-	ID          int64     `json:"id"`
-	BrandID     int64     `json:"brand_id"`
-	IDJamaah    string    `json:"id_jamaah"`
-	KodeJamaah  string    `json:"kode_jamaah"`
-	NamaLengkap string    `json:"nama_lengkap"`
-	NIK         *string   `json:"nik"`
-	NoHP        *string   `json:"no_hp"`
-	Email       *string   `json:"email"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           int64     `json:"id"`
+	BrandID      int64     `json:"brand_id"`
+	IDJamaah     string    `json:"id_jamaah"`
+	KodeJamaah   string    `json:"kode_jamaah"`
+	NamaLengkap  string    `json:"nama_lengkap"`
+	NIK          *string   `json:"nik"`
+	TanggalLahir *string   `json:"tanggal_lahir"`
+	NoHP         *string   `json:"no_hp"`
+	Email        *string   `json:"email"`
+	Status       string    `json:"status"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // ─── Relasi Kekerabatan ────────────────────────────────────────────────────────
@@ -97,6 +101,7 @@ type CreateJamaahRequest struct {
 	TanggalLahir        *string `json:"tanggal_lahir"`
 	NoPaspor            *string `json:"no_paspor"`
 	TempatPasporKeluar  *string `json:"tempat_paspor_keluar"`
+	TanggalPasporKeluar *string `json:"tanggal_paspor_keluar"`
 	PasporBerlakuSampai *string `json:"paspor_berlaku_sampai"`
 	NoHP                *string `json:"no_hp"`
 	Email               *string `json:"email"`
@@ -107,6 +112,7 @@ type CreateJamaahRequest struct {
 	Alamat              *string `json:"alamat"`
 	Kota                *string `json:"kota"`
 	Catatan             *string `json:"catatan"`
+	Status              *string `json:"status"`
 	EmergencyNama       *string `json:"emergency_nama"`
 	EmergencyNIK        *string `json:"emergency_nik"`
 	EmergencyHP         *string `json:"emergency_hp"`

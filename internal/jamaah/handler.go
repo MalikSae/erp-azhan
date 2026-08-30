@@ -29,7 +29,8 @@ func NewHandler(repo *Repository) *Handler {
 // GET /api/admin/jamaah
 func (h *Handler) ListJamaah(w http.ResponseWriter, r *http.Request) {
 	brandID := identity.GetBrandID(r.Context())
-	items, err := h.repo.List(r.Context(), brandID)
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	items, err := h.repo.List(r.Context(), brandID, status)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
 		return
@@ -73,6 +74,16 @@ func (h *Handler) CreateJamaah(w http.ResponseWriter, r *http.Request) {
 	}
 	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
 
+	// Validasi status opsional: hanya 'aktif' atau 'draft'
+	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
+		s := strings.TrimSpace(*req.Status)
+		if s != "aktif" && s != "draft" {
+			writeError(w, http.StatusBadRequest, "status tidak valid, harus 'draft' atau 'aktif'")
+			return
+		}
+		req.Status = &s
+	}
+
 	// Brand resolution — pola sama dengan schedule
 	ctxBrandID := identity.GetBrandID(r.Context())
 	var finalBrandID int64
@@ -115,6 +126,16 @@ func (h *Handler) UpdateJamaah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
+
+	// Validasi status opsional: hanya 'aktif' atau 'draft'
+	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
+		s := strings.TrimSpace(*req.Status)
+		if s != "aktif" && s != "draft" {
+			writeError(w, http.StatusBadRequest, "status tidak valid, harus 'draft' atau 'aktif'")
+			return
+		}
+		req.Status = &s
+	}
 
 	ctxBrandID := identity.GetBrandID(r.Context())
 
