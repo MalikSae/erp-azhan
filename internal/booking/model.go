@@ -36,16 +36,18 @@ type BookingPax struct {
 // Booking adalah response lengkap admin — JOIN nama jamaah + jadwal_nama schedule + primary pax.
 type Booking struct {
 	ID               int64    `json:"id"`
-	IDBooking        string   `json:"id_booking"`
+	IDBooking        *string  `json:"id_booking"`
 	ScheduleID       int64    `json:"schedule_id"`
 	BrandID          int64    `json:"brand_id"`
 	JadwalNama       string   `json:"jadwal_nama"`
 	BerangkatTanggal *string  `json:"berangkat_tanggal"`
-	PicJamaahID      int64    `json:"pic_jamaah_id"`
-	JamaahID         int64    `json:"jamaah_id"` // alias untuk kompatibilitas endpoint/frontend
-	NamaJamaah       string   `json:"nama_jamaah"`
-	RoomType         string   `json:"room_type"`  // dari primary pax
-	PaxCount         int      `json:"pax_count"`  // jumlah pax aktif
+	PicJamaahID      *int64   `json:"pic_jamaah_id"`
+	JamaahID         *int64   `json:"jamaah_id"` // alias untuk kompatibilitas endpoint/frontend
+	NamaJamaah       *string  `json:"nama_jamaah"`
+	RoomType         *string  `json:"room_type"`  // dari primary pax
+	PaxCount         int      `json:"pax_count"`  // jumlah pax aktif total
+	RegularPaxCount  int      `json:"regular_pax_count"` // jumlah pax reguler
+	InfantPaxCount   int      `json:"infant_pax_count"`  // jumlah pax infant
 	HargaDasar       *float64 `json:"harga_dasar"` // dari primary pax
 	Status           string   `json:"status"`
 	IsSeatBlocked    bool     `json:"is_seat_blocked"`
@@ -87,6 +89,13 @@ type CreateBookingRequest struct {
 	ScheduleID  int64                  `json:"schedule_id"`
 	PicJamaahID int64                  `json:"pic_jamaah_id"`
 	JamaahID    int64                  `json:"jamaah_id,omitempty"` // fallback backward-compatibility
+	Pax         []CreateBookingPaxItem `json:"pax"`
+}
+
+// CreateDraftBookingRequest adalah payload untuk POST dan PUT /api/admin/bookings/draft.
+type CreateDraftBookingRequest struct {
+	ScheduleID  int64                  `json:"schedule_id"`
+	PicJamaahID *int64                 `json:"pic_jamaah_id"`
 	Pax         []CreateBookingPaxItem `json:"pax"`
 }
 

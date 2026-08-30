@@ -31,6 +31,7 @@ var validRoomTypes = map[string]bool{
 
 // validStatuses berisi enum status booking yang valid.
 var validStatuses = map[string]bool{
+	"draft": true,
 	"baru":  true,
 	"dp":    true,
 	"lunas": true,
@@ -53,7 +54,8 @@ func (h *Handler) ListBookings(w http.ResponseWriter, r *http.Request) {
 		jamaahID = &id
 	}
 
-	items, err := h.repo.List(r.Context(), brandID, jamaahID)
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	items, err := h.repo.List(r.Context(), brandID, jamaahID, status)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data booking")
 		return
@@ -182,6 +184,259 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, b)
+}
+
+// ─── Draft Booking ────────────────────────────────────────────────────────────
+
+// CreateDraftBooking godoc
+// POST /api/admin/bookings/draft
+func (h *Handler) CreateDraftBooking(w http.ResponseWriter, r *http.Request) {
+	var req CreateDraftBookingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	// Gate 1: schedule_id wajib
+	if req.ScheduleID == 0 {
+		writeError(w, http.StatusBadRequest, "schedule_id wajib diisi")
+		return
+	}
+
+	// Gate 2: schedule exist & brand cocok
+	exists, err := h.repo.ScheduleExistsForBrand(r.Context(), req.ScheduleID, brandID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusBadRequest, "schedule_id tidak valid atau bukan milik brand Anda")
+		return
+	}
+
+	// PIC Jamaah ID validation (jika diisi)
+	if req.PicJamaahID != nil && *req.PicJamaahID > 0 {
+		exists, err := h.repo.JamaahExistsForBrand(r.Context(), *req.PicJamaahID, brandID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return
+		}
+		if !exists {
+			writeError(w, http.StatusBadRequest, "pic_jamaah_id tidak valid atau bukan milik brand Anda")
+			return
+		}
+	}
+
+	// Validasi pax items yang jamaah_id-nya terisi
+	for i, p := range req.Pax {
+		if p.JamaahID == 0 {
+			continue
+		}
+		exists, err := h.repo.JamaahExistsForBrand(r.Context(), p.JamaahID, brandID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return
+		}
+		if !exists {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("jamaah_id %d pada pax urutan %d tidak valid atau bukan milik brand Anda", p.JamaahID, i+1))
+			return
+		}
+
+		if p.PaxType != "" && p.PaxType != "reguler" && p.PaxType != "infant" {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("pax_type pada pax urutan %d tidak valid, harus 'reguler' atau 'infant'", i+1))
+			return
+		}
+
+		if p.PaxType == "infant" {
+			if p.RoomType != nil && strings.TrimSpace(*p.RoomType) != "" {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("pax_type infant pada urutan %d tidak boleh memilih room_type (harus null)", i+1))
+				return
+			}
+		} else if p.RoomType != nil && strings.TrimSpace(*p.RoomType) != "" {
+			if !validRoomTypes[*p.RoomType] {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("room_type untuk pax reguler pada urutan %d harus salah satu dari Quad, Triple, atau Double", i+1))
+				return
+			}
+		}
+	}
+
+	createdBy := identity.GetAdminUserID(r.Context())
+
+	b, err := h.repo.CreateDraftBooking(r.Context(), &req, createdBy)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, b)
+}
+
+// UpdateDraftBooking godoc
+// PUT /api/admin/bookings/{id}/draft
+func (h *Handler) UpdateDraftBooking(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	var req CreateDraftBookingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	// Verifikasi booking exist, milik brand, dan status='draft'
+	existing, err := h.repo.GetByID(r.Context(), id, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	if existing.Status != "draft" {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("hanya booking berstatus draft yang dapat diubah melalui endpoint ini (status saat ini: %s)", existing.Status))
+		return
+	}
+
+	if req.ScheduleID == 0 {
+		req.ScheduleID = existing.ScheduleID
+	} else {
+		exists, err := h.repo.ScheduleExistsForBrand(r.Context(), req.ScheduleID, brandID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return
+		}
+		if !exists {
+			writeError(w, http.StatusBadRequest, "schedule_id tidak valid atau bukan milik brand Anda")
+			return
+		}
+	}
+
+	if req.PicJamaahID != nil && *req.PicJamaahID > 0 {
+		exists, err := h.repo.JamaahExistsForBrand(r.Context(), *req.PicJamaahID, brandID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return
+		}
+		if !exists {
+			writeError(w, http.StatusBadRequest, "pic_jamaah_id tidak valid atau bukan milik brand Anda")
+			return
+		}
+	}
+
+	for i, p := range req.Pax {
+		if p.JamaahID == 0 {
+			continue
+		}
+		exists, err := h.repo.JamaahExistsForBrand(r.Context(), p.JamaahID, brandID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return
+		}
+		if !exists {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("jamaah_id %d pada pax urutan %d tidak valid atau bukan milik brand Anda", p.JamaahID, i+1))
+			return
+		}
+
+		if p.PaxType != "" && p.PaxType != "reguler" && p.PaxType != "infant" {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("pax_type pada pax urutan %d tidak valid, harus 'reguler' atau 'infant'", i+1))
+			return
+		}
+
+		if p.PaxType == "infant" {
+			if p.RoomType != nil && strings.TrimSpace(*p.RoomType) != "" {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("pax_type infant pada urutan %d tidak boleh memilih room_type (harus null)", i+1))
+				return
+			}
+		} else if p.RoomType != nil && strings.TrimSpace(*p.RoomType) != "" {
+			if !validRoomTypes[*p.RoomType] {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("room_type untuk pax reguler pada urutan %d harus salah satu dari Quad, Triple, atau Double", i+1))
+				return
+			}
+		}
+	}
+
+	b, err := h.repo.UpdateDraftBooking(r.Context(), id, &req)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
+}
+
+// FinalizeBooking godoc
+// POST /api/admin/bookings/{id}/finalize
+func (h *Handler) FinalizeBooking(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	existing, err := h.repo.GetByID(r.Context(), id, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	if existing.Status != "draft" {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("booking bukan berstatus draft (status saat ini: %s)", existing.Status))
+		return
+	}
+
+	// Validasi kelengkapan data sebelum finalisasi
+	if existing.PicJamaahID == nil || *existing.PicJamaahID == 0 {
+		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) wajib dipilih sebelum finalisasi booking")
+		return
+	}
+
+	if len(existing.Pax) == 0 {
+		writeError(w, http.StatusBadRequest, "Daftar pax kosong. Minimal 1 jamaah reguler wajib didaftarkan")
+		return
+	}
+
+	var regularPaxCount int
+	var picIsRegular bool
+	for i, p := range existing.Pax {
+		if p.JamaahID == 0 {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax urutan %d belum memilih jamaah", i+1))
+			return
+		}
+		if p.PaxType == "reguler" {
+			regularPaxCount++
+			if existing.PicJamaahID != nil && p.JamaahID == *existing.PicJamaahID {
+				picIsRegular = true
+			}
+			if p.RoomType == nil || !validRoomTypes[*p.RoomType] {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax %s (urutan %d) belum memilih tipe kamar (Quad, Triple, atau Double)", p.NamaJamaah, i+1))
+				return
+			}
+		} else if p.PaxType == "infant" {
+			if p.RoomType != nil && *p.RoomType != "" {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax infant %s tidak boleh memiliki tipe kamar", p.NamaJamaah))
+				return
+			}
+		}
+	}
+
+	if regularPaxCount == 0 {
+		writeError(w, http.StatusBadRequest, "Booking harus memiliki minimal 1 pax reguler (tidak boleh hanya infant)")
+		return
+	}
+
+	if !picIsRegular {
+		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) harus merupakan jamaah reguler (bukan infant)")
+		return
+	}
+
+	b, err := h.repo.FinalizeBooking(r.Context(), id)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
 }
 
 // ─── Cancel Pax ───────────────────────────────────────────────────────────────

@@ -215,7 +215,7 @@ func (h *Handler) ListBookings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bookings, err := h.bookingRepo.List(r.Context(), nil, &jamaahID)
+	bookings, err := h.bookingRepo.List(r.Context(), nil, &jamaahID, "non_draft")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar booking")
 		return
@@ -245,7 +245,7 @@ func (h *Handler) GetBookingByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, err := h.bookingRepo.GetByID(r.Context(), bookingID, nil)
-	if errors.Is(err, booking.ErrNotFound) || (b != nil && b.JamaahID != jamaahID) {
+	if errors.Is(err, booking.ErrNotFound) || (b != nil && (b.JamaahID == nil || *b.JamaahID != jamaahID || b.Status == "draft")) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 		return
 	}
@@ -275,7 +275,7 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 
 	// Verify booking belongs to this jamaah
 	b, err := h.bookingRepo.GetByID(r.Context(), bookingID, nil)
-	if errors.Is(err, booking.ErrNotFound) || (b != nil && b.JamaahID != jamaahID) {
+	if errors.Is(err, booking.ErrNotFound) || (b != nil && (b.JamaahID == nil || *b.JamaahID != jamaahID)) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 		return
 	}
@@ -338,7 +338,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b, err := h.bookingRepo.GetByID(r.Context(), bookingID, nil)
-	if err != nil || b.JamaahID != jamaahID {
+	if err != nil || b.JamaahID == nil || *b.JamaahID != jamaahID {
 		writeError(w, 404, "booking tidak ditemukan")
 		return
 	}
