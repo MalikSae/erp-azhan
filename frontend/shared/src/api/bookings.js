@@ -48,6 +48,19 @@ export const cancelBookingSeatBlock = async (id) => {
   return data;
 };
 
+export const blockBookingSeat = async (id, idempotencyKey) => {
+  const { data } = await api.put(
+    `/api/admin/bookings/${id}/seat-block`,
+    {},
+    {
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
+    }
+  );
+  return data;
+};
+
 export const listPayments = async (bookingId) => {
   const { data } = await api.get(`/api/admin/bookings/${bookingId}/payments`);
   return data;
@@ -58,8 +71,12 @@ export const createPayment = async (bookingId, payload) => {
   return data;
 };
 
-export const updatePaymentStatus = async (paymentId, status) => {
-  const { data } = await api.put(`/api/admin/payments/${paymentId}/status`, { status });
+export const updatePaymentStatus = async (paymentId, status, rejectionReason = null) => {
+  const payload = { status };
+  if (rejectionReason) {
+    payload.rejection_reason = rejectionReason;
+  }
+  const { data } = await api.put(`/api/admin/payments/${paymentId}/status`, payload);
   return data;
 };
 

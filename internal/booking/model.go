@@ -107,7 +107,7 @@ type UpdateBookingStatusRequest struct {
 }
 
 type SeatBlockRequest struct {
-	ExpiresAt string `json:"expires_at"`
+	ExpiresAt *string `json:"expires_at,omitempty"`
 }
 
 // UpdatePaxRoomTypeRequest adalah payload untuk PUT /api/admin/bookings/{id}/pax/{pax_id}/room-type.

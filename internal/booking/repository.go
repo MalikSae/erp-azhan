@@ -1104,9 +1104,10 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 	var oldStatus string
 	var isSeatBlocked bool
 	var scheduleID int64
+	var seatCount int
 	err = tx.QueryRowContext(ctx,
-		`SELECT status, schedule_id, is_seat_blocked FROM bookings WHERE id=? FOR UPDATE`, bookingID,
-	).Scan(&oldStatus, &scheduleID, &isSeatBlocked)
+		`SELECT status, schedule_id, is_seat_blocked, seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID,
+	).Scan(&oldStatus, &scheduleID, &isSeatBlocked, &seatCount)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -1136,9 +1137,13 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 	newIsLocked := lockedStatuses[newStatus]
 
 	if newStatus == "batal" && isSeatBlocked {
-		if activeRegularPax > 0 {
+		seatsToRestore := activeRegularPax
+		if seatsToRestore <= 0 {
+			seatsToRestore = seatCount
+		}
+		if seatsToRestore > 0 {
 			_, err = tx.ExecContext(ctx,
-				`UPDATE schedules SET seat_sisa = LEAST(seat_total, seat_sisa + ?) WHERE id=?`, activeRegularPax, scheduleID)
+				`UPDATE schedules SET seat_sisa = LEAST(seat_total, seat_sisa + ?) WHERE id=?`, seatsToRestore, scheduleID)
 			if err != nil {
 				return nil, fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
 			}
@@ -1198,7 +1203,8 @@ func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Boo
 
 	var scheduleID int64
 	var isBlocked bool
-	err = tx.QueryRowContext(ctx, `SELECT schedule_id, is_seat_blocked FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&scheduleID, &isBlocked)
+	var seatCount int
+	err = tx.QueryRowContext(ctx, `SELECT schedule_id, is_seat_blocked, seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&scheduleID, &isBlocked, &seatCount)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -1216,8 +1222,13 @@ func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Boo
 		return nil, fmt.Errorf("booking.CancelSeatBlock count regular pax: %w", err)
 	}
 
-	if activeRegularPax > 0 {
-		if _, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=LEAST(seat_total, seat_sisa + ?) WHERE id=?`, activeRegularPax, scheduleID); err != nil {
+	seatsToRestore := activeRegularPax
+	if seatsToRestore <= 0 {
+		seatsToRestore = seatCount
+	}
+
+	if seatsToRestore > 0 {
+		if _, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=LEAST(seat_total, seat_sisa + ?) WHERE id=?`, seatsToRestore, scheduleID); err != nil {
 			return nil, fmt.Errorf("booking.CancelSeatBlock restore seat: %w", err)
 		}
 	}
@@ -1231,7 +1242,7 @@ func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Boo
 }
 
 // BlockSeat menahan seluruh seat_count booking baru dengan idempotency key.
-func (r *Repository) BlockSeat(ctx context.Context, bookingID int64, expiresAt time.Time, idempotencyKey string) (*Booking, error) {
+func (r *Repository) BlockSeat(ctx context.Context, bookingID int64, expiresAt *time.Time, idempotencyKey string) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.BlockSeat tx: %w", err)
@@ -1275,9 +1286,13 @@ func (r *Repository) BlockSeat(ctx context.Context, bookingID int64, expiresAt t
 	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=seat_sisa-? WHERE id=?`, seatCount, scheduleID); err != nil {
 		return nil, fmt.Errorf("booking.BlockSeat reserve: %w", err)
 	}
+	var expVal interface{}
+	if expiresAt != nil {
+		expVal = expiresAt.UTC()
+	}
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE bookings SET is_seat_blocked=TRUE,seat_hold_expires_at=?,seat_hold_key=? WHERE id=?`,
-		expiresAt.UTC(), idempotencyKey, bookingID,
+		expVal, idempotencyKey, bookingID,
 	); err != nil {
 		return nil, fmt.Errorf("booking.BlockSeat update: %w", err)
 	}
