@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -522,6 +523,12 @@ func (h *Handler) UpdateBookingStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Status finansial (dp, lunas, baru) hanya dapat ditentukan melalui pencatatan pembayaran via syncBookingStatusTx
+	if req.Status != "batal" {
+		writeError(w, http.StatusBadRequest, "Status DP dan Lunas hanya dapat ditentukan melalui pencatatan pembayaran, tidak bisa diubah manual.")
+		return
+	}
+
 	brandID := identity.GetBrandID(r.Context())
 
 	// Verifikasi booking exists dan milik brand (jika brand admin)
@@ -579,14 +586,20 @@ func (h *Handler) BlockSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req SeatBlockRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
-		return
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, "request body tidak valid")
+			return
+		}
 	}
-	expiresAt, err := time.Parse(time.RFC3339, req.ExpiresAt)
-	if err != nil || !expiresAt.After(time.Now().Add(time.Minute)) {
-		writeError(w, http.StatusBadRequest, "expires_at harus RFC3339 dan berada di masa depan")
-		return
+	var expiresAt *time.Time
+	if req.ExpiresAt != nil && strings.TrimSpace(*req.ExpiresAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(*req.ExpiresAt))
+		if err != nil || !parsed.After(time.Now().Add(time.Minute)) {
+			writeError(w, http.StatusBadRequest, "expires_at harus RFC3339 dan berada di masa depan")
+			return
+		}
+		expiresAt = &parsed
 	}
 	if _, err := h.repo.GetByID(r.Context(), id, identity.GetBrandID(r.Context())); err != nil {
 		handleRepoError(w, err)
