@@ -49,7 +49,14 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "crm_lead_id tidak valid")
 		return
 	}
-	if req.ScheduleID <= 0 || req.Pax < 1 || req.Pax > 20 {
+	if req.Pax == 0 {
+		req.Pax = 1
+	}
+	if req.Pax > 1 {
+		writeError(w, http.StatusBadRequest, "Deal CRM saat ini hanya mendukung 1 pax per transaksi. Untuk booking lebih dari 1 orang, gunakan menu Booking di dashboard admin.")
+		return
+	}
+	if req.ScheduleID <= 0 || req.Pax < 1 {
 		writeError(w, http.StatusBadRequest, "schedule_id dan pax wajib valid")
 		return
 	}
@@ -83,6 +90,8 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 	response, err := h.repo.Process(r.Context(), finalBrandID, identity.GetAdminUserID(r.Context()), idempotencyKey, req)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrMaxPaxExceeded):
+			writeError(w, http.StatusBadRequest, err.Error())
 		case errors.Is(err, ErrNotFound):
 			writeError(w, http.StatusNotFound, err.Error())
 		case errors.Is(err, ErrSeatUnavailable), errors.Is(err, ErrAmbiguousJamaah), errors.Is(err, ErrIdempotencyConflict), errors.Is(err, ErrLeadAlreadyConverted):

@@ -26,6 +26,7 @@ var (
 	ErrLeadAlreadyConverted = errors.New("lead ini sudah pernah dikonversi")
 	ErrBrandCodeMissing     = errors.New("kode_brand belum diatur")
 	ErrInvalidPayment       = errors.New("nominal pembayaran tidak sesuai")
+	ErrMaxPaxExceeded       = errors.New("Deal CRM saat ini hanya mendukung 1 pax per transaksi. Untuk booking lebih dari 1 orang, gunakan menu Booking di dashboard admin.")
 )
 
 const codeCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -41,6 +42,13 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idempotencyKey string, req DealRequest) (*DealResponse, error) {
+	if req.Pax == 0 {
+		req.Pax = 1
+	}
+	if req.Pax > 1 {
+		return nil, ErrMaxPaxExceeded
+	}
+
 	req.BrandID = &brandID
 	payload, err := json.Marshal(req)
 	if err != nil {
