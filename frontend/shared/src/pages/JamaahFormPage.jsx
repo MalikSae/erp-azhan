@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
-import { getJamaah, createJamaah, updateJamaah, listJamaah, createRelasi } from "../api/jamaah";
+import { useNavigate, useParams } from "react-router-dom";
+import { 
+  getJamaah, 
+  createJamaah, 
+  updateJamaah, 
+  listJamaah, 
+  listRelasi, 
+  createRelasi, 
+  updateRelasi, 
+  deleteRelasi 
+} from "../api/jamaah";
 import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
 import MetaBox from "../components/ui/MetaBox";
@@ -22,7 +31,6 @@ import {
   Users, 
   Plus, 
   X, 
-  ArrowRight,
   Save,
   CheckCircle2
 } from "lucide-react";
@@ -79,18 +87,29 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   // Relasi Kekerabatan Repeater State
   const [candidateList, setCandidateList] = useState([]);
   const [relasiList, setRelasiList] = useState([]);
+  const [initialRelasiList, setInitialRelasiList] = useState([]);
   const [relasiErrors, setRelasiErrors] = useState({});
 
-  // Fetch data jamaah saat mode Edit
+  // Fetch data jamaah & relasi saat mode Edit
   useEffect(() => {
     if (isEdit) {
-      getJamaah(id)
-        .then(data => {
+      Promise.all([getJamaah(id), listRelasi(id)])
+        .then(([jamaahData, relasiData]) => {
           setFormData(prev => ({ 
             ...prev, 
-            ...data,
-            brand_id: data.brand_id || prev.brand_id || "" 
+            ...jamaahData,
+            brand_id: jamaahData.brand_id || prev.brand_id || "" 
           }));
+          const mappedRelasi = (relasiData || []).map(r => ({
+            id: r.id,
+            db_relasi_id: r.id,
+            relasi_jamaah_id: r.relasi_jamaah_id,
+            searchText: `${r.nama_relasi} (${r.id_jamaah_relasi || r.nik_relasi || `ID: ${r.relasi_jamaah_id}`})`,
+            hubungan: r.hubungan,
+            keterangan: r.keterangan || "",
+          }));
+          setRelasiList(mappedRelasi);
+          setInitialRelasiList(mappedRelasi);
           setLoading(false);
         })
         .catch(() => {
@@ -265,8 +284,8 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
       return;
     }
 
-    // Validasi relasi di mode create jika ada baris relasi
-    if (!isEdit && relasiList.length > 0) {
+    // Validasi relasi jika ada baris relasi (berlaku di mode create dan edit)
+    if (relasiList.length > 0) {
       const rErrors = {};
       relasiList.forEach((r, idx) => {
         if (!r.relasi_jamaah_id) {
@@ -299,6 +318,63 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
       
       if (isEdit) {
         await updateJamaah(id, payload);
+
+        // Rekonsiliasi sinkronisasi relasi di mode Edit
+        const failedRelasi = [];
+
+        // 1. DELETE: Baris yang ada di initialRelasiList tapi sudah dihapus dari UI
+        const currentDbIds = new Set(relasiList.filter(r => r.db_relasi_id).map(r => r.db_relasi_id));
+        const toDelete = initialRelasiList.filter(r => !currentDbIds.has(r.db_relasi_id));
+        for (const delItem of toDelete) {
+          try {
+            await deleteRelasi(id, delItem.db_relasi_id);
+          } catch (delErr) {
+            const errMsg = delErr.response?.data?.error || delErr.message || "Gagal menghapus relasi";
+            failedRelasi.push(`Hapus relasi (${delItem.searchText || 'Kerabat'}): ${errMsg}`);
+          }
+        }
+
+        // 2. UPDATE (PUT) & CREATE (POST)
+        for (let i = 0; i < relasiList.length; i++) {
+          const row = relasiList[i];
+          if (row.db_relasi_id) {
+            // Baris existing: cek apakah hubungan / keterangan berubah
+            const initialItem = initialRelasiList.find(r => r.db_relasi_id === row.db_relasi_id);
+            const isHubunganChanged = initialItem && initialItem.hubungan !== row.hubungan;
+            const isKeteranganChanged = initialItem && (initialItem.keterangan || "") !== (row.keterangan || "").trim();
+
+            if (isHubunganChanged || isKeteranganChanged) {
+              try {
+                await updateRelasi(id, row.db_relasi_id, {
+                  hubungan: row.hubungan,
+                  keterangan: row.keterangan ? row.keterangan.trim() : null,
+                });
+              } catch (updErr) {
+                const errMsg = updErr.response?.data?.error || updErr.message || "Gagal memperbarui relasi";
+                failedRelasi.push(`Update Relasi #${i + 1} (${row.searchText || 'Kerabat'}): ${errMsg}`);
+              }
+            }
+          } else {
+            // Baris baru tanpa db_relasi_id: POST
+            try {
+              await createRelasi(id, {
+                relasi_jamaah_id: Number(row.relasi_jamaah_id),
+                hubungan: row.hubungan,
+                keterangan: row.keterangan ? row.keterangan.trim() : null,
+              });
+            } catch (addErr) {
+              const errMsg = addErr.response?.data?.error || addErr.message || "Gagal menambahkan relasi baru";
+              failedRelasi.push(`Tambah Relasi #${i + 1} (${row.searchText || 'Kerabat'}): ${errMsg}`);
+            }
+          }
+        }
+
+        if (failedRelasi.length > 0) {
+          const warningMsg = `Data jamaah berhasil diperbarui, tapi ada ${failedRelasi.length} relasi yang gagal disinkronkan: ${failedRelasi.join("; ")}`;
+          navigate(`/jamaah/${id}`, { state: { error: warningMsg } });
+          return;
+        }
+
         navigate(`/jamaah/${id}`);
       } else {
         const res = await createJamaah(payload);
@@ -581,142 +657,127 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
             </MetaBox>
 
             {/* 5. HUBUNGAN KEKERABATAN (OPSIONAL) */}
-            {isEdit ? (
-              <MetaBox 
-                title="Hubungan Kekerabatan (Opsional)" 
-                subtitle="Hubungan dengan anggota keluarga atau mahram yang sudah terdaftar"
-                icon={<Users size={18} className="text-neutral-700" />}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1">
-                  <p className="text-xs md:text-sm text-neutral-600 font-body">
-                    Relasi kekerabatan dikelola langsung melalui halaman detail jamaah.
+            <MetaBox
+              title="Hubungan Kekerabatan (Opsional)"
+              subtitle={isEdit ? "Hubungan dengan anggota keluarga atau mahram yang sudah terdaftar" : "Hubungkan jamaah ini dengan keluarga atau mahram yang sudah terdaftar"}
+              icon={<Users size={18} className="text-neutral-700" />}
+              headerActions={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleAddRelasi}
+                  className="flex items-center gap-1.5 text-xs"
+                >
+                  <Plus size={14} />
+                  <span>Tambah Relasi</span>
+                </Button>
+              }
+            >
+              <p className="text-xs text-neutral-500 font-body -mt-1 mb-4">
+                Cari jamaah yang sudah terdaftar, lalu tentukan jenis hubungannya.
+              </p>
+
+              {relasiList.length === 0 ? (
+                <div className="text-center py-6 border-2 border-dashed border-neutral-200 rounded-xl bg-neutral-50/50">
+                  <p className="text-xs md:text-sm text-neutral-500 font-body mb-3">
+                    Belum ada relasi kekerabatan yang ditambahkan.
                   </p>
-                  <Link
-                    to={`/jamaah/${id}`}
-                    className="text-xs md:text-sm font-semibold text-neutral-900 hover:text-neutral-700 underline inline-flex items-center gap-1 shrink-0"
-                  >
-                    <span>Kelola relasi kekerabatan di halaman detail</span>
-                    <ArrowRight size={14} />
-                  </Link>
-                </div>
-              </MetaBox>
-            ) : (
-              <MetaBox
-                title="Hubungan Kekerabatan (Opsional)"
-                subtitle="Hubungkan jamaah ini dengan keluarga atau mahram yang sudah terdaftar"
-                icon={<Users size={18} className="text-neutral-700" />}
-                headerActions={
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
                     onClick={handleAddRelasi}
-                    className="flex items-center gap-1.5 text-xs"
+                    className="inline-flex items-center gap-1.5 text-xs"
                   >
                     <Plus size={14} />
-                    <span>Tambah Relasi</span>
+                    <span>+ Tambah Relasi</span>
                   </Button>
-                }
-              >
-                <p className="text-xs text-neutral-500 font-body -mt-1 mb-4">
-                  Cari jamaah yang sudah terdaftar, lalu tentukan jenis hubungannya.
-                </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {relasiList.map((row, idx) => {
+                    const jamaahError = relasiErrors[`row_${row.id}_jamaah`];
+                    const hubunganError = relasiErrors[`row_${row.id}_hubungan`];
 
-                {relasiList.length === 0 ? (
-                  <div className="text-center py-6 border-2 border-dashed border-neutral-200 rounded-xl bg-neutral-50/50">
-                    <p className="text-xs md:text-sm text-neutral-500 font-body mb-3">
-                      Belum ada relasi kekerabatan yang ditambahkan.
-                    </p>
+                    return (
+                      <div
+                        key={row.id}
+                        className="p-4 rounded-xl border border-neutral-200 bg-white space-y-3 relative hover:border-neutral-300 transition-colors"
+                      >
+                        <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
+                          <span className="font-heading font-semibold text-xs md:text-sm text-neutral-900 flex items-center gap-2">
+                            <span>Relasi #{idx + 1}</span>
+                            {row.db_relasi_id && (
+                              <span className="text-[10px] font-medium text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full">
+                                Tersimpan
+                              </span>
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRelasi(row.id)}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-danger-600 hover:bg-danger-50 transition-colors cursor-pointer"
+                            title="Hapus baris relasi"
+                            aria-label={`Hapus Relasi #${idx + 1}`}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                          {/* Autocomplete Jamaah */}
+                          <div>
+                            <AutocompleteInput
+                              label="Pilih Jamaah"
+                              name={`relasi_jamaah_${row.id}`}
+                              value={row.searchText || ""}
+                              onChange={(e) => handleRelasiSearchChange(row.id, e.target.value)}
+                              onSelect={(opt) => handleRelasiSelectJamaah(row.id, opt)}
+                              options={candidateOptions}
+                              placeholder="Cari nama atau NIK jamaah..."
+                              error={jamaahError}
+                              disabled={Boolean(row.db_relasi_id)}
+                              minChars={0}
+                              required
+                            />
+                          </div>
+
+                          {/* Dropdown Hubungan */}
+                          <div>
+                            <CustomDropdown
+                              label="Hubungan"
+                              name={`hubungan_${row.id}`}
+                              options={HUBUNGAN_OPTIONS}
+                              value={row.hubungan}
+                              onChange={(val) => {
+                                const actualVal = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
+                                handleRelasiFieldChange(row.id, "hubungan", actualVal);
+                              }}
+                              error={hubunganError}
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <div className="mt-4 flex justify-center">
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
                       onClick={handleAddRelasi}
-                      className="inline-flex items-center gap-1.5 text-xs"
+                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs"
                     >
                       <Plus size={14} />
-                      <span>+ Tambah Relasi</span>
+                      <span>Tambah Relasi Lagi</span>
                     </Button>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {relasiList.map((row, idx) => {
-                      const jamaahError = relasiErrors[`row_${row.id}_jamaah`];
-                      const hubunganError = relasiErrors[`row_${row.id}_hubungan`];
-
-                      return (
-                        <div
-                          key={row.id}
-                          className="p-4 rounded-xl border border-neutral-200 bg-white space-y-3 relative hover:border-neutral-300 transition-colors"
-                        >
-                          <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
-                            <span className="font-heading font-semibold text-xs md:text-sm text-neutral-900">
-                              Relasi #{idx + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveRelasi(row.id)}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-danger-600 hover:bg-danger-50 transition-colors cursor-pointer"
-                              title="Hapus baris relasi"
-                              aria-label={`Hapus Relasi #${idx + 1}`}
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                            {/* Autocomplete Jamaah */}
-                            <div>
-                              <AutocompleteInput
-                                label="Pilih Jamaah"
-                                name={`relasi_jamaah_${row.id}`}
-                                value={row.searchText || ""}
-                                onChange={(e) => handleRelasiSearchChange(row.id, e.target.value)}
-                                onSelect={(opt) => handleRelasiSelectJamaah(row.id, opt)}
-                                options={candidateOptions}
-                                placeholder="Cari nama atau NIK jamaah..."
-                                error={jamaahError}
-                                minChars={0}
-                                required
-                              />
-                            </div>
-
-                            {/* Dropdown Hubungan */}
-                            <div>
-                              <CustomDropdown
-                                label="Hubungan"
-                                name={`hubungan_${row.id}`}
-                                options={HUBUNGAN_OPTIONS}
-                                value={row.hubungan}
-                                onChange={(val) => {
-                                  const actualVal = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
-                                  handleRelasiFieldChange(row.id, "hubungan", actualVal);
-                                }}
-                                error={hubunganError}
-                                required
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    <div className="mt-4 flex justify-center">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={handleAddRelasi}
-                        className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs"
-                      >
-                        <Plus size={14} />
-                        <span>Tambah Relasi Lagi</span>
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </MetaBox>
-            )}
+                </div>
+              )}
+            </MetaBox>
 
           </div>
 

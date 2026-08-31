@@ -301,6 +301,7 @@ func main() {
 		// Relasi Kekerabatan Jamaah
 		r.Get("/jamaah/{id}/relasi", jamaahHandler.ListRelasi)
 		r.Post("/jamaah/{id}/relasi", jamaahHandler.CreateRelasi)
+		r.Put("/jamaah/{id}/relasi/{relasi_id}", jamaahHandler.UpdateRelasi)
 		r.Delete("/jamaah/{id}/relasi/{relasi_id}", jamaahHandler.DeleteRelasi)
 
 		// Dokumen Jamaah

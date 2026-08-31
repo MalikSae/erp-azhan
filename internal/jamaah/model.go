@@ -134,3 +134,9 @@ type CreateRelasiRequest struct {
 	Hubungan       string  `json:"hubungan"`
 	Keterangan     *string `json:"keterangan"`
 }
+
+// UpdateRelasiRequest adalah payload untuk PUT /api/admin/jamaah/{id}/relasi/{relasi_id}.
+type UpdateRelasiRequest struct {
+	Hubungan   string  `json:"hubungan"`
+	Keterangan *string `json:"keterangan"`
+}

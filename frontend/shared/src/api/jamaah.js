@@ -40,8 +40,14 @@ export const createRelasi = async (jamaahId, payload) => {
   return data;
 };
 
+export const updateRelasi = async (jamaahId, relasiId, payload) => {
+  const { data } = await api.put(`/api/admin/jamaah/${jamaahId}/relasi/${relasiId}`, payload);
+  return data;
+};
+
 export const deleteRelasi = async (jamaahId, relasiId) => {
   const { data } = await api.delete(`/api/admin/jamaah/${jamaahId}/relasi/${relasiId}`);
   return data;
 };
+
 

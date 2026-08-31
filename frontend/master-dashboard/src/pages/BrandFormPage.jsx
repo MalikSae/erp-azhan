@@ -10,6 +10,7 @@ import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { getBrand, createBrand, updateBrand } from '../api/brands';
 import { uploadMedia } from '../api/media';
+import { Building2, Upload, Phone, CreditCard, Globe, Save, CheckCircle2, X } from 'lucide-react';
 
 const initialFormData = {
   kode_brand: '',
@@ -203,194 +204,223 @@ const BrandFormPage = () => {
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6">
       <PageHeader 
-        title={isEditMode ? "Edit Brand" : "Tambah Brand"} 
+        title={isEditMode ? "Edit Profil Brand" : "Tambah Brand Baru"} 
+        subtitle={isEditMode ? `Perbarui profil, konfigurasi, dan identitas visual brand ${formData.name || ""}` : "Pendaftaran biro travel / brand baru ke dalam ekosistem Azhan"}
         onBack={() => navigate("/brands")}
       />
 
+      {formErrors && (
+        <Alert variant="error">{formErrors}</Alert>
+      )}
+
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6 md:items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Kolom KIRI (Konten Utama) */}
-          <div className="space-y-6">
+          <div className="lg:col-span-2 space-y-6">
             
             {/* MetaBox Identitas */}
-            <MetaBox title="Identitas Brand">
-              <FormField label="Nama Brand" required>
-                <Input 
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  placeholder="Contoh: Azhan Travel"
-                />
-              </FormField>
-
-              <FormField 
-                label="Kode Brand" 
-                helperText="2 huruf unik, dipakai untuk format ID Jamaah (mis. HN-2608000031)"
-              >
-                <Input 
-                  name="kode_brand"
-                  value={formData.kode_brand}
-                  onChange={handleChange}
-                  maxLength={2}
-                  placeholder="mis. HN"
-                  className="font-mono text-sm uppercase"
-                />
-              </FormField>
-
-              <FormField label="Domain" helperText="Domain unik untuk me-resolve microsite brand">
-                <Input 
-                  name="domain"
-                  value={formData.domain}
-                  onChange={handleChange}
-                  placeholder="alsha.azhan.test"
-                  className="font-mono text-sm"
-                />
-              </FormField>
-
-              <FormField label="Warna Utama Brand">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    name="primary_color"
-                    value={formData.primary_color || '#FED853'}
+            <MetaBox 
+              title="Identitas Brand" 
+              subtitle="Nama, kode, domain, dan warna tema brand"
+              icon={<Building2 size={18} className="text-neutral-700" />}
+            >
+              <div className="space-y-4">
+                <FormField label="Nama Brand" required>
+                  <Input 
+                    name="name"
+                    value={formData.name}
                     onChange={handleChange}
-                    className="w-10 h-10 p-1 bg-white border border-neutral-200 rounded-xl cursor-pointer"
+                    required
+                    placeholder="Contoh: Azhan Travel"
                   />
-                  <Input
-                    name="primary_color"
-                    value={formData.primary_color}
-                    onChange={handleChange}
-                    placeholder="#FED853"
-                    className="font-mono uppercase"
-                  />
+                </FormField>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField 
+                    label="Kode Brand" 
+                    helperText="2 huruf unik untuk format ID Jamaah (mis. HN)"
+                  >
+                    <Input 
+                      name="kode_brand"
+                      value={formData.kode_brand}
+                      onChange={handleChange}
+                      maxLength={2}
+                      placeholder="mis. HN"
+                      className="font-mono text-sm uppercase"
+                    />
+                  </FormField>
+
+                  <FormField label="Domain Microsite" helperText="Domain untuk me-resolve microsite">
+                    <Input 
+                      name="domain"
+                      value={formData.domain}
+                      onChange={handleChange}
+                      placeholder="alsha.azhan.test"
+                      className="font-mono text-sm"
+                    />
+                  </FormField>
                 </div>
-              </FormField>
 
-              <FormField 
-                label="Ikon Brand (Square 1:1)" 
-                helperText="Gunakan gambar persegi (1:1), contoh 512x512px — dipakai untuk favicon dan ikon PWA"
-              >
-                {(localIconPreview || formData.icon_url) && (
-                  <div className="mb-3 relative inline-block">
-                    <img 
-                      src={localIconPreview || getMediaUrl(formData.icon_url)}
-                      alt="Preview Ikon"
-                      className="w-16 h-16 aspect-square object-cover rounded bg-pure-white border border-neutral-200"
+                <FormField label="Warna Utama Brand">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      name="primary_color"
+                      value={formData.primary_color || '#FED853'}
+                      onChange={handleChange}
+                      className="w-10 h-10 p-1 bg-white border border-neutral-200 rounded-xl cursor-pointer"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLocalIconPreview(null);
-                        setFormData(prev => ({ ...prev, icon_url: '' }));
-                      }}
-                      className="absolute -top-2 -right-2 bg-danger-600 text-pure-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-xs"
-                      title="Hapus Ikon"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                <Input 
-                  type="file"
-                  accept="image/*"
-                  onChange={handleIconUpload}
-                  disabled={isUploadingIcon}
-                />
-                {isUploadingIcon && <p className="text-xs text-neutral-500 mt-1">Mengunggah ikon...</p>}
-              </FormField>
-
-              <FormField 
-                label="Logo Brand (Landscape)" 
-                helperText="Gunakan gambar horizontal (landscape), untuk header microsite"
-              >
-                {(localLogoPreview || formData.logo_url) && (
-                  <div className="mb-3 relative inline-block">
-                    <img 
-                      src={localLogoPreview || getMediaUrl(formData.logo_url)}
-                      alt="Preview Logo"
-                      className="h-16 w-auto object-contain rounded bg-pure-white border border-neutral-200 p-1"
+                    <Input
+                      name="primary_color"
+                      value={formData.primary_color}
+                      onChange={handleChange}
+                      placeholder="#FED853"
+                      className="font-mono uppercase"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLocalLogoPreview(null);
-                        setFormData(prev => ({ ...prev, logo_url: '' }));
-                      }}
-                      className="absolute -top-2 -right-2 bg-danger-600 text-pure-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-xs"
-                      title="Hapus Logo"
-                    >
-                      ×
-                    </button>
                   </div>
-                )}
-                <Input 
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  disabled={isUploadingLogo}
-                />
-                {isUploadingLogo && <p className="text-xs text-neutral-500 mt-1">Mengunggah logo...</p>}
-              </FormField>
+                </FormField>
+              </div>
             </MetaBox>
 
-            {/* MetaBox Kontak */}
-            <MetaBox title="Kontak & Lokasi">
-              <FormField label="Nomor WhatsApp">
-                <Input 
-                  name="whatsapp_number"
-                  value={formData.whatsapp_number}
-                  onChange={handleChange}
-                  placeholder="Contoh: 62812345678"
-                />
-              </FormField>
+            {/* MetaBox Media & Visual Brand */}
+            <MetaBox 
+              title="Media & Visual Brand" 
+              subtitle="Logo dan ikon/favicon resmi brand"
+              icon={<Upload size={18} className="text-neutral-700" />}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField 
+                  label="Logo Brand" 
+                  helperText="Format PNG transparan atau SVG direkomendasikan"
+                >
+                  {(localLogoPreview || formData.logo_url) && (
+                    <div className="mb-3 relative inline-block">
+                      <img 
+                        src={localLogoPreview || getMediaUrl(formData.logo_url)}
+                        alt="Preview Logo"
+                        className="h-16 w-auto max-w-[200px] object-contain rounded bg-white border border-neutral-200 p-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocalLogoPreview(null);
+                          setFormData(prev => ({ ...prev, logo_url: '' }));
+                        }}
+                        className="absolute -top-2 -right-2 bg-danger-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-xs cursor-pointer hover:bg-danger-700"
+                        title="Hapus Logo"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <Input 
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    disabled={isUploadingLogo}
+                  />
+                  {isUploadingLogo && <p className="text-xs text-neutral-500 mt-1">Mengunggah logo...</p>}
+                </FormField>
 
-              <FormField label="Alamat Kantor">
-                <Textarea 
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  placeholder="Jl. Utama No. 123, Jakarta"
-                  rows={3}
-                />
-              </FormField>
+                <FormField 
+                  label="Ikon Brand (Square 1:1)" 
+                  helperText="Format persegi (512x512px) untuk favicon & PWA"
+                >
+                  {(localIconPreview || formData.icon_url) && (
+                    <div className="mb-3 relative inline-block">
+                      <img 
+                        src={localIconPreview || getMediaUrl(formData.icon_url)}
+                        alt="Preview Ikon"
+                        className="w-16 h-16 aspect-square object-cover rounded bg-white border border-neutral-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocalIconPreview(null);
+                          setFormData(prev => ({ ...prev, icon_url: '' }));
+                        }}
+                        className="absolute -top-2 -right-2 bg-danger-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-xs cursor-pointer hover:bg-danger-700"
+                        title="Hapus Ikon"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <Input 
+                    type="file"
+                    accept="image/*"
+                    onChange={handleIconUpload}
+                    disabled={isUploadingIcon}
+                  />
+                  {isUploadingIcon && <p className="text-xs text-neutral-500 mt-1">Mengunggah ikon...</p>}
+                </FormField>
+              </div>
+            </MetaBox>
 
-              <FormField label="URL Google Maps">
-                <Input 
-                  name="gmaps_url"
-                  value={formData.gmaps_url}
-                  onChange={handleChange}
-                  placeholder="https://maps.google.com/..."
-                />
-              </FormField>
+            {/* MetaBox Kontak & Lokasi */}
+            <MetaBox 
+              title="Kontak & Alamat Kantor" 
+              subtitle="WhatsApp, alamat kantor fisik, dan Google Maps"
+              icon={<Phone size={18} className="text-neutral-700" />}
+            >
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField label="Nomor WhatsApp CS">
+                    <Input 
+                      name="whatsapp_number"
+                      value={formData.whatsapp_number}
+                      onChange={handleChange}
+                      placeholder="Contoh: 62812345678"
+                    />
+                  </FormField>
+
+                  <FormField label="URL Google Maps">
+                    <Input 
+                      name="gmaps_url"
+                      value={formData.gmaps_url}
+                      onChange={handleChange}
+                      placeholder="https://maps.google.com/..."
+                    />
+                  </FormField>
+                </div>
+
+                <FormField label="Alamat Kantor Fisik">
+                  <Textarea 
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    placeholder="Jl. Utama No. 123, Jakarta"
+                    rows={3}
+                  />
+                </FormField>
+              </div>
             </MetaBox>
 
             {/* MetaBox Legalitas */}
-            <MetaBox title="Legalitas">
-              <FormField label="Keterangan Legalitas">
+            <MetaBox 
+              title="Legalitas & Izin Usaha" 
+              subtitle="Nomor SK Kemenag PPIU / PIHK resmi"
+              icon={<CreditCard size={18} className="text-neutral-700" />}
+            >
+              <FormField label="Keterangan Legalitas Resmi">
                 <Textarea 
                   name="legalitas"
                   value={formData.legalitas}
                   onChange={handleChange}
-                  placeholder="mis. Nomor izin PPIU: ..., PIHK: ..."
+                  placeholder="mis. Nomor izin PPIU: No. 123 Tahun 2024, Izin PIHK: No. 456..."
                   rows={3}
                 />
               </FormField>
             </MetaBox>
 
-            {/* MetaBox Info Rekening */}
-            <MetaBox title="Info Rekening Bank">
-              <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
-                <p className="text-sm font-semibold text-neutral-900">Rekening dikelola terpusat</p>
-                <p className="mt-1 text-sm leading-6 text-neutral-600">Satu brand dapat memiliki beberapa rekening aktif. Rekening lama sudah dipindahkan otomatis dan tetap tersedia.</p>
-                <Button type="button" variant="secondary" className="mt-3" onClick={() => navigate('/bank-accounts')}>Kelola Rekening Bank</Button>
-              </div>
-            </MetaBox>
-
             {/* MetaBox Media Sosial */}
-            <MetaBox title="Media Sosial">
+            <MetaBox 
+              title="Akun Media Sosial" 
+              subtitle="Tautan channel sosial media resmi brand"
+              icon={<Globe size={18} className="text-neutral-700" />}
+            >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input 
                   label="Facebook"
@@ -431,39 +461,47 @@ const BrandFormPage = () => {
             </MetaBox>
           </div>
 
-          {/* Kolom KANAN (Sidebar Form) */}
-          <div className="sticky top-6 flex flex-col gap-6">
-            <MetaBox title="Simpan Data">
-              <p className="text-sm text-neutral-500">
-                {isEditMode 
-                  ? "Perubahan data brand akan langsung diperbarui di sistem ERP dan microsite."
-                  : "Brand baru yang dibuat akan langsung dapat dipilih untuk scopenya."}
-              </p>
+          {/* Kolom KANAN (Sidebar Aksi & Simpan) */}
+          <div className="space-y-6 lg:sticky lg:top-6">
+            <MetaBox 
+              title="Aksi & Simpan" 
+              subtitle="Penyimpanan data brand"
+              icon={<Save size={18} className="text-neutral-700" />}
+            >
+              <div className="space-y-3.5">
+                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs text-neutral-600 space-y-1.5 font-body">
+                  <div className="flex items-center gap-1.5 text-neutral-900 font-semibold">
+                    <CheckCircle2 size={14} className="text-success-600" />
+                    <span>Sinkronisasi Otomatis</span>
+                  </div>
+                  <p>
+                    {isEditMode 
+                      ? "Perubahan data brand akan langsung diperbarui di seluruh ekosistem ERP dan microsite."
+                      : "Brand baru yang dibuat akan langsung aktif dan siap digunakan untuk paket & booking."}
+                  </p>
+                </div>
 
-              {formErrors && (
-                <Alert variant="error">{formErrors}</Alert>
-              )}
+                <div className="space-y-2 pt-1">
+                  <Button 
+                    type="submit" 
+                    variant="primary" 
+                    isLoading={isSubmitting}
+                    disabled={isSubmitting || isUploadingLogo || isUploadingIcon}
+                    className="w-full justify-center shadow-sm"
+                  >
+                    {isSubmitting ? "Menyimpan..." : (isEditMode ? "Perbarui Data Brand" : "Simpan Brand Baru")}
+                  </Button>
 
-              <div className="flex flex-col gap-3 pt-2">
-                <Button 
-                  type="submit" 
-                  variant="primary" 
-                  isLoading={isSubmitting}
-                  disabled={isSubmitting || isUploadingLogo || isUploadingIcon}
-                  className="w-full justify-center"
-                >
-                  {isEditMode ? "Simpan Perubahan" : "Simpan"}
-                </Button>
-
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  onClick={() => navigate('/brands')}
-                  disabled={isSubmitting}
-                  className="w-full justify-center"
-                >
-                  Batal
-                </Button>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    onClick={() => navigate('/brands')}
+                    disabled={isSubmitting}
+                    className="w-full justify-center text-neutral-600 hover:text-neutral-900"
+                  >
+                    Batal
+                  </Button>
+                </div>
               </div>
             </MetaBox>
           </div>

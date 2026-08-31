@@ -12,6 +12,7 @@ import MetaBox from '../components/ui/MetaBox';
 import Badge from '../components/ui/Badge';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Toggle from '../components/ui/Toggle';
+import { Plane, Building2, Calendar, Hotel, DollarSign, CheckSquare, MapPin, Save, CheckCircle2, Image as ImageIcon, Tag, Plus, Trash2, X, Info } from 'lucide-react';
 
 import { getSchedule, createSchedule, updateSchedule } from '../api/schedules';
 import { listHotels } from '../api/hotels';
@@ -638,26 +639,24 @@ const ScheduleFormPage = () => {
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6">
       <PageHeader
-        title={isEditMode ? 'Edit Paket' : 'Tambah Paket Baru'}
+        title={isEditMode ? 'Edit Paket Umroh' : 'Tambah Paket Baru'}
+        subtitle={isEditMode ? `Perbarui data jadwal, hotel, penerbangan, dan harga untuk ${formData.jadwal_nama || "paket"}` : "Penyusunan jadwal keberangkatan, rincian hotel, maskapai, dan skema harga kamar"}
         onBack={() => navigate('/schedules')}
       />
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-6 md:items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
           {/* Kolom KIRI (Konten Utama) */}
-          <div className="space-y-6">
+          <div className="lg:col-span-2 space-y-6">
 
             {/* 1. SECTION: INFORMASI DASAR & KUOTA */}
             <MetaBox
-              title="Informasi Dasar"
-              icon={
-                <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-                </svg>
-              }
+              title="Informasi Dasar & Kuota"
+              subtitle="Nama paket, tipe keberangkatan, dan alokasi total seat"
+              icon={<Plane size={18} className="text-neutral-700" />}
             >
               <div className="space-y-4">
                 {/* Input Nama Paket */}
@@ -1526,149 +1525,139 @@ const ScheduleFormPage = () => {
           </div>
 
           {/* Kolom KANAN (Sidebar Form) */}
-          <div className="flex flex-col gap-6">
+          <div className="space-y-6 lg:sticky lg:top-6">
 
-            {/* MetaBox: Brand & Kategori */}
-            <div>
-              <MetaBox
-                title="Brand & Kategori"
-                icon={
-                  <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                }
-              >
-                <div className="space-y-4">
-                  {/* Brand */}
-                  <div>
-                    <CustomDropdown
-                      label="Brand"
-                      className="!mb-0"
-                      value={formData.brand_id}
-                      onChange={(val) => {
-                        handleChange({ target: { name: 'brand_id', value: val } });
-                        const selectedBid = parseInt(val, 10);
-                        const currentCat = categoryOptions.find(c => String(c.id) === String(formData.category_id));
-                        if (currentCat && currentCat.brands && currentCat.brands.length > 0) {
-                          const brandSupported = currentCat.brands.some(b => b.id === selectedBid);
-                          if (!brandSupported) {
-                            setFormData(prev => ({ ...prev, brand_id: val, category_id: '' }));
-                          }
-                        }
-                      }}
-                      required
-                      placeholder="-- Pilih Brand --"
-                      options={brandOptions.map(b => ({ value: b.id, label: b.name }))}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                      }
-                    />
+            {/* MetaBox: Aksi & Simpan */}
+            <MetaBox
+              title="Aksi & Simpan"
+              subtitle="Status publikasi dan penyimpanan"
+              icon={<Save size={18} className="text-neutral-700" />}
+            >
+              <div className="space-y-3.5">
+                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs text-neutral-600 space-y-1.5 font-body">
+                  <div className="flex items-center gap-1.5 text-neutral-900 font-semibold">
+                    <CheckCircle2 size={14} className="text-success-600" />
+                    <span>Verifikasi Jadwal</span>
                   </div>
-
-                  {/* Kategori */}
-                  <div>
-                    <CustomDropdown
-                      label="Kategori"
-                      className="!mb-0"
-                      value={formData.category_id}
-                      onChange={(val) => handleChange({ target: { name: 'category_id', value: val } })}
-                      placeholder="-- Pilih Kategori --"
-                      options={filteredCategories.map(c => ({ value: c.id, label: c.name }))}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                        </svg>
-                      }
-                    />
-                  </div>
+                  <p>Pastikan tanggal keberangkatan, rincian hotel, maskapai, serta kuota kursi telah sesuai alokasi.</p>
                 </div>
-              </MetaBox>
-            </div>
 
-            {/* MetaBox: Brosur Paket (Image) */}
-            <div>
-              <MetaBox
-                title="Brosur Paket"
-                icon={
-                  <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                }
-              >
-                {formData.brosur_url ? (
-                  <div className="space-y-3">
-                    <div className="border border-neutral-200 rounded-md p-1 bg-neutral-50 overflow-hidden flex justify-center shadow-2xs">
-                      <img
-                        src={formData.brosur_url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${formData.brosur_url}` : formData.brosur_url}
-                        alt="Preview Brosur"
-                        className="max-w-full h-auto max-h-52 object-contain rounded"
-                      />
-                    </div>
-                    <label className="flex items-center justify-center gap-2 px-4 py-2 w-full bg-white border border-neutral-300 rounded-md text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer shadow-2xs transition-colors text-center">
-                      <svg className="w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                      </svg>
-                      <span>{isUploadingBrosur ? 'Mengupload...' : 'Ganti Gambar'}</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
-                    </label>
-                  </div>
-                ) : (
-                  <div className="flex justify-center px-4 pt-6 pb-6 border-2 border-neutral-300 border-dashed rounded-md hover:border-primary-400 transition-colors bg-neutral-50">
-                    <div className="space-y-2 text-center">
-                      <div className="w-10 h-10 mx-auto rounded-full bg-white border border-neutral-200 flex items-center justify-center text-neutral-400 shadow-2xs">
-                        <svg className="h-5 w-5" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <div className="text-xs text-neutral-600">
-                        <label htmlFor="brosur-upload" className="cursor-pointer font-semibold text-primary-600 hover:text-primary-700">
-                          <span>{isUploadingBrosur ? 'Mengupload...' : 'Upload Brosur'}</span>
-                          <input id="brosur-upload" name="brosur-upload" type="file" className="sr-only" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
-                        </label>
-                        <p className="text-[11px] text-neutral-400 mt-0.5">JPG, PNG, WebP</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </MetaBox>
-            </div>
+                <CustomDropdown
+                  label="Status Publikasi"
+                  value={formData.status}
+                  onChange={(val) => handleChange({ target: { name: 'status', value: val } })}
+                  options={[
+                    { value: 'draft', label: 'Draft' },
+                    { value: 'published', label: 'Published' },
+                    { value: 'archived', label: 'Archived' }
+                  ]}
+                />
 
-            {/* MetaBox: Publikasikan */}
-            <div>
-              <MetaBox
-                title="Publikasikan"
-                icon={
-                  <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                  </svg>
-                }
-              >
-                <div className="space-y-4">
-                  <CustomDropdown
-                    label="Status"
-                    value={formData.status}
-                    onChange={(val) => handleChange({ target: { name: 'status', value: val } })}
-                    options={[
-                      { value: 'draft', label: 'Draft' },
-                      { value: 'published', label: 'Published' },
-                      { value: 'archived', label: 'Archived' }
-                    ]}
-                  />
-
+                <div className="space-y-2 pt-1">
                   <Button
                     type="submit"
                     variant="primary"
                     isLoading={isSubmitting}
                     disabled={isUploadingBrosur}
-                    className="w-full justify-center shadow-xs"
+                    className="w-full justify-center shadow-sm"
                   >
-                    {isEditMode ? 'Simpan Perubahan' : 'Simpan Paket'}
+                    {isSubmitting ? 'Menyimpan...' : (isEditMode ? 'Perbarui Data Paket' : 'Simpan Paket Baru')}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => navigate('/schedules')}
+                    className="w-full justify-center text-neutral-600 hover:text-neutral-900"
+                  >
+                    Batal
                   </Button>
                 </div>
-              </MetaBox>
-            </div>
+              </div>
+            </MetaBox>
+
+            {/* MetaBox: Brand & Kategori */}
+            <MetaBox
+              title="Brand & Kategori"
+              subtitle="Afiliasi biro travel dan pengelompokan"
+              icon={<Building2 size={18} className="text-neutral-700" />}
+            >
+              <div className="space-y-4">
+                {/* Brand */}
+                <div>
+                  <CustomDropdown
+                    label="Brand"
+                    className="!mb-0"
+                    value={formData.brand_id}
+                    onChange={(val) => {
+                      handleChange({ target: { name: 'brand_id', value: val } });
+                      const selectedBid = parseInt(val, 10);
+                      const currentCat = categoryOptions.find(c => String(c.id) === String(formData.category_id));
+                      if (currentCat && currentCat.brands && currentCat.brands.length > 0) {
+                        const brandSupported = currentCat.brands.some(b => b.id === selectedBid);
+                        if (!brandSupported) {
+                          setFormData(prev => ({ ...prev, brand_id: val, category_id: '' }));
+                        }
+                      }
+                    }}
+                    required
+                    placeholder="-- Pilih Brand --"
+                    options={brandOptions.map(b => ({ value: b.id, label: b.name }))}
+                  />
+                </div>
+
+                {/* Kategori */}
+                <div>
+                  <CustomDropdown
+                    label="Kategori"
+                    className="!mb-0"
+                    value={formData.category_id}
+                    onChange={(val) => handleChange({ target: { name: 'category_id', value: val } })}
+                    placeholder="-- Pilih Kategori --"
+                    options={filteredCategories.map(c => ({ value: c.id, label: c.name }))}
+                  />
+                </div>
+              </div>
+            </MetaBox>
+
+            {/* MetaBox: Brosur Paket (Image) */}
+            <MetaBox
+              title="Brosur Paket"
+              subtitle="Flyer / poster promosi digital"
+              icon={<ImageIcon size={18} className="text-neutral-700" />}
+            >
+              {formData.brosur_url ? (
+                <div className="space-y-3">
+                  <div className="border border-neutral-200 rounded-lg p-1 bg-white overflow-hidden flex justify-center shadow-2xs">
+                    <img
+                      src={formData.brosur_url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${formData.brosur_url}` : formData.brosur_url}
+                      alt="Preview Brosur"
+                      className="max-w-full h-auto max-h-52 object-contain rounded"
+                    />
+                  </div>
+                  <label className="flex items-center justify-center gap-2 px-4 py-2 w-full bg-white border border-neutral-300 rounded-lg text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer shadow-2xs transition-colors text-center">
+                    <ImageIcon size={14} className="text-neutral-500" />
+                    <span>{isUploadingBrosur ? 'Mengupload...' : 'Ganti Gambar Brosur'}</span>
+                    <input type="file" className="hidden" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
+                  </label>
+                </div>
+              ) : (
+                <div className="flex justify-center px-4 pt-6 pb-6 border-2 border-neutral-300 border-dashed rounded-xl hover:border-primary-400 transition-colors bg-neutral-50">
+                  <div className="space-y-2 text-center">
+                    <div className="w-10 h-10 mx-auto rounded-full bg-white border border-neutral-200 flex items-center justify-center text-neutral-400 shadow-2xs">
+                      <ImageIcon size={20} />
+                    </div>
+                    <div className="text-xs text-neutral-600">
+                      <label htmlFor="brosur-upload" className="cursor-pointer font-semibold text-primary-600 hover:text-primary-700">
+                        <span>{isUploadingBrosur ? 'Mengupload...' : 'Upload Brosur'}</span>
+                        <input id="brosur-upload" name="brosur-upload" type="file" className="sr-only" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
+                      </label>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">JPG, PNG, WebP</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </MetaBox>
 
           </div>
         </div>

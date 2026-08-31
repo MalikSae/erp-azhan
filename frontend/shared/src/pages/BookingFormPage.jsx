@@ -1019,21 +1019,12 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-20">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <PageHeader
-          title={isEditDraft ? "Lanjutkan Draft Booking" : "Booking Baru"}
-          subtitle={isEditDraft ? "Lengkapi data pendaftaran sebelum finalisasi booking" : "Form pendaftaran jamaah paket umroh"}
-          onBack={() => navigate("/bookings")}
-        />
-        {isEditDraft && (
-          <div className="flex items-center gap-2">
-            <Badge variant="draft" className="text-xs px-3 py-1">
-              Mode Draft #{id}
-            </Badge>
-          </div>
-        )}
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={isEditDraft ? "Lanjutkan Draft Booking" : "Booking Baru"}
+        subtitle={isEditDraft ? "Lengkapi data pendaftaran sebelum finalisasi booking" : "Form pendaftaran jamaah paket umroh"}
+        onBack={() => navigate("/bookings")}
+      />
 
       {serverError && (
         <Alert variant="error" className="shadow-sm">
@@ -1078,10 +1069,10 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
       <form onSubmit={handleSubmit}>
         {/* Responsive 2-Column Grid Layout: Konten Form Pax (Kiri) & Sticky Summary/Actions (Kanan) */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           
           {/* KOLOM KIRI: Pemilihan Travel, Paket & Manifest Pax */}
-          <div className="space-y-6">
+          <div className="lg:col-span-2 space-y-6">
 
             {/* 1. PILIH BIRO TRAVEL & PAKET JADWAL */}
             <MetaBox 

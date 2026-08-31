@@ -34,7 +34,7 @@ import CustomDropdown from "../components/ui/CustomDropdown";
 import CurrencyInput from "../components/ui/CurrencyInput";
 import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
-import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Users, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig } from "lucide-react";
+import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Users, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig, Building2 } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -508,33 +508,27 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       {error && <Alert variant="error">{error}</Alert>}
 
       {/* Header Info */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-lg border border-neutral-200 shadow-sm">
-        <div>
+      <PageHeader
+        title={
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-sm font-bold bg-neutral-100 text-neutral-900 px-3 py-1 rounded border border-neutral-200">
-              {booking.id_booking || `ID: ${booking.id}`}
-            </span>
-            <Badge variant={statusVariant} hideIcon={true} className="text-sm font-semibold px-3 py-1">
+            <span>{booking.id_booking || `Booking #${booking.id}`}</span>
+            <Badge variant={statusVariant} hideIcon={true} className="text-xs font-semibold px-2.5 py-0.5">
               Status: {statusLabel}
             </Badge>
             {seatLockInfo && (
-              <Badge variant={booking.is_seat_blocked ? "success" : "warning"} className="text-sm px-3 py-1 font-medium flex items-center gap-1.5">
-                {booking.is_seat_blocked ? <CircleCheckBig size={14} /> : <Loader size={14} />}
-                <span>{seatLockInfo.label}</span>
+              <Badge
+                variant={booking.is_seat_blocked ? "success" : "warning"}
+                icon={booking.is_seat_blocked ? <CircleCheckBig size={13} /> : <Loader size={13} className="animate-spin" />}
+                className="text-xs font-medium px-2.5 py-0.5"
+              >
+                {seatLockInfo.label}
               </Badge>
             )}
-            {showBrandColumn && (brand || booking.brand_id) && (
-              <div className="mt-0.5">
-                <BrandCell brand={brand} brandId={booking.brand_id} showText={true} />
-              </div>
-            )}
           </div>
-          <p className="text-xs text-neutral-500 font-body mt-2">
-            Dibuat pada {formatTanggal(booking.created_at)}
-          </p>
-        </div>
-
-        {/* Action Controls */}
+        }
+        subtitle={`Dibuat pada ${formatTanggal(booking.created_at)}`}
+        onBack={() => navigate("/bookings")}
+      >
         <div className="flex flex-wrap items-center gap-2">
           {booking.status === "baru" && (
             <Button size="sm" variant="secondary" onClick={() => handleBookingStatus("dp")}>
@@ -547,16 +541,16 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </Button>
           )}
           {booking.status !== "batal" && (
-            <Button size="sm" variant="ghost" className="text-danger-600 hover:bg-danger-50" onClick={() => handleBookingStatus("batal")}>
+            <Button size="sm" variant="ghost" className="text-danger-600 hover:bg-danger-50 text-xs" onClick={() => handleBookingStatus("batal")}>
               Batalkan Booking
             </Button>
           )}
-          <Button size="sm" variant="secondary" onClick={() => setIsInvoiceModalOpen(true)} className="flex items-center gap-1.5">
-            <FileText size={16} />
+          <Button size="sm" variant="secondary" onClick={() => setIsInvoiceModalOpen(true)} className="flex items-center gap-1.5 shadow-2xs">
+            <FileText size={15} />
             <span>Cetak Invoice</span>
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Main Grid: Details */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -916,8 +910,21 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </div>
         </div>
 
-        {/* Kolom Kanan: Ringkasan Tagihan, Progress, & Perlengkapan (1 span) */}
+        {/* Kolom Kanan: Afiliasi Travel, Ringkasan Tagihan, Progress, & Perlengkapan (1 span) */}
         <div className="space-y-6">
+          {/* Afiliasi Biro Travel (Khusus Super Admin / Master Dashboard) */}
+          {showBrandColumn && (brand || booking.brand_id) && (
+            <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-neutral-200">
+                <Building2 size={18} className="text-primary-600" />
+                <h3 className="font-semibold text-neutral-900 font-heading">Afiliasi Biro Travel</h3>
+              </div>
+              <div className="pt-1">
+                <BrandCell brand={brand} brandId={booking.brand_id} showText={true} />
+              </div>
+            </div>
+          )}
+
           {/* Ringkasan Finansial Card */}
           <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
             <h3 className="font-semibold text-neutral-900 font-heading pb-2 border-b border-neutral-200">

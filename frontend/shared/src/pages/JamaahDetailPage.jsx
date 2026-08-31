@@ -16,7 +16,7 @@ import Modal from "../components/ui/Modal";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import Textarea from "../components/ui/Textarea";
 import BrandCell from "../components/BrandCell";
-import { Edit2, Eye, Upload, ExternalLink, RefreshCw, Users, Plus, Trash2, Save, ArrowRight } from "lucide-react";
+import { Edit2, Eye, Upload, ExternalLink, RefreshCw, Users, Plus, Save, ArrowRight, Building2 } from "lucide-react";
 
 const DOKUMEN_TYPES = [
   { key: "pas_foto", label: "Pas Foto" },
@@ -311,33 +311,20 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
       />
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <PageHeader
-            title={jamaah.nama_lengkap}
-            onBack={() => navigate("/jamaah")}
-          />
-          <Badge variant={jamaah.status === 'draft' ? 'draft' : 'success'}>
-            {jamaah.status === 'draft' ? 'Draft' : 'Aktif'}
-          </Badge>
-          {showBrandColumn && (brand || jamaah.brand_id) && (
-            <div className="mt-1">
-              <BrandCell brand={brand} brandId={jamaah.brand_id} showText={true} />
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => navigate(`/jamaah/${id}/edit`)}
-            className="flex items-center gap-1.5"
-          >
-            <Edit2 size={14} />
-            <span>Edit Data</span>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={jamaah.nama_lengkap}
+        onBack={() => navigate("/jamaah")}
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => navigate(`/jamaah/${id}/edit`)}
+          className="flex items-center gap-1.5 shadow-2xs"
+        >
+          <Edit2 size={14} />
+          <span>Edit Data</span>
+        </Button>
+      </PageHeader>
 
       {error && <Alert variant="error">{error}</Alert>}
       {success && <Alert variant="success">{success}</Alert>}
@@ -371,15 +358,15 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
               <InfoItem label="Pekerjaan" value={jamaah.pekerjaan} />
               <InfoItem label="Pendidikan Terakhir" value={jamaah.pendidikan_terakhir} />
               <InfoItem label="Penjamin Kesehatan" value={jamaah.penjamin_kesehatan} />
-              <InfoItem label="No. BPJS / Asuransi" value={jamaah.no_asuransi_bpjs} />
+              <InfoItem label="No BPJS / Asuransi" value={jamaah.no_asuransi_bpjs} />
             </div>
           </MetaBox>
 
           <MetaBox title="Kontak Darurat (Emergency Contact)">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
               <InfoItem label="Nama Kontak Darurat" value={jamaah.emergency_nama} />
-              <InfoItem label="Hubungan Keluarga" value={jamaah.emergency_hubungan} />
-              <InfoItem label="No. HP Darurat" value={jamaah.emergency_hp} />
+              <InfoItem label="Hubungan" value={jamaah.emergency_hubungan} />
+              <InfoItem label="No HP Kontak Darurat" value={jamaah.emergency_hp} />
               <InfoItem label="NIK Kontak Darurat" value={jamaah.emergency_nik} />
               <InfoItem label="Alamat Kontak Darurat" value={jamaah.emergency_alamat} colSpan={true} />
             </div>
@@ -388,20 +375,20 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
           {/* Hubungan Kekerabatan & Mahram */}
           <MetaBox 
             title="Hubungan Kekerabatan & Mahram"
-            headerAction={
+            headerActions={
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={handleOpenRelasiModal}
-                className="flex items-center gap-1 text-xs"
+                className="flex items-center gap-1.5 text-xs"
               >
-                <Plus size={13} />
+                <Plus size={14} />
                 <span>Tambah Kerabat</span>
               </Button>
             }
           >
             {relasiList.length === 0 ? (
-              <p className="text-sm text-neutral-500 font-body py-2">
+              <p className="text-sm text-neutral-500 font-body">
                 Belum ada relasi kekerabatan / mahram yang terdaftar untuk jamaah ini.
               </p>
             ) : (
@@ -411,20 +398,20 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
                     key={rel.id}
                     className="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold font-heading text-neutral-900">
                           {rel.nama_relasi}
                         </span>
-                        {rel.id_jamaah_relasi && (
-                          <span className="font-mono text-2xs font-bold text-neutral-700 bg-neutral-100 border border-neutral-200/90 px-1.5 py-0.5 rounded">
-                            {rel.id_jamaah_relasi}
-                          </span>
-                        )}
                         <span className="text-xs font-bold font-body px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
                           {rel.hubungan}
                         </span>
                       </div>
+                      {rel.id_jamaah_relasi && (
+                        <p className="text-xs text-neutral-500 font-mono font-medium">
+                          {rel.id_jamaah_relasi}
+                        </p>
+                      )}
                       {rel.keterangan && (
                         <p className="text-xs text-neutral-500 font-body">
                           {rel.keterangan}
@@ -443,15 +430,6 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
                         <span>Lihat Profil</span>
                         <ArrowRight size={13} />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteRelasi(rel.id, rel.nama_relasi)}
-                        className="p-1.5 text-neutral-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
-                        title="Hapus Relasi"
-                      >
-                        <Trash2 size={15} />
-                      </Button>
                     </div>
                   </div>
                 ))}
@@ -460,8 +438,20 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
           </MetaBox>
         </div>
 
-        {/* Kolom Kanan: Paspor, Dokumen Digital, Catatan (1 span) */}
+        {/* Kolom Kanan: Afiliasi Biro Travel, Paspor, Dokumen Digital, Catatan (1 span) */}
         <div className="space-y-6">
+          {/* Afiliasi Biro Travel (Khusus Super Admin / Master Dashboard) */}
+          {showBrandColumn && (brand || jamaah.brand_id) && (
+            <MetaBox 
+              title="Afiliasi Biro Travel"
+              icon={<Building2 size={18} className="text-neutral-700" />}
+            >
+              <div className="py-0.5">
+                <BrandCell brand={brand} brandId={jamaah.brand_id} showText={true} />
+              </div>
+            </MetaBox>
+          )}
+
           <MetaBox title="Dokumen Paspor">
             <div className="space-y-4">
               <InfoItem label="Nomor Paspor" value={jamaah.no_paspor} />

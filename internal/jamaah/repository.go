@@ -487,6 +487,87 @@ func (r *Repository) CreateRelasi(ctx context.Context, jamaahID int64, brandID *
 	return item, nil
 }
 
+// UpdateRelasi memperbarui kolom hubungan dan keterangan pada baris relasi yang sudah ada.
+func (r *Repository) UpdateRelasi(ctx context.Context, jamaahID int64, relasiID int64, brandID *int64, req *UpdateRelasiRequest) (*JamaahRelasiItem, error) {
+	if err := r.exists(ctx, jamaahID, brandID); err != nil {
+		return nil, err
+	}
+
+	isValidHubungan := false
+	for _, h := range ValidHubunganList {
+		if h == req.Hubungan {
+			isValidHubungan = true
+			break
+		}
+	}
+	if !isValidHubungan {
+		return nil, errors.New("hubungan tidak valid")
+	}
+
+	var (
+		rowJamaahID       int64
+		rowRelasiJamaahID int64
+		rowCreatedAt      time.Time
+	)
+	qSelect := `SELECT jamaah_id, relasi_jamaah_id, created_at FROM jamaah_relasi WHERE id = ? AND (jamaah_id = ? OR relasi_jamaah_id = ?)`
+	err := r.db.QueryRowContext(ctx, qSelect, relasiID, jamaahID, jamaahID).Scan(&rowJamaahID, &rowRelasiJamaahID, &rowCreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("check relasi: %w", err)
+	}
+
+	isAsal := (rowJamaahID == jamaahID)
+	rawDBHubungan := req.Hubungan
+	if !isAsal {
+		if inv, ok := HubunganInverseMap[req.Hubungan]; ok {
+			rawDBHubungan = inv
+		}
+	}
+
+	qUpdate := `UPDATE jamaah_relasi SET hubungan = ?, keterangan = ? WHERE id = ?`
+	_, err = r.db.ExecContext(ctx, qUpdate, rawDBHubungan, req.Keterangan, relasiID)
+	if err != nil {
+		return nil, fmt.Errorf("update relasi: %w", err)
+	}
+
+	var opponentID int64
+	if isAsal {
+		opponentID = rowRelasiJamaahID
+	} else {
+		opponentID = rowJamaahID
+	}
+
+	var (
+		targetNama     string
+		targetIDJamaah sql.NullString
+		targetNIK      sql.NullString
+	)
+	err = r.db.QueryRowContext(ctx, "SELECT nama_lengkap, id_jamaah, nik FROM jamaah WHERE id = ?", opponentID).Scan(&targetNama, &targetIDJamaah, &targetNIK)
+	if err != nil {
+		return nil, fmt.Errorf("fetch opponent jamaah: %w", err)
+	}
+
+	item := &JamaahRelasiItem{
+		ID:             relasiID,
+		JamaahID:       jamaahID,
+		RelasiJamaahID: opponentID,
+		NamaRelasi:     targetNama,
+		IDJamaahRelasi: targetIDJamaah.String,
+		Hubungan:       req.Hubungan,
+		HubunganAsli:   rawDBHubungan,
+		IsAsal:         isAsal,
+		Keterangan:     req.Keterangan,
+		CreatedAt:      rowCreatedAt,
+	}
+	if targetNIK.Valid {
+		item.NIKRelasi = &targetNIK.String
+	}
+
+	return item, nil
+}
+
 // DeleteRelasi menghapus baris relasi baik subjek sebagai pembuat maupun penerima.
 func (r *Repository) DeleteRelasi(ctx context.Context, jamaahID int64, relasiID int64, brandID *int64) error {
 	if err := r.exists(ctx, jamaahID, brandID); err != nil {

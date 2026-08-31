@@ -267,6 +267,47 @@ func (h *Handler) CreateRelasi(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, item)
 }
 
+// UpdateRelasi godoc
+// PUT /api/admin/jamaah/{id}/relasi/{relasi_id}
+func (h *Handler) UpdateRelasi(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	rawRelasiID := chi.URLParam(r, "relasi_id")
+	relasiID, err := strconv.ParseInt(rawRelasiID, 10, 64)
+	if err != nil || relasiID <= 0 {
+		writeError(w, http.StatusBadRequest, "id relasi tidak valid")
+		return
+	}
+
+	var req UpdateRelasiRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "format data tidak valid")
+		return
+	}
+
+	req.Hubungan = strings.TrimSpace(req.Hubungan)
+	if req.Hubungan == "" {
+		writeError(w, http.StatusBadRequest, "pilih jenis hubungan kekerabatan")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	item, err := h.repo.UpdateRelasi(r.Context(), id, relasiID, brandID, &req)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(w, http.StatusNotFound, "data relasi tidak ditemukan")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, item)
+}
+
 // DeleteRelasi godoc
 // DELETE /api/admin/jamaah/{id}/relasi/{relasi_id}
 func (h *Handler) DeleteRelasi(w http.ResponseWriter, r *http.Request) {
