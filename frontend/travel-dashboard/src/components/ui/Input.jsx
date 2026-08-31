@@ -6,9 +6,9 @@ const Input = ({ label, type = 'text', value, onChange, error, required, placeho
   const isPasswordField = type === 'password';
   const inputType = isPasswordField && showPassword ? 'text' : type;
 
-  const inputBaseClasses = 'h-11 w-full min-w-0 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors';
+  const inputBaseClasses = 'h-11 w-full min-w-0 rounded-xl border border-neutral-200/90 bg-white px-3.5 text-xs md:text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs font-body transition-all';
   const disabledClasses = disabled || readOnly ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : '';
-  const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500' : '';
+  const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20' : '';
   const paddingRightClass = isPasswordField ? 'pr-10' : '';
 
   return (
@@ -23,6 +23,7 @@ const Input = ({ label, type = 'text', value, onChange, error, required, placeho
           placeholder={placeholder}
           disabled={disabled}
           readOnly={readOnly}
+          aria-invalid={!!error}
           className={`${inputBaseClasses} ${errorClasses} ${paddingRightClass} ${disabledClasses}`}
           {...props}
         />

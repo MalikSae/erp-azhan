@@ -5,7 +5,6 @@ import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
 import DataTable from "../components/ui/DataTable";
 import Button from "../components/ui/Button";
-import Badge from "../components/ui/Badge";
 import Alert from "../components/ui/Alert";
 import Modal from "../components/ui/Modal";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
@@ -22,34 +21,31 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
   const [error, setError] = useState(null);
 
   const [filterBrandId, setFilterBrandId] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
     fetchData();
-  }, [showBrandColumn]);
+  }, []);
 
   const fetchData = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-
-      const promises = [listJamaah()];
       if (showBrandColumn) {
-        promises.push(listBrands());
-      }
-
-      const [resJamaah, resBrands] = await Promise.all(promises);
-      setData(resJamaah || []);
-
-      if (resBrands) {
-        setBrands(resBrands || []);
+        const [resJamaah, resBrands] = await Promise.all([
+          listJamaah(),
+          listBrands()
+        ]);
+        setData(resJamaah || []);
+        const bList = resBrands || [];
+        setBrands(bList);
         const bMap = {};
-        (resBrands || []).forEach(b => {
-          bMap[b.id] = b;
-        });
+        bList.forEach(b => { bMap[b.id] = b; });
         setBrandsMap(bMap);
+      } else {
+        const resJamaah = await listJamaah();
+        setData(resJamaah || []);
       }
     } catch (err) {
       setError(err.response?.data?.error || "Gagal memuat data jamaah");
@@ -78,10 +74,9 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
   const filteredData = useMemo(() => {
     return data.filter(j => {
       if (showBrandColumn && filterBrandId && j.brand_id?.toString() !== filterBrandId) return false;
-      if (filterStatus && j.status !== filterStatus) return false;
       return true;
     });
-  }, [data, showBrandColumn, filterBrandId, filterStatus]);
+  }, [data, showBrandColumn, filterBrandId]);
 
   const columns = useMemo(() => {
     const cols = [];
@@ -127,19 +122,7 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
         )
       },
       { header: "NIK", key: "nik", accessor: "nik" },
-      { header: "No HP", key: "no_hp", accessor: "no_hp" },
-      {
-        header: "Status",
-        key: "status",
-        accessor: (row) => {
-          const isDraft = row.status === 'draft';
-          return (
-            <Badge variant={isDraft ? 'draft' : 'success'}>
-              {isDraft ? 'Draft' : 'Aktif'}
-            </Badge>
-          );
-        }
-      }
+      { header: "No HP", key: "no_hp", accessor: "no_hp" }
     );
 
     cols.push({
@@ -160,8 +143,8 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
             variant="ghost" 
             size="sm" 
             onClick={() => handleDeleteClick(row)}
-            title="Hapus"
-            className="p-1.5 text-danger-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg"
+            title="Hapus Jamaah"
+            className="p-1.5 text-danger-400 hover:text-danger-700 hover:bg-danger-50 rounded-lg"
           >
             <Trash2 size={16} />
           </Button>
@@ -195,8 +178,8 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
             searchPlaceholder="Cari nama, NIK, atau nomor HP..."
             emptyMessage='Belum ada data jamaah. Klik "+ Tambah Jamaah" untuk menambahkan.'
             toolbarActions={
-              <div className="flex flex-wrap items-center gap-2">
-                {showBrandColumn && brands.length > 0 && (
+              showBrandColumn && brands.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2">
                   <CustomDropdown
                     value={filterBrandId}
                     onChange={(val) => setFilterBrandId(val)}
@@ -207,19 +190,8 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
                     placeholder="Semua Brand"
                     className="!mb-0 min-w-40"
                   />
-                )}
-                <CustomDropdown
-                  value={filterStatus}
-                  onChange={(val) => setFilterStatus(val)}
-                  options={[
-                    { value: '', label: 'Semua Status' },
-                    { value: 'aktif', label: 'Aktif' },
-                    { value: 'draft', label: 'Draft' }
-                  ]}
-                  placeholder="Semua Status"
-                  className="!mb-0 w-36"
-                />
-              </div>
+                </div>
+              ) : null
             }
           />
         </div>

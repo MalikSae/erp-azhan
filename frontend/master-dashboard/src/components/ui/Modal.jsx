@@ -25,11 +25,11 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
   if (!isOpen) return null;
 
   const sizeClasses = {
-    sm: 'w-[90vw] md:w-full max-w-sm',
-    md: 'w-[90vw] md:w-full max-w-md',
-    lg: 'w-[90vw] md:w-full max-w-3xl', // ~768px, suitable for nested forms
-    xl: 'w-[90vw] md:w-full max-w-xl',
-    '2xl': 'w-[90vw] md:w-full max-w-2xl',
+    sm: 'w-full max-w-sm',
+    md: 'w-full max-w-md',
+    lg: 'w-full max-w-3xl', // ~768px, suitable for nested forms
+    xl: 'w-full max-w-xl',
+    '2xl': 'w-full max-w-2xl',
   };
 
   return (
@@ -44,12 +44,12 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
 
         {/* Modal Dialog */}
         <div 
-          className={`bg-white rounded-2xl shadow-2xl border border-neutral-200/80 ${sizeClasses[size]} relative z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8`}
+          className={`bg-white rounded-2xl shadow-2xl border border-neutral-200/80 ${sizeClasses[size]} relative z-50 animate-in fade-in zoom-in-95 duration-150 my-8`}
           role="dialog"
           aria-modal="true"
         >
           {/* Header */}
-          <div className="px-6 py-4.5 border-b border-neutral-200/80 flex items-center justify-between bg-white">
+          <div className="px-6 py-4.5 border-b border-neutral-200/80 flex items-center justify-between bg-white rounded-t-2xl">
             <h3 className="text-base md:text-lg font-bold font-heading text-neutral-900">
               {title}
             </h3>
@@ -71,7 +71,7 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
 
           {/* Footer */}
           {footer && (
-            <div className="px-6 py-3.5 bg-neutral-50/70 border-t border-neutral-200/80 flex items-center justify-end gap-3">
+            <div className="px-6 py-3.5 bg-neutral-50/70 border-t border-neutral-200/80 flex items-center justify-end gap-3 rounded-b-2xl">
               {footer}
             </div>
           )}

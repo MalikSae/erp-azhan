@@ -31,11 +31,17 @@ const Button = ({
   const isDisabled = disabled || isLoading;
   const disabledClasses = isDisabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer';
 
+  const primaryStyle = variant === 'primary' ? {
+    backgroundColor: 'var(--brand-primary, #FED853)',
+    color: 'var(--brand-primary-text, #14171A)',
+  } : undefined;
+
   return (
     <button
       type={type}
       onClick={isDisabled ? undefined : onClick}
       disabled={isDisabled}
+      style={primaryStyle}
       className={`${baseClasses} ${variantClasses[variant] || variantClasses.primary} ${sizeClasses[size] || sizeClasses.md} ${disabledClasses} ${className}`}
     >
       {isLoading ? (

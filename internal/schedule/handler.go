@@ -88,6 +88,29 @@ func (h *Handler) ListSchedulesPublic(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// GetSchedulePublic godoc
+// GET /api/schedules/{id}
+// Response 200: PublicSchedule (hanya jika berstatus published)
+func (h *Handler) GetSchedulePublic(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	s, err := h.repo.GetByID(r.Context(), id, nil)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	if s.Status != "published" {
+		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan atau belum dipublikasikan")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, s.ToPublic())
+}
+
 // ─── Admin: Create ────────────────────────────────────────────────────────────
 
 // CreateSchedule godoc

@@ -5,17 +5,21 @@ const MetaBox = ({
   subtitle,
   icon,
   badge,
+  action,
+  headerAction,
   headerActions,
   children, 
   className = '',
   contentClassName = 'p-5 space-y-4'
 }) => {
+  const actionsSlot = headerActions || headerAction || action;
+
   return (
-    <div className={`bg-white border border-neutral-200/90 rounded-xl shadow-2xs overflow-visible ${className}`}>
-      <div className="bg-neutral-50/80 border-b border-neutral-200/80 px-4 sm:px-5 py-3 flex items-center justify-between gap-3 rounded-t-xl">
+    <div className={`bg-white border border-neutral-200/80 rounded-2xl shadow-card relative transition-all ${className}`}>
+      <div className="bg-neutral-50/70 border-b border-neutral-200/80 px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 rounded-t-2xl">
         <div className="flex items-center gap-2.5 min-w-0">
           {icon && (
-            <div className="w-7 h-7 rounded-lg bg-white border border-neutral-200/90 flex items-center justify-center text-primary-600 shrink-0 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-white border border-neutral-200/90 flex items-center justify-center text-neutral-800 shrink-0 shadow-2xs">
               {icon}
             </div>
           )}
@@ -24,7 +28,7 @@ const MetaBox = ({
               {title}
             </h3>
             {subtitle && (
-              <p className="text-xs text-neutral-500 font-normal leading-normal truncate">
+              <p className="text-xs text-neutral-500 font-normal leading-normal truncate mt-0.5">
                 {subtitle}
               </p>
             )}
@@ -33,11 +37,11 @@ const MetaBox = ({
         
         <div className="flex items-center gap-2 shrink-0">
           {badge && (
-            <span className="text-[10px] font-bold uppercase tracking-wider bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded border border-neutral-200">
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded-full border border-neutral-200">
               {badge}
             </span>
           )}
-          {headerActions}
+          {actionsSlot}
         </div>
       </div>
       <div className={contentClassName}>
@@ -48,4 +52,3 @@ const MetaBox = ({
 };
 
 export default MetaBox;
-

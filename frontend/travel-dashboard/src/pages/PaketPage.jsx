@@ -8,8 +8,27 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Badge from '../components/ui/Badge';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import { listSchedulesAdmin } from 'shared';
-import UrgentPackagesBanner from '../components/UrgentPackagesBanner';
 import { Eye, Files, Check, Archive, Minus, Zap } from 'lucide-react';
+
+// Helper: hitung hari tersisa sampai keberangkatan
+const getDaysRemaining = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  return Math.ceil((d - now) / 86400000);
+};
+
+// Helper: apakah paket tergolong mendesak (< 60 hari & belum full)
+const isScheduleUrgent = (schedule) => {
+  if (schedule.status !== 'published') return false;
+  const days = getDaysRemaining(schedule.berangkat_tanggal);
+  if (days === null || days < 0 || days > 60) return false;
+  const seatSisa = schedule.seat_sisa ?? 0;
+  return seatSisa > 0;
+};
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-';
@@ -39,6 +58,7 @@ const PaketPage = () => {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterMaskapai, setFilterMaskapai] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
 
   const fetchSchedules = async () => {
     setIsLoading(true);
@@ -94,7 +114,7 @@ const PaketPage = () => {
       draft: schedules.filter(s => s.status === 'draft').length,
       archived: schedules.filter(s => s.status === 'archived').length,
     };
-  }, [schedules, today]);
+  }, [schedules]);
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter(s => {
@@ -125,7 +145,7 @@ const PaketPage = () => {
 
       return true;
     });
-  }, [schedules, activeTab, filterMaskapai, filterMonth, today]);
+  }, [schedules, activeTab, filterMaskapai, filterMonth]);
 
   const tabs = [
     { id: 'all', label: 'Semua Paket', count: counts.all },

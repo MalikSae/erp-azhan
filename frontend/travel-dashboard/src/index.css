@@ -2,8 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Travel Dashboard — Dynamic Brand Theme System
+ *
+ * Variabel --brand-primary dan palettnya di-inject secara dinamis
+ * oleh DashboardLayout.jsx melalui applyBrandTheme() saat runtime.
+ *
+ * CSS di bawah ini meng-override semua Tailwind primary-* utility
+ * agar mengikuti variabel CSS yang sudah di-set JS.
+ *
+ * Ini adalah pendekatan yang benar untuk Tailwind v3 dynamic theming
+ * karena tailwind.config.js hanya dibaca saat build time (statis).
+ */
+
 :root {
   --brand-primary: #FED853;
+  --brand-primary-text: #14171A;
+  --brand-primary-50: #FEFDF0;
+  --brand-primary-100: #FEF7D6;
+  --brand-primary-200: #FDEE9F;
+  --brand-primary-300: #FCE366;
+  --brand-primary-400: #FBD836;
+  --brand-primary-600: #F5CD3E;
+  --brand-primary-700: #E5BD2C;
+  --brand-primary-800: #D4AA1E;
+  --brand-primary-900: #B89014;
+  --brand-primary-950: #8A6A0B;
 }
 
 @layer base {
@@ -14,13 +38,13 @@
 
 @layer utilities {
   .bg-brand {
-    background-color: var(--brand-primary, #FED853);
+    background-color: var(--brand-primary);
   }
   .text-brand {
-    color: var(--brand-primary, #FED853);
+    color: var(--brand-primary);
   }
   .border-brand {
-    border-color: var(--brand-primary, #FED853);
+    border-color: var(--brand-primary);
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
@@ -31,13 +55,90 @@
   }
 }
 
+/* ================================================================
+   DYNAMIC BRAND OVERRIDE — after @tailwind utilities
+   Override semua kelas Tailwind primary-* dengan CSS variable brand
+   ================================================================ */
+
+/* Background */
+.bg-primary-50  { background-color: var(--brand-primary-50) !important; }
+.bg-primary-100 { background-color: var(--brand-primary-100) !important; }
+.bg-primary-200 { background-color: var(--brand-primary-200) !important; }
+.bg-primary-300 { background-color: var(--brand-primary-300) !important; }
+.bg-primary-400 { background-color: var(--brand-primary-400) !important; }
+.bg-primary-500 { background-color: var(--brand-primary) !important; }
+.bg-primary-600 { background-color: var(--brand-primary-600) !important; }
+.bg-primary-700 { background-color: var(--brand-primary-700) !important; }
+.bg-primary-800 { background-color: var(--brand-primary-800) !important; }
+.bg-primary-900 { background-color: var(--brand-primary-900) !important; }
+
+/* Text */
+.text-primary-50  { color: var(--brand-primary-50) !important; }
+.text-primary-100 { color: var(--brand-primary-100) !important; }
+.text-primary-200 { color: var(--brand-primary-200) !important; }
+.text-primary-300 { color: var(--brand-primary-300) !important; }
+.text-primary-400 { color: var(--brand-primary-400) !important; }
+.text-primary-500 { color: var(--brand-primary) !important; }
+.text-primary-600 { color: var(--brand-primary-600) !important; }
+.text-primary-700 { color: var(--brand-primary-700) !important; }
+.text-primary-800 { color: var(--brand-primary-800) !important; }
+.text-primary-900 { color: var(--brand-primary-900) !important; }
+
+/* Border */
+.border-primary-50  { border-color: var(--brand-primary-50) !important; }
+.border-primary-100 { border-color: var(--brand-primary-100) !important; }
+.border-primary-200 { border-color: var(--brand-primary-200) !important; }
+.border-primary-300 { border-color: var(--brand-primary-300) !important; }
+.border-primary-400 { border-color: var(--brand-primary-400) !important; }
+.border-primary-500 { border-color: var(--brand-primary) !important; }
+.border-primary-600 { border-color: var(--brand-primary-600) !important; }
+.border-primary-700 { border-color: var(--brand-primary-700) !important; }
+.border-primary-800 { border-color: var(--brand-primary-800) !important; }
+.border-primary-900 { border-color: var(--brand-primary-900) !important; }
+
+/* Ring (focus) */
+.ring-primary-500 { --tw-ring-color: var(--brand-primary) !important; }
+.ring-primary-600 { --tw-ring-color: var(--brand-primary-600) !important; }
+
+/* Fill (SVG) */
+.fill-primary-500 { fill: var(--brand-primary) !important; }
+.fill-primary-600 { fill: var(--brand-primary-600) !important; }
+
+/* Stroke (SVG) */
+.stroke-primary-500 { stroke: var(--brand-primary) !important; }
+.stroke-primary-600 { stroke: var(--brand-primary-600) !important; }
+
+/* Hover overrides */
+.hover\:bg-primary-50:hover  { background-color: var(--brand-primary-50) !important; }
+.hover\:bg-primary-100:hover { background-color: var(--brand-primary-100) !important; }
+.hover\:bg-primary-200:hover { background-color: var(--brand-primary-200) !important; }
+.hover\:bg-primary-500:hover { background-color: var(--brand-primary) !important; }
+.hover\:bg-primary-600:hover { background-color: var(--brand-primary-600) !important; }
+
+.hover\:text-primary-600:hover { color: var(--brand-primary-600) !important; }
+.hover\:text-primary-700:hover { color: var(--brand-primary-700) !important; }
+.hover\:text-primary-800:hover { color: var(--brand-primary-800) !important; }
+
+.hover\:border-primary-200:hover { border-color: var(--brand-primary-200) !important; }
+.hover\:border-primary-300:hover { border-color: var(--brand-primary-300) !important; }
+
+/* Focus ring overrides */
+.focus\:border-primary-500:focus { border-color: var(--brand-primary) !important; }
+.focus\:ring-primary-500:focus { --tw-ring-color: var(--brand-primary) !important; }
+
+/* currentColor SVG elements — override via text-primary-* parent */
+.text-primary-600 svg,
+.text-primary-600 path { color: inherit; }
+
+/* Primary buttons (since text- is used for icon color on buttons) */
+button.bg-primary-500,
+a.bg-primary-500 {
+  color: var(--brand-primary-text) !important;
+}
+
 @keyframes progress-stripes {
-  from {
-    background-position: 1rem 0;
-  }
-  to {
-    background-position: 0 0;
-  }
+  from { background-position: 1rem 0; }
+  to { background-position: 0 0; }
 }
 
 .animate-progress-stripes {

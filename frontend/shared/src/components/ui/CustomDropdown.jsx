@@ -45,7 +45,11 @@ const CustomDropdown = ({
     };
   }, []);
 
-  const selectedOption = normalizedOptions.find(opt => String(opt.value) === String(value));
+  const actualValue = (value && typeof value === 'object' && 'target' in value) 
+    ? value.target.value 
+    : value;
+
+  const selectedOption = normalizedOptions.find(opt => String(opt.value) === String(actualValue));
   const isDark = variant === 'dark';
 
   const handleSelect = (optValue) => {
@@ -119,7 +123,7 @@ const CustomDropdown = ({
 
         {/* Dropdown Menu */}
         {isOpen && !disabled && (
-          <div className={`absolute z-30 min-w-full w-max max-w-lg mt-1.5 border rounded-xl shadow-card overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150
+          <div className={`absolute z-50 w-full min-w-[200px] mt-1.5 border rounded-xl shadow-card overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150
             ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200/80'}
           `}>
             <ul className="max-h-60 overflow-y-auto py-1 text-xs md:text-sm font-body">

@@ -4,10 +4,12 @@ import { AuthContext } from '../context/AuthContext';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import Alert from '../components/ui/Alert';
+import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -33,93 +35,91 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex bg-white font-body">
-      {/* Left Column - Form */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-8 sm:p-12 md:p-24 relative z-10">
-        <div className="w-full max-w-sm space-y-8">
-          
-          <div className="space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight text-neutral-900 font-heading">
-              Bismillah...
-            </h2>
-            <p className="text-neutral-500 text-sm">
-              Please enter your details to access the master dashboard.
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] px-4 py-12 font-body text-neutral-900 antialiased selection:bg-primary-500 selection:text-neutral-900">
+      <div className="w-full max-w-[380px] space-y-6">
+        
+        {/* Header / Logo */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#181C1F] border border-neutral-800 text-primary-500 shadow-sm">
+            <KaabaIcon className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-heading font-bold tracking-tight text-neutral-900">
+              Azhan ERP
+            </h1>
+            <p className="text-xs text-neutral-500 mt-1 font-medium">
+              Master Dashboard
             </p>
           </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Card Form */}
+        <div className="bg-white p-7 rounded-2xl border border-neutral-200/80 shadow-sm space-y-5">
+          {errorMsg && (
+            <Alert variant="error">
+              {errorMsg}
+            </Alert>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
             <Input
-              label="Email address"
+              label="Email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="admin@azhan.id"
               required
+              autoFocus
+              className="!mb-0"
             />
 
             <Input
-              label="Password"
+              label="Kata Sandi"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
+              className="!mb-0"
             />
 
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-neutral-600 cursor-pointer">
-                <input type="checkbox" className="rounded border-neutral-300 text-primary-500 focus:ring-primary-500 w-4 h-4" />
-                <span>Remember me</span>
+            <div className="flex items-center justify-between text-xs pt-1">
+              <label className="flex items-center gap-2 text-neutral-600 cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-neutral-300 text-primary-500 focus:ring-primary-500/40 w-3.5 h-3.5 cursor-pointer" 
+                />
+                <span>Ingat saya</span>
               </label>
-              <a href="#" className="text-primary-600 hover:text-primary-700 font-medium transition-colors">
-                Forgot password?
+              <a 
+                href="https://wa.me/62812345678" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-neutral-500 hover:text-neutral-900 transition-colors"
+              >
+                Lupa sandi?
               </a>
             </div>
-
-            {errorMsg && (
-              <Alert variant="error" className="animate-in fade-in slide-in-from-top-1">
-                {errorMsg}
-              </Alert>
-            )}
 
             <Button
               type="submit"
               variant="primary"
               isLoading={loading}
-              className="w-full py-2.5 text-base mt-2"
+              disabled={loading}
+              className="w-full h-10 text-sm font-semibold justify-center shadow-xs mt-2"
             >
-              Sign in
+              {loading ? "Memproses..." : "Masuk"}
             </Button>
           </form>
-
-          <p className="text-center text-sm text-neutral-500 pt-6">
-            &copy; {new Date().getFullYear()} Azhan Technologies. All rights reserved.
-          </p>
         </div>
-      </div>
 
-      {/* Right Column - Branding/Illustration */}
-      <div 
-        className="hidden md:flex w-1/2 relative overflow-hidden bg-neutral-900"
-        style={{ backgroundImage: "url('/haram-bg.jpg')", backgroundSize: 'cover', backgroundPosition: 'bottom center' }}
-      >
-        {/* Black Transparent Overlay */}
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] z-0"></div>
-        
-        {/* Branding Content */}
-        <div className="relative z-10 flex flex-col justify-center p-12 md:p-24 w-full text-white h-full">
-          <div>
-            <h2 className="text-4xl md:text-5xl font-bold font-heading leading-tight mb-6">
-              Bersama Menuju <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-500 to-primary-600">
-                Azhan Maju, Besar & Berkah
-              </span>
-            </h2>
-            <p className="text-lg text-amber-100/90 max-w-md font-light leading-relaxed">
-              Satu langkah hari ini, membawa kita lebih dekat pada masa depan yang lebih baik.
-            </p>
-          </div>
-        </div>
+        {/* Footer */}
+        <p className="text-center text-xs text-neutral-400">
+          &copy; {new Date().getFullYear()} Azhan Grup. All rights reserved.
+        </p>
+
       </div>
     </div>
   );

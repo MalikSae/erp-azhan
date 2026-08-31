@@ -316,19 +316,27 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 
 func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 	brandID := identity.GetBrandID(r.Context())
-	if brandID == nil {
-		writeError(w, http.StatusNotFound, "endpoint ini untuk admin brand tertentu")
-		return
-	}
+	var b *Brand
+	var err error
 
-	b, err := h.repo.GetByID(r.Context(), uint64(*brandID))
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+	if brandID == nil {
+		// Fallback untuk super admin atau testing: ambil brand pertama yang ada
+		brands, listErr := h.repo.List(r.Context())
+		if listErr != nil || len(brands) == 0 {
+			writeError(w, http.StatusNotFound, "belum ada data brand")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data brand")
-		return
+		b = &brands[0]
+	} else {
+		b, err = h.repo.GetByID(r.Context(), uint64(*brandID))
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "gagal mengambil data brand")
+			return
+		}
 	}
 
 	// Hanya kembalikan field publik/esensial

@@ -12,8 +12,7 @@ const DataTable = ({
   itemsPerPage = 10,
   emptyMessage = "Tidak ada data",
   renderCell,
-  toolbarActions,
-  onRowClick
+  toolbarActions
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -63,10 +62,10 @@ const DataTable = ({
     return result;
   }, [data, searchQuery, sortConfig, columns]);
 
-  // Reset to first page when search changes
+  // Reset to first page when search or data changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, data.length, itemsPerPage]);
+  }, [searchQuery, data, itemsPerPage]);
 
   // Paginate data
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -115,7 +114,6 @@ const DataTable = ({
         renderCell={renderCell}
         sortConfig={sortConfig}
         onSort={handleSort}
-        onRowClick={onRowClick}
       />
 
       {/* Footer / Pagination */}

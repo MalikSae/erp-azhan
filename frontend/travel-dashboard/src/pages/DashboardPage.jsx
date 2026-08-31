@@ -135,8 +135,8 @@ const DashboardPage = () => {
     <PageHeader title="Dashboard" subtitle={`Ringkasan operasional ${brandInfo?.nama || "travel"} hari ini.`} secondaryActionLabel="Tambah Jamaah" onSecondaryAction={() => navigate("/jamaah/new")} actionLabel="Booking Baru" onAction={() => navigate("/bookings/new")} />
     {error && <Alert variant="error" message={error} onClose={() => setError("")} />}
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <MetricCard label="Jamaah Terdaftar" value={data.jamaah.length} note={`${stats.activeBookings.length} booking aktif`} icon={UsersRound} onClick={() => navigate("/jamaah")} />
-      <MetricCard label="Booking Baru" value={stats.newBookings} note={`${stats.blocked} kursi sedang diblokir`} icon={CalendarDays} tone="warning" onClick={() => navigate("/bookings")} />
+      <MetricCard label="Jamaah Terdaftar" value={data.jamaah.length} note={`${stats.activeBookings.length} booking aktif`} icon={UsersRound} tone="primary" onClick={() => navigate("/jamaah")} />
+      <MetricCard label="Booking Baru" value={stats.newBookings} note={`${stats.blocked} kursi sedang diblokir`} icon={CalendarDays} tone="primary" onClick={() => navigate("/bookings")} />
       <MetricCard label="Pembayaran Diterima" value={formatCompactRupiah(stats.confirmedPaid)} note={`${stats.pendingPayments.length} pembayaran menunggu`} icon={TrendingUp} tone="success" onClick={() => navigate("/bookings")} />
       <MetricCard label="Sisa Tagihan" value={formatCompactRupiah(stats.receivable)} note="Dari seluruh booking aktif" icon={Banknote} tone="danger" onClick={() => navigate("/bookings")} />
     </div>

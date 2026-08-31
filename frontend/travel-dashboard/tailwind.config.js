@@ -20,6 +20,7 @@ export default {
           800: '#D4AA1E',
           900: '#B89014',
           950: '#8A6A0B',
+          DEFAULT: '#FED853',
         },
         neutral: {
           50: '#FAFAFA',
