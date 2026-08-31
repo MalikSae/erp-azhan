@@ -155,9 +155,7 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 		if req.PaymentAmount == nil || math.Abs(*req.PaymentAmount-totalPrice) >= 0.5 {
 			return nil, ErrInvalidPayment
 		}
-		bookingStatus = "lunas"
-		isSeatBlocked = true
-		dealSubstatus = "paid"
+		dealSubstatus = "lunas_pending"
 	case "dp":
 		if req.PaymentAmount == nil || *req.PaymentAmount <= 0 || *req.PaymentAmount > totalPrice {
 			return nil, ErrInvalidPayment
@@ -202,20 +200,12 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 
 	var paymentID *int64
 	if req.CommitmentType == "dp" || req.CommitmentType == "lunas" {
-		paymentStatus := "pending"
-		var verifiedBy any
-		var verifiedAt any
-		if req.CommitmentType == "lunas" {
-			paymentStatus = "confirmed"
-			verifiedBy = createdBy
-			verifiedAt = time.Now().UTC()
-		}
 		paymentResult, err := tx.ExecContext(ctx,
 			`INSERT INTO payments
 			 (booking_id,jumlah,metode,tanggal,status,bukti_url,source,verified_by,verified_at)
-			 VALUES (?,?,?,?,?,?,'crm',?,?)`,
-			bookingID, *req.PaymentAmount, req.PaymentMethod, req.PaymentDate, paymentStatus,
-			req.PaymentProofURL, verifiedBy, verifiedAt,
+			 VALUES (?,?,?,?,'pending',?,'crm',NULL,NULL)`,
+			bookingID, *req.PaymentAmount, req.PaymentMethod, req.PaymentDate,
+			req.PaymentProofURL,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("create payment: %w", err)
@@ -367,65 +357,94 @@ func phoneVariants(phone string) (string, string) {
 	return digits, digits
 }
 
-// ReleaseExpiredSeatHolds melepas hold booking baru yang kedaluwarsa secara idempotent.
+// ReleaseExpiredSeatHolds melepas hold booking baru yang kedaluwarsa secara atomic per-booking.
 func (r *Repository) ReleaseExpiredSeatHolds(ctx context.Context) (int64, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("begin release expired seat holds: %w", err)
-	}
-	defer tx.Rollback()
-
-	rows, err := tx.QueryContext(ctx, `
-		SELECT id,schedule_id,seat_count FROM bookings
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id FROM bookings
 		WHERE status='baru' AND is_seat_blocked=TRUE
-		  AND seat_hold_expires_at IS NOT NULL AND seat_hold_expires_at<=UTC_TIMESTAMP()
-		ORDER BY id FOR UPDATE`)
+		  AND seat_hold_expires_at IS NOT NULL AND seat_hold_expires_at <= UTC_TIMESTAMP()
+		ORDER BY id`)
 	if err != nil {
-		return 0, fmt.Errorf("lock expired seat holds: %w", err)
+		return 0, fmt.Errorf("find expired seat hold candidates: %w", err)
 	}
-	var bookingIDs []int64
-	seatsBySchedule := make(map[int64]int)
+	defer rows.Close()
+
+	var candidateIDs []int64
 	for rows.Next() {
-		var bookingID, scheduleID int64
-		var seatCount int
-		if err := rows.Scan(&bookingID, &scheduleID, &seatCount); err != nil {
-			rows.Close()
+		var id int64
+		if err := rows.Scan(&id); err != nil {
 			return 0, err
 		}
-		bookingIDs = append(bookingIDs, bookingID)
-		seatsBySchedule[scheduleID] += seatCount
+		candidateIDs = append(candidateIDs, id)
 	}
-	if err := rows.Close(); err != nil {
+	if err := rows.Err(); err != nil {
 		return 0, err
 	}
-	if len(bookingIDs) == 0 {
-		if err := tx.Commit(); err != nil {
-			return 0, err
-		}
+	if len(candidateIDs) == 0 {
 		return 0, nil
 	}
 
-	for scheduleID, seatCount := range seatsBySchedule {
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE schedules SET seat_sisa=LEAST(seat_total,seat_sisa+?) WHERE id=?`,
-			seatCount, scheduleID,
-		); err != nil {
-			return 0, fmt.Errorf("restore expired seats: %w", err)
+	var releasedCount int64
+	for _, bookingID := range candidateIDs {
+		released, err := r.releaseSingleSeatHold(ctx, bookingID)
+		if err != nil {
+			continue
+		}
+		if released {
+			releasedCount++
 		}
 	}
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(bookingIDs)), ",")
-	args := make([]any, len(bookingIDs))
-	for index, id := range bookingIDs {
-		args[index] = id
+
+	return releasedCount, nil
+}
+
+func (r *Repository) releaseSingleSeatHold(ctx context.Context, bookingID int64) (bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("begin tx for booking %d: %w", bookingID, err)
 	}
+	defer tx.Rollback()
+
+	var isSeatBlocked bool
+	var seatHoldExpiresAt sql.NullTime
+	var scheduleID int64
+	var seatCount int
+	var status string
+
+	err = tx.QueryRowContext(ctx, `
+		SELECT is_seat_blocked, seat_hold_expires_at, schedule_id, seat_count, status
+		FROM bookings
+		WHERE id=?
+		FOR UPDATE`, bookingID).Scan(&isSeatBlocked, &seatHoldExpiresAt, &scheduleID, &seatCount, &status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("lock booking %d: %w", bookingID, err)
+	}
+
+	now := time.Now().UTC()
+	if !isSeatBlocked || !seatHoldExpiresAt.Valid || status != "baru" || seatHoldExpiresAt.Time.After(now) {
+		return false, nil
+	}
+
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE bookings SET is_seat_blocked=FALSE,seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id IN (`+placeholders+`)`,
-		args...,
+		`UPDATE schedules SET seat_sisa=LEAST(seat_total, seat_sisa+?) WHERE id=?`,
+		seatCount, scheduleID,
 	); err != nil {
-		return 0, fmt.Errorf("clear expired seat holds: %w", err)
+		return false, fmt.Errorf("restore seat for schedule %d: %w", scheduleID, err)
 	}
+
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE bookings SET is_seat_blocked=FALSE, seat_hold_expires_at=NULL, seat_hold_key=NULL WHERE id=?`,
+		bookingID,
+	); err != nil {
+		return false, fmt.Errorf("clear hold on booking %d: %w", bookingID, err)
+	}
+
 	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("commit expired seat holds: %w", err)
+		return false, fmt.Errorf("commit release hold on booking %d: %w", bookingID, err)
 	}
-	return int64(len(bookingIDs)), nil
+
+	return true, nil
 }
