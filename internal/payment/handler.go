@@ -113,25 +113,32 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validasi nilai tidak boleh melebihi sisa tagihan
-	totalHarga, totalPaid, err := h.repo.GetBookingTotalAndPaid(r.Context(), bookingID)
+	// Validasi status booking dan nilai tidak boleh melebihi sisa tagihan
+	status, totalHarga, totalPaid, err := h.repo.GetBookingTotalAndPaid(r.Context(), bookingID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
-	if totalHarga != nil {
-		sisaTagihan := *totalHarga - totalPaid
-		if sisaTagihan <= 0 {
-			writeError(w, http.StatusBadRequest, "tagihan booking sudah lunas")
-			return
-		}
-		if req.Jumlah > sisaTagihan {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("jumlah pembayaran tidak boleh melebihi sisa tagihan (sisa: Rp %.0f)", sisaTagihan))
-			return
-		}
+	if status == "draft" {
+		writeError(w, http.StatusBadRequest, "Booking ini masih berstatus draft, pembayaran belum bisa diproses. Selesaikan/finalisasi booking terlebih dahulu.")
+		return
+	}
+	if totalHarga == nil {
+		writeError(w, http.StatusBadRequest, "Total tagihan booking belum ditentukan, pembayaran tidak dapat diproses.")
+		return
+	}
+	sisaTagihan := *totalHarga - totalPaid
+	if sisaTagihan <= 0 {
+		writeError(w, http.StatusBadRequest, "tagihan booking sudah lunas")
+		return
+	}
+	if req.Jumlah > sisaTagihan {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("jumlah pembayaran tidak boleh melebihi sisa tagihan (sisa: Rp %.0f)", sisaTagihan))
+		return
 	}
 
-	p, err := h.repo.Create(r.Context(), bookingID, &req)
+	adminUserID := identity.GetAdminUserID(r.Context())
+	p, err := h.repo.Create(r.Context(), bookingID, &req, &adminUserID)
 	if err != nil {
 		handleRepoError(w, err)
 		return

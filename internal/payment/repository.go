@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Sentinel errors
@@ -159,14 +160,18 @@ func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string)
 	return items, rows.Err()
 }
 
-// ─── Create ───────────────────────────────────────────────────────────────────
+// Create menambahkan payment baru. Jika source == 'admin', status otomatis 'confirmed', verified_by & verified_at terisi, dan booking status disinkronkan.
+func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePaymentRequest, verifiedBy *int64) (*Payment, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("payment.Create tx: %w", err)
+	}
+	defer tx.Rollback()
 
-// Create menambahkan payment baru. Status selalu 'pending'.
-func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePaymentRequest) (*Payment, error) {
 	var bankName, accountNumber, accountHolder *string
 	if req.BankAccountID != nil {
 		var n, no, h string
-		err := r.db.QueryRowContext(ctx, `SELECT bank_name,account_number,account_holder FROM bank_accounts WHERE id=? AND is_active=TRUE`, *req.BankAccountID).Scan(&n, &no, &h)
+		err := tx.QueryRowContext(ctx, `SELECT bank_name,account_number,account_holder FROM bank_accounts WHERE id=? AND is_active=TRUE`, *req.BankAccountID).Scan(&n, &no, &h)
 		if err != nil {
 			return nil, ErrNotFound
 		}
@@ -174,13 +179,24 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 		accountNumber = &no
 		accountHolder = &h
 	}
-	const q = `INSERT INTO payments (booking_id,bank_account_id,destination_bank_name,destination_account_number,destination_account_holder,jumlah,metode,sender_name,sender_bank,tanggal,status,bukti_url,notes,source) VALUES (?,?,?,?,?,?,?,?,?,?,'pending',?,?,?)`
 
 	source := req.Source
 	if source == "" {
 		source = "admin"
 	}
-	res, err := r.db.ExecContext(ctx, q, bookingID, req.BankAccountID, bankName, accountNumber, accountHolder, req.Jumlah, req.Metode, req.SenderName, req.SenderBank, req.Tanggal, req.BuktiURL, req.Notes, source)
+
+	status := "pending"
+	var vBy *int64
+	var verifiedAt any
+	if source == "admin" {
+		status = "confirmed"
+		vBy = verifiedBy
+		verifiedAt = time.Now().UTC()
+	}
+
+	const q = `INSERT INTO payments (booking_id,bank_account_id,destination_bank_name,destination_account_number,destination_account_holder,jumlah,metode,sender_name,sender_bank,tanggal,status,bukti_url,notes,source,verified_by,verified_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+
+	res, err := tx.ExecContext(ctx, q, bookingID, req.BankAccountID, bankName, accountNumber, accountHolder, req.Jumlah, req.Metode, req.SenderName, req.SenderBank, req.Tanggal, status, req.BuktiURL, req.Notes, source, vBy, verifiedAt)
 	if err != nil {
 		return nil, fmt.Errorf("payment.Create: %w", err)
 	}
@@ -190,30 +206,41 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 		return nil, fmt.Errorf("payment.Create LastInsertId: %w", err)
 	}
 
+	if status == "confirmed" {
+		if err := r.syncBookingStatusTx(ctx, tx, bookingID); err != nil {
+			return nil, fmt.Errorf("payment.Create sync booking: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("payment.Create commit: %w", err)
+	}
+
 	return r.GetByID(ctx, id, nil)
 }
 
-// GetBookingTotalAndPaid mengambil total_harga booking dan total pembayaran yang sudah dikonfirmasi.
-func (r *Repository) GetBookingTotalAndPaid(ctx context.Context, bookingID int64) (*float64, float64, error) {
+// GetBookingTotalAndPaid mengambil status, total_harga booking dan total pembayaran yang sudah dikonfirmasi.
+func (r *Repository) GetBookingTotalAndPaid(ctx context.Context, bookingID int64) (string, *float64, float64, error) {
 	q := `
-		SELECT b.total_harga, COALESCE(SUM(p.jumlah), 0)
+		SELECT b.status, b.total_harga, COALESCE(SUM(p.jumlah), 0)
 		FROM bookings b
 		LEFT JOIN payments p ON p.booking_id = b.id AND p.status = 'confirmed'
 		WHERE b.id = ?
-		GROUP BY b.id, b.total_harga`
+		GROUP BY b.id, b.status, b.total_harga`
+	var status string
 	var totalHarga sql.NullFloat64
 	var totalPaid float64
-	err := r.db.QueryRowContext(ctx, q, bookingID).Scan(&totalHarga, &totalPaid)
+	err := r.db.QueryRowContext(ctx, q, bookingID).Scan(&status, &totalHarga, &totalPaid)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, 0, ErrNotFound
+		return "", nil, 0, ErrNotFound
 	}
 	if err != nil {
-		return nil, 0, fmt.Errorf("payment.GetBookingTotalAndPaid: %w", err)
+		return "", nil, 0, fmt.Errorf("payment.GetBookingTotalAndPaid: %w", err)
 	}
 	if totalHarga.Valid {
-		return &totalHarga.Float64, totalPaid, nil
+		return status, &totalHarga.Float64, totalPaid, nil
 	}
-	return nil, totalPaid, nil
+	return status, nil, totalPaid, nil
 }
 
 // ─── UpdateStatus ─────────────────────────────────────────────────────────────

@@ -361,16 +361,29 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "rekening tujuan tidak tersedia untuk brand ini")
 		return
 	}
-	total, totalPaid, err := h.paymentRepo.GetBookingTotalAndPaid(r.Context(), bookingID)
+	status, total, totalPaid, err := h.paymentRepo.GetBookingTotalAndPaid(r.Context(), bookingID)
 	if err != nil {
 		writeError(w, 500, "gagal memeriksa tagihan")
 		return
 	}
-	if total != nil && req.Jumlah > *total-totalPaid {
+	if status == "draft" {
+		writeError(w, 400, "Booking ini masih berstatus draft, pembayaran belum bisa diproses. Selesaikan/finalisasi booking terlebih dahulu.")
+		return
+	}
+	if total == nil {
+		writeError(w, 400, "Total tagihan booking belum ditentukan, pembayaran tidak dapat diproses.")
+		return
+	}
+	sisa := *total - totalPaid
+	if sisa <= 0 {
+		writeError(w, 400, "tagihan booking sudah lunas")
+		return
+	}
+	if req.Jumlah > sisa {
 		writeError(w, 400, "nominal melebihi sisa tagihan")
 		return
 	}
-	item, err := h.paymentRepo.Create(r.Context(), bookingID, &req)
+	item, err := h.paymentRepo.Create(r.Context(), bookingID, &req, nil)
 	if err != nil {
 		writeError(w, 500, "gagal menyimpan konfirmasi pembayaran")
 		return
