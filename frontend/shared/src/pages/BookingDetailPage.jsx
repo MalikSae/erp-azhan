@@ -4,6 +4,7 @@ import {
   getBooking, 
   updateBookingStatus, 
   cancelBookingSeatBlock,
+  blockBookingSeat,
   listPayments, 
   createPayment, 
   updatePaymentStatus, 
@@ -81,6 +82,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   });
   const [paymentFormError, setPaymentFormError] = useState(null);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [selectedBuktiUrl, setSelectedBuktiUrl] = useState(null);
 
   // Add-on Modal State
   const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
@@ -109,6 +111,27 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [isCancelPaxModalOpen, setIsCancelPaxModalOpen] = useState(false);
   const [selectedPaxForCancel, setSelectedPaxForCancel] = useState(null);
   const [cancelPaxSubmitting, setCancelPaxSubmitting] = useState(false);
+
+  // Reject Payment Modal State
+  const [selectedPaymentForReject, setSelectedPaymentForReject] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  const [rejectError, setRejectError] = useState("");
+
+  // Confirm Payment Modal State
+  const [selectedPaymentForConfirm, setSelectedPaymentForConfirm] = useState(null);
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false);
+  const [confirmError, setConfirmError] = useState("");
+
+  // Seat Block / Release Modal State
+  const [cancelSeatBlockModal, setCancelSeatBlockModal] = useState(false);
+  const [cancelSeatBlockError, setCancelSeatBlockError] = useState("");
+  const [seatBlockLoading, setSeatBlockLoading] = useState(false);
+
+  const [blockSeatModal, setBlockSeatModal] = useState(false);
+  const [blockSeatError, setBlockSeatError] = useState("");
+  const [blockSeatLoading, setBlockSeatLoading] = useState(false);
+  const [blockSeatKey, setBlockSeatKey] = useState("");
 
   const fetchAll = async () => {
     try {
@@ -179,8 +202,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   };
 
   const [cancelConfirmModal, setCancelConfirmModal] = useState(false);
-  const [cancelSeatBlockModal, setCancelSeatBlockModal] = useState(false);
-  const [seatBlockLoading, setSeatBlockLoading] = useState(false);
 
   const handleBookingStatus = (newStatus) => {
     if (newStatus === "batal") {
@@ -203,15 +224,42 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
   const handleCancelSeatBlock = async () => {
     setSeatBlockLoading(true);
+    setCancelSeatBlockError("");
     try {
       await cancelBookingSeatBlock(id);
       setCancelSeatBlockModal(false);
       await fetchAll();
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal melepas blok kursi");
-      setCancelSeatBlockModal(false);
+      setCancelSeatBlockError(err.response?.data?.error || "Gagal membatalkan block seat");
     } finally {
       setSeatBlockLoading(false);
+    }
+  };
+
+  const handleOpenBlockSeat = () => {
+    const key = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+    setBlockSeatKey(key);
+    setBlockSeatError("");
+    setBlockSeatModal(true);
+  };
+
+  const handleBlockSeatSubmit = async () => {
+    setBlockSeatLoading(true);
+    setBlockSeatError("");
+    try {
+      await blockBookingSeat(id, blockSeatKey);
+      setBlockSeatModal(false);
+      await fetchAll();
+    } catch (err) {
+      setBlockSeatError(err.response?.data?.error || "Gagal melakukan block seat");
+    } finally {
+      setBlockSeatLoading(false);
     }
   };
 
@@ -225,11 +273,15 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
   const handleChangeRoomSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedPaxForRoomChange || !newRoomType) return;
+    const roomVal = (newRoomType && typeof newRoomType === 'object' && 'target' in newRoomType) 
+      ? newRoomType.target.value 
+      : newRoomType;
+
+    if (!selectedPaxForRoomChange || !roomVal) return;
     setChangeRoomSubmitting(true);
     setChangeRoomError(null);
     try {
-      await updatePaxRoomType(id, selectedPaxForRoomChange.id, newRoomType);
+      await updatePaxRoomType(id, selectedPaxForRoomChange.id, roomVal);
       setIsChangeRoomModalOpen(false);
       setSelectedPaxForRoomChange(null);
       fetchAll();
@@ -466,12 +518,46 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     }
   };
 
-  const handleUpdatePaymentStatus = async (paymentId, newStatus) => {
+  const handleUpdatePaymentStatus = async (paymentId, newStatus, reason = null) => {
     try {
-      await updatePaymentStatus(paymentId, newStatus);
+      await updatePaymentStatus(paymentId, newStatus, reason);
       fetchAll();
     } catch (err) {
       setError(err.response?.data?.error || "Gagal mengubah status pembayaran");
+    }
+  };
+
+  const handleRejectPaymentSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedPaymentForReject || rejectionReason.trim().length < 3) return;
+
+    setRejectSubmitting(true);
+    setRejectError("");
+    try {
+      await updatePaymentStatus(selectedPaymentForReject.id, "rejected", rejectionReason.trim());
+      setSelectedPaymentForReject(null);
+      setRejectionReason("");
+      fetchAll();
+    } catch (err) {
+      setRejectError(err.response?.data?.error || "Gagal menolak pembayaran");
+    } finally {
+      setRejectSubmitting(false);
+    }
+  };
+
+  const handleConfirmPaymentSubmit = async () => {
+    if (!selectedPaymentForConfirm) return;
+
+    setConfirmSubmitting(true);
+    setConfirmError("");
+    try {
+      await updatePaymentStatus(selectedPaymentForConfirm.id, "confirmed");
+      setSelectedPaymentForConfirm(null);
+      fetchAll();
+    } catch (err) {
+      setConfirmError(err.response?.data?.error || "Gagal mengonfirmasi pembayaran");
+    } finally {
+      setConfirmSubmitting(false);
     }
   };
 
@@ -530,14 +616,22 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         onBack={() => navigate("/bookings")}
       >
         <div className="flex flex-wrap items-center gap-2">
-          {booking.status === "baru" && (
-            <Button size="sm" variant="secondary" onClick={() => handleBookingStatus("dp")}>
-              Set Status DP
+          {booking.status === "baru" && !booking.is_seat_blocked && (
+            <Button size="sm" variant="secondary" onClick={handleOpenBlockSeat}>
+              Block Seat
             </Button>
           )}
-          {booking.status === "dp" && sisaTagihan === 0 && (
-            <Button size="sm" variant="primary" onClick={() => handleBookingStatus("lunas")}>
-              Set Status Lunas
+          {booking.is_seat_blocked && (
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="text-danger-600 hover:bg-danger-50 text-xs" 
+              onClick={() => {
+                setCancelSeatBlockError("");
+                setCancelSeatBlockModal(true);
+              }}
+            >
+              Cancel Block Seat
             </Button>
           )}
           {booking.status !== "batal" && (
@@ -582,7 +676,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 <h3 className="font-semibold text-neutral-900 font-heading">Daftar Jamaah (Pax)</h3>
               </div>
               <span className="text-xs text-neutral-500 font-body">
-                {activePaxList.length} pax aktif ({regularActiveCount} reguler, {infantActiveCount} infant) dari total {paxList.length} pax
+                Total: <span className="font-semibold text-neutral-800">{activePaxList.length} Jamaah</span>
+                {infantActiveCount > 0 && ` (${infantActiveCount} infant)`}
+                {paxList.length > activePaxList.length && ` · ${paxList.length - activePaxList.length} batal`}
               </span>
             </div>
 
@@ -594,10 +690,8 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
                     <tr>
                       <th className="py-3 px-4">Nama Jamaah</th>
-                      <th className="py-3 px-3">Tipe</th>
                       <th className="py-3 px-3">Kamar</th>
                       <th className="py-3 px-3">Harga</th>
-                      <th className="py-3 px-3">Status</th>
                       <th className="py-3 px-4 text-right">Aksi</th>
                     </tr>
                   </thead>
@@ -609,7 +703,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                       return (
                         <tr key={pax.id} className={isBatal ? "bg-neutral-50/70 opacity-60" : "hover:bg-neutral-50/50"}>
                           <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
+                            <div>
                               <button
                                 type="button"
                                 onClick={() => navigate(`/jamaah/${pax.jamaah_id}`)}
@@ -620,19 +714,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                               >
                                 {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
                               </button>
-                              {isPic && (
-                                <Badge variant="primary" showIcon={false}>
-                                  PIC
-                                </Badge>
+                              {pax.pax_type === 'infant' && (
+                                <span className="block text-[11px] text-neutral-500 font-normal">
+                                  Infant (Bayi &lt; 2 thn)
+                                </span>
                               )}
                             </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            {pax.pax_type === 'infant' ? (
-                              <Badge variant="warning" showIcon={false}>Infant</Badge>
-                            ) : (
-                              <Badge variant="neutral" showIcon={false}>Reguler</Badge>
-                            )}
                           </td>
                           <td className="py-3 px-3">
                             <span className="font-medium text-neutral-800">
@@ -641,13 +728,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                           </td>
                           <td className="py-3 px-3 font-semibold text-neutral-900">
                             {formatRupiah(pax.harga_pax)}
-                          </td>
-                          <td className="py-3 px-3">
-                            {pax.pax_status === 'aktif' ? (
-                              <Badge variant="success" showIcon={false}>Aktif</Badge>
-                            ) : (
-                              <Badge variant="danger" showIcon={false}>Batal</Badge>
-                            )}
                           </td>
                           <td className="py-3 px-4 text-right">
                             {pax.pax_status === 'aktif' && (
@@ -710,15 +790,14 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                       return (
                         <tr key={pax.id} className="hover:bg-neutral-50/50">
                           <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-neutral-900 font-body">
+                            <div>
+                              <span className="font-semibold text-neutral-900 font-body block">
                                 {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
                               </span>
-                              {isPic && (
-                                <Badge variant="primary" showIcon={false}>PIC</Badge>
-                              )}
                               {pax.pax_type === 'infant' && (
-                                <Badge variant="warning" showIcon={false}>Infant</Badge>
+                                <span className="block text-[11px] text-neutral-500 font-normal">
+                                  Infant (Bayi &lt; 2 thn)
+                                </span>
                               )}
                             </div>
                           </td>
@@ -868,16 +947,23 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   if (key === "jumlah") return formatRupiah(p.jumlah);
                   if (key === "bukti_url") {
                     return p.bukti_url ? (
-                      <a
-                        href={p.bukti_url.startsWith('http') ? p.bukti_url : `${import.meta.env.VITE_API_BASE_URL}${p.bukti_url}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary-600 hover:underline flex items-center gap-1 text-xs"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const fullUrl = p.bukti_url.startsWith('http') 
+                            ? p.bukti_url 
+                            : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${p.bukti_url.startsWith('/') ? '' : '/'}${p.bukti_url}`;
+                          setSelectedBuktiUrl(fullUrl);
+                        }}
+                        className="text-neutral-900 hover:text-primary-700 font-semibold inline-flex items-center gap-1.5 text-xs bg-neutral-100 hover:bg-neutral-200/80 px-2.5 py-1 rounded-lg border border-neutral-200/90 transition-colors cursor-pointer"
+                        title="Lihat Bukti Pembayaran"
                       >
+                        <FileText size={13} className="text-neutral-500" />
                         <span>Lihat Bukti</span>
-                        <ExternalLink size={12} />
-                      </a>
-                    ) : "-";
+                      </button>
+                    ) : (
+                      <span className="text-neutral-400 text-xs">-</span>
+                    );
                   }
                   if (key === "status") {
                     const statusConfig = {
@@ -886,16 +972,42 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                       rejected: ["danger", "Ditolak"],
                     };
                     const [v, label] = statusConfig[p.status] || ["neutral", p.status];
-                    return <Badge variant={v} hideIcon={true}>{label}</Badge>;
+                    return (
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant={v} hideIcon={true}>{label}</Badge>
+                        {p.status === "rejected" && p.rejection_reason && (
+                          <span className="text-[11px] text-danger-600 italic font-body max-w-[180px] leading-tight" title={p.rejection_reason}>
+                            Alasan: {p.rejection_reason}
+                          </span>
+                        )}
+                      </div>
+                    );
                   }
                   if (key === "aksi") {
                     if (p.status === "pending") {
                       return (
                         <div className="flex items-center gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => handleUpdatePaymentStatus(p.id, "confirmed")} title="Konfirmasi">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedPaymentForConfirm(p);
+                              setConfirmError("");
+                            }}
+                            title="Konfirmasi"
+                          >
                             <Check size={14} className="text-success-600" />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleUpdatePaymentStatus(p.id, "rejected")} title="Tolak">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedPaymentForReject(p);
+                              setRejectionReason("");
+                              setRejectError("");
+                            }}
+                            title="Tolak"
+                          >
                             <X size={14} className="text-danger-600" />
                           </Button>
                         </div>
@@ -1078,46 +1190,163 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         title="Catat Pembayaran Baru"
+        size="md"
       >
-        <form onSubmit={handlePaymentSubmit} className="space-y-4">
+        <form onSubmit={handlePaymentSubmit} className="space-y-4 font-body">
           {paymentFormError && <Alert variant="error">{paymentFormError}</Alert>}
+
+          {/* Billing Context Card */}
+          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <span className="text-[11px] uppercase tracking-wider text-neutral-500 font-semibold block">Sisa Tagihan</span>
+              <div className={`text-base sm:text-lg font-bold font-heading ${sisaTagihan > 0 ? "text-neutral-900" : "text-success-600"}`}>
+                {formatRupiah(sisaTagihan)}
+              </div>
+            </div>
+            {sisaTagihan > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setPaymentForm(prev => ({ ...prev, jumlah: sisaTagihan }))}
+                className="text-xs shrink-0 self-start sm:self-auto"
+              >
+                Bayar Penuh Sisa
+              </Button>
+            )}
+          </div>
+
           <CurrencyInput
             label="Jumlah Pembayaran (Rp)"
             value={paymentForm.jumlah}
             onChange={(val) => setPaymentForm(prev => ({ ...prev, jumlah: val }))}
             required
-            helperText={`Sisa tagihan saat ini: ${formatRupiah(sisaTagihan)}`}
+            placeholder="0"
+            className="!mb-0"
           />
-          <CustomDropdown
-            label="Metode Pembayaran"
-            value={paymentForm.metode}
-            onChange={(val) => setPaymentForm(prev => ({ ...prev, metode: val }))}
-            options={[
-              { value: "transfer", label: "Transfer Bank" },
-              { value: "cash", label: "Tunai / Cash" },
-            ]}
-          />
-          <Input
-            label="Tanggal Pembayaran"
-            type="date"
-            value={paymentForm.tanggal}
-            onChange={(e) => setPaymentForm(prev => ({ ...prev, tanggal: e.target.value }))}
-            required
-          />
-          <FormField label="Bukti Pembayaran (Opsional)">
-            <Input
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={(e) => setPaymentForm(prev => ({ ...prev, bukti_file: e.target.files?.[0] || null }))}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <CustomDropdown
+              label="Metode Pembayaran"
+              value={paymentForm.metode}
+              onChange={(val) => setPaymentForm(prev => ({ ...prev, metode: val }))}
+              options={[
+                { value: "transfer", label: "Transfer Bank" },
+                { value: "cash", label: "Tunai / Cash" },
+              ]}
+              className="!mb-0"
             />
+            <Input
+              label="Tanggal Pembayaran"
+              type="date"
+              value={paymentForm.tanggal}
+              onChange={(e) => setPaymentForm(prev => ({ ...prev, tanggal: e.target.value }))}
+              required
+              className="!mb-0"
+            />
+          </div>
+
+          <FormField label="Bukti Pembayaran (Opsional)" helperText="Format JPG, PNG, atau PDF (maks. 5MB)">
+            {paymentForm.bukti_file ? (
+              <div className="flex items-center justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-xl">
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <div className="w-8 h-8 rounded-lg bg-primary-50 border border-primary-200 flex items-center justify-center text-primary-700 shrink-0">
+                    <FileText size={16} />
+                  </div>
+                  <div className="truncate">
+                    <p className="text-xs font-semibold text-neutral-800 truncate">{paymentForm.bukti_file.name}</p>
+                    <p className="text-[11px] text-neutral-500">{(paymentForm.bukti_file.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPaymentForm(prev => ({ ...prev, bukti_file: null }))}
+                  className="text-neutral-400 hover:text-danger-600 p-1 rounded-lg hover:bg-white transition-colors cursor-pointer"
+                  title="Hapus file"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center p-4 border-2 border-neutral-200 border-dashed rounded-xl bg-neutral-50/50 hover:bg-neutral-50 hover:border-primary-400 transition-colors cursor-pointer group">
+                <Upload size={20} className="text-neutral-400 group-hover:text-primary-600 transition-colors mb-1.5" />
+                <span className="text-xs font-medium text-neutral-700">
+                  Unggah bukti transfer / kwitansi
+                </span>
+                <span className="text-[11px] text-neutral-400 mt-0.5">
+                  Klik untuk memilih file
+                </span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, bukti_file: e.target.files?.[0] || null }))}
+                />
+              </label>
+            )}
           </FormField>
-          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-            <Button type="button" variant="ghost" onClick={() => setIsPaymentModalOpen(false)}>Batal</Button>
-            <Button type="submit" variant="primary" disabled={paymentSubmitting}>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-100">
+            <Button 
+              type="button" 
+              variant="ghost" 
+              onClick={() => setIsPaymentModalOpen(false)}
+              disabled={paymentSubmitting}
+            >
+              Batal
+            </Button>
+            <Button 
+              type="submit" 
+              variant="primary" 
+              isLoading={paymentSubmitting}
+              disabled={paymentSubmitting}
+            >
               {paymentSubmitting ? "Menyimpan..." : "Simpan Pembayaran"}
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: Preview Bukti Pembayaran */}
+      <Modal
+        isOpen={Boolean(selectedBuktiUrl)}
+        onClose={() => setSelectedBuktiUrl(null)}
+        title="Bukti Pembayaran"
+        size="lg"
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <a
+              href={selectedBuktiUrl || "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline inline-flex items-center gap-1.5"
+            >
+              <span>Buka di Tab Baru</span>
+              <ExternalLink size={13} />
+            </a>
+            <Button type="button" variant="secondary" onClick={() => setSelectedBuktiUrl(null)}>
+              Tutup
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col items-center justify-center p-3 bg-neutral-900/5 rounded-xl overflow-hidden min-h-[260px] max-h-[70vh]">
+          {selectedBuktiUrl ? (
+            selectedBuktiUrl.toLowerCase().endsWith('.pdf') ? (
+              <iframe
+                src={selectedBuktiUrl}
+                title="Bukti Pembayaran PDF"
+                className="w-full h-[60vh] rounded-lg border border-neutral-200"
+              />
+            ) : (
+              <img
+                src={selectedBuktiUrl}
+                alt="Bukti Pembayaran"
+                className="max-h-[60vh] w-auto max-w-full object-contain rounded-lg shadow-2xs"
+              />
+            )
+          ) : null}
+        </div>
       </Modal>
 
       {/* Modal: Tambah Add-on */}
@@ -1315,22 +1544,26 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         title={`Ganti Tipe Kamar - ${selectedPaxForRoomChange?.nama_jamaah || ''}`}
       >
         {changeRoomError && <Alert variant="error" className="mb-4">{changeRoomError}</Alert>}
-        <form onSubmit={handleChangeRoomSubmit} className="space-y-4">
-          <CustomDropdown
-            label="Pilih Tipe Kamar Baru"
-            name="new_room_type"
-            value={newRoomType}
-            onChange={(val) => setNewRoomType(val)}
-            options={[
-              { value: "Quad", label: "Quad (4 orang)" },
-              { value: "Triple", label: "Triple (3 orang)" },
-              { value: "Double", label: "Double (2 orang)" }
-            ]}
-            required
-          />
-          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
+        <form onSubmit={handleChangeRoomSubmit} className="space-y-5 font-body min-h-[160px] flex flex-col justify-between">
+          <div>
+            <CustomDropdown
+              label="Pilih Tipe Kamar Baru"
+              value={newRoomType}
+              onChange={(val) => {
+                const actual = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
+                setNewRoomType(actual);
+              }}
+              options={[
+                { value: "Quad", label: "Quad (4 orang)" },
+                { value: "Triple", label: "Triple (3 orang)" },
+                { value: "Double", label: "Double (2 orang)" }
+              ]}
+              required
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-100">
             <Button type="button" variant="ghost" onClick={() => setIsChangeRoomModalOpen(false)}>Batal</Button>
-            <Button type="submit" variant="primary" disabled={changeRoomSubmitting}>
+            <Button type="submit" variant="primary" disabled={changeRoomSubmitting} isLoading={changeRoomSubmitting}>
               {changeRoomSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
             </Button>
           </div>
@@ -1351,6 +1584,182 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           <Button variant="danger" disabled={cancelPaxSubmitting} onClick={handleCancelPaxSubmit}>
             {cancelPaxSubmitting ? "Memproses..." : "Ya, Batalkan Pax"}
           </Button>
+        </div>
+      </Modal>
+
+      {/* Modal: Tolak Pembayaran */}
+      <Modal
+        isOpen={Boolean(selectedPaymentForReject)}
+        onClose={() => !rejectSubmitting && setSelectedPaymentForReject(null)}
+        title="Tolak Pembayaran"
+      >
+        {rejectError && <Alert variant="error" className="mb-4">{rejectError}</Alert>}
+
+        {selectedPaymentForReject && (
+          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 mb-4 text-xs space-y-1 font-body">
+            <div className="flex justify-between">
+              <span className="text-neutral-500">Nominal:</span>
+              <span className="font-bold text-neutral-900">{formatRupiah(selectedPaymentForReject.jumlah)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-neutral-500">Pengirim:</span>
+              <span className="font-medium text-neutral-800">{selectedPaymentForReject.sender_name || "-"}</span>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleRejectPaymentSubmit} className="space-y-4 font-body">
+          <div>
+            <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-1.5">
+              Alasan Penolakan <span className="text-danger-500">*</span>
+            </label>
+            <textarea
+              rows={3}
+              className="w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 resize-none disabled:bg-neutral-100"
+              placeholder="Contoh: bukti transfer tidak sesuai jumlah"
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              required
+              disabled={rejectSubmitting}
+            />
+            <p className="text-[11px] text-neutral-400 mt-1">
+              Minimal 3 karakter. Alasan ini akan tercatat dalam riwayat pembayaran.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setSelectedPaymentForReject(null)}
+              disabled={rejectSubmitting}
+            >
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              variant="danger"
+              disabled={rejectSubmitting || rejectionReason.trim().length < 3}
+              isLoading={rejectSubmitting}
+            >
+              {rejectSubmitting ? "Menolak..." : "Tolak Pembayaran"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Konfirmasi Pembayaran */}
+      <Modal
+        isOpen={Boolean(selectedPaymentForConfirm)}
+        onClose={() => !confirmSubmitting && setSelectedPaymentForConfirm(null)}
+        title="Konfirmasi Pembayaran"
+      >
+        {confirmError && <Alert variant="error" className="mb-4">{confirmError}</Alert>}
+
+        {selectedPaymentForConfirm && (
+          <div className="space-y-4 font-body">
+            <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-2 font-body">
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-medium">Nominal:</span>
+                <span className="font-bold text-neutral-900 text-sm">{formatRupiah(selectedPaymentForConfirm.jumlah)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-medium">Pengirim:</span>
+                <span className="font-medium text-neutral-800">{selectedPaymentForConfirm.sender_name || "-"}</span>
+              </div>
+              {selectedPaymentForConfirm.destination_bank_name && (
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500 font-medium">Rekening Tujuan:</span>
+                  <span className="font-medium text-neutral-800">
+                    {selectedPaymentForConfirm.destination_bank_name} - {selectedPaymentForConfirm.destination_account_number} ({selectedPaymentForConfirm.destination_account_holder})
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-neutral-600 text-sm leading-relaxed">
+              Pastikan dana sudah benar-benar masuk ke rekening tujuan. Setelah dikonfirmasi, status booking akan disinkronkan dan alokasi kursi akan dikunci.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setSelectedPaymentForConfirm(null)}
+                disabled={confirmSubmitting}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleConfirmPaymentSubmit}
+                disabled={confirmSubmitting}
+                isLoading={confirmSubmitting}
+              >
+                {confirmSubmitting ? "Mengonfirmasi..." : "Ya, Konfirmasi Pembayaran"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal: Cancel Block Seat */}
+      <Modal
+        isOpen={cancelSeatBlockModal}
+        onClose={() => !seatBlockLoading && setCancelSeatBlockModal(false)}
+        title="Cancel Block Seat"
+      >
+        {cancelSeatBlockError && <Alert variant="error" className="mb-4">{cancelSeatBlockError}</Alert>}
+        <p className="text-neutral-600 font-body text-sm mb-6 leading-relaxed">
+          Apakah Anda yakin ingin membatalkan block seat untuk booking ini? Kuota kursi yang terpakai ({regularActiveCount || booking.seat_count || 1} kursi) akan otomatis dikembalikan ke jadwal paket.
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button variant="ghost" onClick={() => setCancelSeatBlockModal(false)} disabled={seatBlockLoading}>
+            Batal
+          </Button>
+          <Button variant="danger" disabled={seatBlockLoading} isLoading={seatBlockLoading} onClick={handleCancelSeatBlock}>
+            {seatBlockLoading ? "Membatalkan..." : "Cancel Block Seat"}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Modal: Block Seat */}
+      <Modal
+        isOpen={blockSeatModal}
+        onClose={() => !blockSeatLoading && setBlockSeatModal(false)}
+        title="Block Seat"
+      >
+        {blockSeatError && <Alert variant="error" className="mb-4">{blockSeatError}</Alert>}
+        <div className="space-y-4 font-body">
+          <p className="text-neutral-600 text-sm leading-relaxed">
+            Kunci kursi untuk booking ini? Kuota kursi ({regularActiveCount || booking.seat_count || 1} kursi) pada jadwal akan ditahan sampai dilepas secara manual.
+          </p>
+          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-1.5 font-body">
+            <div className="flex justify-between items-center">
+              <span className="text-neutral-500 font-medium">Jumlah Kursi:</span>
+              <span className="font-semibold text-neutral-900">{regularActiveCount || booking.seat_count || 1} Kursi</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-neutral-500 font-medium">Status Kunci:</span>
+              <span className="font-semibold text-neutral-900">Permanen (Manual)</span>
+            </div>
+            {booking.schedule && booking.schedule.seat_sisa !== undefined && (
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500 font-medium">Sisa Kuota Jadwal:</span>
+                <span className="font-semibold text-neutral-900">{booking.schedule.seat_sisa} Kursi Tersedia</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={() => setBlockSeatModal(false)} disabled={blockSeatLoading}>
+              Batal
+            </Button>
+            <Button variant="primary" disabled={blockSeatLoading} isLoading={blockSeatLoading} onClick={handleBlockSeatSubmit}>
+              {blockSeatLoading ? "Memproses..." : "Block Seat"}
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>
