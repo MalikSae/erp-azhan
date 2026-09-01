@@ -29,7 +29,7 @@ function SectionHeader({ title, subtitle, action, onAction }) {
   return <div className="flex items-end justify-between gap-3"><div><h2 className="text-base font-bold text-neutral-900">{title}</h2><p className="mt-0.5 text-xs text-neutral-500">{subtitle}</p></div>{action && <button type="button" onClick={onAction} className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-700 hover:text-primary-800">{action}<ArrowRight size={13} /></button>}</div>;
 }
 
-function PaymentChart({ payments }) {
+function PaxChart({ bookings }) {
   const [hoverIndex, setHoverIndex] = useState(null);
   const series = useMemo(() => {
     const now = new Date();
@@ -38,13 +38,13 @@ function PaymentChart({ payments }) {
       const date = new Date(now);
       date.setDate(now.getDate() - (29 - index));
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-      const amount = payments.filter((payment) => payment.status === "confirmed" && String(payment.tanggal || payment.created_at || "").slice(0, 10) === key).reduce((sum, payment) => sum + Number(payment.jumlah || 0), 0);
+      const amount = bookings.filter((b) => b.status !== "batal" && String(b.tanggal_booking || b.created_at || "").slice(0, 10) === key).reduce((sum, b) => sum + Number(b.pax_count || 0), 0);
       return { date, key, amount };
     });
     const max = Math.max(...values.map((item) => item.amount), 1);
     const total = values.reduce((sum, item) => sum + item.amount, 0);
     return { values, max, total, average: total / 30 };
-  }, [payments]);
+  }, [bookings]);
 
   const width = 800;
   const height = 170;
@@ -76,8 +76,8 @@ function PaymentChart({ payments }) {
 
   return <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
     <div className="flex flex-col gap-4 border-b border-neutral-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-700"><BarChart3 size={19} /></span><div><h2 className="text-base font-bold font-heading text-neutral-900">Arus Pembayaran</h2><p className="mt-0.5 text-xs text-neutral-500">30 hari terakhir • pembayaran terkonfirmasi</p></div></div>
-      <div className="flex gap-6"><div><p className="text-xs text-neutral-500">Total</p><p className="font-bold text-neutral-900">{formatCompactRupiah(series.total)}</p></div><div className="border-l border-neutral-200 pl-6"><p className="text-xs text-neutral-500">Rata-rata / hari</p><p className="font-bold text-neutral-900">{formatCompactRupiah(series.average)}</p></div></div>
+      <div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-700"><BarChart3 size={19} /></span><div><h2 className="text-base font-bold font-heading text-neutral-900">Pendaftaran Pax</h2><p className="mt-0.5 text-xs text-neutral-500">30 hari terakhir • jumlah pax aktif</p></div></div>
+      <div className="flex gap-6"><div><p className="text-xs text-neutral-500">Total Pax</p><p className="font-bold text-neutral-900">{series.total} pax</p></div><div className="border-l border-neutral-200 pl-6"><p className="text-xs text-neutral-500">Rata-rata / hari</p><p className="font-bold text-neutral-900">{series.average.toFixed(1)} pax</p></div></div>
     </div>
     <div className="px-4 pb-3 pt-2 sm:px-5">
       <div className="relative rounded-md bg-neutral-50 px-2 pt-1">
@@ -94,9 +94,9 @@ function PaymentChart({ payments }) {
               {points[hoverIndex].date.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}
             </div>
             <div className="flex items-center justify-between gap-3 text-xs">
-              <span className="text-neutral-300">Pembayaran</span>
+              <span className="text-neutral-300">Pax Baru</span>
               <span className="font-bold text-primary-400 font-mono">
-                {formatRupiah(points[hoverIndex].amount)}
+                {points[hoverIndex].amount} pax
               </span>
             </div>
           </div>
@@ -106,14 +106,14 @@ function PaymentChart({ payments }) {
           viewBox={`0 0 ${width} ${height}`}
           className="h-48 w-full text-primary-600 cursor-crosshair"
           role="img"
-          aria-label="Grafik pembayaran terkonfirmasi 30 hari terakhir"
+          aria-label="Grafik pendaftaran pax 30 hari terakhir"
           onMouseMove={handlePointerMove}
           onMouseLeave={() => setHoverIndex(null)}
           onTouchMove={handlePointerMove}
           onTouchEnd={() => setHoverIndex(null)}
         >
           <defs><linearGradient id="paymentArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity="0.24" /><stop offset="100%" stopColor="currentColor" stopOpacity="0.01" /></linearGradient></defs>
-          {[0, 0.5, 1].map((ratio) => <g key={ratio}><line x1={padding.left} y1={padding.top + plotHeight * ratio} x2={padding.left + plotWidth} y2={padding.top + plotHeight * ratio} stroke="#e4e4e7" strokeWidth="1" strokeDasharray="4 5" /><text x={padding.left - 10} y={padding.top + plotHeight * ratio + 3} textAnchor="end" fontSize="9" fill="#71717a">{formatCompactRupiah(series.max * (1 - ratio))}</text></g>)}
+          {[0, 0.5, 1].map((ratio) => <g key={ratio}><line x1={padding.left} y1={padding.top + plotHeight * ratio} x2={padding.left + plotWidth} y2={padding.top + plotHeight * ratio} stroke="#e4e4e7" strokeWidth="1" strokeDasharray="4 5" /><text x={padding.left - 10} y={padding.top + plotHeight * ratio + 3} textAnchor="end" fontSize="9" fill="#71717a">{Math.round(series.max * (1 - ratio))}</text></g>)}
           <polygon points={area} fill="url(#paymentArea)" />
           <polyline points={line} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
           
@@ -145,7 +145,7 @@ function PaymentChart({ payments }) {
 
           {labelIndexes.map((index) => <text key={index} x={points[index].x} y={height - 7} textAnchor={index === 0 ? "start" : index === 29 ? "end" : "middle"} fontSize="10" fill={hoverIndex === index ? "#18181B" : "#9ca3af"} fontWeight={hoverIndex === index ? "700" : "400"}>{points[index].date.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</text>)}
         </svg>
-        {series.total === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-lg border border-neutral-200 bg-white/90 px-4 py-2 text-xs font-medium text-neutral-500">Belum ada pembayaran terkonfirmasi dalam 30 hari terakhir</div></div>}
+        {series.total === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-lg border border-neutral-200 bg-white/90 px-4 py-2 text-xs font-medium text-neutral-500">Belum ada pendaftaran pax dalam 30 hari terakhir</div></div>}
       </div>
     </div>
   </section>;
@@ -212,7 +212,7 @@ const DashboardPage = () => {
       <MetricCard label="Sisa Tagihan" value={formatCompactRupiah(stats.receivable)} note="Dari seluruh booking aktif" icon={Banknote} tone="danger" onClick={() => navigate("/bookings")} />
     </div>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      <div className="md:col-span-2"><PaymentChart payments={data.payments.filter((payment) => stats.activeBookings.some((booking) => booking.id === payment.booking_id))} /></div>
+      <div className="md:col-span-2"><PaxChart bookings={data.bookings} /></div>
       <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"><SectionHeader title="Perlu Ditindaklanjuti" subtitle="Prioritas operasional saat ini" /><div className="mt-3 space-y-2">{tasks.length === 0 ? <div className="flex flex-col items-center py-8 text-center"><CheckCircle2 className="text-success-500" size={28} /><p className="mt-2 text-sm font-semibold text-neutral-700">Semua terkendali</p></div> : tasks.map((task) => <button key={task.label} onClick={() => navigate(task.path)} className="flex w-full items-center gap-3 rounded-md border border-neutral-100 px-3 py-2.5 text-left hover:bg-neutral-50"><span className={`flex h-8 w-8 items-center justify-center rounded-md ${task.tone === "danger" ? "bg-danger-50 text-danger-600" : "bg-warning-50 text-warning-700"}`}><task.icon size={15} /></span><span className="min-w-0 flex-1 text-xs font-medium text-neutral-700">{task.label}</span><span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-neutral-900 px-1.5 text-xs font-bold text-white">{task.count}</span></button>)}</div></section>
     </div>
     <div className="grid grid-cols-1 gap-4">

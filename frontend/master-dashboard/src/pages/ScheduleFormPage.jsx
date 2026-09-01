@@ -455,11 +455,13 @@ const ScheduleFormPage = () => {
   const handleAddTransitHotel = (hotelId) => {
     if (!hotelId) return;
     const idNum = parseInt(hotelId, 10);
-    if (formData.transit_hotel_ids.includes(idNum)) return;
-    setFormData(prev => ({
-      ...prev,
-      transit_hotel_ids: [...prev.transit_hotel_ids, idNum]
-    }));
+    setFormData(prev => {
+      if (prev.transit_hotel_ids.includes(idNum)) return prev;
+      return {
+        ...prev,
+        transit_hotel_ids: [...prev.transit_hotel_ids, idNum]
+      };
+    });
   };
 
   const handleRemoveTransitHotel = (hotelId) => {

@@ -90,8 +90,7 @@ const SchedulesPage = () => {
   }, []);
 
   const isScheduleUrgent = (s) => {
-    if (!s.is_ticket_confirmed) return false;
-    if (s.status === 'archived') return false;
+    if (s.status !== 'published') return false;
     if (!s.berangkat_tanggal) return false;
     const departDate = new Date(s.berangkat_tanggal);
     departDate.setHours(0, 0, 0, 0);

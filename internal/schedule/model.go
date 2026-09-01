@@ -17,6 +17,7 @@ type HotelRef struct {
 	Name       string `json:"name"`
 	StarRating int    `json:"star_rating"`
 	DistanceM  *int   `json:"distance_m"`
+	PhotoURL   *string `json:"photo_url"`
 }
 
 // AddOnRef merepresentasikan add-on yang dipasang ke schedule.

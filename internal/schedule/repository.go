@@ -46,10 +46,12 @@ const selectFull = `
 		COALESCE(hm.name, '') AS hm_name,
 		COALESCE(hm.star_rating, 0) AS hm_star,
 		hm.distance_m AS hm_dist,
+		hm.photo_url AS hm_photo,
 		s.hotel_madinah_id,
 		COALESCE(hmd.name, '') AS hmd_name,
 		COALESCE(hmd.star_rating, 0) AS hmd_star,
 		hmd.distance_m AS hmd_dist,
+		hmd.photo_url AS hmd_photo,
 		s.harga_quad,
 		s.harga_triple,
 		s.harga_double,
@@ -574,10 +576,12 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		hmName         string
 		hmStar         int
 		hmDist         sql.NullInt64
+		hmPhoto        sql.NullString
 		hotelMadinahID sql.NullInt64
 		hmdName        string
 		hmdStar        int
 		hmdDist        sql.NullInt64
+		hmdPhoto       sql.NullString
 		hargaInfant    sql.NullFloat64
 		hargaCoret     sql.NullFloat64
 		itineraryID    sql.NullInt64
@@ -594,8 +598,8 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		&s.BerangkatBandaraAsal, &s.BerangkatBandaraTujuan,
 		&s.PulangTanggal, &s.PulangJam, &s.PulangKodePenerbangan,
 		&s.PulangBandaraAsal, &s.PulangBandaraTujuan, &s.TransitBandara,
-		&hotelMekkahID, &hmName, &hmStar, &hmDist,
-		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist,
+		&hotelMekkahID, &hmName, &hmStar, &hmDist, &hmPhoto,
+		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist, &hmdPhoto,
 		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret,
 		&itineraryID, &addOnsJSON, &includeJSON, &excludeJSON,
 		&s.BrosurURL, &s.BrosurThumbURL,
@@ -631,6 +635,9 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 			v := int(hmDist.Int64)
 			s.HotelMekkah.DistanceM = &v
 		}
+		if hmPhoto.Valid && hmPhoto.String != "" {
+			s.HotelMekkah.PhotoURL = &hmPhoto.String
+		}
 	}
 
 	// Hotel Madinah ref
@@ -641,6 +648,9 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		if hmdDist.Valid {
 			v := int(hmdDist.Int64)
 			s.HotelMadinah.DistanceM = &v
+		}
+		if hmdPhoto.Valid && hmdPhoto.String != "" {
+			s.HotelMadinah.PhotoURL = &hmdPhoto.String
 		}
 	}
 
