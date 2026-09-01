@@ -36,6 +36,7 @@ import (
 	"erp-azhan/api/internal/perlengkapan"
 	"erp-azhan/api/internal/portal"
 	"erp-azhan/api/internal/schedule"
+	"erp-azhan/api/internal/selfbooking"
 	"erp-azhan/api/internal/shared"
 )
 
@@ -86,7 +87,7 @@ func main() {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Brand-Id"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -139,6 +140,10 @@ func main() {
 	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
 	crmUserRepo := crmuser.NewRepository(db)
 	crmUserHandler := crmuser.NewHandler(crmUserRepo)
+	
+	selfBookingRepo := selfbooking.NewRepository(db)
+	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo)
+
 	if db != nil {
 		go runSeatHoldExpiry(crmDealRepo)
 	}
@@ -169,6 +174,9 @@ func main() {
 	// Public: categories & brand
 	r.With(requireDB(db)).Get("/api/public/categories", categoryHandler.ListPublicCategories)
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
+
+	// Public: Booking (Self-Service)
+	r.With(requireDB(db)).Post("/api/public/book", selfBookingHandler.CreateBooking)
 
 	// Auth (public)
 	r.Route("/api/auth", func(r chi.Router) {
