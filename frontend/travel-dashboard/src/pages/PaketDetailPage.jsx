@@ -37,6 +37,45 @@ const formatCurrency = (amount) => {
   return 'Rp ' + amount.toLocaleString('id-ID');
 };
 
+const parseTransitAirports = (rawStr) => {
+  if (!rawStr || typeof rawStr !== 'string') {
+    return { berangkat: null, pulang: null };
+  }
+  const str = rawStr.trim();
+  if (!str) return { berangkat: null, pulang: null };
+
+  let berangkatRaw = null;
+  let pulangRaw = null;
+
+  if (str.toLowerCase().includes('berangkat:') || str.toLowerCase().includes('pulang:')) {
+    const parts = str.split('|').map(p => p.trim());
+    parts.forEach(p => {
+      const lower = p.toLowerCase();
+      if (lower.startsWith('berangkat:')) {
+        berangkatRaw = p.substring(p.indexOf(':') + 1).trim();
+      } else if (lower.startsWith('pulang:')) {
+        pulangRaw = p.substring(p.indexOf(':') + 1).trim();
+      }
+    });
+  } else {
+    berangkatRaw = str;
+    pulangRaw = str;
+  }
+
+  const extractCode = (part) => {
+    if (!part) return null;
+    const cleaned = part.split(',')[0].split('(')[0].trim().toUpperCase();
+    const match = cleaned.match(/[A-Z]{3}/);
+    if (match) return match[0];
+    return cleaned || null;
+  };
+
+  return {
+    berangkat: extractCode(berangkatRaw),
+    pulang: extractCode(pulangRaw)
+  };
+};
+
 const PaketDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -207,9 +246,23 @@ const PaketDetailPage = () => {
                     {formatDate(schedule.berangkat_tanggal)} {schedule.berangkat_jam ? `• ${schedule.berangkat_jam}` : ''}
                   </p>
                   {(schedule.berangkat_bandara_asal || schedule.berangkat_bandara_tujuan) && (
-                    <p className="text-xs text-neutral-600 flex items-center gap-1">
+                    <p className="text-xs text-neutral-600 flex items-center gap-1 flex-wrap">
                       <MapPin size={12} className="text-primary-600 shrink-0" />
-                      <span>{schedule.berangkat_bandara_asal || '-'} → {schedule.berangkat_bandara_tujuan || '-'}</span>
+                      <span>{schedule.berangkat_bandara_asal || '-'}</span>
+                      {(() => {
+                        const transitAirports = parseTransitAirports(schedule.transit_bandara);
+                        if (transitAirports.berangkat) {
+                          return (
+                            <>
+                              <span>→</span>
+                              <span>{transitAirports.berangkat}</span>
+                              <span>→</span>
+                            </>
+                          );
+                        }
+                        return <span>→</span>;
+                      })()}
+                      <span>{schedule.berangkat_bandara_tujuan || '-'}</span>
                     </p>
                   )}
                 </div>
@@ -228,9 +281,23 @@ const PaketDetailPage = () => {
                     {formatDate(schedule.pulang_tanggal)} {schedule.pulang_jam ? `• ${schedule.pulang_jam}` : ''}
                   </p>
                   {(schedule.pulang_bandara_asal || schedule.pulang_bandara_tujuan) && (
-                    <p className="text-xs text-neutral-600 flex items-center gap-1">
+                    <p className="text-xs text-neutral-600 flex items-center gap-1 flex-wrap">
                       <MapPin size={12} className="text-primary-600 shrink-0" />
-                      <span>{schedule.pulang_bandara_asal || '-'} → {schedule.pulang_bandara_tujuan || '-'}</span>
+                      <span>{schedule.pulang_bandara_asal || '-'}</span>
+                      {(() => {
+                        const transitAirports = parseTransitAirports(schedule.transit_bandara);
+                        if (transitAirports.pulang) {
+                          return (
+                            <>
+                              <span>→</span>
+                              <span>{transitAirports.pulang}</span>
+                              <span>→</span>
+                            </>
+                          );
+                        }
+                        return <span>→</span>;
+                      })()}
+                      <span>{schedule.pulang_bandara_tujuan || '-'}</span>
                     </p>
                   )}
                 </div>

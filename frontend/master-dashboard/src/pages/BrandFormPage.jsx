@@ -4,6 +4,7 @@ import PageHeader from '../components/ui/PageHeader';
 import MetaBox from '../components/ui/MetaBox';
 import FormField from '../components/ui/FormField';
 import Input from '../components/ui/Input';
+import FileInput from '../components/ui/FileInput';
 import Textarea from '../components/ui/Textarea';
 import Button from '../components/ui/Button';
 import Alert from '../components/ui/Alert';
@@ -291,71 +292,35 @@ const BrandFormPage = () => {
               icon={<Upload size={18} className="text-neutral-700" />}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField 
+                <FileInput 
                   label="Logo Brand" 
                   helperText="Format PNG transparan atau SVG direkomendasikan"
-                >
-                  {(localLogoPreview || formData.logo_url) && (
-                    <div className="mb-3 relative inline-block">
-                      <img 
-                        src={localLogoPreview || getMediaUrl(formData.logo_url)}
-                        alt="Preview Logo"
-                        className="h-16 w-auto max-w-[200px] object-contain rounded bg-white border border-neutral-200 p-2"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLocalLogoPreview(null);
-                          setFormData(prev => ({ ...prev, logo_url: '' }));
-                        }}
-                        className="absolute -top-2 -right-2 bg-danger-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-xs cursor-pointer hover:bg-danger-700"
-                        title="Hapus Logo"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                  <Input 
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    disabled={isUploadingLogo}
-                  />
-                  {isUploadingLogo && <p className="text-xs text-neutral-500 mt-1">Mengunggah logo...</p>}
-                </FormField>
+                  value={formData.logo_url}
+                  previewUrl={localLogoPreview}
+                  onChange={handleLogoUpload}
+                  onRemove={() => {
+                    setLocalLogoPreview(null);
+                    setFormData(prev => ({ ...prev, logo_url: '' }));
+                  }}
+                  isUploading={isUploadingLogo}
+                  uploadingText="Mengunggah logo..."
+                  placeholder="Pilih file logo brand..."
+                />
 
-                <FormField 
+                <FileInput 
                   label="Ikon Brand (Square 1:1)" 
                   helperText="Format persegi (512x512px) untuk favicon & PWA"
-                >
-                  {(localIconPreview || formData.icon_url) && (
-                    <div className="mb-3 relative inline-block">
-                      <img 
-                        src={localIconPreview || getMediaUrl(formData.icon_url)}
-                        alt="Preview Ikon"
-                        className="w-16 h-16 aspect-square object-cover rounded bg-white border border-neutral-200"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLocalIconPreview(null);
-                          setFormData(prev => ({ ...prev, icon_url: '' }));
-                        }}
-                        className="absolute -top-2 -right-2 bg-danger-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-xs cursor-pointer hover:bg-danger-700"
-                        title="Hapus Ikon"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                  <Input 
-                    type="file"
-                    accept="image/*"
-                    onChange={handleIconUpload}
-                    disabled={isUploadingIcon}
-                  />
-                  {isUploadingIcon && <p className="text-xs text-neutral-500 mt-1">Mengunggah ikon...</p>}
-                </FormField>
+                  value={formData.icon_url}
+                  previewUrl={localIconPreview}
+                  onChange={handleIconUpload}
+                  onRemove={() => {
+                    setLocalIconPreview(null);
+                    setFormData(prev => ({ ...prev, icon_url: '' }));
+                  }}
+                  isUploading={isUploadingIcon}
+                  uploadingText="Mengunggah ikon..."
+                  placeholder="Pilih file ikon brand..."
+                />
               </div>
             </MetaBox>
 

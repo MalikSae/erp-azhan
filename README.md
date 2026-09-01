@@ -270,6 +270,7 @@ dashboard menggunakan aset resmi yang memiliki izin penggunaan.
 | `PUT` | `/api/admin/schedules/{id}/status` | Update status publikasi paket (*draft*, *published*, *archived*) |
 | `PUT` | `/api/admin/schedules/{id}/seat` | Update kuota total kursi paket |
 | `GET` | `/api/admin/analytics/transactions-30-days` | *(Super Admin)* Agregasi transaksi terkonfirmasi 30 hari per brand |
+| `GET` | `/api/admin/analytics/pax-30-days` | *(Super Admin)* Agregasi pendaftaran jamaah/pax aktif 30 hari per brand |
 | `CRUD` | `/api/admin/bank-accounts` | *(Super Admin)* Kelola beberapa rekening transfer resmi per brand |
 
 #### C. Data Jamaah & Dokumen
@@ -283,7 +284,7 @@ dashboard menggunakan aset resmi yang memiliki izin penggunaan.
 #### D. Transaksi Pemesanan (Bookings) & Operasional
 | Method | Endpoint | Deskripsi |
 |---|---|---|
-| `CRUD` | `/api/admin/bookings` | Pemesanan paket jamaah & update status order (*draft*, *dp*, *lunas*, *batal*) |
+| `CRUD` | `/api/admin/bookings` | Pemesanan paket jamaah, update status order, & hard delete draft booking |
 | `DELETE` | `/api/admin/bookings/{id}/seat-block` | Batalkan block seat tanpa menghapus atau membatalkan booking |
 | `POST` | `/api/admin/bookings/{id}/addons` | Tambah add-on berbayar ke booking tertentu |
 | `DELETE`| `/api/admin/bookings/{id}/addons/{addon_id}`| Hapus add-on dari booking |

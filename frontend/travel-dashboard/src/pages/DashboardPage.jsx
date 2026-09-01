@@ -30,6 +30,7 @@ function SectionHeader({ title, subtitle, action, onAction }) {
 }
 
 function PaymentChart({ payments }) {
+  const [hoverIndex, setHoverIndex] = useState(null);
   const series = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -59,6 +60,20 @@ function PaymentChart({ payments }) {
   const area = `${padding.left},${padding.top + plotHeight} ${line} ${padding.left + plotWidth},${padding.top + plotHeight}`;
   const labelIndexes = [0, 7, 14, 21, 29];
 
+  const handlePointerMove = (e) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const clientX = (e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX) - rect.left;
+    if (rect.width <= 0) return;
+    const svgX = (clientX / rect.width) * width;
+    const clampedX = Math.max(padding.left, Math.min(width - padding.right, svgX));
+    const rawIndex = ((clampedX - padding.left) / plotWidth) * 29;
+    const index = Math.round(rawIndex);
+    if (index >= 0 && index < 30) {
+      setHoverIndex(index);
+    }
+  };
+
   return <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
     <div className="flex flex-col gap-4 border-b border-neutral-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-700"><BarChart3 size={19} /></span><div><h2 className="text-base font-bold font-heading text-neutral-900">Arus Pembayaran</h2><p className="mt-0.5 text-xs text-neutral-500">30 hari terakhir • pembayaran terkonfirmasi</p></div></div>
@@ -66,13 +81,69 @@ function PaymentChart({ payments }) {
     </div>
     <div className="px-4 pb-3 pt-2 sm:px-5">
       <div className="relative rounded-md bg-neutral-50 px-2 pt-1">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-48 w-full text-primary-600" role="img" aria-label="Grafik pembayaran terkonfirmasi 30 hari terakhir">
+        {hoverIndex !== null && (
+          <div
+            className="absolute z-20 pointer-events-none transition-all duration-75 ease-out bg-neutral-900/95 text-white px-3 py-2 rounded-xl shadow-xl backdrop-blur-xs border border-neutral-700/80 min-w-[160px]"
+            style={{
+              left: `${(points[hoverIndex].x / width) * 100}%`,
+              top: '6px',
+              transform: hoverIndex > 20 ? 'translateX(-95%)' : hoverIndex < 6 ? 'translateX(5%)' : 'translateX(-50%)',
+            }}
+          >
+            <div className="text-[11px] font-medium text-neutral-400 border-b border-neutral-700/80 pb-1 mb-1 font-heading">
+              {points[hoverIndex].date.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}
+            </div>
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-neutral-300">Pembayaran</span>
+              <span className="font-bold text-primary-400 font-mono">
+                {formatRupiah(points[hoverIndex].amount)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-48 w-full text-primary-600 cursor-crosshair"
+          role="img"
+          aria-label="Grafik pembayaran terkonfirmasi 30 hari terakhir"
+          onMouseMove={handlePointerMove}
+          onMouseLeave={() => setHoverIndex(null)}
+          onTouchMove={handlePointerMove}
+          onTouchEnd={() => setHoverIndex(null)}
+        >
           <defs><linearGradient id="paymentArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity="0.24" /><stop offset="100%" stopColor="currentColor" stopOpacity="0.01" /></linearGradient></defs>
           {[0, 0.5, 1].map((ratio) => <g key={ratio}><line x1={padding.left} y1={padding.top + plotHeight * ratio} x2={padding.left + plotWidth} y2={padding.top + plotHeight * ratio} stroke="#e4e4e7" strokeWidth="1" strokeDasharray="4 5" /><text x={padding.left - 10} y={padding.top + plotHeight * ratio + 3} textAnchor="end" fontSize="9" fill="#71717a">{formatCompactRupiah(series.max * (1 - ratio))}</text></g>)}
           <polygon points={area} fill="url(#paymentArea)" />
           <polyline points={line} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          {points.filter((point) => point.amount > 0).map((point) => <circle key={point.key} cx={point.x} cy={point.y} r="4" fill="white" stroke="currentColor" strokeWidth="3"><title>{point.date.toLocaleDateString("id-ID")}: {formatRupiah(point.amount)}</title></circle>)}
-          {labelIndexes.map((index) => <text key={index} x={points[index].x} y={height - 7} textAnchor={index === 0 ? "start" : index === 29 ? "end" : "middle"} fontSize="10" fill="#9ca3af">{points[index].date.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</text>)}
+          
+          {hoverIndex !== null && (
+            <line
+              x1={points[hoverIndex].x}
+              x2={points[hoverIndex].x}
+              y1={padding.top}
+              y2={padding.top + plotHeight}
+              stroke="#94A3B8"
+              strokeWidth="1.5"
+              strokeDasharray="3 3"
+              opacity="0.8"
+            />
+          )}
+
+          {points.filter((point) => point.amount > 0).map((point) => <circle key={point.key} cx={point.x} cy={point.y} r="4" fill="white" stroke="currentColor" strokeWidth="3" />)}
+          
+          {hoverIndex !== null && (
+            <circle
+              cx={points[hoverIndex].x}
+              cy={points[hoverIndex].y}
+              r={points[hoverIndex].amount > 0 ? "5" : "3.5"}
+              fill="white"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            />
+          )}
+
+          {labelIndexes.map((index) => <text key={index} x={points[index].x} y={height - 7} textAnchor={index === 0 ? "start" : index === 29 ? "end" : "middle"} fontSize="10" fill={hoverIndex === index ? "#18181B" : "#9ca3af"} fontWeight={hoverIndex === index ? "700" : "400"}>{points[index].date.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</text>)}
         </svg>
         {series.total === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-lg border border-neutral-200 bg-white/90 px-4 py-2 text-xs font-medium text-neutral-500">Belum ada pembayaran terkonfirmasi dalam 30 hari terakhir</div></div>}
       </div>

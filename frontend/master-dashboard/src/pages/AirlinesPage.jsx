@@ -5,6 +5,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import FormField from '../components/ui/FormField';
 import Input from '../components/ui/Input';
+import FileInput from '../components/ui/FileInput';
 import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { listAirlines, createAirline, updateAirline, deleteAirline } from '../api/airlines';
@@ -487,37 +488,20 @@ const AirlinesPage = () => {
             />
           </FormField>
 
-          <FormField label="Logo Maskapai (Opsional)">
-            {(logoPreview || airlineFormData.logo_url) && (
-              <div className="mb-2 relative inline-block">
-                <img 
-                  src={logoPreview || (airlineFormData.logo_url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL}${airlineFormData.logo_url}` : airlineFormData.logo_url)}
-                  alt="Preview"
-                  className="h-16 object-contain rounded bg-white border border-neutral-200"
-                />
-                {(logoPreview || airlineFormData.logo_url) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLogoPreview(null);
-                      setAirlineFormData(prev => ({ ...prev, logo_url: '' }));
-                    }}
-                    className="absolute -top-2 -right-2 bg-danger-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-[10px]"
-                  >
-                    X
-                  </button>
-                )}
-              </div>
-            )}
-            
-            <Input 
-              type="file"
-              accept="image/*"
-              onChange={handleLogoFileChange}
-              disabled={isUploadingLogo}
-            />
-            {isUploadingLogo && <p className="text-sm text-neutral-500 mt-1">Mengupload...</p>}
-          </FormField>
+          <FileInput
+            label="Logo Maskapai (Opsional)"
+            value={airlineFormData.logo_url}
+            previewUrl={logoPreview}
+            onChange={handleLogoFileChange}
+            onRemove={() => {
+              setLogoPreview(null);
+              setAirlineFormData(prev => ({ ...prev, logo_url: '' }));
+            }}
+            isUploading={isUploadingLogo}
+            uploadingText="Mengupload logo maskapai..."
+            placeholder="Pilih file logo maskapai (PNG, SVG, JPG)..."
+            helperText="Format transparan PNG atau SVG direkomendasikan"
+          />
 
           {airlineFormErrors && (
             <Alert variant="error">{airlineFormErrors}</Alert>

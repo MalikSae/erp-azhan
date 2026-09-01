@@ -52,6 +52,45 @@ const formatTime = (timeStr) => {
   return timeStr.substring(0, 5);
 };
 
+const parseTransitAirports = (rawStr) => {
+  if (!rawStr || typeof rawStr !== 'string') {
+    return { berangkat: null, pulang: null };
+  }
+  const str = rawStr.trim();
+  if (!str) return { berangkat: null, pulang: null };
+
+  let berangkatRaw = null;
+  let pulangRaw = null;
+
+  if (str.toLowerCase().includes('berangkat:') || str.toLowerCase().includes('pulang:')) {
+    const parts = str.split('|').map(p => p.trim());
+    parts.forEach(p => {
+      const lower = p.toLowerCase();
+      if (lower.startsWith('berangkat:')) {
+        berangkatRaw = p.substring(p.indexOf(':') + 1).trim();
+      } else if (lower.startsWith('pulang:')) {
+        pulangRaw = p.substring(p.indexOf(':') + 1).trim();
+      }
+    });
+  } else {
+    berangkatRaw = str;
+    pulangRaw = str;
+  }
+
+  const extractCode = (part) => {
+    if (!part) return null;
+    const cleaned = part.split(',')[0].split('(')[0].trim().toUpperCase();
+    const match = cleaned.match(/[A-Z]{3}/);
+    if (match) return match[0];
+    return cleaned || null;
+  };
+
+  return {
+    berangkat: extractCode(berangkatRaw),
+    pulang: extractCode(pulangRaw)
+  };
+};
+
 const StarRating = ({ count = 0 }) => {
   const stars = Math.max(0, Math.min(5, Number(count) || 0));
   if (stars === 0) return <span className="text-xs text-neutral-400 font-body">Non-bintang</span>;
@@ -222,62 +261,72 @@ const ScheduleDetailPage = () => {
               </div>
 
               {/* Rute Keberangkatan & Kepulangan */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                {/* Berangkat */}
-                <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-2">
-                  <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
-                    <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Plane size={14} className="text-neutral-700 rotate-45" />
-                      Penerbangan Berangkat
-                    </span>
-                    {schedule.berangkat_kode_penerbangan && (
-                      <span className="text-xs font-mono font-bold text-neutral-800 bg-neutral-100 px-2 py-0.5 rounded-lg border border-neutral-200/90">
-                        {schedule.berangkat_kode_penerbangan}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-neutral-600 space-y-1">
-                    <p><strong>Tanggal:</strong> {formatDate(schedule.berangkat_tanggal)}</p>
-                    <p><strong>Jam:</strong> {formatTime(schedule.berangkat_jam) || '-'}</p>
-                    <div className="flex items-center gap-1.5 pt-1 text-neutral-900 font-semibold text-xs">
-                      <span>{schedule.berangkat_bandara_asal || '-'}</span>
-                      <ArrowRight size={13} className="text-neutral-400 shrink-0" />
-                      <span>{schedule.berangkat_bandara_tujuan || '-'}</span>
+              {(() => {
+                const transitAirports = parseTransitAirports(schedule.transit_bandara);
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    {/* Berangkat */}
+                    <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-2">
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                        <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <Plane size={14} className="text-neutral-700 rotate-45" />
+                          Penerbangan Berangkat
+                        </span>
+                        {schedule.berangkat_kode_penerbangan && (
+                          <span className="text-xs font-mono font-bold text-neutral-800 bg-neutral-100 px-2 py-0.5 rounded-lg border border-neutral-200/90">
+                            {schedule.berangkat_kode_penerbangan}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-neutral-600 space-y-1">
+                        <p><strong>Tanggal:</strong> {formatDate(schedule.berangkat_tanggal)}</p>
+                        <p><strong>Jam:</strong> {formatTime(schedule.berangkat_jam) || '-'}</p>
+                        <div className="flex items-center gap-1.5 pt-1 text-neutral-900 font-semibold text-xs flex-wrap">
+                          <span>{schedule.berangkat_bandara_asal || '-'}</span>
+                          <ArrowRight size={13} className="text-neutral-400 shrink-0" />
+                          {transitAirports.berangkat && (
+                            <>
+                              <span>{transitAirports.berangkat}</span>
+                              <ArrowRight size={13} className="text-neutral-400 shrink-0" />
+                            </>
+                          )}
+                          <span>{schedule.berangkat_bandara_tujuan || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pulang */}
+                    <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-2">
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                        <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <Plane size={14} className="text-neutral-700 -rotate-135" />
+                          Penerbangan Pulang
+                        </span>
+                        {schedule.pulang_kode_penerbangan && (
+                          <span className="text-xs font-mono font-bold text-neutral-800 bg-neutral-100 px-2 py-0.5 rounded-lg border border-neutral-200/90">
+                            {schedule.pulang_kode_penerbangan}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-neutral-600 space-y-1">
+                        <p><strong>Tanggal:</strong> {formatDate(schedule.pulang_tanggal)}</p>
+                        <p><strong>Jam:</strong> {formatTime(schedule.pulang_jam) || '-'}</p>
+                        <div className="flex items-center gap-1.5 pt-1 text-neutral-900 font-semibold text-xs flex-wrap">
+                          <span>{schedule.pulang_bandara_asal || '-'}</span>
+                          <ArrowRight size={13} className="text-neutral-400 shrink-0" />
+                          {transitAirports.pulang && (
+                            <>
+                              <span>{transitAirports.pulang}</span>
+                              <ArrowRight size={13} className="text-neutral-400 shrink-0" />
+                            </>
+                          )}
+                          <span>{schedule.pulang_bandara_tujuan || '-'}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Pulang */}
-                <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-2">
-                  <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
-                    <span className="text-xs font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Plane size={14} className="text-neutral-700 -rotate-135" />
-                      Penerbangan Pulang
-                    </span>
-                    {schedule.pulang_kode_penerbangan && (
-                      <span className="text-xs font-mono font-bold text-neutral-800 bg-neutral-100 px-2 py-0.5 rounded-lg border border-neutral-200/90">
-                        {schedule.pulang_kode_penerbangan}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-neutral-600 space-y-1">
-                    <p><strong>Tanggal:</strong> {formatDate(schedule.pulang_tanggal)}</p>
-                    <p><strong>Jam:</strong> {formatTime(schedule.pulang_jam) || '-'}</p>
-                    <div className="flex items-center gap-1.5 pt-1 text-neutral-900 font-semibold text-xs">
-                      <span>{schedule.pulang_bandara_asal || '-'}</span>
-                      <ArrowRight size={13} className="text-neutral-400 shrink-0" />
-                      <span>{schedule.pulang_bandara_tujuan || '-'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {schedule.transit_bandara && (
-                <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200 text-xs">
-                  <span className="text-neutral-500 block mb-0.5">Informasi Transit Penerbangan:</span>
-                  <span className="font-semibold text-neutral-900">{schedule.transit_bandara}</span>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </MetaBox>
 

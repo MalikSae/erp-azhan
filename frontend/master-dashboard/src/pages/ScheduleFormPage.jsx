@@ -656,7 +656,7 @@ const ScheduleFormPage = () => {
             <MetaBox
               title="Informasi Dasar & Kuota"
               subtitle="Nama paket, tipe keberangkatan, dan alokasi total seat"
-              icon={<Plane size={18} className="text-neutral-700" />}
+              icon={<Tag size={18} className="text-neutral-700" />}
             >
               <div className="space-y-4">
                 {/* Input Nama Paket */}
@@ -742,11 +742,8 @@ const ScheduleFormPage = () => {
             {/* 2. SECTION: PENERBANGAN & RUTE */}
             <MetaBox
               title="Penerbangan & Maskapai"
-              icon={
-                <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              }
+              subtitle="Maskapai penerbangan, jadwal terbang, dan rute transit"
+              icon={<Plane size={18} className="text-neutral-700" />}
             >
               <div className="space-y-6">
                 {/* Bagian 1: Data Maskapai */}
@@ -1190,11 +1187,8 @@ const ScheduleFormPage = () => {
             {/* 3. SECTION: AKOMODASI HOTEL */}
             <MetaBox
               title="Akomodasi Hotel"
-              icon={
-                <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              }
+              subtitle="Penginapan hotel Mekkah, Madinah, dan hotel transit"
+              icon={<Hotel size={18} className="text-neutral-700" />}
             >
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1325,11 +1319,8 @@ const ScheduleFormPage = () => {
             {/* 4. SECTION: HARGA PAKET & PROMO */}
             <MetaBox
               title="Harga Paket & Promo"
-              icon={
-                <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
+              subtitle="Skema harga per tipe kamar dan penawaran diskon coret"
+              icon={<DollarSign size={18} className="text-neutral-700" />}
             >
               <div className="space-y-4">
                 {/* 4 Kolom Tipe Kamar & Infant */}
@@ -1421,11 +1412,7 @@ const ScheduleFormPage = () => {
             <MetaBox
               title="Fasilitas Paket"
               subtitle="Tuliskan 1 item per baris"
-              icon={
-                <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-              }
+              icon={<CheckSquare size={18} className="text-neutral-700" />}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Include */}
@@ -1457,11 +1444,8 @@ const ScheduleFormPage = () => {
             {/* 6. SECTION: ITINERARY & ADD-ON */}
             <MetaBox
               title="Itinerary & Add-On"
-              icon={
-                <svg className="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-              }
+              subtitle="Master susunan kegiatan harian dan layanan tambahan"
+              icon={<MapPin size={18} className="text-neutral-700" />}
             >
               <div className="space-y-4">
                 {/* Itinerary Dropdown */}

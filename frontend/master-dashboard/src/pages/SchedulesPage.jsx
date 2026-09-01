@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Files, Check, Archive, Minus, Zap } from 'lucide-react';
+import { Files, Check, Archive, Minus, Zap, Eye, Edit2, Trash2 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -10,6 +10,7 @@ import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Badge from '../components/ui/Badge';
 import CustomDropdown from '../components/ui/CustomDropdown';
+import ActionMenu from '../components/ui/ActionMenu';
 import { listSchedulesAdmin, deleteSchedule } from '../api/schedules';
 import { listBrands } from '../api/brands';
 import UrgentPackagesBanner from '../components/UrgentPackagesBanner';
@@ -246,28 +247,6 @@ const SchedulesPage = () => {
         return valA - valB;
       }
     },
-    {
-      header: 'Promo',
-      key: 'promo',
-      align: 'center',
-      sortable: true,
-      sortFn: (a, b) => {
-        const valA = a.is_promo ? 1 : 0;
-        const valB = b.is_promo ? 1 : 0;
-        return valA - valB;
-      }
-    },
-    { 
-      header: 'Berangkat', 
-      key: 'berangkat_tanggal',
-      sortable: true,
-      sortFn: (a, b) => {
-        const tA = a.berangkat_tanggal ? new Date(a.berangkat_tanggal).getTime() : 0;
-        const tB = b.berangkat_tanggal ? new Date(b.berangkat_tanggal).getTime() : 0;
-        return tA - tB;
-      }
-    },
-
     { 
       header: 'Sisa Seat', 
       key: 'seat_sisa',
@@ -370,6 +349,36 @@ const SchedulesPage = () => {
               if (key === 'brand') {
                 return <BrandCell brand={brandsMap[row.brand_id]} />;
               }
+              if (key === 'jadwal_nama') {
+                const days = getDaysRemaining(row.berangkat_tanggal);
+                const isUrgent = isScheduleUrgent(row);
+                return (
+                  <div className="flex flex-col items-start gap-0.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/schedules/${row.id}`);
+                      }}
+                      className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body leading-snug cursor-pointer"
+                      title="Lihat Detail Paket"
+                    >
+                      {row.jadwal_nama}
+                    </button>
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-500 font-body">
+                      <span>{formatDate(row.berangkat_tanggal)}</span>
+                      {isUrgent && days !== null && (
+                        <span 
+                          className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold text-danger-700 bg-danger-50 border border-danger-200"
+                          title="Mendekati keberangkatan & belum penuh"
+                        >
+                          {days} hr lagi
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
             if (key === 'status') {
               if (row.status === 'published') {
                 return (
@@ -415,45 +424,13 @@ const SchedulesPage = () => {
                 </div>
               );
             }
-            if (key === 'promo') {
-              return (
-                <div className="flex items-center justify-center">
-                  {row.is_promo ? (
-                    <div title="Promo Aktif" className="w-5 h-5 rounded-full bg-warning-500 text-white flex items-center justify-center shadow-2xs">
-                      <Zap size={11} className="fill-white" />
-                    </div>
-                  ) : (
-                    <div title="Tidak Ada Promo" className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-400 flex items-center justify-center shadow-2xs">
-                      <Minus size={12} strokeWidth={3} />
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            if (key === 'berangkat_tanggal') {
-              const days = getDaysRemaining(row.berangkat_tanggal);
-              const isUrgent = isScheduleUrgent(row);
-              return (
-                <div className="flex items-center gap-2">
-                  <span className="font-body text-neutral-900">{formatDate(row.berangkat_tanggal)}</span>
-                  {isUrgent && days !== null && (
-                    <span 
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold text-danger-700 bg-danger-50 border border-danger-200"
-                      title="Mendekati keberangkatan & belum penuh"
-                    >
-                      {days} hr lagi
-                    </span>
-                  )}
-                </div>
-              );
-            }
-
             if (key === 'seat_sisa') {
-              if (row.seat_sisa === 0) {
+              const sisa = row.seat_sisa !== null && row.seat_sisa !== undefined ? Number(row.seat_sisa) : null;
+              if (sisa !== null && sisa <= 0) {
                 return (
                   <div className="flex items-center">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-heading tracking-wide bg-success-600 text-white shadow-2xs">
-                      Full Booked
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-heading tracking-wide uppercase bg-neutral-900 text-white shadow-2xs">
+                      FULL BOOKED
                     </span>
                   </div>
                 );
@@ -482,52 +459,52 @@ const SchedulesPage = () => {
             }
 
             if (key === 'harga') {
-               const minPrice = getMinPrice(row);
-               return minPrice > 0 ? formatCurrency(minPrice) : '-';
+              const minPrice = getMinPrice(row);
+              if (minPrice <= 0) return '-';
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-neutral-900 font-body">{formatCurrency(minPrice)}</span>
+                  {row.is_promo && (
+                    <span 
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold font-heading bg-warning-50 text-warning-700 border border-warning-200 shadow-2xs shrink-0"
+                      title="Paket Promo Aktif"
+                    >
+                      <Zap size={10} className="fill-warning-500 text-warning-500" />
+                      Promo
+                    </span>
+                  )}
+                </div>
+              );
             }
             if (key === 'aksi') {
               const hasBookings = (row.booking_count || 0) > 0;
+              const menuItems = [
+                {
+                  label: 'Lihat',
+                  icon: Eye,
+                  onClick: () => navigate(`/schedules/${row.id}`),
+                  tooltip: 'Lihat Detail Paket'
+                },
+                {
+                  label: 'Edit',
+                  icon: Edit2,
+                  onClick: () => navigate(`/schedules/${row.id}/edit`),
+                  tooltip: 'Edit Paket'
+                },
+                {
+                  label: 'Hapus',
+                  icon: Trash2,
+                  danger: true,
+                  disabled: hasBookings,
+                  disabledTooltip: `Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`,
+                  onClick: () => handleDeleteClick(row.id),
+                  tooltip: 'Hapus Paket'
+                }
+              ];
+
               return (
-                <div className="flex gap-2 items-center">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/schedules/${row.id}/edit`);
-                    }}
-                    className="!px-2"
-                    title="Edit"
-                  >
-                    Edit
-                  </Button>
-                  {hasBookings ? (
-                    <button 
-                      type="button"
-                      disabled
-                      onClick={(e) => e.stopPropagation()}
-                      title={`Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`}
-                      className="text-neutral-300 opacity-40 cursor-not-allowed ml-1"
-                    >
-                      <svg className="w-5 h-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <button 
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteClick(row.id);
-                      }} 
-                      title="Hapus"
-                      className="text-neutral-400 hover:text-danger-600 transition-colors ml-1 cursor-pointer"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  )}
+                <div className="flex items-center justify-center">
+                  <ActionMenu items={menuItems} align="right" />
                 </div>
               );
             }

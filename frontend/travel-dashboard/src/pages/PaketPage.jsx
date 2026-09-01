@@ -7,6 +7,7 @@ import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Badge from '../components/ui/Badge';
 import CustomDropdown from '../components/ui/CustomDropdown';
+import ActionMenu from '../components/ui/ActionMenu';
 import { listSchedulesAdmin } from 'shared';
 import { Eye, Files, Check, Archive, Minus, Zap } from 'lucide-react';
 
@@ -159,16 +160,33 @@ const PaketPage = () => {
     { 
       header: 'Nama Paket', 
       key: 'jadwal_nama',
-      accessor: (row) => (
-        <button
-          type="button"
-          onClick={() => navigate(`/paket/${row.id}`)}
-          className="font-semibold text-neutral-900 hover:text-primary-600 hover:underline text-left transition-colors"
-          title="Lihat Detail Paket"
-        >
-          {row.jadwal_nama}
-        </button>
-      )
+      accessor: (row) => {
+        const days = getDaysRemaining(row.berangkat_tanggal);
+        const isUrgent = isScheduleUrgent(row);
+        return (
+          <div className="flex flex-col items-start gap-0.5">
+            <button
+              type="button"
+              onClick={() => navigate(`/schedules/${row.id}`)}
+              className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body leading-snug cursor-pointer"
+              title="Lihat Detail Paket"
+            >
+              {row.jadwal_nama}
+            </button>
+            <div className="flex items-center gap-1.5 text-xs text-neutral-500 font-body">
+              <span>{formatDate(row.berangkat_tanggal)}</span>
+              {isUrgent && days !== null && (
+                <span 
+                  className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold text-danger-700 bg-danger-50 border border-danger-200"
+                  title="Mendekati keberangkatan & belum penuh"
+                >
+                  {days} hr lagi
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      }
     },
     { 
       header: 'Maskapai', 
@@ -252,68 +270,18 @@ const PaketPage = () => {
         </div>
       )
     },
-    {
-      header: 'Promo',
-      key: 'promo',
-      align: 'center',
-      sortable: true,
-      sortFn: (a, b) => {
-        const valA = a.is_promo ? 1 : 0;
-        const valB = b.is_promo ? 1 : 0;
-        return valA - valB;
-      },
-      accessor: (row) => (
-        <div className="flex items-center justify-center">
-          {row.is_promo ? (
-            <div title="Promo Aktif" className="w-5 h-5 rounded-full bg-warning-500 text-white flex items-center justify-center shadow-2xs">
-              <Zap size={11} className="fill-white" />
-            </div>
-          ) : (
-            <div title="Tidak Ada Promo" className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-400 flex items-center justify-center shadow-2xs">
-              <Minus size={12} strokeWidth={3} />
-            </div>
-          )}
-        </div>
-      )
-    },
-    { 
-      header: 'Berangkat', 
-      key: 'berangkat_tanggal',
-      sortable: true,
-      sortFn: (a, b) => {
-        const tA = a.berangkat_tanggal ? new Date(a.berangkat_tanggal).getTime() : 0;
-        const tB = b.berangkat_tanggal ? new Date(b.berangkat_tanggal).getTime() : 0;
-        return tA - tB;
-      },
-      accessor: (row) => {
-        const days = getDaysRemaining(row.berangkat_tanggal);
-        const isUrgent = isScheduleUrgent(row);
-        return (
-          <div className="flex items-center gap-2">
-            <span className="font-body text-neutral-900">{formatDate(row.berangkat_tanggal)}</span>
-            {isUrgent && days !== null && (
-              <span 
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold text-danger-700 bg-danger-50 border border-danger-200"
-                title="Mendekati keberangkatan & belum penuh"
-              >
-                {days} hr lagi
-              </span>
-            )}
-          </div>
-        );
-      }
-    },
     { 
       header: 'Sisa Seat', 
       key: 'seat_sisa',
       sortable: true,
       sortFn: (a, b) => (a.seat_sisa || 0) - (b.seat_sisa || 0),
       accessor: (row) => {
-        if (row.seat_sisa === 0) {
+        const sisa = row.seat_sisa !== null && row.seat_sisa !== undefined ? Number(row.seat_sisa) : null;
+        if (sisa !== null && sisa <= 0) {
           return (
             <div className="flex items-center">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-heading tracking-wide bg-success-600 text-white shadow-2xs">
-                Full Booked
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-heading tracking-wide uppercase bg-neutral-900 text-white shadow-2xs">
+                FULL BOOKED
               </span>
             </div>
           );
@@ -348,7 +316,41 @@ const PaketPage = () => {
       sortFn: (a, b) => getMinPrice(a) - getMinPrice(b),
       accessor: (row) => {
         const minPrice = getMinPrice(row);
-        return minPrice > 0 ? formatCurrency(minPrice) : '-';
+        if (minPrice <= 0) return '-';
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-neutral-900 font-body">{formatCurrency(minPrice)}</span>
+            {row.is_promo && (
+              <span 
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold font-heading bg-warning-50 text-warning-700 border border-warning-200 shadow-2xs shrink-0"
+                title="Paket Promo Aktif"
+              >
+                <Zap size={10} className="fill-warning-500 text-warning-500" />
+                Promo
+              </span>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      header: 'Aksi',
+      key: 'aksi',
+      align: 'center',
+      accessor: (row) => {
+        const menuItems = [
+          {
+            label: 'Lihat',
+            icon: Eye,
+            onClick: () => navigate(`/schedules/${row.id}`),
+            tooltip: 'Lihat Detail Paket'
+          }
+        ];
+        return (
+          <div className="flex items-center justify-center">
+            <ActionMenu items={menuItems} align="right" />
+          </div>
+        );
       }
     }
   ];
@@ -407,6 +409,7 @@ const PaketPage = () => {
             columns={columns}
             data={filteredSchedules}
             itemsPerPage={15}
+            onRowClick={(row) => navigate(`/schedules/${row.id}`)}
             searchPlaceholder="Cari paket..."
             emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket untuk travel Anda.'}
             toolbarActions={

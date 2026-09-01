@@ -6,6 +6,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import FormField from '../components/ui/FormField';
 import Input from '../components/ui/Input';
+import FileInput from '../components/ui/FileInput';
 import Select from '../components/ui/Select';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import Alert from '../components/ui/Alert';
@@ -393,37 +394,20 @@ const HotelsPage = () => {
             placeholder="Contoh: 200 (opsional)"
           />
 
-          <FormField label="Foto Hotel (Opsional)">
-            {(localPreview || formData.photo_url) && (
-              <div className="mb-2 relative inline-block">
-                <img 
-                  src={localPreview || (formData.photo_url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL}${formData.photo_url}` : formData.photo_url)}
-                  alt="Preview"
-                  className="h-16 object-contain rounded bg-white border border-neutral-200"
-                />
-                {(localPreview || formData.photo_url) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLocalPreview(null);
-                      setFormData(prev => ({ ...prev, photo_url: '' }));
-                    }}
-                    className="absolute -top-2 -right-2 bg-danger-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm text-xs"
-                  >
-                    X
-                  </button>
-                )}
-              </div>
-            )}
-            
-            <Input 
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              disabled={isUploading}
-            />
-            {isUploading && <p className="text-sm text-neutral-500 mt-1">Mengupload...</p>}
-          </FormField>
+          <FileInput
+            label="Foto Hotel (Opsional)"
+            value={formData.photo_url}
+            previewUrl={localPreview}
+            onChange={handleFileChange}
+            onRemove={() => {
+              setLocalPreview(null);
+              setFormData(prev => ({ ...prev, photo_url: '' }));
+            }}
+            isUploading={isUploading}
+            uploadingText="Mengupload foto hotel..."
+            placeholder="Pilih file foto hotel (JPG, PNG, WebP)..."
+            helperText="Format JPG, PNG, atau WebP"
+          />
 
           {formErrors && (
             <Alert variant="error">{formErrors}</Alert>

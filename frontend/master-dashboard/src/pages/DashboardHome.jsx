@@ -5,7 +5,7 @@ import { listBrands } from '../api/brands';
 import { listSchedulesAdmin } from '../api/schedules';
 import { listHotels } from '../api/hotels';
 import { listAirlines } from '../api/airlines';
-import { listTransactions30Days } from '../api/analytics';
+import { listPax30Days } from '../api/analytics';
 import {
   Plane,
   Building2,
@@ -16,6 +16,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Users,
+  UsersRound,
   Plus,
   ArrowUpRight
 } from 'lucide-react';
@@ -34,6 +35,10 @@ const toDateKey = (date) => {
 
 const formatCompactRupiah = (value) => new Intl.NumberFormat('id-ID', {
   style: 'currency', currency: 'IDR', notation: 'compact', maximumFractionDigits: 1,
+}).format(value);
+
+const formatRupiah = (value) => new Intl.NumberFormat('id-ID', {
+  style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0,
 }).format(value);
 
 // Attention Metric Card (Matching Altezza Travel Reference)
@@ -80,51 +85,68 @@ const AttentionCard = ({ icon: Icon, title, count, actionLabel, actionLink, badg
   );
 };
 
-const TransactionsChart = ({ brands, transactions, isLoading }) => {
+const PaxRegistrationChart = ({ brands, paxData, isLoading }) => {
+  const [hoverIndex, setHoverIndex] = useState(null);
   const width = 900;
   const height = 240;
-  const padding = { top: 20, right: 20, bottom: 35, left: 75 };
+  const padding = { top: 20, right: 20, bottom: 35, left: 60 };
   const dates = Array.from({ length: 30 }, (_, index) => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - (29 - index));
     return date;
   });
-  const activeBrandIds = [...new Set(transactions.map((item) => Number(item.brand_id)))];
+  const activeBrandIds = [...new Set(paxData.map((item) => Number(item.brand_id)))];
   const series = activeBrandIds.map((brandId, index) => {
+    const brand = brands.find((b) => Number(b.id) === brandId);
     const valuesByDate = new Map(
-      transactions.filter((item) => Number(item.brand_id) === brandId).map((item) => [item.date, Number(item.total_amount) || 0]),
+      paxData.filter((item) => Number(item.brand_id) === brandId).map((item) => [item.date, Number(item.pax_count) || 0]),
     );
     return {
       brandId,
-      name: brands.find((brand) => Number(brand.id) === brandId)?.name || `Brand ${brandId}`,
-      color: `hsl(${(brandId * 137.508 + index * 47) % 360} 68% 42%)`,
+      name: brand?.name || `Brand ${brandId}`,
+      color: brand?.primary_color || `hsl(${(brandId * 137.508 + index * 47) % 360} 68% 42%)`,
       values: dates.map((date) => valuesByDate.get(toDateKey(date)) || 0),
     };
   });
-  const maxValue = Math.max(1, ...series.flatMap((item) => item.values));
+  const rawMax = Math.max(0, ...series.flatMap((item) => item.values));
+  const maxValue = rawMax === 0 ? 5 : Math.max(4, Math.ceil(rawMax / 4) * 4);
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const x = (index) => padding.left + (index / 29) * plotWidth;
   const y = (value) => padding.top + plotHeight - (value / maxValue) * plotHeight;
   const labelIndexes = [0, 7, 14, 21, 29];
 
+  const handlePointerMove = (e) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const clientX = (e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX) - rect.left;
+    if (rect.width <= 0) return;
+    const svgX = (clientX / rect.width) * width;
+    const clampedX = Math.max(padding.left, Math.min(width - padding.right, svgX));
+    const rawIndex = ((clampedX - padding.left) / plotWidth) * 29;
+    const index = Math.round(rawIndex);
+    if (index >= 0 && index < 30) {
+      setHoverIndex(index);
+    }
+  };
+
   return (
-    <section className="rounded-2xl border border-neutral-200/80 bg-white shadow-card overflow-hidden" aria-labelledby="transaction-chart-title">
+    <section className="rounded-2xl border border-neutral-200/80 bg-white shadow-card overflow-hidden" aria-labelledby="pax-chart-title">
       <div className="flex flex-col gap-3 border-b border-neutral-200/80 px-6 py-5 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary-600" />
-            <h2 id="transaction-chart-title" className="font-heading font-bold text-neutral-900 text-base">
-              Grafik Transaksi Masuk (30 Hari Terakhir)
+            <UsersRound className="w-5 h-5 text-primary-600" />
+            <h2 id="pax-chart-title" className="font-heading font-bold text-neutral-900 text-base">
+              Grafik Pendaftaran Pax (30 Hari Terakhir)
             </h2>
           </div>
-          <p className="mt-1 text-xs text-neutral-500 font-body">Nominal pembayaran terkonfirmasi per brand hingga hari ini</p>
+          <p className="mt-1 text-xs text-neutral-500 font-body">Jumlah jamaah/pax aktif terdaftar per brand hingga hari ini</p>
         </div>
         <div className="flex max-w-full flex-wrap gap-x-4 gap-y-2" aria-label="Legenda brand">
           {series.map((item) => (
             <span key={item.brandId} className="flex items-center gap-1.5 text-xs font-semibold text-neutral-700 bg-neutral-50 px-2.5 py-1 rounded-full border border-neutral-200/60">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+              <span className="h-2.5 w-2.5 rounded-full shadow-2xs" style={{ backgroundColor: item.color }} />
               {item.name}
             </span>
           ))}
@@ -135,39 +157,140 @@ const TransactionsChart = ({ brands, transactions, isLoading }) => {
           <div className="h-60 animate-pulse rounded-xl bg-neutral-100" />
         ) : series.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center text-center">
-            <p className="text-sm font-medium text-neutral-700 font-heading">Belum ada transaksi terkonfirmasi</p>
-            <p className="mt-1 text-xs text-neutral-500 font-body">Transaksi 30 hari terakhir akan tampil di grafik ini.</p>
+            <p className="text-sm font-medium text-neutral-700 font-heading">Belum ada pendaftaran jamaah</p>
+            <p className="mt-1 text-xs text-neutral-500 font-body">Data pendaftaran pax 30 hari terakhir akan tampil di grafik ini.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto" role="img" aria-label={`Grafik transaksi 30 hari untuk ${series.length} brand`}>
-            <svg viewBox={`0 0 ${width} ${height}`} className="min-w-[680px] w-full" aria-hidden="true">
+          <div className="relative overflow-x-auto" role="img" aria-label={`Grafik pendaftaran pax 30 hari untuk ${series.length} brand`}>
+            {/* Interactive Floating Tooltip */}
+            {hoverIndex !== null && (
+              <div
+                className="absolute z-20 pointer-events-none transition-all duration-75 ease-out bg-neutral-900/95 text-white p-3 rounded-xl shadow-xl backdrop-blur-xs border border-neutral-700/80 min-w-[200px]"
+                style={{
+                  left: `${((x(hoverIndex)) / width) * 100}%`,
+                  top: '8px',
+                  transform: hoverIndex > 20 ? 'translateX(-95%)' : hoverIndex < 6 ? 'translateX(5%)' : 'translateX(-50%)',
+                }}
+              >
+                <div className="text-[11px] font-medium text-neutral-400 border-b border-neutral-700/80 pb-1.5 mb-2 font-heading flex items-center justify-between gap-2">
+                  <span className="text-white font-semibold">
+                    {new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }).format(dates[hoverIndex])}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {series.map((item) => {
+                    const val = item.values[hoverIndex];
+                    return (
+                      <div key={item.brandId} className="flex items-center justify-between gap-3 text-xs font-body">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: item.color }} />
+                          <span className="truncate text-neutral-200">{item.name}</span>
+                        </div>
+                        <span className={`font-semibold shrink-0 font-mono ${val > 0 ? 'text-white font-bold' : 'text-neutral-500'}`}>
+                          {val} pax
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {series.length > 1 && (
+                  <div className="mt-2 pt-2 border-t border-neutral-700/80 flex items-center justify-between text-xs font-heading">
+                    <span className="text-neutral-400 font-medium">Total Pax</span>
+                    <span className="font-bold text-primary-400 font-mono">
+                      {series.reduce((sum, item) => sum + item.values[hoverIndex], 0)} pax
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <svg
+              viewBox={`0 0 ${width} ${height}`}
+              className="min-w-[680px] w-full cursor-crosshair"
+              aria-hidden="true"
+              onMouseMove={handlePointerMove}
+              onMouseLeave={() => setHoverIndex(null)}
+              onTouchMove={handlePointerMove}
+              onTouchEnd={() => setHoverIndex(null)}
+            >
               {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
                 const gridY = padding.top + plotHeight * ratio;
-                const value = maxValue * (1 - ratio);
+                const value = Math.round(maxValue * (1 - ratio));
                 return (
                   <g key={ratio}>
                     <line x1={padding.left} x2={width - padding.right} y1={gridY} y2={gridY} stroke="#F0F1F3" strokeDasharray="4 5"/>
-                    <text x={padding.left - 12} y={gridY + 4} textAnchor="end" fontSize="10" fontWeight="600" fill="#8C95A0" fontFamily="DM Sans">
-                      {formatCompactRupiah(value).replace('Rp', '').trim()}
+                    <text x={padding.left - 10} y={gridY + 4} textAnchor="end" fontSize="10" fontWeight="600" fill="#8C95A0" fontFamily="DM Sans">
+                      {value}
                     </text>
                   </g>
                 );
               })}
               {labelIndexes.map((index) => (
-                <text key={index} x={x(index)} y={height - 8} textAnchor={index === 0 ? 'start' : index === 29 ? 'end' : 'middle'} fontSize="10" fontWeight="500" fill="#8C95A0" fontFamily="DM Sans">
+                <text
+                  key={index}
+                  x={x(index)}
+                  y={height - 8}
+                  textAnchor={index === 0 ? 'start' : index === 29 ? 'end' : 'middle'}
+                  fontSize="10"
+                  fontWeight={hoverIndex === index ? "700" : "500"}
+                  fill={hoverIndex === index ? "#18181B" : "#8C95A0"}
+                  fontFamily="DM Sans"
+                >
                   {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(dates[index])}
                 </text>
               ))}
+
+              {/* Vertical Guide Line on Hover */}
+              {hoverIndex !== null && (
+                <line
+                  x1={x(hoverIndex)}
+                  x2={x(hoverIndex)}
+                  y1={padding.top}
+                  y2={padding.top + plotHeight}
+                  stroke="#94A3B8"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 3"
+                  opacity="0.8"
+                />
+              )}
+
+              {/* Series Lines & Static Circles */}
               {series.map((item) => {
                 const points = item.values.map((value, index) => `${x(index)},${y(value)}`).join(' ');
                 return (
                   <g key={item.brandId}>
                     <polyline points={points} fill="none" stroke={item.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
                     {item.values.map((value, index) => value > 0 && (
-                      <circle key={index} cx={x(index)} cy={y(value)} r="4" fill="white" stroke={item.color} strokeWidth="2.5">
-                        <title>{item.name} · {formatDate(toDateKey(dates[index]))} · {formatCompactRupiah(value)}</title>
-                      </circle>
+                      <circle key={index} cx={x(index)} cy={y(value)} r="4" fill="white" stroke={item.color} strokeWidth="2.5" />
                     ))}
+                  </g>
+                );
+              })}
+
+              {/* Hover Highlight Circles */}
+              {hoverIndex !== null && series.map((item) => {
+                const val = item.values[hoverIndex];
+                return (
+                  <g key={`hover-point-${item.brandId}`}>
+                    {val > 0 && (
+                      <circle
+                        cx={x(hoverIndex)}
+                        cy={y(val)}
+                        r="8"
+                        fill={item.color}
+                        opacity="0.25"
+                      />
+                    )}
+                    <circle
+                      cx={x(hoverIndex)}
+                      cy={y(val)}
+                      r={val > 0 ? "5" : "3.5"}
+                      fill="white"
+                      stroke={item.color}
+                      strokeWidth={val > 0 ? "2.5" : "1.5"}
+                    />
                   </g>
                 );
               })}
@@ -180,15 +303,15 @@ const TransactionsChart = ({ brands, transactions, isLoading }) => {
 };
 
 const DashboardHome = () => {
-  const [data, setData] = useState({ brands: [], schedules: [], hotels: [], airlines: [], transactions: [] });
+  const [data, setData] = useState({ brands: [], schedules: [], hotels: [], airlines: [], paxRegistrations: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    Promise.all([listBrands(), listSchedulesAdmin(), listHotels(), listAirlines(), listTransactions30Days()])
-      .then(([brands, schedules, hotels, airlines, transactions]) => {
-        if (active) setData({ brands: brands || [], schedules: schedules || [], hotels: hotels || [], airlines: airlines || [], transactions: transactions || [] });
+    Promise.all([listBrands(), listSchedulesAdmin(), listHotels(), listAirlines(), listPax30Days()])
+      .then(([brands, schedules, hotels, airlines, paxRegistrations]) => {
+        if (active) setData({ brands: brands || [], schedules: schedules || [], hotels: hotels || [], airlines: airlines || [], paxRegistrations: paxRegistrations || [] });
       })
       .catch((err) => {
         if (active) setError(err.response?.data?.error || 'Ringkasan dashboard gagal dimuat.');
@@ -305,8 +428,8 @@ const DashboardHome = () => {
         </section>
       </div>
 
-      {/* Transaction 30 Days Trend */}
-      <TransactionsChart brands={data.brands} transactions={data.transactions} isLoading={isLoading} />
+      {/* Pax Registration 30 Days Trend */}
+      <PaxRegistrationChart brands={data.brands} paxData={data.paxRegistrations} isLoading={isLoading} />
 
       {/* Bottom Grid: Departures & Distribution */}
       <div className="grid gap-6 lg:grid-cols-3">
