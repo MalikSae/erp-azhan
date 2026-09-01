@@ -17,6 +17,7 @@ import (
 	"erp-azhan/api/internal/jamaah"
 	"erp-azhan/api/internal/payment"
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type loginAttempt struct {
@@ -110,9 +111,9 @@ func getClientIP(r *http.Request) string {
 // ─── Login Portal ─────────────────────────────────────────────────────────────
 
 type PortalLoginRequest struct {
-	BrandID     *int64 `json:"brand_id"`
-	NamaLengkap string `json:"nama_lengkap"`
-	IDJamaah    string `json:"id_jamaah"`
+	BrandID   *int64 `json:"brand_id"`
+	IDJamaah  string `json:"id_jamaah"`
+	PortalPIN string `json:"portal_pin"`
 }
 
 type PortalLoginResponse struct {
@@ -145,28 +146,45 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
 	req.IDJamaah = strings.TrimSpace(req.IDJamaah)
+	req.PortalPIN = strings.TrimSpace(req.PortalPIN)
 
-	if req.NamaLengkap == "" || req.IDJamaah == "" {
-		writeError(w, http.StatusBadRequest, "nama_lengkap dan id_jamaah wajib diisi")
+	if req.IDJamaah == "" || req.PortalPIN == "" {
+		writeError(w, http.StatusBadRequest, "id_jamaah dan PIN wajib diisi")
 		return
 	}
 
-	// Query: SELECT jamaah WHERE brand_id = ? AND UPPER(id_jamaah) = UPPER(?) AND UPPER(nama_lengkap) = UPPER(?)
 	var j PortalJamaahSummary
-	query := `SELECT id, COALESCE(id_jamaah, ''), nama_lengkap, brand_id FROM jamaah 
-		WHERE brand_id = ? AND UPPER(id_jamaah) = UPPER(?) AND UPPER(nama_lengkap) = UPPER(?)`
+	var pinHash sql.NullString
+	query := `SELECT id, COALESCE(id_jamaah, ''), nama_lengkap, brand_id, portal_pin_hash FROM jamaah 
+		WHERE brand_id = ? AND UPPER(id_jamaah) = UPPER(?)`
 
-	err := h.db.QueryRowContext(r.Context(), query, *req.BrandID, req.IDJamaah, req.NamaLengkap).Scan(&j.ID, &j.IDJamaah, &j.NamaLengkap, &j.BrandID)
+	err := h.db.QueryRowContext(r.Context(), query, *req.BrandID, req.IDJamaah).Scan(&j.ID, &j.IDJamaah, &j.NamaLengkap, &j.BrandID, &pinHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		h.recordFailedLogin(clientIP)
-		writeError(w, http.StatusUnauthorized, "nama atau id jamaah tidak cocok")
+		writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
 		return
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan pada server")
 		return
+	}
+	
+	if !pinHash.Valid || pinHash.String == "" {
+		// Jika belum punya PIN (misal pendaftaran manual oleh admin)
+		// Harus diarahkan untuk ganti PIN, tapi untuk MVP kita cek jika PIN adalah default "123456"
+		if req.PortalPIN != "123456" {
+			h.recordFailedLogin(clientIP)
+			writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
+			return
+		}
+	} else {
+		// Verifikasi bcrypt hash
+		if err := bcrypt.CompareHashAndPassword([]byte(pinHash.String), []byte(req.PortalPIN)); err != nil {
+			h.recordFailedLogin(clientIP)
+			writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
+			return
+		}
 	}
 
 	// Login sukses -> reset counter

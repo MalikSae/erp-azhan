@@ -31,6 +31,7 @@ type Brand struct {
 	MetaDescription        *string   `json:"meta_description"`
 	OgImageURL             *string   `json:"og_image_url"`
 	GoogleVerificationCode *string   `json:"google_verification_code"`
+	MinimalDP              float64   `json:"minimal_dp"`
 	CreatedAt              time.Time `json:"created_at"`
 }
 
@@ -61,6 +62,7 @@ type CreateBrandRequest struct {
 	MetaDescription        *string `json:"meta_description"`
 	OgImageURL             *string `json:"og_image_url"`
 	GoogleVerificationCode *string `json:"google_verification_code"`
+	MinimalDP              float64 `json:"minimal_dp"`
 }
 
 // UpdateBrandRequest adalah payload untuk PUT /api/admin/brands/{id}.
@@ -90,4 +92,5 @@ type UpdateBrandRequest struct {
 	MetaDescription        *string `json:"meta_description"`
 	OgImageURL             *string `json:"og_image_url"`
 	GoogleVerificationCode *string `json:"google_verification_code"`
+	MinimalDP              float64 `json:"minimal_dp"`
 }

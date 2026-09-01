@@ -340,6 +340,7 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 		"meta_description":         b.MetaDescription,
 		"og_image_url":             b.OgImageURL,
 		"google_verification_code": b.GoogleVerificationCode,
+		"minimal_dp":               b.MinimalDP,
 		"social_media":             socialMedia,
 	}
 

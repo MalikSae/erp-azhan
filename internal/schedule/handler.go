@@ -565,6 +565,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		HargaDouble:              req.HargaDouble,
 		HargaInfant:              finalHargaInfant,
 		HargaCoret:               finalHargaCoret,
+		MinimalDP:                req.MinimalDP,
 		ItineraryID:              req.ItineraryID,
 		IncludeItems:             includeItems,
 		ExcludeItems:             excludeItems,

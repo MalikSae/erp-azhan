@@ -78,6 +78,7 @@ type Schedule struct {
 	HargaDouble              float64        `json:"harga_double"`
 	HargaInfant              *float64       `json:"harga_infant"`
 	HargaCoret               *float64       `json:"harga_coret"`
+	MinimalDP                *float64       `json:"minimal_dp"`
 	ItineraryID              *int64         `json:"itinerary_id"`
 	IncludeItems             []string       `json:"include_items"`
 	ExcludeItems             []string       `json:"exclude_items"`
@@ -120,6 +121,7 @@ type PublicSchedule struct {
 	HargaDouble              float64        `json:"harga_double"`
 	HargaInfant              *float64       `json:"harga_infant"`
 	HargaCoret               *float64       `json:"harga_coret"`
+	MinimalDP                *float64       `json:"minimal_dp"`
 	ItineraryID              *int64         `json:"itinerary_id"`
 	IncludeItems             []string       `json:"include_items"`
 	ExcludeItems             []string       `json:"exclude_items"`
@@ -163,6 +165,7 @@ func (s *Schedule) ToPublic() *PublicSchedule {
 		HargaDouble:              s.HargaDouble,
 		HargaInfant:              s.HargaInfant,
 		HargaCoret:               s.HargaCoret,
+		MinimalDP:                s.MinimalDP,
 		ItineraryID:              s.ItineraryID,
 		IncludeItems:             s.IncludeItems,
 		ExcludeItems:             s.ExcludeItems,
@@ -231,6 +234,7 @@ type ScheduleInput struct {
 	HargaDouble              float64
 	HargaInfant              *float64
 	HargaCoret               *float64
+	MinimalDP                *float64
 	ItineraryID              *int64
 	IncludeItems             []string
 	ExcludeItems             []string
@@ -273,6 +277,7 @@ type CreateScheduleRequest struct {
 	HargaDouble              float64  `json:"harga_double"`
 	HargaInfant              *float64 `json:"harga_infant"`
 	HargaCoret               *float64 `json:"harga_coret"`
+	MinimalDP                *float64 `json:"minimal_dp"`
 	ItineraryID              *int64   `json:"itinerary_id"`
 	IncludeItems             []string `json:"include_items"`
 	ExcludeItems             []string `json:"exclude_items"`

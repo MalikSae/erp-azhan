@@ -57,6 +57,7 @@ const selectFull = `
 		s.harga_double,
 		s.harga_infant,
 		s.harga_coret,
+		s.minimal_dp,
 		s.itinerary_id,
 		(
 			SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('id', ao.id, 'name', ao.name)), '[]')
@@ -250,7 +251,7 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 			maskapai_id, berangkat_tanggal, berangkat_jam, berangkat_kode_penerbangan, berangkat_bandara_asal, berangkat_bandara_tujuan,
 			pulang_tanggal, pulang_jam, pulang_kode_penerbangan, pulang_bandara_asal, pulang_bandara_tujuan, transit_bandara,
 			hotel_mekkah_id, hotel_madinah_id,
-			harga_quad, harga_triple, harga_double, harga_infant, harga_coret,
+			harga_quad, harga_triple, harga_double, harga_infant, harga_coret, minimal_dp,
 			itinerary_id, include_items, exclude_items,
 			brosur_url, brosur_thumb_url
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -263,7 +264,7 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 		inp.PulangTanggal, nullString(inp.PulangJam), nullString(inp.PulangKodePenerbangan),
 		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
-		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret,
+		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret, inp.MinimalDP,
 		inp.ItineraryID, includeJSON, excludeJSON,
 		nullString(inp.BrosurURL), nullString(inp.BrosurThumbURL),
 	)
@@ -319,7 +320,7 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 			maskapai_id=?, berangkat_tanggal=?, berangkat_jam=?, berangkat_kode_penerbangan=?, berangkat_bandara_asal=?, berangkat_bandara_tujuan=?,
 			pulang_tanggal=?, pulang_jam=?, pulang_kode_penerbangan=?, pulang_bandara_asal=?, pulang_bandara_tujuan=?, transit_bandara=?,
 			hotel_mekkah_id=?, hotel_madinah_id=?,
-			harga_quad=?, harga_triple=?, harga_double=?, harga_infant=?, harga_coret=?,
+			harga_quad=?, harga_triple=?, harga_double=?, harga_infant=?, harga_coret=?, minimal_dp=?,
 			itinerary_id=?, include_items=?, exclude_items=?,
 			brosur_url=?, brosur_thumb_url=?
 		WHERE id=?`
@@ -332,7 +333,7 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 		inp.PulangTanggal, nullString(inp.PulangJam), nullString(inp.PulangKodePenerbangan),
 		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
-		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret,
+		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret, inp.MinimalDP,
 		inp.ItineraryID, includeJSON, excludeJSON,
 		nullString(inp.BrosurURL), nullString(inp.BrosurThumbURL),
 		id,
@@ -584,6 +585,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		hmdPhoto       sql.NullString
 		hargaInfant    sql.NullFloat64
 		hargaCoret     sql.NullFloat64
+		minimalDP      sql.NullFloat64
 		itineraryID    sql.NullInt64
 		addOnsJSON     []byte
 		includeJSON    []byte
@@ -600,7 +602,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		&s.PulangBandaraAsal, &s.PulangBandaraTujuan, &s.TransitBandara,
 		&hotelMekkahID, &hmName, &hmStar, &hmDist, &hmPhoto,
 		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist, &hmdPhoto,
-		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret,
+		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret, &minimalDP,
 		&itineraryID, &addOnsJSON, &includeJSON, &excludeJSON,
 		&s.BrosurURL, &s.BrosurThumbURL,
 		&s.CreatedAt, &s.UpdatedAt,
@@ -664,6 +666,12 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 	if hargaCoret.Valid {
 		v := hargaCoret.Float64
 		s.HargaCoret = &v
+	}
+
+	// Minimal DP nullable
+	if minimalDP.Valid {
+		v := minimalDP.Float64
+		s.MinimalDP = &v
 	}
 
 	// ItineraryID nullable

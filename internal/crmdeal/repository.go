@@ -2,7 +2,6 @@ package crmdeal
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -10,11 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"regexp"
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/shared"
 	"github.com/go-sql-driver/mysql"
 )
 
@@ -112,8 +111,25 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 	unitPrice := map[string]float64{"Quad": quad, "Triple": triple, "Double": double}[req.RoomType]
 	totalPrice := unitPrice * float64(req.Pax)
 
-	jamaahID, err := r.resolveJamaah(ctx, tx, brandID, req.Jamaah)
+	// Convert crmdeal.JamaahInput to shared.JamaahInput
+	sharedJamaahInput := shared.JamaahInput{
+		ID:          req.Jamaah.ID,
+		NamaLengkap: req.Jamaah.NamaLengkap,
+		NoHP:        req.Jamaah.NoHP,
+		Email:       req.Jamaah.Email,
+		Alamat:      req.Jamaah.Alamat,
+	}
+	jamaahID, err := shared.ResolveJamaah(ctx, tx, brandID, sharedJamaahInput)
 	if err != nil {
+		if errors.Is(err, shared.ErrAmbiguousJamaah) {
+			return nil, ErrAmbiguousJamaah
+		}
+		if errors.Is(err, shared.ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		if errors.Is(err, shared.ErrBrandCodeMissing) {
+			return nil, ErrBrandCodeMissing
+		}
 		return nil, err
 	}
 
@@ -121,7 +137,7 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 	if err != nil {
 		return nil, err
 	}
-	bookingCode, err := uniqueCode(ctx, tx, "bookings", "id_booking", brandCode, 4)
+	bookingCode, err := shared.UniqueCode(ctx, tx, "bookings", "id_booking", brandCode, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -246,72 +262,6 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 	return &response, nil
 }
 
-func (r *Repository) resolveJamaah(ctx context.Context, tx *sql.Tx, brandID int64, input JamaahInput) (int64, error) {
-	if input.ID != nil {
-		var found int64
-		if err := tx.QueryRowContext(ctx, `SELECT id FROM jamaah WHERE id=? AND brand_id=? FOR UPDATE`, *input.ID, brandID).Scan(&found); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return 0, ErrNotFound
-			}
-			return 0, fmt.Errorf("find jamaah: %w", err)
-		}
-		return found, nil
-	}
-
-	canonical, local := phoneVariants(input.NoHP)
-	rows, err := tx.QueryContext(ctx,
-		`SELECT id FROM jamaah WHERE brand_id=? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?) ORDER BY id LIMIT 2 FOR UPDATE`,
-		brandID, canonical, local,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("find jamaah by phone: %w", err)
-	}
-	var matches []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		matches = append(matches, id)
-	}
-	if err := rows.Close(); err != nil {
-		return 0, err
-	}
-	if len(matches) > 1 {
-		return 0, ErrAmbiguousJamaah
-	}
-	if len(matches) == 1 {
-		return matches[0], nil
-	}
-
-	var brandCode sql.NullString
-	var counter uint64
-	if err := tx.QueryRowContext(ctx, `SELECT kode_brand,jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter); err != nil {
-		return 0, fmt.Errorf("lock brand for jamaah: %w", err)
-	}
-	if !brandCode.Valid || strings.TrimSpace(brandCode.String) == "" {
-		return 0, ErrBrandCodeMissing
-	}
-	counter++
-	if _, err := tx.ExecContext(ctx, `UPDATE brands SET jamaah_counter=? WHERE id=?`, counter, brandID); err != nil {
-		return 0, fmt.Errorf("update jamaah counter: %w", err)
-	}
-	idJamaah := fmt.Sprintf("%s-%02d%02d%06d", strings.ToUpper(strings.TrimSpace(brandCode.String)), time.Now().Year()%100, int(time.Now().Month()), counter)
-	kodeJamaah, err := uniqueCode(ctx, tx, "jamaah", "kode_jamaah", "", 6)
-	if err != nil {
-		return 0, err
-	}
-	result, err := tx.ExecContext(ctx,
-		`INSERT INTO jamaah (brand_id,id_jamaah,kode_jamaah,nama_lengkap,no_hp,email,alamat) VALUES (?,?,?,?,?,?,?)`,
-		brandID, idJamaah, kodeJamaah, input.NamaLengkap, input.NoHP, input.Email, input.Alamat,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("create jamaah: %w", err)
-	}
-	return result.LastInsertId()
-}
-
 func (r *Repository) brandCode(ctx context.Context, tx *sql.Tx, brandID int64) (string, error) {
 	var code sql.NullString
 	if err := tx.QueryRowContext(ctx, `SELECT kode_brand FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&code); err != nil {
@@ -321,40 +271,6 @@ func (r *Repository) brandCode(ctx context.Context, tx *sql.Tx, brandID int64) (
 		return "", ErrBrandCodeMissing
 	}
 	return strings.ToUpper(strings.TrimSpace(code.String)), nil
-}
-
-func uniqueCode(ctx context.Context, tx *sql.Tx, table, column, prefix string, randomLength int) (string, error) {
-	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s=?", table, column)
-	for attempt := 0; attempt < 20; attempt++ {
-		var suffix strings.Builder
-		for i := 0; i < randomLength; i++ {
-			n, err := rand.Int(rand.Reader, big.NewInt(int64(len(codeCharset))))
-			if err != nil {
-				return "", err
-			}
-			suffix.WriteByte(codeCharset[n.Int64()])
-		}
-		code := prefix + suffix.String()
-		var count int
-		if err := tx.QueryRowContext(ctx, query, code).Scan(&count); err != nil {
-			return "", err
-		}
-		if count == 0 {
-			return code, nil
-		}
-	}
-	return "", errors.New("gagal membuat kode unik")
-}
-
-func phoneVariants(phone string) (string, string) {
-	digits := nonDigit.ReplaceAllString(phone, "")
-	if strings.HasPrefix(digits, "0") {
-		return "62" + digits[1:], digits
-	}
-	if strings.HasPrefix(digits, "62") {
-		return digits, "0" + digits[2:]
-	}
-	return digits, digits
 }
 
 // ReleaseExpiredSeatHolds melepas hold booking baru yang kedaluwarsa secara atomic per-booking.
