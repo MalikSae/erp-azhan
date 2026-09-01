@@ -60,6 +60,7 @@ func (h *Handler) GetBrand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data brand")
 		return
 	}
+
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -128,7 +129,11 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.WhatsappNumber = sanitizeString(req.WhatsappNumber)
+	req.Email = sanitizeString(req.Email)
+	req.Phone = sanitizeString(req.Phone)
 	req.Address = sanitizeString(req.Address)
+	req.City = sanitizeString(req.City)
+	req.Province = sanitizeString(req.Province)
 	req.GmapsURL = sanitizeString(req.GmapsURL)
 	req.Legalitas = sanitizeString(req.Legalitas)
 	req.BankName = sanitizeString(req.BankName)
@@ -141,6 +146,10 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	req.LogoURL = sanitizeString(req.LogoURL)
 	req.IconURL = sanitizeString(req.IconURL)
 	req.PrimaryColor = sanitizeString(req.PrimaryColor)
+	req.MetaTitle = sanitizeString(req.MetaTitle)
+	req.MetaDescription = sanitizeString(req.MetaDescription)
+	req.OgImageURL = sanitizeString(req.OgImageURL)
+	req.GoogleVerificationCode = sanitizeString(req.GoogleVerificationCode)
 
 	b, err := h.repo.Create(r.Context(), req)
 	if err != nil {
@@ -222,7 +231,11 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.WhatsappNumber = sanitizeString(req.WhatsappNumber)
+	req.Email = sanitizeString(req.Email)
+	req.Phone = sanitizeString(req.Phone)
 	req.Address = sanitizeString(req.Address)
+	req.City = sanitizeString(req.City)
+	req.Province = sanitizeString(req.Province)
 	req.GmapsURL = sanitizeString(req.GmapsURL)
 	req.Legalitas = sanitizeString(req.Legalitas)
 	req.BankName = sanitizeString(req.BankName)
@@ -235,6 +248,10 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	req.LogoURL = sanitizeString(req.LogoURL)
 	req.IconURL = sanitizeString(req.IconURL)
 	req.PrimaryColor = sanitizeString(req.PrimaryColor)
+	req.MetaTitle = sanitizeString(req.MetaTitle)
+	req.MetaDescription = sanitizeString(req.MetaDescription)
+	req.OgImageURL = sanitizeString(req.OgImageURL)
+	req.GoogleVerificationCode = sanitizeString(req.GoogleVerificationCode)
 
 	b, err := h.repo.Update(r.Context(), id, req)
 	if err != nil {
@@ -290,13 +307,40 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	socialMedia := map[string]string{}
+	if b.SocialFacebook != nil && *b.SocialFacebook != "" {
+		socialMedia["facebook"] = *b.SocialFacebook
+	}
+	if b.SocialInstagram != nil && *b.SocialInstagram != "" {
+		socialMedia["instagram"] = *b.SocialInstagram
+	}
+	if b.SocialTiktok != nil && *b.SocialTiktok != "" {
+		socialMedia["tiktok"] = *b.SocialTiktok
+	}
+	if b.SocialYoutube != nil && *b.SocialYoutube != "" {
+		socialMedia["youtube"] = *b.SocialYoutube
+	}
+
 	resp := map[string]any{
-		"id":              b.ID,
-		"name":            b.Name,
-		"whatsapp_number": b.WhatsappNumber,
-		"logo_url":        b.LogoURL,
-		"icon_url":        b.IconURL,
-		"primary_color":   b.PrimaryColor,
+		"id":                       b.ID,
+		"name":                     b.Name,
+		"whatsapp_number":          b.WhatsappNumber,
+		"email":                    b.Email,
+		"phone":                    b.Phone,
+		"address":                  b.Address,
+		"city":                     b.City,
+		"province":                 b.Province,
+		"gmaps_url":                b.GmapsURL,
+		"legalitas":                b.Legalitas,
+		"legal_info":               b.Legalitas,
+		"logo_url":                 b.LogoURL,
+		"icon_url":                 b.IconURL,
+		"primary_color":            b.PrimaryColor,
+		"meta_title":               b.MetaTitle,
+		"meta_description":         b.MetaDescription,
+		"og_image_url":             b.OgImageURL,
+		"google_verification_code": b.GoogleVerificationCode,
+		"social_media":             socialMedia,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -312,7 +356,7 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// ─── My Brand (Travel Admin) ───────────────────────────────────────────────────
+// --- My Brand (Travel Admin) -------------------------------------------------------------
 
 func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 	brandID := identity.GetBrandID(r.Context())
@@ -349,4 +393,3 @@ func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, resp)
 }
-
