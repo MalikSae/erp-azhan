@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { listBookings } from "../api/bookings";
+import { listBookings, deleteDraftBooking } from "../api/bookings";
 import { listBrands } from "../api/brands";
 import { getStatusBadgeConfig, getSeatLockIcon } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
@@ -10,8 +10,9 @@ import Badge from "../components/ui/Badge";
 import Alert from "../components/ui/Alert";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import CustomDropdown from "../components/ui/CustomDropdown";
+import Modal from "../components/ui/Modal";
 import BrandCell from "../components/BrandCell";
-import { Eye, Loader, CircleCheckBig } from "lucide-react";
+import { Eye, Trash2, Loader, CircleCheckBig } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -51,6 +52,11 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Delete Draft Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   // Filter State
   const [filterBrandId, setFilterBrandId] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -89,6 +95,22 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
     }
   };
 
+  const confirmDeleteDraft = async () => {
+    if (!selectedDraft) return;
+    try {
+      setDeleteLoading(true);
+      await deleteDraftBooking(selectedDraft.id);
+      setIsDeleteModalOpen(false);
+      setSelectedDraft(null);
+      await fetchData();
+    } catch (err) {
+      setError(err.response?.data?.error || "Gagal menghapus draft booking");
+      setIsDeleteModalOpen(false);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   // Available unique departure dates sorted chronologically
   const availableDates = useMemo(() => {
     const map = new Map();
@@ -120,19 +142,16 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
         return false;
       }
 
-      // 2. Filter Seat (is_seat_blocked)
+      // 2. Filter Seat
       if (filterSeat) {
         if (filterSeat === 'blocked' && !b.is_seat_blocked) return false;
         if (filterSeat === 'unblocked' && b.is_seat_blocked) return false;
       }
 
-      // 3. Filter Specific Departure Date
+      // 3. Filter Tanggal Keberangkatan
       if (filterDate) {
-        if (!b.berangkat_tanggal) return false;
-        const d = new Date(b.berangkat_tanggal);
-        if (isNaN(d.getTime())) return false;
-        const val = d.toISOString().split('T')[0];
-        if (val !== filterDate) return false;
+        const dateVal = b.berangkat_tanggal ? new Date(b.berangkat_tanggal).toISOString().split('T')[0] : '';
+        if (dateVal !== filterDate) return false;
       }
 
       return true;
@@ -145,95 +164,76 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
     if (showBrandColumn) {
       cols.push({
         header: "Brand",
-        key: "brand_id",
+        key: "brand",
         accessor: (row) => {
-          const brand = brandsMap[row.brand_id];
-          return <BrandCell brand={brand} brandId={row.brand_id} />;
+          const b = brandsMap[row.brand_id];
+          return <BrandCell brand={b} brandId={row.brand_id} />;
         }
       });
     }
 
     cols.push(
-      {
-        header: "ID Booking",
-        key: "id_booking",
-        accessor: (row) => (
-          <button
-            type="button"
-            onClick={() => navigate(row.status === 'draft' ? `/bookings/${row.id}/edit` : `/bookings/${row.id}`)}
-            className="font-mono text-xs font-bold text-neutral-800 bg-neutral-100 px-2.5 py-1 rounded-lg border border-neutral-200/90 hover:bg-neutral-200/80 hover:border-neutral-300 transition-colors cursor-pointer"
-          >
-            {row.id_booking || `ID: ${row.id}`}
-          </button>
-        )
+      { 
+        header: "ID Booking", 
+        key: "id_booking", 
+        accessor: (row) => {
+          if (row.id_booking) {
+            return (
+              <span className="font-mono font-bold text-neutral-900 tracking-wider">
+                {row.id_booking}
+              </span>
+            );
+          }
+          if (row.status === 'draft') {
+            return <span className="text-xs text-neutral-400 italic">Draft</span>;
+          }
+          return <span className="text-xs text-neutral-400 font-medium">ID: {row.id}</span>;
+        }
       },
       { 
-        header: "Jamaah", 
-        key: "nama_jamaah",
+        header: "Kontak Utama (PIC)", 
+        key: "nama_jamaah", 
         accessor: (row) => (
-          <div className="flex flex-col items-start">
-            {row.jamaah_id ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/jamaah/${row.jamaah_id}`);
-                }}
-                className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body leading-tight"
-                title="Lihat Detail Jamaah"
-              >
-                {row.nama_jamaah || row.jamaah?.nama_lengkap || `ID: ${row.jamaah_id}`}
-              </button>
-            ) : (
-              <span className="text-neutral-700 font-body leading-tight">{row.nama_jamaah || "-"}</span>
-            )}
+          <div className="flex flex-col">
+            <span className="font-semibold text-neutral-900">{row.nama_jamaah || "-"}</span>
+            <span className="text-xs text-neutral-500 font-mono">
+              {formatPaxDetail(row)}
+            </span>
           </div>
         )
       },
       { 
-        header: "Paket", 
+        header: "Paket & Keberangkatan", 
         key: "jadwal_nama", 
         accessor: (row) => (
-          <div className="flex flex-col items-start min-w-[150px]">
-            <span className="font-semibold text-neutral-900 font-body leading-tight">
-              {row.jadwal_nama || row.schedule?.jadwal_nama || `ID: ${row.schedule_id}`}
+          <div className="flex flex-col">
+            <span className="font-medium text-neutral-900">{row.jadwal_nama || "-"}</span>
+            <span className="text-xs text-neutral-500">
+              {formatTanggal(row.berangkat_tanggal)}
             </span>
-            {row.berangkat_tanggal && (
-              <span className="text-xs text-neutral-500 font-body mt-0.5">
-                {formatTanggal(row.berangkat_tanggal)}
-              </span>
-            )}
           </div>
         )
       },
       { 
         header: "Total Tagihan", 
         key: "total_harga", 
-        accessor: (row) => {
-          const paxText = formatPaxDetail(row);
-          return (
-            <div className="flex flex-col items-start min-w-[130px]">
-              <span className="font-semibold text-neutral-900 font-body leading-tight">
-                {formatRupiah(row.total_harga)}
-              </span>
-              <span className="text-xs text-neutral-500 font-body mt-0.5">
-                {paxText}
-              </span>
-            </div>
-          );
-        }
+        accessor: (row) => (
+          <span className="font-semibold text-neutral-800">
+            {formatRupiah(row.total_harga)}
+          </span>
+        )
       },
-      {
-        header: "Status",
-        key: "status",
+      { 
+        header: "Status", 
+        key: "status", 
         accessor: (row) => {
           const [statusVariant, statusLabel] = getStatusBadgeConfig(row.status);
           return <Badge variant={statusVariant} hideIcon={true}>{statusLabel}</Badge>;
         }
       },
-      {
-        header: "Seat",
-        key: "seat",
+      { 
+        header: "Seat", 
+        key: "is_seat_blocked", 
         accessor: (row) => {
           const lockInfo = getSeatLockIcon(row.status, row.is_seat_blocked);
           if (!lockInfo) {
@@ -251,15 +251,31 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
         header: "Aksi",
         key: "aksi",
         accessor: (row) => (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => navigate(row.status === 'draft' ? `/bookings/${row.id}/edit` : `/bookings/${row.id}`)}
-            title={row.status === 'draft' ? "Lanjutkan Draft" : "Detail"}
-            className="p-1.5 text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg"
-          >
-            <Eye size={16} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => navigate(row.status === 'draft' ? `/bookings/${row.id}/edit` : `/bookings/${row.id}`)}
+              title={row.status === 'draft' ? "Lanjutkan Draft" : "Detail"}
+              className="p-1.5 text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg"
+            >
+              <Eye size={16} />
+            </Button>
+            {row.status === 'draft' && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  setSelectedDraft(row);
+                  setIsDeleteModalOpen(true);
+                }}
+                title="Hapus Draft"
+                className="p-1.5 text-danger-400 hover:text-danger-700 hover:bg-danger-50 rounded-lg"
+              >
+                <Trash2 size={16} />
+              </Button>
+            )}
+          </div>
         )
       }
     );
@@ -346,6 +362,33 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
           />
         </div>
       )}
+
+      {/* Modal Konfirmasi Hapus Draft */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => !deleteLoading && setIsDeleteModalOpen(false)}
+        title="Konfirmasi Hapus Draft"
+      >
+        <p className="text-neutral-600 mb-6 font-body text-sm">
+          Hapus draft booking ini? Data pax yang sudah diisi akan ikut terhapus dan tidak bisa dikembalikan.
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button 
+            variant="ghost" 
+            onClick={() => setIsDeleteModalOpen(false)}
+            disabled={deleteLoading}
+          >
+            Batal
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={confirmDeleteDraft}
+            disabled={deleteLoading}
+          >
+            {deleteLoading ? "Menghapus..." : "Hapus"}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 };

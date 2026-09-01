@@ -7,12 +7,12 @@ export async function getStokPerlengkapan(brandId) {
   return response.data;
 }
 
-export async function markPerlengkapanDiberikan(bookingId) {
-  const response = await client.put(`/api/admin/bookings/${bookingId}/perlengkapan/distribusi`);
+export async function markPerlengkapanDiberikan(bookingId, paxId) {
+  const response = await client.put(`/api/admin/bookings/${bookingId}/pax/${paxId}/perlengkapan/distribusi`);
   return response.data;
 }
 
-export async function batalkanPerlengkapan(bookingId) {
-  const response = await client.delete(`/api/admin/bookings/${bookingId}/perlengkapan/distribusi`);
+export async function batalkanPerlengkapan(bookingId, paxId) {
+  const response = await client.delete(`/api/admin/bookings/${bookingId}/pax/${paxId}/perlengkapan/distribusi`);
   return response.data;
 }

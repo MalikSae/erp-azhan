@@ -28,6 +28,7 @@ export { default as Textarea } from './components/ui/Textarea';
 export { default as Toggle } from './components/ui/Toggle';
 export { default as CurrencyInput } from './components/ui/CurrencyInput';
 export { default as AutocompleteInput } from './components/ui/AutocompleteInput';
+export { default as ActionMenu } from './components/ui/ActionMenu';
 
 // API
 export { default as client } from './api/client';

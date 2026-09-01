@@ -93,36 +93,64 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
     }
 
     cols.push(
-      {
-        header: "ID Jamaah",
-        key: "id_jamaah",
-        accessor: (row) => (
-          <button
-            type="button"
-            onClick={() => navigate(`/jamaah/${row.id}`)}
-            className="font-mono text-xs font-bold text-neutral-800 bg-neutral-100 px-2.5 py-1 rounded-lg border border-neutral-200/90 hover:bg-neutral-200/80 hover:border-neutral-300 transition-colors cursor-pointer"
-            title="Lihat Detail Jamaah"
-          >
-            {row.id_jamaah || "-"}
-          </button>
-        ),
-      },
       { 
         header: "Nama Lengkap", 
         key: "nama_lengkap",
         accessor: (row) => (
-          <button
-            type="button"
-            onClick={() => navigate(`/jamaah/${row.id}`)}
-            className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body"
-            title="Lihat Detail Jamaah"
-          >
-            {row.nama_lengkap}
-          </button>
+          <div className="flex flex-col">
+            <button
+              type="button"
+              onClick={() => navigate(`/jamaah/${row.id}`)}
+              className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body"
+              title="Lihat Detail Jamaah"
+            >
+              {row.nama_lengkap}
+            </button>
+            {row.id_jamaah && (
+              <span className="text-xs text-neutral-500 font-mono">
+                {row.id_jamaah}
+              </span>
+            )}
+          </div>
         )
       },
+      { 
+        header: "L/P", 
+        key: "jenis_kelamin", 
+        accessor: (row) => row.jenis_kelamin || "-" 
+      },
       { header: "NIK", key: "nik", accessor: "nik" },
-      { header: "No HP", key: "no_hp", accessor: "no_hp" }
+      { header: "No HP", key: "no_hp", accessor: "no_hp" },
+      {
+        header: "% Data",
+        key: "pct_data",
+        accessor: (row) => (
+          <div className="flex items-center gap-2" title="Kelengkapan Data Profil">
+            <div className="w-16 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full ${row.pct_data === 100 ? 'bg-success-500' : row.pct_data >= 50 ? 'bg-warning-500' : 'bg-danger-500'}`} 
+                style={{ width: `${row.pct_data || 0}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-neutral-600 w-8">{row.pct_data || 0}%</span>
+          </div>
+        )
+      },
+      {
+        header: "% Dokumen",
+        key: "pct_dokumen",
+        accessor: (row) => (
+          <div className="flex items-center gap-2" title="Kelengkapan Dokumen Wajib">
+            <div className="w-16 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full ${row.pct_dokumen === 100 ? 'bg-success-500' : row.pct_dokumen >= 50 ? 'bg-warning-500' : 'bg-danger-500'}`} 
+                style={{ width: `${row.pct_dokumen || 0}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-neutral-600 w-8">{row.pct_dokumen || 0}%</span>
+          </div>
+        )
+      }
     );
 
     cols.push({

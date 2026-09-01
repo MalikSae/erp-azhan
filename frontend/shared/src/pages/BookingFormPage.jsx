@@ -27,6 +27,7 @@ import {
   createBooking, 
   createDraftBooking, 
   updateDraftBooking, 
+  deleteDraftBooking,
   finalizeBooking, 
   getBooking 
 } from "../api/bookings";
@@ -220,10 +221,14 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
   // Modal konfirmasi cascade delete saat menghapus pax reguler terakhir yang memiliki infant
   const [cascadeDeleteTarget, setCascadeDeleteTarget] = useState(null);
 
+  // Modal konfirmasi hapus draft booking
+  const [deleteDraftModalOpen, setDeleteDraftModalOpen] = useState(false);
+  const [deleteDraftSubmitting, setDeleteDraftSubmitting] = useState(false);
+
   // === Quick Create Jamaah Modal ===
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [quickCreatePaxId, setQuickCreatePaxId] = useState(null); // pax.id yang akan di-fill
-  const [quickCreateForm, setQuickCreateForm] = useState({ nama_lengkap: '', nik: '', tanggal_lahir: '', no_hp: '' });
+  const [quickCreateForm, setQuickCreateForm] = useState({ nama_lengkap: '', jenis_kelamin: '', nik: '', tanggal_lahir: '', no_hp: '' });
   const [quickCreateError, setQuickCreateError] = useState(null);
   const [quickCreateLoading, setQuickCreateLoading] = useState(false);
 
@@ -754,7 +759,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
   // === Handler Quick Create Jamaah ===
   const handleOpenQuickCreate = (paxId) => {
     setQuickCreatePaxId(paxId);
-    setQuickCreateForm({ nama_lengkap: '', nik: '', tanggal_lahir: '', no_hp: '' });
+    setQuickCreateForm({ nama_lengkap: '', jenis_kelamin: '', nik: '', tanggal_lahir: '', no_hp: '' });
     setQuickCreateError(null);
     setQuickCreateOpen(true);
   };
@@ -769,6 +774,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
     try {
       const payload = {
         nama_lengkap: quickCreateForm.nama_lengkap.trim(),
+        jenis_kelamin: quickCreateForm.jenis_kelamin || null,
         nik: quickCreateForm.nik.trim() || null,
         tanggal_lahir: quickCreateForm.tanggal_lahir || null,
         no_hp: quickCreateForm.no_hp.trim() || null,
@@ -910,6 +916,21 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setDraftSubmitting(false);
+    }
+  };
+
+  const handleConfirmDeleteDraft = async () => {
+    if (!id) return;
+    try {
+      setDeleteDraftSubmitting(true);
+      await deleteDraftBooking(id);
+      navigate("/bookings");
+    } catch (err) {
+      setServerError(err.response?.data?.error || "Gagal menghapus draft booking");
+      setDeleteDraftModalOpen(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } finally {
+      setDeleteDraftSubmitting(false);
     }
   };
 
@@ -1823,7 +1844,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     type="button"
                     variant="secondary"
                     onClick={handleSaveDraft}
-                    disabled={draftSubmitting || submitting || !selectedScheduleId || (showBrandColumn && !selectedBrandId)}
+                    disabled={draftSubmitting || submitting || deleteDraftSubmitting || !selectedScheduleId || (showBrandColumn && !selectedBrandId)}
                     className="w-full justify-center shadow-sm"
                   >
                     {draftSubmitting ? "Menyimpan Draft..." : "Simpan Draft"}
@@ -1831,7 +1852,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                   <Button
                     type="submit"
                     variant="primary"
-                    disabled={isSubmitDisabled || submitting || draftSubmitting}
+                    disabled={isSubmitDisabled || submitting || draftSubmitting || deleteDraftSubmitting}
                     className="w-full justify-center shadow-sm"
                   >
                     {submitting ? "Memproses..." : (isEditDraft ? "Selesaikan Booking" : "Buat Booking")}
@@ -1840,10 +1861,22 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     type="button" 
                     variant="ghost" 
                     onClick={() => navigate("/bookings")}
+                    disabled={draftSubmitting || submitting || deleteDraftSubmitting}
                     className="w-full justify-center text-neutral-600 hover:text-neutral-900"
                   >
                     Batal
                   </Button>
+                  {isEditDraft && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      onClick={() => setDeleteDraftModalOpen(true)}
+                      disabled={draftSubmitting || submitting || deleteDraftSubmitting}
+                      className="w-full justify-center shadow-sm"
+                    >
+                      Hapus Draft
+                    </Button>
+                  )}
                 </div>
               </div>
             </MetaBox>
@@ -1917,6 +1950,37 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
         </p>
       </Modal>
 
+      {/* Modal Konfirmasi Hapus Draft */}
+      <Modal
+        isOpen={deleteDraftModalOpen}
+        onClose={() => !deleteDraftSubmitting && setDeleteDraftModalOpen(false)}
+        title="Konfirmasi Hapus Draft"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setDeleteDraftModalOpen(false)}
+              disabled={deleteDraftSubmitting}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleConfirmDeleteDraft}
+              disabled={deleteDraftSubmitting}
+            >
+              {deleteDraftSubmitting ? "Menghapus..." : "Hapus"}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-neutral-700 font-body">
+          Hapus draft booking ini? Data pax yang sudah diisi akan ikut terhapus dan tidak bisa dikembalikan.
+        </p>
+      </Modal>
+
       {/* Modal Quick Create Jamaah */}
       <Modal
         isOpen={quickCreateOpen}
@@ -1974,6 +2038,34 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 className="h-11 w-full rounded-xl border border-neutral-200/90 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs"
                 autoFocus
               />
+            </div>
+            {/* Jenis Kelamin */}
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-neutral-700">Jenis Kelamin</label>
+              <div className="flex gap-4 items-center h-11 px-1">
+                <label className="flex items-center gap-2 text-sm text-neutral-900 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="quick_jenis_kelamin"
+                    value="L"
+                    checked={quickCreateForm.jenis_kelamin === "L"}
+                    onChange={(e) => setQuickCreateForm((prev) => ({ ...prev, jenis_kelamin: e.target.value }))}
+                    className="w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500"
+                  />
+                  Laki-laki
+                </label>
+                <label className="flex items-center gap-2 text-sm text-neutral-900 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="quick_jenis_kelamin"
+                    value="P"
+                    checked={quickCreateForm.jenis_kelamin === "P"}
+                    onChange={(e) => setQuickCreateForm((prev) => ({ ...prev, jenis_kelamin: e.target.value }))}
+                    className="w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500"
+                  />
+                  Perempuan
+                </label>
+              </div>
             </div>
             {/* NIK */}
             <div>

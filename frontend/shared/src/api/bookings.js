@@ -105,8 +105,13 @@ export const deleteBookingAddon = async (bookingId, addonId) => {
   return data;
 };
 
-export const updateBookingDiskon = async (bookingId, payload) => {
-  const { data } = await api.put(`/api/admin/bookings/${bookingId}/diskon`, payload);
+export const addBookingDiscount = async (bookingId, payload) => {
+  const { data } = await api.post(`/api/admin/bookings/${bookingId}/discounts`, payload);
+  return data;
+};
+
+export const removeBookingDiscount = async (bookingId, discountId) => {
+  const { data } = await api.delete(`/api/admin/bookings/${bookingId}/discounts/${discountId}`);
   return data;
 };
 
@@ -129,4 +134,10 @@ export const updatePaxRoomType = async (bookingId, paxId, roomType) => {
   const { data } = await api.put(`/api/admin/bookings/${bookingId}/pax/${paxId}/room-type`, { room_type: roomType });
   return data;
 };
+
+export const deleteDraftBooking = async (id) => {
+  const { data } = await api.delete(`/api/admin/bookings/${id}`);
+  return data;
+};
+
 

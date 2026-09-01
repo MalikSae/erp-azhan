@@ -10,7 +10,8 @@ import {
   updatePaymentStatus, 
   addBookingAddon, 
   deleteBookingAddon, 
-  updateBookingDiskon, 
+  addBookingDiscount,
+  removeBookingDiscount,
   updateBookingProgress,
   updatePaxProgress,
   cancelBookingPax,
@@ -23,6 +24,7 @@ import { uploadMedia } from "../api/media";
 import { getStatusBadgeConfig, getSeatLockIcon } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
 import Card from "../components/ui/Card";
+import MetaBox from "../components/ui/MetaBox";
 import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
@@ -35,7 +37,7 @@ import CustomDropdown from "../components/ui/CustomDropdown";
 import CurrencyInput from "../components/ui/CurrencyInput";
 import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
-import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Users, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig, Building2 } from "lucide-react";
+import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Users, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig, Building2, CreditCard, Receipt } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -172,11 +174,11 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     fetchAll();
   }, [id, showBrandColumn]);
 
-  const handleDistribusiPerlengkapan = async () => {
+  const handleDistribusiPerlengkapan = async (paxId) => {
     setPerlengkapanLoading(true);
     setPerlengkapanError(null);
     try {
-      await markPerlengkapanDiberikan(id);
+      await markPerlengkapanDiberikan(id, paxId);
       await fetchAll();
     } catch (err) {
       const msg = err.response?.data?.error || "Gagal mendistribusikan perlengkapan.";
@@ -186,12 +188,16 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     }
   };
 
+  const [selectedPaxForCancelPerlengkapan, setSelectedPaxForCancelPerlengkapan] = useState(null);
+
   const handleBatalkanPerlengkapan = async () => {
+    if (!selectedPaxForCancelPerlengkapan) return;
     setPerlengkapanLoading(true);
     setPerlengkapanError(null);
     try {
-      await batalkanPerlengkapan(id);
+      await batalkanPerlengkapan(id, selectedPaxForCancelPerlengkapan.id);
       setIsBatalkanModalOpen(false);
+      setSelectedPaxForCancelPerlengkapan(null);
       await fetchAll();
     } catch (err) {
       const msg = err.response?.data?.error || "Gagal membatalkan perlengkapan.";
@@ -317,8 +323,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const hargaDasar = booking?.harga_dasar ? parseFloat(booking.harga_dasar) : (parseFloat(booking?.total_harga) || 0);
   const addons = booking?.addons || [];
   const totalAddons = addons.reduce((sum, a) => sum + (parseFloat(a.nominal) || 0), 0);
-  const diskon = parseFloat(booking?.diskon) || 0;
-  const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, hargaDasar + totalAddons - diskon);
+  const discounts = booking?.discounts || [];
+  const totalDiskon = discounts.reduce((sum, d) => sum + (parseFloat(d.nominal) || 0), 0);
+  const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, hargaDasar + totalAddons - totalDiskon);
 
   const totalPaid = payments
     .filter((p) => p.status === "confirmed")
@@ -366,10 +373,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
   // ─── Diskon Handlers ─────────────────────────────────────────────────────────
   const handleOpenDiskonModal = () => {
-    setDiskonForm({
-      diskon: booking?.diskon ? booking.diskon.toString() : "",
-      diskon_keterangan: booking?.diskon_keterangan || ""
-    });
+    setDiskonForm({ diskon: "", diskon_keterangan: "" });
     setDiskonError(null);
     setIsDiskonModalOpen(true);
   };
@@ -377,24 +381,39 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const handleDiskonSubmit = async (e) => {
     e.preventDefault();
     const diskonNum = parseFloat(diskonForm.diskon) || 0;
-    if (diskonNum < 0) {
-      setDiskonError("Diskon tidak boleh bernilai negatif");
+    if (!diskonForm.diskon_keterangan.trim()) {
+      setDiskonError("Nama/Keterangan diskon wajib diisi");
+      return;
+    }
+    if (diskonNum <= 0) {
+      setDiskonError("Nominal diskon harus lebih dari 0");
       return;
     }
 
     setDiskonSubmitting(true);
     setDiskonError(null);
     try {
-      await updateBookingDiskon(id, {
-        diskon: diskonNum,
-        diskon_keterangan: diskonForm.diskon_keterangan.trim() || null
+      await addBookingDiscount(id, {
+        nama: diskonForm.diskon_keterangan.trim(),
+        nominal: diskonNum
       });
       setIsDiskonModalOpen(false);
+      setDiskonForm({ diskon: "", diskon_keterangan: "" });
       fetchAll();
     } catch (err) {
-      setDiskonError(err.response?.data?.error || "Gagal memperbarui diskon");
+      setDiskonError(err.response?.data?.error || "Gagal menambahkan diskon");
     } finally {
       setDiskonSubmitting(false);
+    }
+  };
+
+  const handleDeleteDiscount = async (discountId) => {
+    if (!window.confirm("Yakin ingin menghapus diskon ini?")) return;
+    try {
+      await removeBookingDiscount(id, discountId);
+      fetchAll();
+    } catch (err) {
+      alert(err.response?.data?.error || "Gagal menghapus diskon");
     }
   };
 
@@ -624,8 +643,8 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           {booking.is_seat_blocked && (
             <Button 
               size="sm" 
-              variant="ghost" 
-              className="text-danger-600 hover:bg-danger-50 text-xs" 
+              variant="secondary" 
+              className="text-xs" 
               onClick={() => {
                 setCancelSeatBlockError("");
                 setCancelSeatBlockModal(true);
@@ -635,7 +654,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </Button>
           )}
           {booking.status !== "batal" && (
-            <Button size="sm" variant="ghost" className="text-danger-600 hover:bg-danger-50 text-xs" onClick={() => handleBookingStatus("batal")}>
+            <Button size="sm" variant="danger" className="text-xs shadow-2xs" onClick={() => handleBookingStatus("batal")}>
               Batalkan Booking
             </Button>
           )}
@@ -651,11 +670,10 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         {/* Kolom Kiri: Detail Paket & Jamaah (2 span) */}
         <div className="lg:col-span-2 space-y-6">
           {/* Section: Informasi Paket */}
-          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-neutral-200">
-              <Plane size={18} className="text-primary-600" />
-              <h3 className="font-semibold text-neutral-900 font-heading">Informasi Paket</h3>
-            </div>
+          <MetaBox 
+            title="Informasi Paket" 
+            icon={<Plane size={18} className="text-neutral-700" />}
+          >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <span className="block text-xs text-neutral-500 font-body">Nama Paket</span>
@@ -666,26 +684,24 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 <p className="text-sm font-semibold text-neutral-900 font-body">{formatTanggal(booking.berangkat_tanggal)}</p>
               </div>
             </div>
-          </div>
+          </MetaBox>
 
           {/* Section: Daftar Jamaah (Pax) */}
-          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-neutral-200">
-              <div className="flex items-center gap-2">
-                <Users size={18} className="text-primary-600" />
-                <h3 className="font-semibold text-neutral-900 font-heading">Daftar Jamaah (Pax)</h3>
-              </div>
+          <MetaBox 
+            title="Daftar Jamaah (Pax)"
+            icon={<Users size={18} className="text-neutral-700" />}
+            headerAction={
               <span className="text-xs text-neutral-500 font-body">
                 Total: <span className="font-semibold text-neutral-800">{activePaxList.length} Jamaah</span>
                 {infantActiveCount > 0 && ` (${infantActiveCount} infant)`}
                 {paxList.length > activePaxList.length && ` · ${paxList.length - activePaxList.length} batal`}
               </span>
-            </div>
-
+            }
+          >
             {paxList.length === 0 ? (
               <p className="text-xs text-neutral-500 font-body">Tidak ada data pax.</p>
             ) : (
-              <div className="overflow-x-auto -mx-6 sm:mx-0">
+              <div className="overflow-x-auto -mx-5 -mb-4 sm:mx-0 sm:mb-0">
                 <table className="w-full text-left text-sm font-body">
                   <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
                     <tr>
@@ -704,16 +720,21 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                         <tr key={pax.id} className={isBatal ? "bg-neutral-50/70 opacity-60" : "hover:bg-neutral-50/50"}>
                           <td className="py-3 px-4">
                             <div>
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/jamaah/${pax.jamaah_id}`)}
-                                className={`font-semibold hover:text-primary-600 hover:underline text-left transition-colors font-body ${
-                                  isBatal ? "line-through text-neutral-500" : "text-neutral-900"
-                                }`}
-                                title="Lihat Profil Jamaah"
-                              >
-                                {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/jamaah/${pax.jamaah_id}`)}
+                                  className={`font-semibold hover:text-primary-600 hover:underline text-left transition-colors font-body ${
+                                    isBatal ? "line-through text-neutral-500" : "text-neutral-900"
+                                  }`}
+                                  title="Lihat Profil Jamaah"
+                                >
+                                  {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
+                                </button>
+                                {isPic && (
+                                  <span className="bg-primary-100 text-brand-dark text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">PIC</span>
+                                )}
+                              </div>
                               {pax.pax_type === 'infant' && (
                                 <span className="block text-[11px] text-neutral-500 font-normal">
                                   Infant (Bayi &lt; 2 thn)
@@ -735,21 +756,22 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                                 {pax.pax_type === 'reguler' && (
                                   <Button
                                     size="sm"
-                                    variant="ghost"
-                                    className="text-xs text-primary-600 hover:text-primary-700 h-7 px-2"
+                                    variant="secondary"
+                                    className="text-xs h-7 px-2.5 shadow-none border-neutral-200 text-neutral-700 bg-white"
                                     onClick={() => handleOpenChangeRoom(pax)}
                                   >
                                     Ganti Kamar
                                   </Button>
                                 )}
                                 <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-xs text-danger-600 hover:bg-danger-50 h-7 px-2"
-                                    onClick={() => handleOpenCancelPax(pax)}
-                                  >
-                                    Batalkan
-                                  </Button>
+                                  size="sm"
+                                  variant="danger-light"
+                                  className="text-xs h-7 px-2.5 shadow-none"
+                                  title="Batalkan Pax"
+                                  onClick={() => handleOpenCancelPax(pax)}
+                                >
+                                  Batalkan
+                                </Button>
                               </div>
                             )}
                           </td>
@@ -760,19 +782,17 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 </table>
               </div>
             )}
-          </div>
+          </MetaBox>
 
           {/* Section: Checklist Dokumen & Kesiapan Jamaah */}
-          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-neutral-200">
-              <Shield size={18} className="text-primary-600" />
-              <h3 className="font-semibold text-neutral-900 font-heading">Checklist Dokumen & Kesiapan Jamaah</h3>
-            </div>
-
+          <MetaBox 
+            title="Checklist Dokumen & Kesiapan Jamaah"
+            icon={<Shield size={18} className="text-neutral-700" />}
+          >
             {activePaxList.length === 0 ? (
               <p className="text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
             ) : (
-              <div className="overflow-x-auto -mx-6 sm:mx-0">
+              <div className="overflow-x-auto -mx-5 -mb-4 sm:mx-0 sm:mb-0">
                 <table className="w-full text-left text-sm font-body">
                   <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
                     <tr>
@@ -816,43 +836,51 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                           </td>
                           <td className="py-3 px-3 text-center">
                             <div className="flex justify-center">
-                              <Toggle
-                                id={`toggle-vaksin-${pax.id}`}
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
                                 checked={Boolean(pax.progress_vaksin_meningitis)}
                                 onChange={() => handleTogglePaxProgress(pax.id, 'vaksin_meningitis', Boolean(pax.progress_vaksin_meningitis))}
+                                title="Tandai Vaksin Meningitis Selesai"
                               />
                             </div>
                           </td>
                           <td className="py-3 px-3 text-center">
                             <div className="flex justify-center">
-                              <Toggle
-                                id={`toggle-visa-${pax.id}`}
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
                                 checked={Boolean(pax.progress_visa)}
                                 onChange={() => handleTogglePaxProgress(pax.id, 'visa', Boolean(pax.progress_visa))}
+                                title="Tandai Visa Selesai"
                               />
                             </div>
                           </td>
                           <td className="py-3 px-3 text-center">
                             <div className="flex justify-center">
-                              <Toggle
-                                id={`toggle-siskopatuh-${pax.id}`}
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
                                 checked={Boolean(pax.progress_siskopatuh)}
                                 onChange={() => handleTogglePaxProgress(pax.id, 'siskopatuh', Boolean(pax.progress_siskopatuh))}
+                                title="Tandai Siskopatuh Selesai"
                               />
                             </div>
                           </td>
                           <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              {pax.pax_type === 'infant' ? (
-                                <span className="text-xs text-neutral-400 font-semibold font-body">N/A</span>
-                              ) : (
-                                <Toggle
-                                  id={`toggle-manasik-${pax.id}`}
+                            {pax.pax_type === 'infant' ? (
+                              <span className="text-xs text-neutral-400 font-semibold font-body">N/A</span>
+                            ) : (
+                              <div className="flex justify-center">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
                                   checked={Boolean(pax.progress_manasik)}
                                   onChange={() => handleTogglePaxProgress(pax.id, 'manasik', Boolean(pax.progress_manasik))}
+                                  title="Tandai Manasik Selesai"
                                 />
-                              )}
-                            </div>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
@@ -861,23 +889,112 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 </table>
               </div>
             )}
-          </div>
+          </MetaBox>
 
-          {/* Section: Add-ons & Diskon */}
-          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
-              <div className="flex items-center gap-2">
-                <Tag size={18} className="text-primary-600" />
-                <h3 className="font-semibold text-neutral-900 font-heading">Add-on & Biaya Tambahan</h3>
+          {/* Section: Distribusi Perlengkapan */}
+          <MetaBox
+            title="Distribusi Perlengkapan"
+            icon={<Package size={18} className="text-neutral-700" />}
+          >
+            {perlengkapanError && <Alert variant="error" className="mb-4">{perlengkapanError}</Alert>}
+            
+            {activePaxList.length === 0 ? (
+              <p className="text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-5 -mb-4 sm:mx-0 sm:mb-0">
+                <table className="w-full text-left text-sm font-body">
+                  <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
+                    <tr>
+                      <th className="py-3 px-4">Nama Jamaah</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3">Tanggal</th>
+                      <th className="py-3 px-3 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {activePaxList.map((pax) => {
+                      return (
+                        <tr key={pax.id} className="hover:bg-neutral-50/50">
+                          <td className="py-3 px-4">
+                            <div>
+                              <span className="font-semibold text-neutral-900 font-body block">
+                                {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
+                              </span>
+                              {pax.pax_type === 'infant' && (
+                                <span className="block text-[11px] text-neutral-500 font-normal">
+                                  Infant (Bayi &lt; 2 thn)
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            {pax.pax_type === 'infant' ? (
+                              <span className="text-xs text-neutral-400 font-semibold font-body">N/A</span>
+                            ) : pax.perlengkapan_status === 'sudah_diberikan' ? (
+                              <Badge variant="success">Selesai</Badge>
+                            ) : (
+                              <Badge variant="neutral" hideIcon={true}>Pending</Badge>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-xs text-neutral-600">
+                            {(pax.pax_type !== 'infant' && pax.perlengkapan_tanggal) ? formatTanggal(pax.perlengkapan_tanggal) : '-'}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {pax.pax_type !== 'infant' && (
+                              <div className="flex justify-end">
+                                {pax.perlengkapan_status === 'sudah_diberikan' ? (
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="!py-1.5 !px-3 text-xs text-danger-600 hover:bg-danger-50"
+                                    disabled={perlengkapanLoading}
+                                    onClick={() => {
+                                      setSelectedPaxForCancelPerlengkapan(pax);
+                                      setIsBatalkanModalOpen(true);
+                                    }}
+                                  >
+                                    Batal
+                                  </Button>
+                                ) : (
+                                  <Button 
+                                    size="sm" 
+                                    variant="secondary" 
+                                    className="!py-1.5 !px-3 text-xs"
+                                    disabled={perlengkapanLoading}
+                                    onClick={() => handleDistribusiPerlengkapan(pax.id)}
+                                  >
+                                    {perlengkapanLoading ? "Memproses..." : "Serahkan"}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+            )}
+          </MetaBox>
+
+          {/* Section: Add-on & Biaya Tambahan */}
+          <MetaBox
+            title="Add-on & Biaya Tambahan"
+            icon={<Tag size={18} className="text-neutral-700" />}
+            headerAction={
               <Button size="sm" variant="secondary" onClick={() => setIsAddonModalOpen(true)} className="text-xs flex items-center gap-1">
                 <Plus size={14} />
                 <span>Tambah Add-on</span>
               </Button>
-            </div>
-
+            }
+          >
             {addons.length === 0 ? (
-              <p className="text-xs text-neutral-500 font-body">Tidak ada biaya tambahan/add-on.</p>
+              <div className="py-6 flex flex-col items-center justify-center text-center bg-neutral-50/50 rounded-xl border border-neutral-100 border-dashed">
+                <Tag size={24} className="text-neutral-300 mb-2" />
+                <p className="text-sm font-medium text-neutral-700 font-body">Belum ada Add-on</p>
+                <p className="text-xs text-neutral-500 font-body mt-0.5">Tambahkan biaya ekstra jika ada.</p>
+              </div>
             ) : (
               <div className="divide-y divide-neutral-100">
                 {addons.map((a) => (
@@ -897,39 +1014,64 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               </div>
             )}
 
-            <div className="pt-3 border-t border-neutral-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Percent size={16} className="text-primary-600" />
-                <span className="text-sm font-medium text-neutral-800 font-body">Diskon Khusus:</span>
-                {booking.diskon_keterangan && (
-                  <span className="text-xs text-neutral-500 font-body">({booking.diskon_keterangan})</span>
-                )}
+          </MetaBox>
+
+          {/* Section: Diskon Khusus */}
+          <MetaBox
+            title="Program Diskon"
+            icon={<Percent size={18} className="text-neutral-700" />}
+            headerAction={
+              <Button size="sm" variant="secondary" onClick={handleOpenDiskonModal} className="text-xs flex items-center gap-1">
+                <Plus size={14} />
+                <span>Tambah Diskon</span>
+              </Button>
+            }
+          >
+            {discounts.length === 0 ? (
+              <div className="py-6 flex flex-col items-center justify-center text-center bg-neutral-50/50 rounded-xl border border-neutral-100 border-dashed">
+                <Percent size={24} className="text-neutral-300 mb-2" />
+                <p className="text-sm font-medium text-neutral-700 font-body">Belum ada Diskon</p>
+                <p className="text-xs text-neutral-500 font-body mt-0.5">Tambahkan program diskon jika ada.</p>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-bold text-success-600 font-body">
-                  {diskon > 0 ? `- ${formatRupiah(diskon)}` : "Rp 0"}
-                </span>
-                <Button size="sm" variant="ghost" onClick={handleOpenDiskonModal} className="text-xs text-primary-600">
-                  Ubah Diskon
-                </Button>
+            ) : (
+              <div className="divide-y divide-neutral-100">
+                {discounts.map((d) => (
+                  <div key={d.id} className="py-2.5 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-neutral-900 font-body">{d.nama}</p>
+                      <span className="text-xs text-neutral-500 font-body">{formatTanggal(d.created_at)}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-success-600 font-body">- {formatRupiah(d.nominal)}</span>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteDiscount(d.id)} title="Hapus Diskon">
+                        <Trash2 size={14} className="text-danger-600" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          </div>
+            )}
+          </MetaBox>
 
           {/* Section: Riwayat Pembayaran */}
-          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
-              <h3 className="font-semibold text-neutral-900 font-heading">Riwayat Pembayaran</h3>
-              {sisaTagihan > 0 && booking.status !== "batal" && (
+          <MetaBox
+            title="Riwayat Pembayaran"
+            icon={<CreditCard size={18} className="text-neutral-700" />}
+            headerAction={
+              sisaTagihan > 0 && booking.status !== "batal" ? (
                 <Button size="sm" variant="primary" onClick={() => setIsPaymentModalOpen(true)} className="text-xs flex items-center gap-1">
                   <Plus size={14} />
                   <span>Catat Pembayaran</span>
                 </Button>
-              )}
-            </div>
-
+              ) : null
+            }
+          >
             {payments.length === 0 ? (
-              <p className="text-xs text-neutral-500 font-body">Belum ada pembayaran yang dicatat.</p>
+              <div className="py-8 flex flex-col items-center justify-center text-center bg-neutral-50/50 rounded-xl border border-neutral-100 border-dashed">
+                <CreditCard size={32} className="text-neutral-300 mb-2" />
+                <p className="text-sm font-medium text-neutral-700 font-body">Belum ada Pembayaran</p>
+                <p className="text-xs text-neutral-500 font-body mt-0.5">Catat pembayaran dari jamaah di sini.</p>
+              </div>
             ) : (
               <Table
                 columns={[
@@ -1019,29 +1161,28 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 }}
               />
             )}
-          </div>
+          </MetaBox>
         </div>
 
         {/* Kolom Kanan: Afiliasi Travel, Ringkasan Tagihan, Progress, & Perlengkapan (1 span) */}
         <div className="space-y-6">
           {/* Afiliasi Biro Travel (Khusus Super Admin / Master Dashboard) */}
           {showBrandColumn && (brand || booking.brand_id) && (
-            <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-3">
-              <div className="flex items-center gap-2 pb-2 border-b border-neutral-200">
-                <Building2 size={18} className="text-primary-600" />
-                <h3 className="font-semibold text-neutral-900 font-heading">Afiliasi Biro Travel</h3>
-              </div>
+            <MetaBox
+              title="Afiliasi Biro Travel"
+              icon={<Building2 size={18} className="text-neutral-700" />}
+            >
               <div className="pt-1">
                 <BrandCell brand={brand} brandId={booking.brand_id} showText={true} />
               </div>
-            </div>
+            </MetaBox>
           )}
 
           {/* Ringkasan Finansial Card */}
-          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <h3 className="font-semibold text-neutral-900 font-heading pb-2 border-b border-neutral-200">
-              Ringkasan Pembayaran
-            </h3>
+          <MetaBox
+            title="Ringkasan Pembayaran"
+            icon={<Receipt size={18} className="text-neutral-700" />}
+          >
             <div className="space-y-2.5 font-body">
               <div className="flex justify-between text-sm">
                 <span className="text-neutral-500">Harga Paket Dasar:</span>
@@ -1053,10 +1194,10 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   <span className="font-medium text-neutral-900">+ {formatRupiah(totalAddons)}</span>
                 </div>
               )}
-              {diskon > 0 && (
+              {totalDiskon > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-neutral-500">Diskon:</span>
-                  <span className="font-medium text-success-600">- {formatRupiah(diskon)}</span>
+                  <span className="text-neutral-500">Total Diskon:</span>
+                  <span className="font-medium text-success-600">- {formatRupiah(totalDiskon)}</span>
                 </div>
               )}
               <div className="pt-2 border-t border-neutral-200 flex justify-between text-base font-bold">
@@ -1074,16 +1215,14 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 </span>
               </div>
             </div>
-          </div>
+          </MetaBox>
 
           {/* Progress Paket Card */}
-          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-neutral-200">
-              <div className="flex items-center gap-2">
-                <Shield size={18} className="text-primary-600" />
-                <h3 className="font-semibold text-neutral-900 font-heading">Progress Paket</h3>
-              </div>
-              {booking.siap_berangkat ? (
+          <MetaBox
+            title="Progress Paket"
+            icon={<Shield size={18} className="text-neutral-700" />}
+            headerAction={
+              booking.siap_berangkat ? (
                 <Badge variant="success" className="px-2 py-0.5 text-xs font-semibold">
                   Siap Berangkat
                 </Badge>
@@ -1091,26 +1230,31 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 <Badge variant="warning" className="px-2 py-0.5 text-xs font-semibold">
                   Persiapan Berjalan
                 </Badge>
-              )}
-            </div>
-
+              )
+            }
+          >
             <div className="space-y-3">
               {/* 1. Tiket Maskapai Read-only */}
-              <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-md border border-neutral-200">
+              <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-neutral-200/90">
                 <div>
                   <span className="text-sm font-medium font-body text-neutral-800 block">Tiket Maskapai</span>
                   <span className="text-xs text-neutral-500 font-body block">(otomatis dari master paket)</span>
                 </div>
-                <Toggle
-                  id="toggle-tiket-detail"
-                  checked={Boolean(booking.progress_tiket)}
-                  disabled={true}
-                  onChange={() => {}}
-                />
+                {booking.progress_tiket ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-success-50 text-success-700 rounded-lg text-xs font-semibold">
+                    <CheckCircle size={14} />
+                    <span>Selesai</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-100 text-neutral-500 rounded-lg text-xs font-semibold">
+                    <Loader size={14} className="animate-spin" />
+                    <span>Menunggu</span>
+                  </div>
+                )}
               </div>
 
               {/* 2. Hotel */}
-              <div className="flex items-center justify-between p-3 bg-white rounded-md border border-neutral-200">
+              <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-neutral-200/90">
                 <span className="text-sm font-medium font-body text-neutral-800">Hotel</span>
                 <Toggle
                   id="toggle-hotel-detail"
@@ -1120,7 +1264,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               </div>
 
               {/* 3. Land Arrangement */}
-              <div className="flex items-center justify-between p-3 bg-white rounded-md border border-neutral-200">
+              <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-neutral-200/90">
                 <span className="text-sm font-medium font-body text-neutral-800">Land Arrangement</span>
                 <Toggle
                   id="toggle-land_arrangement-detail"
@@ -1129,59 +1273,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 />
               </div>
             </div>
-          </div>
+          </MetaBox>
 
-          {/* Perlengkapan Card */}
-          <div className="bg-white p-6 rounded-lg border border-neutral-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-neutral-200">
-              <Package size={18} className="text-primary-600" />
-              <h3 className="font-semibold text-neutral-900 font-heading">Perlengkapan Jamaah</h3>
-            </div>
-
-            {perlengkapanError && <Alert variant="error">{perlengkapanError}</Alert>}
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-neutral-500 font-body">Status:</span>
-                {booking.perlengkapan_status === 'sudah_diberikan' ? (
-                  <Badge variant="success">Sudah Diberikan</Badge>
-                ) : (
-                  <Badge variant="neutral">Belum Diberikan</Badge>
-                )}
-              </div>
-
-              {booking.perlengkapan_tanggal && (
-                <div className="flex justify-between text-xs text-neutral-500 font-body">
-                  <span>Tanggal Distribusi:</span>
-                  <span>{formatTanggal(booking.perlengkapan_tanggal)}</span>
-                </div>
-              )}
-
-              <div className="pt-2">
-                {booking.perlengkapan_status === 'sudah_diberikan' ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="w-full text-danger-600 hover:bg-danger-50 text-xs"
-                    disabled={perlengkapanLoading}
-                    onClick={() => setIsBatalkanModalOpen(true)}
-                  >
-                    Batalkan Distribusi
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="w-full text-xs"
-                    disabled={perlengkapanLoading}
-                    onClick={handleDistribusiPerlengkapan}
-                  >
-                    {perlengkapanLoading ? "Memproses..." : "Tandai Sudah Diberikan"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
+          
         </div>
       </div>
 
@@ -1470,12 +1564,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                     <td className="p-2.5 text-right font-medium">+ {formatRupiah(a.nominal)}</td>
                   </tr>
                 ))}
-                {diskon > 0 && (
-                  <tr>
-                    <td className="p-2.5 text-success-600">Diskon {booking.diskon_keterangan ? `(${booking.diskon_keterangan})` : ''}</td>
-                    <td className="p-2.5 text-right font-medium text-success-600">- {formatRupiah(diskon)}</td>
+                {discounts.map(d => (
+                  <tr key={d.id}>
+                    <td className="p-2.5 text-success-600">Diskon: {d.nama}</td>
+                    <td className="p-2.5 text-right font-medium text-success-600">- {formatRupiah(d.nominal)}</td>
                   </tr>
-                )}
+                ))}
                 <tr className="bg-neutral-50 font-bold">
                   <td className="p-2.5">TOTAL TAGIHAN</td>
                   <td className="p-2.5 text-right">{formatRupiah(totalHarga)}</td>
@@ -1508,7 +1602,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         title="Konfirmasi Pembatalan Distribusi Perlengkapan"
       >
         <p className="text-neutral-600 font-body text-sm mb-6">
-          Apakah Anda yakin ingin membatalkan distribusi perlengkapan untuk booking ini?
+          Apakah Anda yakin ingin membatalkan distribusi perlengkapan untuk jamaah {selectedPaxForCancelPerlengkapan?.nama_jamaah || 'ini'}?
           Stok barang akan dikembalikan ke inventaris.
         </p>
         <div className="flex justify-end gap-3">

@@ -60,6 +60,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   const [formData, setFormData] = useState({
     brand_id: "",
     nama_lengkap: "",
+    jenis_kelamin: "",
     nama_ayah_kandung: "",
     nik: "",
     tempat_lahir: "",
@@ -443,16 +444,42 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
               icon={<User size={18} className="text-neutral-700" />}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Baris 1: Nama Lengkap (Full Width untuk penekanan nama) */}
-                <div className="md:col-span-2">
-                  <Input 
-                    label="Nama Lengkap (Sesuai KTP / Paspor)" 
-                    name="nama_lengkap" 
-                    value={formData.nama_lengkap} 
-                    onChange={handleChange} 
-                    required 
-                    placeholder="Contoh: Muhammad Abdullah" 
-                  />
+                {/* Baris 1: Nama Lengkap & Jenis Kelamin */}
+                <Input 
+                  label="Nama Lengkap (Sesuai KTP / Paspor)" 
+                  name="nama_lengkap" 
+                  value={formData.nama_lengkap} 
+                  onChange={handleChange} 
+                  required 
+                  placeholder="Contoh: Muhammad Abdullah" 
+                />
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-semibold text-neutral-900 font-heading">Jenis Kelamin</label>
+                  <div className="flex gap-6 h-10 items-center">
+                    <label className="flex items-center gap-2 text-sm font-body cursor-pointer text-neutral-700 hover:text-neutral-900">
+                      <input 
+                        type="radio" 
+                        name="jenis_kelamin" 
+                        value="L" 
+                        checked={formData.jenis_kelamin === 'L'} 
+                        onChange={handleChange} 
+                        className="w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500" 
+                      />
+                      Laki-laki
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-body cursor-pointer text-neutral-700 hover:text-neutral-900">
+                      <input 
+                        type="radio" 
+                        name="jenis_kelamin" 
+                        value="P" 
+                        checked={formData.jenis_kelamin === 'P'} 
+                        onChange={handleChange} 
+                        className="w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500" 
+                      />
+                      Perempuan
+                    </label>
+                  </div>
                 </div>
 
                 {/* Baris 2: NIK & Nama Ayah Kandung */}

@@ -312,7 +312,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
 
       {/* Header */}
       <PageHeader
-        title={jamaah.nama_lengkap}
+        title={jamaah.id_jamaah || jamaah.kode_jamaah || `ID: ${jamaah.id}`}
         onBack={() => navigate("/jamaah")}
       >
         <Button
@@ -335,7 +335,8 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
         <div className="lg:col-span-2 space-y-6">
           <MetaBox title="Identitas Pribadi">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
-              <InfoItem label="ID Jamaah" value={jamaah.id_jamaah} />
+              <InfoItem label="Nama Lengkap" value={jamaah.nama_lengkap} />
+              <InfoItem label="Jenis Kelamin" value={jamaah.jenis_kelamin === 'L' ? 'Laki-laki' : jamaah.jenis_kelamin === 'P' ? 'Perempuan' : '-'} />
               <InfoItem label="Nama Ayah Kandung" value={jamaah.nama_ayah_kandung} />
               <InfoItem label="NIK (Nomor Induk Kependudukan)" value={jamaah.nik} />
               <InfoItem
