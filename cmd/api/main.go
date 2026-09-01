@@ -314,6 +314,7 @@ func main() {
 		r.Get("/bookings", bookingHandler.ListBookings)
 		r.Get("/bookings/{id}", bookingHandler.GetBooking)
 		r.Post("/bookings", bookingHandler.CreateBooking)
+		r.Delete("/bookings/{id}", bookingHandler.DeleteDraftBooking)
 		r.Post("/bookings/draft", bookingHandler.CreateDraftBooking)
 		r.Put("/bookings/{id}/draft", bookingHandler.UpdateDraftBooking)
 		r.Post("/bookings/{id}/finalize", bookingHandler.FinalizeBooking)
@@ -322,13 +323,14 @@ func main() {
 		r.Delete("/bookings/{id}/seat-block", bookingHandler.CancelSeatBlock)
 		r.Post("/bookings/{id}/addons", bookingHandler.AddBookingAddon)
 		r.Delete("/bookings/{id}/addons/{addon_id}", bookingHandler.DeleteBookingAddon)
-		r.Put("/bookings/{id}/diskon", bookingHandler.UpdateBookingDiskon)
+		r.Post("/bookings/{id}/discounts", bookingHandler.AddBookingDiscount)
+		r.Delete("/bookings/{id}/discounts/{discountID}", bookingHandler.RemoveBookingDiscount)
 		r.Put("/bookings/{id}/progress", bookingHandler.UpdateBookingProgress)
 		r.Put("/bookings/{id}/pax/{pax_id}/progress", bookingHandler.UpdatePaxProgress)
 		r.Put("/bookings/{id}/pax/{pax_id}/cancel", bookingHandler.CancelPax)
 		r.Put("/bookings/{id}/pax/{pax_id}/room-type", bookingHandler.UpdatePaxRoomType)
-		r.Put("/bookings/{id}/perlengkapan/distribusi", bookingHandler.DistribusiPerlengkapan)
-		r.Delete("/bookings/{id}/perlengkapan/distribusi", bookingHandler.BatalkanPerlengkapan)
+		r.Put("/bookings/{id}/pax/{pax_id}/perlengkapan/distribusi", bookingHandler.DistribusiPerlengkapan)
+		r.Delete("/bookings/{id}/pax/{pax_id}/perlengkapan/distribusi", bookingHandler.BatalkanPerlengkapan)
 
 		// Perlengkapan Items (Global)
 		r.Get("/perlengkapan-items", perlengkapanHandler.ListItems)
@@ -356,6 +358,7 @@ func main() {
 
 		// Analytics lintas brand (Super Admin Only)
 		r.With(brand.RequireSuperAdmin).Get("/analytics/transactions-30-days", paymentHandler.ListDailyBrandTransactions)
+		r.With(brand.RequireSuperAdmin).Get("/analytics/pax-30-days", bookingHandler.ListDailyBrandPax)
 	})
 
 	// ─── Start Server ─────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ type Jamaah struct {
 	IDJamaah            string     `json:"id_jamaah"`
 	KodeJamaah          string     `json:"kode_jamaah"`
 	NamaLengkap         string     `json:"nama_lengkap"`
+	JenisKelamin        *string    `json:"jenis_kelamin"`
 	NamaAyahKandung     *string    `json:"nama_ayah_kandung"`
 	NIK                 *string    `json:"nik"`
 	TempatLahir         *string    `json:"tempat_lahir"`
@@ -44,11 +45,14 @@ type JamaahListItem struct {
 	IDJamaah     string    `json:"id_jamaah"`
 	KodeJamaah   string    `json:"kode_jamaah"`
 	NamaLengkap  string    `json:"nama_lengkap"`
+	JenisKelamin *string   `json:"jenis_kelamin"`
 	NIK          *string   `json:"nik"`
 	TanggalLahir *string   `json:"tanggal_lahir"`
 	NoHP         *string   `json:"no_hp"`
 	Email        *string   `json:"email"`
 	Status       string    `json:"status"`
+	PctData      int       `json:"pct_data"`
+	PctDokumen   int       `json:"pct_dokumen"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -95,6 +99,7 @@ type JamaahRelasiItem struct {
 type CreateJamaahRequest struct {
 	BrandID             *int64  `json:"brand_id"`
 	NamaLengkap         string  `json:"nama_lengkap"`
+	JenisKelamin        *string `json:"jenis_kelamin"`
 	NamaAyahKandung     *string `json:"nama_ayah_kandung"`
 	NIK                 *string `json:"nik"`
 	TempatLahir         *string `json:"tempat_lahir"`

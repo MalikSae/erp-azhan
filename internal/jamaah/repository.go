@@ -98,9 +98,37 @@ func (r *Repository) GenerateIDJamaah(ctx context.Context, tx *sql.Tx, brandID i
 
 // List mengambil semua jamaah, filter brand kalau scoped admin.
 func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([]JamaahListItem, error) {
-	q := `SELECT id, brand_id, COALESCE(id_jamaah, ''), kode_jamaah, nama_lengkap, nik,
+	q := `SELECT id, brand_id, COALESCE(id_jamaah, ''), kode_jamaah, nama_lengkap, jenis_kelamin, nik,
 		DATE_FORMAT(tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
-		no_hp, email, status, created_at
+		no_hp, email, status,
+		ROUND((
+			IF(nama_lengkap IS NOT NULL AND nama_lengkap != '', 1, 0) +
+			IF(nama_ayah_kandung IS NOT NULL AND nama_ayah_kandung != '', 1, 0) +
+			IF(nik IS NOT NULL AND nik != '', 1, 0) +
+			IF(tempat_lahir IS NOT NULL AND tempat_lahir != '', 1, 0) +
+			IF(tanggal_lahir IS NOT NULL, 1, 0) +
+			IF(jenis_kelamin IS NOT NULL AND jenis_kelamin != '', 1, 0) +
+			IF(no_paspor IS NOT NULL AND no_paspor != '', 1, 0) +
+			IF(tempat_paspor_keluar IS NOT NULL AND tempat_paspor_keluar != '', 1, 0) +
+			IF(paspor_berlaku_sampai IS NOT NULL, 1, 0) +
+			IF(no_hp IS NOT NULL AND no_hp != '', 1, 0) +
+			IF(email IS NOT NULL AND email != '', 1, 0) +
+			IF(pekerjaan IS NOT NULL AND pekerjaan != '', 1, 0) +
+			IF(pendidikan_terakhir IS NOT NULL AND pendidikan_terakhir != '', 1, 0) +
+			IF(penjamin_kesehatan IS NOT NULL AND penjamin_kesehatan != '', 1, 0) +
+			IF(no_asuransi_bpjs IS NOT NULL AND no_asuransi_bpjs != '', 1, 0) +
+			IF(alamat IS NOT NULL AND alamat != '', 1, 0) +
+			IF(kota IS NOT NULL AND kota != '', 1, 0) +
+			IF(emergency_nama IS NOT NULL AND emergency_nama != '', 1, 0) +
+			IF(emergency_nik IS NOT NULL AND emergency_nik != '', 1, 0) +
+			IF(emergency_hp IS NOT NULL AND emergency_hp != '', 1, 0) +
+			IF(emergency_hubungan IS NOT NULL AND emergency_hubungan != '', 1, 0) +
+			IF(emergency_alamat IS NOT NULL AND emergency_alamat != '', 1, 0)
+		) / 22.0 * 100) AS pct_data,
+		ROUND(
+			(SELECT COUNT(*) FROM dokumen_jamaah dj WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status IN ('submitted', 'approved')) / 6.0 * 100
+		) AS pct_dokumen,
+		created_at
 		FROM jamaah WHERE 1=1`
 
 	var args []interface{}
@@ -129,7 +157,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([
 	items := make([]JamaahListItem, 0)
 	for rows.Next() {
 		var item JamaahListItem
-		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &item.PctDokumen, &item.CreatedAt); err != nil {
 			return nil, fmt.Errorf("jamaah.List scan: %w", err)
 		}
 		items = append(items, item)
@@ -141,7 +169,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([
 
 // GetByID mengambil jamaah lengkap, verify brand match untuk scoped admin.
 func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Jamaah, error) {
-	q := `SELECT id, brand_id, COALESCE(id_jamaah, ''), kode_jamaah, nama_lengkap, nama_ayah_kandung, nik, tempat_lahir,
+	q := `SELECT id, brand_id, COALESCE(id_jamaah, ''), kode_jamaah, nama_lengkap, jenis_kelamin, nama_ayah_kandung, nik, tempat_lahir,
 		DATE_FORMAT(tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
 		no_paspor, tempat_paspor_keluar,
 		DATE_FORMAT(tanggal_paspor_keluar, '%Y-%m-%d') AS tanggal_paspor_keluar,
@@ -160,7 +188,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 
 	var j Jamaah
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(
-		&j.ID, &j.BrandID, &j.IDJamaah, &j.KodeJamaah, &j.NamaLengkap, &j.NamaAyahKandung, &j.NIK, &j.TempatLahir,
+		&j.ID, &j.BrandID, &j.IDJamaah, &j.KodeJamaah, &j.NamaLengkap, &j.JenisKelamin, &j.NamaAyahKandung, &j.NIK, &j.TempatLahir,
 		&j.TanggalLahir,
 		&j.NoPaspor, &j.TempatPasporKeluar, &j.TanggalPasporKeluar,
 		&j.PasporBerlakuSampai,
@@ -203,14 +231,14 @@ func (r *Repository) Create(ctx context.Context, brandID int64, req *CreateJamaa
 	}
 
 	const q = `INSERT INTO jamaah (
-		brand_id, id_jamaah, kode_jamaah, nama_lengkap, nama_ayah_kandung, nik, tempat_lahir, tanggal_lahir,
+		brand_id, id_jamaah, kode_jamaah, nama_lengkap, jenis_kelamin, nama_ayah_kandung, nik, tempat_lahir, tanggal_lahir,
 		no_paspor, tempat_paspor_keluar, tanggal_paspor_keluar, paspor_berlaku_sampai,
 		no_hp, email, pekerjaan, pendidikan_terakhir, penjamin_kesehatan, no_asuransi_bpjs,
 		alamat, kota, catatan, status, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	res, err := tx.ExecContext(ctx, q,
-		brandID, idJamaah, kodeJamaah, req.NamaLengkap, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
+		brandID, idJamaah, kodeJamaah, req.NamaLengkap, req.JenisKelamin, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
 		req.NoPaspor, req.TempatPasporKeluar, req.TanggalPasporKeluar, req.PasporBerlakuSampai,
 		req.NoHP, req.Email, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan, req.NoAsuransiBPJS,
 		req.Alamat, req.Kota, req.Catatan, status, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
@@ -250,14 +278,14 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 	}
 
 	const q = `UPDATE jamaah SET
-		brand_id=?, nama_lengkap=?, nama_ayah_kandung=?, nik=?, tempat_lahir=?, tanggal_lahir=?,
+		brand_id=?, nama_lengkap=?, jenis_kelamin=?, nama_ayah_kandung=?, nik=?, tempat_lahir=?, tanggal_lahir=?,
 		no_paspor=?, tempat_paspor_keluar=?, tanggal_paspor_keluar=?, paspor_berlaku_sampai=?,
 		no_hp=?, email=?, pekerjaan=?, pendidikan_terakhir=?, penjamin_kesehatan=?, no_asuransi_bpjs=?,
 		alamat=?, kota=?, catatan=?, status=?, emergency_nama=?, emergency_nik=?, emergency_hp=?, emergency_hubungan=?, emergency_alamat=?
 		WHERE id=?`
 
 	_, err = r.db.ExecContext(ctx, q,
-		finalBrandID, req.NamaLengkap, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
+		finalBrandID, req.NamaLengkap, req.JenisKelamin, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
 		req.NoPaspor, req.TempatPasporKeluar, req.TanggalPasporKeluar, req.PasporBerlakuSampai,
 		req.NoHP, req.Email, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan, req.NoAsuransiBPJS,
 		req.Alamat, req.Kota, req.Catatan, status, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,

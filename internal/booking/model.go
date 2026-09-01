@@ -13,6 +13,15 @@ type BookingAddon struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// BookingDiscount adalah detail diskon pada booking.
+type BookingDiscount struct {
+	ID        int64     `json:"id"`
+	BookingID int64     `json:"booking_id"`
+	Nama      string    `json:"nama"`
+	Nominal   float64   `json:"nominal"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // BookingPax adalah detail penumpang (pax) pada booking.
 type BookingPax struct {
 	ID                       int64     `json:"id"`
@@ -29,6 +38,8 @@ type BookingPax struct {
 	ProgressSiskopatuh       bool      `json:"progress_siskopatuh"`
 	ProgressManasik          bool      `json:"progress_manasik"`
 	ProgressVaksinMeningitis bool      `json:"progress_vaksin_meningitis"`
+	PerlengkapanStatus       string    `json:"perlengkapan_status"`
+	PerlengkapanTanggal      *string   `json:"perlengkapan_tanggal"`
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
 }
@@ -54,8 +65,6 @@ type Booking struct {
 	IsSeatBlocked     bool     `json:"is_seat_blocked"`
 	SeatHoldExpiresAt *string  `json:"seat_hold_expires_at,omitempty"`
 	TotalHarga        *float64 `json:"total_harga"`
-	Diskon            float64  `json:"diskon"`
-	DiskonKeterangan  *string  `json:"diskon_keterangan"`
 	// ProgressPaspor dihitung dinamis dari dokumen_jamaah
 	ProgressPaspor bool `json:"progress_paspor"`
 	ProgressVisa   bool `json:"progress_visa"`
@@ -67,13 +76,10 @@ type Booking struct {
 	ProgressSiskopatuh        bool           `json:"progress_siskopatuh"`
 	ProgressVaksinMeningitis  bool           `json:"progress_vaksin_meningitis"`
 	SiapBerangkat             bool           `json:"siap_berangkat"`
-	PerlengkapanStatus        string         `json:"perlengkapan_status"`
-	PerlengkapanTanggal       *string        `json:"perlengkapan_tanggal"`
-	PerlengkapanDiberikanOleh *int64         `json:"perlengkapan_diberikan_oleh"`
-	PerlengkapanJumlahPax     *int           `json:"perlengkapan_jumlah_pax"`
 	Pax                       []BookingPax   `json:"pax"`
-	Addons                    []BookingAddon `json:"addons"`
-	CreatedBy                 *int64         `json:"created_by"`
+	Addons                    []BookingAddon    `json:"addons"`
+	Discounts                 []BookingDiscount `json:"discounts"`
+	CreatedBy                 *int64            `json:"created_by"`
 	CreatedAt                 time.Time      `json:"created_at"`
 }
 
@@ -121,8 +127,15 @@ type AddBookingAddonRequest struct {
 	Nominal float64 `json:"nominal"`
 }
 
-// UpdateDiskonRequest adalah payload untuk PUT /api/admin/bookings/{id}/diskon.
-type UpdateDiskonRequest struct {
-	Diskon           float64 `json:"diskon"`
-	DiskonKeterangan *string `json:"diskon_keterangan"`
+// AddBookingDiscountRequest adalah payload untuk POST /api/admin/bookings/{id}/discounts.
+type AddBookingDiscountRequest struct {
+	Nama    string  `json:"nama"`
+	Nominal float64 `json:"nominal"`
+}
+
+// DailyBrandPax merepresentasikan agregasi pendaftaran pax harian per brand.
+type DailyBrandPax struct {
+	Date     string `json:"date"`
+	BrandID  int64  `json:"brand_id"`
+	PaxCount int    `json:"pax_count"`
 }

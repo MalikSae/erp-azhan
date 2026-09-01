@@ -701,22 +701,27 @@ func (h *Handler) DeleteBookingAddon(w http.ResponseWriter, r *http.Request) {
 
 // ─── Diskon ───────────────────────────────────────────────────────────────────
 
-// UpdateBookingDiskon godoc
-// PUT /api/admin/bookings/{id}/diskon
-func (h *Handler) UpdateBookingDiskon(w http.ResponseWriter, r *http.Request) {
+// AddBookingDiscount godoc
+// POST /api/admin/bookings/{id}/discounts
+func (h *Handler) AddBookingDiscount(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
 
-	var req UpdateDiskonRequest
+	var req AddBookingDiscountRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
 
-	if req.Diskon < 0 {
-		writeError(w, http.StatusBadRequest, "diskon tidak boleh negatif")
+	req.Nama = strings.TrimSpace(req.Nama)
+	if req.Nama == "" {
+		writeError(w, http.StatusBadRequest, "nama diskon tidak boleh kosong")
+		return
+	}
+	if req.Nominal <= 0 {
+		writeError(w, http.StatusBadRequest, "nominal diskon harus lebih dari 0")
 		return
 	}
 
@@ -728,7 +733,44 @@ func (h *Handler) UpdateBookingDiskon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.repo.UpdateDiskon(r.Context(), id, req.Diskon, req.DiskonKeterangan); err != nil {
+	if err := h.repo.AddDiscount(r.Context(), id, req.Nama, req.Nominal); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	b, err := h.repo.GetByID(r.Context(), id, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, b)
+}
+
+// RemoveBookingDiscount godoc
+// DELETE /api/admin/bookings/{id}/discounts/{discountID}
+func (h *Handler) RemoveBookingDiscount(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	discountIDStr := chi.URLParam(r, "discountID")
+	discountID, err := strconv.ParseInt(discountIDStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "discountID tidak valid")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+
+	// Verifikasi booking exists dan milik brand
+	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	if err := h.repo.DeleteDiscount(r.Context(), id, discountID); err != nil {
 		handleRepoError(w, err)
 		return
 	}
@@ -837,17 +879,20 @@ func (h *Handler) UpdatePaxProgress(w http.ResponseWriter, r *http.Request) {
 
 // ─── Perlengkapan Distribusi ──────────────────────────────────────────────────
 
-// PUT /api/admin/bookings/{id}/perlengkapan/distribusi
+// PUT /api/admin/bookings/{id}/pax/{pax_id}/perlengkapan/distribusi
 func (h *Handler) DistribusiPerlengkapan(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
+	paxID, ok := parsePaxID(w, r)
+	if !ok {
+		return
+	}
 
-	adminID := identity.GetAdminUserID(r.Context())
 	brandID := identity.GetBrandID(r.Context())
 
-	b, err := h.repo.MarkPerlengkapanDiberikan(r.Context(), id, adminID, brandID)
+	b, err := h.repo.MarkPerlengkapanDiberikan(r.Context(), id, paxID, brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -856,16 +901,20 @@ func (h *Handler) DistribusiPerlengkapan(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, b)
 }
 
-// DELETE /api/admin/bookings/{id}/perlengkapan/distribusi
+// DELETE /api/admin/bookings/{id}/pax/{pax_id}/perlengkapan/distribusi
 func (h *Handler) BatalkanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	paxID, ok := parsePaxID(w, r)
 	if !ok {
 		return
 	}
 
 	brandID := identity.GetBrandID(r.Context())
 
-	b, err := h.repo.BatalkanPerlengkapan(r.Context(), id, brandID)
+	b, err := h.repo.BatalkanPerlengkapan(r.Context(), id, paxID, brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -908,6 +957,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrGenerateIDBookingFailed):
 		writeError(w, http.StatusInternalServerError, err.Error())
+	case errors.Is(err, ErrOnlyDraftCanBeDeleted):
+		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.As(err, &errStok):
 		writeError(w, http.StatusConflict, errStok.Message)
 	default:
@@ -945,4 +996,32 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// DeleteDraftBooking godoc
+// DELETE /api/admin/bookings/{id}
+func (h *Handler) DeleteDraftBooking(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	if err := h.repo.DeleteDraft(r.Context(), id, brandID); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "draft booking berhasil dihapus"})
+}
+
+// ListDailyBrandPax mengembalikan data agregasi pendaftaran pax 30 hari per brand.
+// GET /api/admin/analytics/pax-30-days
+func (h *Handler) ListDailyBrandPax(w http.ResponseWriter, r *http.Request) {
+	items, err := h.repo.ListDailyBrandPax(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "gagal mengambil data pendaftaran pax")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
 }

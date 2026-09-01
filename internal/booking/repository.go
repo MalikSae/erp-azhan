@@ -28,6 +28,7 @@ var (
 	ErrPaxAlreadyCancelled             = errors.New("pax sudah dalam status batal")
 	ErrCannotChangeInfantRoom          = errors.New("tidak bisa mengubah tipe kamar untuk infant")
 	ErrCannotChangeCancelledPaxRoom    = errors.New("tidak bisa mengubah tipe kamar untuk pax yang sudah batal")
+	ErrOnlyDraftCanBeDeleted           = errors.New("Hanya booking berstatus draft yang dapat dihapus. Booking yang sudah final harus dibatalkan, bukan dihapus.")
 )
 
 type ErrStokKurang struct {
@@ -78,15 +79,13 @@ const selectBookingFull = `
 		bp.room_type,
 		bp.harga_pax,
 		b.seat_count, b.status, b.is_seat_blocked, b.seat_hold_expires_at,
-		b.total_harga, b.diskon, b.diskon_keterangan,
+		b.total_harga,
 		COALESCE(bp.progress_visa, FALSE) AS progress_visa,
 		b.progress_hotel,
 		b.progress_land_arrangement,
 		COALESCE(bp.progress_manasik, FALSE) AS progress_manasik,
 		COALESCE(bp.progress_siskopatuh, FALSE) AS progress_siskopatuh,
 		COALESCE(bp.progress_vaksin_meningitis, FALSE) AS progress_vaksin_meningitis,
-		b.perlengkapan_status, DATE_FORMAT(b.perlengkapan_tanggal, '%Y-%m-%d') AS perlengkapan_tanggal, b.perlengkapan_diberikan_oleh,
-		b.perlengkapan_jumlah_pax,
 		b.created_by, b.created_at,
 		s.is_ticket_confirmed,
 		b.pic_jamaah_id AS primary_jamaah_id,
@@ -213,6 +212,13 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 		return nil, err
 	}
 	b.Addons = addons
+
+	discounts, err := r.ListDiscounts(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	b.Discounts = discounts
+
 	return b, nil
 }
 
@@ -222,6 +228,7 @@ func (r *Repository) ListPaxByBookingID(ctx context.Context, bookingID int64) ([
 		SELECT bp.id, bp.booking_id, bp.jamaah_id, j.nama_lengkap, bp.pax_type, bp.room_type,
 			bp.harga_pax, bp.counts_for_seat, bp.pax_status,
 			bp.progress_visa, bp.progress_siskopatuh, bp.progress_manasik, bp.progress_vaksin_meningitis,
+			bp.perlengkapan_status, DATE_FORMAT(bp.perlengkapan_tanggal, '%Y-%m-%d') AS perlengkapan_tanggal,
 			bp.created_at, bp.updated_at
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
@@ -238,16 +245,21 @@ func (r *Repository) ListPaxByBookingID(ctx context.Context, bookingID int64) ([
 	for rows.Next() {
 		var p BookingPax
 		var roomType sql.NullString
+		var perlengkapanTanggal sql.NullString
 		if err := rows.Scan(
 			&p.ID, &p.BookingID, &p.JamaahID, &p.NamaJamaah, &p.PaxType, &roomType,
 			&p.HargaPax, &p.CountsForSeat, &p.PaxStatus,
 			&p.ProgressVisa, &p.ProgressSiskopatuh, &p.ProgressManasik, &p.ProgressVaksinMeningitis,
+			&p.PerlengkapanStatus, &perlengkapanTanggal,
 			&p.CreatedAt, &p.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("booking.ListPax scan: %w", err)
 		}
 		if roomType.Valid {
 			p.RoomType = &roomType.String
+		}
+		if perlengkapanTanggal.Valid {
+			p.PerlengkapanTanggal = &perlengkapanTanggal.String
 		}
 		hasPaspor, err := r.checkPasporUploaded(ctx, p.JamaahID)
 		if err == nil {
@@ -939,11 +951,13 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 	var scheduleID int64
 	var scheduleBrandID int64
 	var isSeatBlocked bool
+	var bookingStatus string
+	var currentPIC int64
 	err = tx.QueryRowContext(ctx, `
-		SELECT b.schedule_id, s.brand_id, b.is_seat_blocked
+		SELECT b.schedule_id, s.brand_id, b.is_seat_blocked, b.status, b.pic_jamaah_id
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
-		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&scheduleID, &scheduleBrandID, &isSeatBlocked)
+		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&scheduleID, &scheduleBrandID, &isSeatBlocked, &bookingStatus, &currentPIC)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -955,12 +969,13 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 	}
 
 	// 2. Lock and get pax status
-	var paxStatus string
+	var paxStatus, perlengkapanStatus, paxType string
 	var countsForSeat bool
+	var paxJamaahID int64
 	err = tx.QueryRowContext(ctx, `
-		SELECT pax_status, counts_for_seat
+		SELECT pax_status, counts_for_seat, perlengkapan_status, jamaah_id, pax_type
 		FROM booking_pax
-		WHERE id = ? AND booking_id = ? FOR UPDATE`, paxID, bookingID).Scan(&paxStatus, &countsForSeat)
+		WHERE id = ? AND booking_id = ? FOR UPDATE`, paxID, bookingID).Scan(&paxStatus, &countsForSeat, &perlengkapanStatus, &paxJamaahID, &paxType)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -971,8 +986,49 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 		return nil, ErrPaxAlreadyCancelled
 	}
 
+	// 2.5 Handle Perlengkapan
+	if perlengkapanStatus == "sudah_diberikan" {
+		qLog := `SELECT perlengkapan_item_id, qty FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ? FOR UPDATE`
+		rows, err := tx.QueryContext(ctx, qLog, paxID)
+		if err != nil {
+			return nil, fmt.Errorf("booking.CancelPax get logs: %w", err)
+		}
+		
+		type logRow struct {
+			ItemID uint64
+			Qty    int
+		}
+		var logs []logRow
+		for rows.Next() {
+			var l logRow
+			if err := rows.Scan(&l.ItemID, &l.Qty); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("booking.CancelPax scan log: %w", err)
+			}
+			logs = append(logs, l)
+		}
+		rows.Close()
+
+		if bookingStatus == "baru" || bookingStatus == "draft" {
+			for _, l := range logs {
+				_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", l.Qty, scheduleBrandID, l.ItemID)
+				if err != nil {
+					return nil, fmt.Errorf("booking.CancelPax restore stok: %w", err)
+				}
+			}
+		}
+
+		if _, err := tx.ExecContext(ctx, "DELETE FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ?", paxID); err != nil {
+			return nil, fmt.Errorf("booking.CancelPax delete logs: %w", err)
+		}
+	}
+
 	// 3. Update status pax
-	_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal' WHERE id = ?`, paxID)
+	if bookingStatus == "baru" || bookingStatus == "draft" {
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE id = ?`, paxID)
+	} else {
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE id = ?`, paxID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("booking.CancelPax update status: %w", err)
 	}
@@ -985,20 +1041,71 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 		}
 	}
 
-	// 5. Cek active pax
-	var activePaxCount int
-	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM booking_pax WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID).Scan(&activePaxCount)
+	// 5. Cek active pax & PIC Transfer
+	var activeAdultChildCount int
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM booking_pax WHERE booking_id = ? AND pax_status = 'aktif' AND pax_type != 'infant'`, bookingID).Scan(&activeAdultChildCount)
 	if err != nil {
 		return nil, fmt.Errorf("booking.CancelPax check active count: %w", err)
 	}
-	if activePaxCount == 0 {
+
+	if activeAdultChildCount > 0 {
+		if paxJamaahID == currentPIC {
+			var newPICJamaahID int64
+			err = tx.QueryRowContext(ctx, `SELECT jamaah_id FROM booking_pax WHERE booking_id = ? AND pax_status = 'aktif' AND pax_type != 'infant' ORDER BY created_at ASC LIMIT 1`, bookingID).Scan(&newPICJamaahID)
+			if err == nil {
+				_, err = tx.ExecContext(ctx, `UPDATE bookings SET pic_jamaah_id = ? WHERE id = ?`, newPICJamaahID, bookingID)
+				if err != nil {
+					return nil, fmt.Errorf("booking.CancelPax transfer PIC: %w", err)
+				}
+			}
+		}
+	} else {
+		rowsInf, err := tx.QueryContext(ctx, `SELECT id FROM booking_pax WHERE booking_id = ? AND pax_status = 'aktif' AND perlengkapan_status = 'sudah_diberikan'`, bookingID)
+		if err == nil {
+			var infPaxIDs []int64
+			for rowsInf.Next() {
+				var ipid int64
+				if err := rowsInf.Scan(&ipid); err == nil {
+					infPaxIDs = append(infPaxIDs, ipid)
+				}
+			}
+			rowsInf.Close()
+
+			for _, ipid := range infPaxIDs {
+				qLog := `SELECT perlengkapan_item_id, qty FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ?`
+				rowsL, _ := tx.QueryContext(ctx, qLog, ipid)
+				for rowsL.Next() {
+					var itemID uint64
+					var qty int
+					if err := rowsL.Scan(&itemID, &qty); err == nil {
+						if bookingStatus == "baru" || bookingStatus == "draft" {
+							tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", qty, scheduleBrandID, itemID)
+						}
+					}
+				}
+				rowsL.Close()
+				tx.ExecContext(ctx, "DELETE FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ?", ipid)
+			}
+		}
+		
+		if bookingStatus == "baru" || bookingStatus == "draft" {
+			tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID)
+		} else {
+			tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID)
+		}
+
 		_, err = tx.ExecContext(ctx, `UPDATE bookings SET status = 'batal', is_seat_blocked = FALSE WHERE id = ?`, bookingID)
 		if err != nil {
 			return nil, fmt.Errorf("booking.CancelPax cancel booking: %w", err)
 		}
 	}
 
-	// 6. Commit (tanpa recalculate total harga)
+	// 6. Recalculate total harga (karena sudah mengubah status/harga_pax)
+	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.CancelPax recalc: %w", err)
+	}
+
+	// 7. Commit
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("booking.CancelPax commit: %w", err)
 	}
@@ -1311,9 +1418,11 @@ func (r *Repository) recalculateTotalTx(ctx context.Context, tx *sql.Tx, booking
 			SELECT COALESCE(SUM(harga_pax), 0) FROM booking_pax WHERE booking_id = ?
 		) + (
 			SELECT COALESCE(SUM(nominal), 0) FROM booking_addons WHERE booking_id = ?
-		) - diskon)
+		) - (
+			SELECT COALESCE(SUM(nominal), 0) FROM booking_discounts WHERE booking_id = ?
+		))
 		WHERE id = ?`
-	if _, err := tx.ExecContext(ctx, q, bookingID, bookingID, bookingID); err != nil {
+	if _, err := tx.ExecContext(ctx, q, bookingID, bookingID, bookingID, bookingID); err != nil {
 		return err
 	}
 
@@ -1412,21 +1521,65 @@ func (r *Repository) DeleteAddon(ctx context.Context, bookingID int64, addonID i
 	return tx.Commit()
 }
 
-// UpdateDiskon mengubah nilai diskon & keterangan lalu menghitung ulang total_harga.
-func (r *Repository) UpdateDiskon(ctx context.Context, bookingID int64, diskon float64, keterangan *string) error {
+// ListDiscounts mengambil daftar diskon untuk sebuah booking.
+func (r *Repository) ListDiscounts(ctx context.Context, bookingID int64) ([]BookingDiscount, error) {
+	const q = `SELECT id, booking_id, nama, nominal, created_at FROM booking_discounts WHERE booking_id=? ORDER BY id ASC`
+	rows, err := r.db.QueryContext(ctx, q, bookingID)
+	if err != nil {
+		return nil, fmt.Errorf("booking.ListDiscounts: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]BookingDiscount, 0)
+	for rows.Next() {
+		var a BookingDiscount
+		if err := rows.Scan(&a.ID, &a.BookingID, &a.Nama, &a.Nominal, &a.CreatedAt); err != nil {
+			return nil, fmt.Errorf("booking.ListDiscounts scan: %w", err)
+		}
+		items = append(items, a)
+	}
+	return items, rows.Err()
+}
+
+// AddDiscount menambahkan diskon baru dan menghitung ulang total_harga.
+func (r *Repository) AddDiscount(ctx context.Context, bookingID int64, nama string, nominal float64) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	_, err = tx.ExecContext(ctx, `UPDATE bookings SET diskon=?, diskon_keterangan=? WHERE id=?`, diskon, keterangan, bookingID)
+	_, err = tx.ExecContext(ctx, `INSERT INTO booking_discounts (booking_id, nama, nominal) VALUES (?, ?, ?)`, bookingID, nama, nominal)
 	if err != nil {
-		return fmt.Errorf("booking.UpdateDiskon update: %w", err)
+		return fmt.Errorf("booking.AddDiscount insert: %w", err)
 	}
 
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
-		return fmt.Errorf("booking.UpdateDiskon recalc: %w", err)
+		return fmt.Errorf("booking.AddDiscount recalc: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// DeleteDiscount menghapus diskon dan menghitung ulang total_harga.
+func (r *Repository) DeleteDiscount(ctx context.Context, bookingID int64, discountID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM booking_discounts WHERE id=? AND booking_id=?`, discountID, bookingID)
+	if err != nil {
+		return fmt.Errorf("booking.DeleteDiscount delete: %w", err)
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return ErrNotFound
+	}
+
+	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
+		return fmt.Errorf("booking.DeleteDiscount recalc: %w", err)
 	}
 
 	return tx.Commit()
@@ -1619,27 +1772,20 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	var primaryJamaahID sql.NullInt64
 	var totalHarga sql.NullFloat64
 	var hargaDasar sql.NullFloat64
-	var diskonKeterangan sql.NullString
 	var createdBy sql.NullInt64
 	var berangkatTanggal sql.NullString
-	var perlengkapanStatus string
-	var perlengkapanTanggal sql.NullString
-	var perlengkapanDiberikanOleh sql.NullInt64
 	var isTicketConfirmed bool
 	var seatHoldExpiresAt sql.NullTime
 	var roomType sql.NullString
-	var perlengkapanJumlahPax sql.NullInt64
 
 	err := rows.Scan(
 		&b.ID, &idBooking, &b.ScheduleID, &b.BrandID, &b.JadwalNama, &berangkatTanggal,
 		&picJamaahID, &namaJamaah,
 		&roomType, &hargaDasar,
 		&b.SeatCount, &b.Status, &b.IsSeatBlocked, &seatHoldExpiresAt,
-		&totalHarga, &b.Diskon, &diskonKeterangan,
+		&totalHarga,
 		&b.ProgressVisa, &b.ProgressHotel, &b.ProgressLandArrangement,
 		&b.ProgressManasik, &b.ProgressSiskopatuh, &b.ProgressVaksinMeningitis,
-		&perlengkapanStatus, &perlengkapanTanggal, &perlengkapanDiberikanOleh,
-		&perlengkapanJumlahPax,
 		&createdBy, &b.CreatedAt,
 		&isTicketConfirmed,
 		&primaryJamaahID,
@@ -1679,22 +1825,8 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 		value := seatHoldExpiresAt.Time.UTC().Format(time.RFC3339)
 		b.SeatHoldExpiresAt = &value
 	}
-	if diskonKeterangan.Valid {
-		b.DiskonKeterangan = &diskonKeterangan.String
-	}
 	if createdBy.Valid {
 		b.CreatedBy = &createdBy.Int64
-	}
-	b.PerlengkapanStatus = perlengkapanStatus
-	if perlengkapanTanggal.Valid {
-		b.PerlengkapanTanggal = &perlengkapanTanggal.String
-	}
-	if perlengkapanDiberikanOleh.Valid {
-		b.PerlengkapanDiberikanOleh = &perlengkapanDiberikanOleh.Int64
-	}
-	if perlengkapanJumlahPax.Valid {
-		v := int(perlengkapanJumlahPax.Int64)
-		b.PerlengkapanJumlahPax = &v
 	}
 	computeSiapBerangkat(&b)
 	b.Addons = make([]BookingAddon, 0)
@@ -1704,27 +1836,23 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 
 // ─── Perlengkapan Distribusi ──────────────────────────────────────────────────
 
-// MarkPerlengkapanDiberikan mendistribusikan perlengkapan sesuai template set brand dikalikan pax non-infant aktif.
-func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID int64, adminID int64, brandID *int64) (*Booking, error) {
+// MarkPerlengkapanDiberikan mendistribusikan perlengkapan sesuai template set brand untuk satu jamaah (pax).
+func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID int64, paxID int64, brandID *int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	// 1. Ambil booking existing & brand_id dari schedule terkait
-	var (
-		status             string
-		perlengkapanStatus string
-		scheduleBrandID    int64
-	)
+	// 1. Ambil booking existing & brand_id
+	var scheduleBrandID int64
 	qBooking := `
-		SELECT b.status, b.perlengkapan_status, s.brand_id
+		SELECT s.brand_id
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id = ?
 	`
-	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&status, &perlengkapanStatus, &scheduleBrandID)
+	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&scheduleBrandID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -1736,20 +1864,27 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		return nil, ErrNotFound
 	}
 
-	if perlengkapanStatus == "sudah_diberikan" {
-		return nil, ErrPerlengkapanSudahDiberikan
+	// 2. Lock and get pax status
+	var paxStatus, perlengkapanStatus, paxType string
+	err = tx.QueryRowContext(ctx, `
+		SELECT pax_status, perlengkapan_status, pax_type
+		FROM booking_pax 
+		WHERE id = ? AND booking_id = ? FOR UPDATE`, paxID, bookingID).Scan(&paxStatus, &perlengkapanStatus, &paxType)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan find pax: %w", err)
 	}
 
-	// 2. Hitung jumlah pax reguler aktif (infant tidak dapat jatah perlengkapan)
-	var jumlahPaxEligible int
-	err = tx.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM booking_pax 
-		WHERE booking_id = ? AND pax_status = 'aktif' AND pax_type = 'reguler'`, bookingID).Scan(&jumlahPaxEligible)
-	if err != nil {
-		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan count eligible pax: %w", err)
+	if paxStatus != "aktif" {
+		return nil, errors.New("jamaah tidak aktif")
 	}
-	if jumlahPaxEligible == 0 {
-		return nil, errors.New("tidak ada pax reguler aktif untuk didistribusikan perlengkapan")
+	if paxType == "infant" {
+		return nil, errors.New("infant tidak dapat jatah perlengkapan")
+	}
+	if perlengkapanStatus == "sudah_diberikan" {
+		return nil, ErrPerlengkapanSudahDiberikan
 	}
 
 	// 3. Ambil template set global & stok untuk brand tersebut dengan row lock FOR UPDATE
@@ -1789,10 +1924,10 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		return nil, ErrTemplatePerlengkapanBelumDiatur
 	}
 
-	// 4. Cek apakah ada stok yang kurang untuk kebutuhan (item.Qty * jumlahPaxEligible)
+	// 4. Cek apakah ada stok yang kurang untuk kebutuhan
 	var kurangItems []string
 	for _, item := range setItems {
-		butuh := item.Qty * jumlahPaxEligible
+		butuh := item.Qty
 		if item.StokTersedia < butuh {
 			kurangItems = append(kurangItems, fmt.Sprintf("%s (tersedia %d, butuh %d)", item.Nama, item.StokTersedia, butuh))
 		}
@@ -1803,26 +1938,29 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		}
 	}
 
-	// 5. Potong stok untuk setiap item di set pada tabel perlengkapan_stok
+	// 5. Potong stok dan catat ke logs
 	for _, item := range setItems {
-		butuh := item.Qty * jumlahPaxEligible
+		butuh := item.Qty
 		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia - ? WHERE brand_id = ? AND perlengkapan_item_id = ?", butuh, scheduleBrandID, item.ItemID)
 		if err != nil {
 			return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan potong stok: %w", err)
 		}
+
+		_, err = tx.ExecContext(ctx, "INSERT INTO booking_pax_perlengkapan_logs (booking_pax_id, perlengkapan_item_id, qty) VALUES (?, ?, ?)", paxID, item.ItemID, butuh)
+		if err != nil {
+			return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan insert log: %w", err)
+		}
 	}
 
-	// 6. Update status perlengkapan pada booking beserta perlengkapan_jumlah_pax
-	qUpdateBooking := `
-		UPDATE bookings
+	// 6. Update status perlengkapan pax
+	qUpdatePax := `
+		UPDATE booking_pax
 		SET perlengkapan_status = 'sudah_diberikan',
-		    perlengkapan_tanggal = CURDATE(),
-		    perlengkapan_diberikan_oleh = ?,
-		    perlengkapan_jumlah_pax = ?
+		    perlengkapan_tanggal = CURDATE()
 		WHERE id = ?
 	`
-	if _, err := tx.ExecContext(ctx, qUpdateBooking, adminID, jumlahPaxEligible, bookingID); err != nil {
-		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan update booking: %w", err)
+	if _, err := tx.ExecContext(ctx, qUpdatePax, paxID); err != nil {
+		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan update pax: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -1832,27 +1970,24 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 	return r.GetByID(ctx, bookingID, brandID)
 }
 
-// BatalkanPerlengkapan membatalkan status perlengkapan dan mengembalikan stok item ke database sesuai jumlah pax tersimpan.
-func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, brandID *int64) (*Booking, error) {
+// BatalkanPerlengkapan membatalkan status perlengkapan pax dan mengembalikan stok item (jika booking_status baru/draft).
+func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, paxID int64, brandID *int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.BatalkanPerlengkapan tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	// 1. Ambil booking existing, brand_id, dan perlengkapan_jumlah_pax
-	var (
-		perlengkapanStatus    string
-		scheduleBrandID       int64
-		perlengkapanJumlahPax sql.NullInt64
-	)
+	// 1. Ambil booking existing & brand_id
+	var scheduleBrandID int64
+	var bookingStatus string
 	qBooking := `
-		SELECT b.perlengkapan_status, s.brand_id, b.perlengkapan_jumlah_pax
+		SELECT b.status, s.brand_id
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id = ?
 	`
-	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&perlengkapanStatus, &scheduleBrandID, &perlengkapanJumlahPax)
+	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&bookingStatus, &scheduleBrandID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -1864,64 +1999,66 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 		return nil, ErrNotFound
 	}
 
+	// 2. Cek status pax
+	var perlengkapanStatus string
+	err = tx.QueryRowContext(ctx, `SELECT perlengkapan_status FROM booking_pax WHERE id = ? AND booking_id = ? FOR UPDATE`, paxID, bookingID).Scan(&perlengkapanStatus)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("booking.BatalkanPerlengkapan find pax: %w", err)
+	}
+	
 	if perlengkapanStatus != "sudah_diberikan" {
 		return nil, ErrPerlengkapanBelumDiberikan
 	}
 
-	// Ambil jumlah pax tersimpan (fallback 1 untuk data legacy)
-	jumlahPaxTersimpan := 1
-	if perlengkapanJumlahPax.Valid && perlengkapanJumlahPax.Int64 > 0 {
-		jumlahPaxTersimpan = int(perlengkapanJumlahPax.Int64)
-	}
-
-	// 2. Ambil template set dengan row lock FOR UPDATE
-	qSet := `
-		SELECT perlengkapan_item_id, qty
-		FROM perlengkapan_set_template
-		FOR UPDATE
-	`
-	rows, err := tx.QueryContext(ctx, qSet)
+	// 3. Ambil log barang yang sudah dikeluarkan
+	qLog := `SELECT id, perlengkapan_item_id, qty FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ? FOR UPDATE`
+	rows, err := tx.QueryContext(ctx, qLog, paxID)
 	if err != nil {
-		return nil, fmt.Errorf("booking.BatalkanPerlengkapan lock set: %w", err)
+		return nil, fmt.Errorf("booking.BatalkanPerlengkapan get logs: %w", err)
 	}
 	defer rows.Close()
 
-	type setItemQty struct {
+	type logRow struct {
+		ID     int64
 		ItemID uint64
 		Qty    int
 	}
-	var setItems []setItemQty
+	var logs []logRow
 	for rows.Next() {
-		var item setItemQty
-		if err := rows.Scan(&item.ItemID, &item.Qty); err != nil {
-			return nil, fmt.Errorf("booking.BatalkanPerlengkapan scan: %w", err)
+		var l logRow
+		if err := rows.Scan(&l.ID, &l.ItemID, &l.Qty); err != nil {
+			return nil, fmt.Errorf("booking.BatalkanPerlengkapan scan log: %w", err)
 		}
-		setItems = append(setItems, item)
+		logs = append(logs, l)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("booking.BatalkanPerlengkapan rows: %w", err)
 	}
 
-	// 3. Kembalikan stok item ke tabel perlengkapan_stok (item.Qty * jumlahPaxTersimpan)
-	for _, item := range setItems {
-		kembalikan := item.Qty * jumlahPaxTersimpan
-		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", kembalikan, scheduleBrandID, item.ItemID)
+	// 4. Kembalikan stok (karena ini aksi eksplisit pembatalan distribusi/undo)
+	for _, l := range logs {
+		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", l.Qty, scheduleBrandID, l.ItemID)
 		if err != nil {
-			return nil, fmt.Errorf("booking.BatalkanPerlengkapan kembalikan stok: %w", err)
+			return nil, fmt.Errorf("booking.BatalkanPerlengkapan restore stok: %w", err)
 		}
 	}
 
-	// 4. Reset booking status perlengkapan dan perlengkapan_jumlah_pax
-	qUpdateBooking := `
-		UPDATE bookings
+	// 5. Hapus logs dan reset status perlengkapan
+	if _, err := tx.ExecContext(ctx, "DELETE FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ?", paxID); err != nil {
+		return nil, fmt.Errorf("booking.BatalkanPerlengkapan delete logs: %w", err)
+	}
+
+	qUpdatePax := `
+		UPDATE booking_pax
 		SET perlengkapan_status = 'belum_diberikan',
-		    perlengkapan_tanggal = NULL,
-		    perlengkapan_diberikan_oleh = NULL,
-		    perlengkapan_jumlah_pax = NULL
+		    perlengkapan_tanggal = NULL
 		WHERE id = ?
 	`
-	if _, err := tx.ExecContext(ctx, qUpdateBooking, bookingID); err != nil {
-		return nil, fmt.Errorf("booking.BatalkanPerlengkapan update booking: %w", err)
+	if _, err := tx.ExecContext(ctx, qUpdatePax, paxID); err != nil {
+		return nil, fmt.Errorf("booking.BatalkanPerlengkapan update pax: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -1929,4 +2066,86 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 	}
 
 	return r.GetByID(ctx, bookingID, brandID)
+}
+
+// ListDailyBrandPax mengambil agregasi pendaftaran pax aktif selama 30 hari terakhir per brand.
+func (r *Repository) ListDailyBrandPax(ctx context.Context) ([]DailyBrandPax, error) {
+	const q = `
+		SELECT DATE_FORMAT(bp.created_at, '%Y-%m-%d') AS reg_date,
+			s.brand_id,
+			COUNT(*) AS pax_count
+		FROM booking_pax bp
+		JOIN bookings b ON b.id = bp.booking_id
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE bp.pax_status = 'aktif'
+			AND b.status != 'batal'
+			AND DATE(bp.created_at) BETWEEN CURDATE() - INTERVAL 29 DAY AND CURDATE()
+		GROUP BY reg_date, s.brand_id
+		ORDER BY reg_date ASC, s.brand_id ASC`
+
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("booking.ListDailyBrandPax: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]DailyBrandPax, 0)
+	for rows.Next() {
+		var item DailyBrandPax
+		if err := rows.Scan(&item.Date, &item.BrandID, &item.PaxCount); err != nil {
+			return nil, fmt.Errorf("booking.ListDailyBrandPax scan: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+// DeleteDraft menghapus booking berstatus draft secara permanen.
+func (r *Repository) DeleteDraft(ctx context.Context, id int64, brandID *int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("booking.DeleteDraft tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Ambil status dan brand_id untuk validasi scoping dan status
+	var status string
+	var scheduleBrandID int64
+	q := `
+		SELECT b.status, s.brand_id
+		FROM bookings b
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE b.id = ? FOR UPDATE`
+	err = tx.QueryRowContext(ctx, q, id).Scan(&status, &scheduleBrandID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("booking.DeleteDraft check: %w", err)
+	}
+
+	// 2. Scoping brand (Super Admin bebas, Brand Admin hanya brand sendiri)
+	if brandID != nil && *brandID != scheduleBrandID {
+		return ErrNotFound
+	}
+
+	// 3. Validasi status harus draft
+	if status != "draft" {
+		return ErrOnlyDraftCanBeDeleted
+	}
+
+	// 4. Hard delete booking (booking_pax & booking_addons terhapus otomatis via CASCADE)
+	res, err := tx.ExecContext(ctx, `DELETE FROM bookings WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("booking.DeleteDraft delete: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("booking.DeleteDraft rows: %w", err)
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+
+	return tx.Commit()
 }
