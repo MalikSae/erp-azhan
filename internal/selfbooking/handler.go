@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
@@ -14,6 +16,29 @@ type Handler struct {
 
 func NewHandler(repo *Repository) *Handler {
 	return &Handler{repo: repo}
+}
+
+func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+	if strings.TrimSpace(code) == "" {
+		writeError(w, http.StatusBadRequest, "kode booking wajib diisi")
+		return
+	}
+
+	invoice, err := h.repo.GetInvoiceByCode(r.Context(), code)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(w, http.StatusNotFound, "invoice pendaftaran tidak ditemukan")
+			return
+		}
+		log.Printf("[ERROR] GetPublicInvoice (%s): %v", code, err)
+		writeError(w, http.StatusInternalServerError, "gagal memuat data invoice")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(invoice)
 }
 
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {

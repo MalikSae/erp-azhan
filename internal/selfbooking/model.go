@@ -70,3 +70,75 @@ type BookingResponse struct {
 	PortalToken  string            `json:"portal_token"`
 	BankAccounts []BankAccountInfo `json:"bank_accounts"`
 }
+
+// InvoiceBrandInfo berisi identitas travel/brand untuk kop invoice.
+type InvoiceBrandInfo struct {
+	ID             int64   `json:"id"`
+	Name           string  `json:"name"`
+	PTName         string  `json:"pt_name"`
+	PPIUNumber     *string `json:"ppiu_number,omitempty"`
+	Akreditasi     *string `json:"akreditasi,omitempty"`
+	LogoURL      *string `json:"logo_url,omitempty"`
+	PrimaryColor string  `json:"primary_color"`
+	Phone        *string `json:"phone,omitempty"`
+	WhatsappNumber *string `json:"whatsapp_number,omitempty"`
+	Alamat       *string `json:"alamat,omitempty"`
+	City         *string `json:"city,omitempty"`
+	Province     *string `json:"province,omitempty"`
+}
+
+// InvoiceMaskapaiInfo berisi info maskapai penerbangan.
+type InvoiceMaskapaiInfo struct {
+	Name    string  `json:"name"`
+	LogoURL *string `json:"logo_url,omitempty"`
+}
+
+// InvoiceScheduleInfo berisi info paket dan jadwal keberangkatan.
+type InvoiceScheduleInfo struct {
+	ID               int64                `json:"id"`
+	JadwalNama       string               `json:"jadwal_nama"`
+	BerangkatTanggal string               `json:"berangkat_tanggal"`
+	PulangTanggal    string               `json:"pulang_tanggal"`
+	Maskapai         *InvoiceMaskapaiInfo `json:"maskapai,omitempty"`
+	HotelMekkah      string               `json:"hotel_mekkah"`
+	HotelMadinah     string               `json:"hotel_madinah"`
+}
+
+// InvoicePICInfo berisi identitas pemesan dengan nomor telepon disensor.
+type InvoicePICInfo struct {
+	NamaLengkap string `json:"nama_lengkap"`
+	NoHPMasked  string `json:"no_hp_masked"`
+}
+
+// InvoicePaxItem berisi rincian tiap jamaah dalam invoice.
+type InvoicePaxItem struct {
+	NamaLengkap string  `json:"nama_lengkap"`
+	PaxType     string  `json:"pax_type"`
+	RoomType    string  `json:"room_type"`
+	Harga       float64 `json:"harga"`
+}
+
+// InvoiceFinancial berisi ringkasan finansial dan status tagihan.
+type InvoiceFinancial struct {
+	TotalHarga          float64 `json:"total_harga"`
+	MinimalDP           float64 `json:"minimal_dp"`
+	TotalDibayar        float64 `json:"total_dibayar"`
+	SisaTagihan         float64 `json:"sisa_tagihan"`
+	JatuhTempoPelunasan string  `json:"jatuh_tempo_pelunasan"`
+}
+
+// InvoiceResponse adalah response lengkap untuk GET /api/public/invoice/{code}.
+type InvoiceResponse struct {
+	BookingCode       string              `json:"booking_code"`
+	Status            string              `json:"status"`
+	StatusLabel       string              `json:"status_label"`
+	CreatedAt         string              `json:"created_at"`
+	SeatHoldExpiresAt string              `json:"seat_hold_expires_at"`
+	Brand             InvoiceBrandInfo    `json:"brand"`
+	Schedule          InvoiceScheduleInfo `json:"schedule"`
+	PIC               InvoicePICInfo      `json:"pic"`
+	PaxItems          []InvoicePaxItem    `json:"pax_items"`
+	Financial         InvoiceFinancial    `json:"financial"`
+	BankAccounts      []BankAccountInfo   `json:"bank_accounts"`
+}
+

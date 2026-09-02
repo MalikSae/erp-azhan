@@ -304,3 +304,263 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		BankAccounts: bankAccounts,
 	}, nil
 }
+
+// GetInvoiceByCode mengambil data lengkap invoice digital berdasarkan kode booking.
+func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (*InvoiceResponse, error) {
+	bookingCode = strings.TrimSpace(strings.ToUpper(bookingCode))
+	if bookingCode == "" {
+		return nil, ErrNotFound
+	}
+
+	// 1. Get booking
+	var bookingID, brandID, scheduleID int64
+	var status string
+	var totalHarga float64
+	var createdAt, seatHoldExpiresAt time.Time
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT b.id, s.brand_id, b.schedule_id, b.status, b.total_harga, b.created_at, COALESCE(b.seat_hold_expires_at, b.created_at)
+		FROM bookings b
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE b.id_booking = ?
+	`, bookingCode).Scan(&bookingID, &brandID, &scheduleID, &status, &totalHarga, &createdAt, &seatHoldExpiresAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get booking: %w", err)
+	}
+
+	// 2. Get Brand info
+	var brand InvoiceBrandInfo
+	var logo, phone, wa, address, city, prov sql.NullString
+	err = r.db.QueryRowContext(ctx, `
+		SELECT id, name, COALESCE(legalitas, name), logo_url, primary_color, phone, whatsapp_number, address, city, province
+		FROM brands WHERE id = ?
+	`, brandID).Scan(&brand.ID, &brand.Name, &brand.PTName, &logo, &brand.PrimaryColor, &phone, &wa, &address, &city, &prov)
+	if err == nil {
+		if logo.Valid && logo.String != "" {
+			brand.LogoURL = &logo.String
+		}
+		if phone.Valid && phone.String != "" {
+			brand.Phone = &phone.String
+		}
+		if wa.Valid && wa.String != "" {
+			brand.WhatsappNumber = &wa.String
+		}
+		if address.Valid && address.String != "" {
+			brand.Alamat = &address.String
+		}
+		if city.Valid && city.String != "" {
+			brand.City = &city.String
+		}
+		if prov.Valid && prov.String != "" {
+			brand.Province = &prov.String
+		}
+	}
+	brand.PPIUNumber = stringPtr("401/2020")
+	brand.Akreditasi = stringPtr("A")
+
+	// 3. Get Schedule info
+	var schedule InvoiceScheduleInfo
+	schedule.ID = scheduleID
+	var airlineName, airlineLogo, hmName, hmdName sql.NullString
+	var hmStar, hmdStar sql.NullInt64
+	var berangkatTanggal, pulangTanggal time.Time
+	var scheduleMinDP sql.NullFloat64
+
+	err = r.db.QueryRowContext(ctx, `
+		SELECT s.jadwal_nama, s.berangkat_tanggal, s.pulang_tanggal, s.minimal_dp,
+		       a.name, a.logo_url,
+		       hm.name, hm.star_rating,
+		       hmd.name, hmd.star_rating
+		FROM schedules s
+		LEFT JOIN airlines a ON a.id = s.maskapai_id
+		LEFT JOIN hotels hm ON hm.id = s.hotel_mekkah_id
+		LEFT JOIN hotels hmd ON hmd.id = s.hotel_madinah_id
+		WHERE s.id = ?
+	`, scheduleID).Scan(
+		&schedule.JadwalNama, &berangkatTanggal, &pulangTanggal, &scheduleMinDP,
+		&airlineName, &airlineLogo,
+		&hmName, &hmStar,
+		&hmdName, &hmdStar,
+	)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("get schedule: %w", err)
+	}
+	schedule.BerangkatTanggal = berangkatTanggal.Format("2006-01-02")
+	schedule.PulangTanggal = pulangTanggal.Format("2006-01-02")
+
+	if airlineName.Valid && airlineName.String != "" {
+		schedule.Maskapai = &InvoiceMaskapaiInfo{
+			Name: airlineName.String,
+		}
+		if airlineLogo.Valid && airlineLogo.String != "" {
+			schedule.Maskapai.LogoURL = &airlineLogo.String
+		}
+	}
+	if hmName.Valid && hmName.String != "" {
+		if hmStar.Valid && hmStar.Int64 > 0 {
+			schedule.HotelMekkah = fmt.Sprintf("%s (★%d)", hmName.String, hmStar.Int64)
+		} else {
+			schedule.HotelMekkah = hmName.String
+		}
+	}
+	if hmdName.Valid && hmdName.String != "" {
+		if hmdStar.Valid && hmdStar.Int64 > 0 {
+			schedule.HotelMadinah = fmt.Sprintf("%s (★%d)", hmdName.String, hmdStar.Int64)
+		} else {
+			schedule.HotelMadinah = hmdName.String
+		}
+	}
+
+	// 4. Get Pax items + PIC
+	var pic InvoicePICInfo
+	var paxItems []InvoicePaxItem
+	var regulerPaxCount int
+
+	paxRows, err := r.db.QueryContext(ctx, `
+		SELECT j.nama_lengkap, COALESCE(j.no_hp, ''), bp.pax_type, bp.room_type, bp.harga_pax
+		FROM booking_pax bp
+		JOIN jamaah j ON j.id = bp.jamaah_id
+		WHERE bp.booking_id = ?
+		ORDER BY bp.id ASC
+	`, bookingID)
+	if err != nil {
+		return nil, fmt.Errorf("get pax items: %w", err)
+	}
+	defer paxRows.Close()
+
+	idx := 0
+	for paxRows.Next() {
+		var pName, pPhone, pType string
+		var rType sql.NullString
+		var pHarga float64
+
+		if err := paxRows.Scan(&pName, &pPhone, &pType, &rType, &pHarga); err == nil {
+			if idx == 0 {
+				pic.NamaLengkap = pName
+				pic.NoHPMasked = maskPhone(pPhone)
+			}
+			idx++
+
+			roomLabel := "INFANT"
+			if pType == "reguler" {
+				regulerPaxCount++
+				if rType.Valid && rType.String != "" {
+					switch strings.ToLower(rType.String) {
+					case "quad":
+						roomLabel = "Quad"
+					case "triple":
+						roomLabel = "Triple"
+					case "double":
+						roomLabel = "Double"
+					default:
+						roomLabel = rType.String
+					}
+				} else {
+					roomLabel = "Reguler"
+				}
+			}
+
+			paxItems = append(paxItems, InvoicePaxItem{
+				NamaLengkap: pName,
+				PaxType:     pType,
+				RoomType:    roomLabel,
+				Harga:       pHarga,
+			})
+		}
+	}
+
+	// 5. Financial details
+	var dpPerPax float64 = 5000000
+	if scheduleMinDP.Valid && scheduleMinDP.Float64 > 0 {
+		dpPerPax = scheduleMinDP.Float64
+	}
+	totalMinDP := dpPerPax * float64(regulerPaxCount)
+
+	var totalDibayar float64
+	_ = r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id = ? AND status = 'verified'
+	`, bookingID).Scan(&totalDibayar)
+
+	sisaTagihan := totalHarga - totalDibayar
+	if sisaTagihan < 0 {
+		sisaTagihan = 0
+	}
+
+	// Status label
+	statusLabel := "Menunggu Pembayaran DP"
+	if status == "dp" {
+		statusLabel = "DP Terverifikasi"
+	} else if status == "lunas" {
+		statusLabel = "Lunas"
+	} else if status == "batal" {
+		statusLabel = "Dibatalkan"
+	} else if time.Now().After(seatHoldExpiresAt) && status == "draft" {
+		statusLabel = "Batas Pembayaran Berakhir"
+	}
+
+	// 6. Bank accounts
+	var bankAccounts []BankAccountInfo
+	bRows, err := r.db.QueryContext(ctx, `
+		SELECT id, bank_name, logo_url, account_number, account_holder, instructions
+		FROM bank_accounts
+		WHERE brand_id = ? AND is_active = TRUE
+		ORDER BY sort_order, id
+	`, brandID)
+	if err == nil {
+		for bRows.Next() {
+			var b BankAccountInfo
+			var logo, inst sql.NullString
+			if err := bRows.Scan(&b.ID, &b.BankName, &logo, &b.AccountNumber, &b.AccountHolder, &inst); err == nil {
+				if logo.Valid && logo.String != "" {
+					b.LogoURL = &logo.String
+				}
+				if inst.Valid && inst.String != "" {
+					b.Instructions = &inst.String
+				}
+				bankAccounts = append(bankAccounts, b)
+			}
+		}
+		bRows.Close()
+	}
+
+	// Pelunasan H-45
+	hMin45 := berangkatTanggal.AddDate(0, 0, -45)
+	jatuhTempoStr := fmt.Sprintf("H-45 Keberangkatan (%s)", hMin45.Format("02 Jan 2006"))
+
+	return &InvoiceResponse{
+		BookingCode:       bookingCode,
+		Status:            status,
+		StatusLabel:       statusLabel,
+		CreatedAt:         createdAt.Format(time.RFC3339),
+		SeatHoldExpiresAt: seatHoldExpiresAt.Format(time.RFC3339),
+		Brand:             brand,
+		Schedule:          schedule,
+		PIC:               pic,
+		PaxItems:          paxItems,
+		Financial: InvoiceFinancial{
+			TotalHarga:          totalHarga,
+			MinimalDP:           totalMinDP,
+			TotalDibayar:        totalDibayar,
+			SisaTagihan:         sisaTagihan,
+			JatuhTempoPelunasan: jatuhTempoStr,
+		},
+		BankAccounts: bankAccounts,
+	}, nil
+}
+
+func maskPhone(phone string) string {
+	phone = strings.TrimSpace(phone)
+	if len(phone) <= 6 {
+		return phone
+	}
+	prefix := phone[:4]
+	suffix := phone[len(phone)-4:]
+	return prefix + "••••" + suffix
+}
+
+func stringPtr(s string) *string {
+	return &s
+}

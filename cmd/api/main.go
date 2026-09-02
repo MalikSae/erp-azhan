@@ -176,8 +176,9 @@ func main() {
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
 	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.List)
 
-	// Public: Booking (Self-Service)
+	// Public: Booking (Self-Service) & Digital Invoice
 	r.With(requireDB(db)).Post("/api/public/book", selfBookingHandler.CreateBooking)
+	r.With(requireDB(db)).Get("/api/public/invoice/{code}", selfBookingHandler.GetPublicInvoice)
 
 	// Auth (public)
 	r.Route("/api/auth", func(r chi.Router) {
