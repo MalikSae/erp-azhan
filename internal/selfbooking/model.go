@@ -20,6 +20,17 @@ type AnggotaInput struct {
 	TanggalLahir *string `json:"tanggal_lahir"` // Wajib jika pax_type = infant (YYYY-MM-DD)
 }
 
+// CheckPhoneRequest adalah payload untuk POST /api/public/jamaah/check.
+type CheckPhoneRequest struct {
+	BrandID *int64 `json:"brand_id"`
+	NoHP    string `json:"no_hp"`
+}
+
+// CheckPhoneResponse adalah response untuk POST /api/public/jamaah/check.
+type CheckPhoneResponse struct {
+	Status string `json:"status"` // "baru" | "perlu_pin" | "tanpa_pin"
+}
+
 // BookingRequest adalah payload untuk POST /api/public/book.
 type BookingRequest struct {
 	BrandID      int64          `json:"brand_id"`
@@ -67,7 +78,7 @@ type BookingResponse struct {
 	Status       string            `json:"status"`
 	Booking      BookingSummary    `json:"booking"`
 	Jamaah       JamaahInfo        `json:"jamaah"`
-	PortalToken  string            `json:"portal_token"`
+	PortalToken  string            `json:"portal_token,omitempty"`
 	BankAccounts []BankAccountInfo `json:"bank_accounts"`
 }
 

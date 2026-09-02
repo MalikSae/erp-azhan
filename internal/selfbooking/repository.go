@@ -14,9 +14,13 @@ import (
 )
 
 var (
-	ErrSeatHabis   = errors.New("kursi tidak cukup")
-	ErrDuplicate   = errors.New("anda sudah memiliki booking aktif di jadwal ini")
-	ErrNotFound    = errors.New("data tidak ditemukan")
+	ErrSeatHabis             = errors.New("kursi tidak cukup")
+	ErrDuplicate             = errors.New("anda sudah memiliki booking aktif di jadwal ini")
+	ErrNotFound              = errors.New("data tidak ditemukan")
+	ErrInvalidPin            = errors.New("nomor atau PIN tidak cocok")
+	ErrAnggotaNameMismatch   = errors.New("nomor tidak dapat digunakan, gunakan nomor lain atau kosongkan")
+	ErrDuplicatePaxInBooking = errors.New("jamaah tidak boleh terdaftar lebih dari sekali dalam satu pemesanan")
+	ErrPinRequired           = errors.New("PIN portal harus 6 digit")
 )
 
 type Repository struct {
@@ -25,6 +29,31 @@ type Repository struct {
 
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
+}
+
+// CheckPhone memeriksa status nomor HP jamaah pada brand tertentu (baru, perlu_pin, tanpa_pin).
+func (r *Repository) CheckPhone(ctx context.Context, brandID int64, rawPhone string) (string, error) {
+	canonical, local := shared.PhoneVariants(rawPhone)
+	var pinHash sql.NullString
+	err := r.db.QueryRowContext(ctx, `
+		SELECT portal_pin_hash FROM jamaah 
+		WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?) 
+		ORDER BY id LIMIT 1
+	`, brandID, canonical, local).Scan(&pinHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "baru", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("check phone: %w", err)
+	}
+	if pinHash.Valid && strings.TrimSpace(pinHash.String) != "" {
+		return "perlu_pin", nil
+	}
+	return "tanpa_pin", nil
+}
+
+func normalizeName(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), " "))
 }
 
 func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req BookingRequest) (*BookingResponse, error) {
@@ -58,15 +87,68 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		return nil, ErrNotFound
 	}
 
-	// 2. Resolve PIC (Jamaah Utama)
-	picJamaahID, err := shared.ResolveJamaah(ctx, tx, brandID, shared.JamaahInput{
-		NamaLengkap:  req.PIC.NamaLengkap,
-		NoHP:         req.PIC.NoHP,
-		Email:        req.PIC.Email,
-		JenisKelamin: &req.PIC.JenisKelamin,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("resolve pic: %w", err)
+	// 2. Resolve PIC (Jamaah Utama) dengan 3 Cabang
+	canonicalPIC, localPIC := shared.PhoneVariants(req.PIC.NoHP)
+	var existingPICID int64
+	var existingPICNama string
+	var existingPICPinHash sql.NullString
+
+	err = tx.QueryRowContext(ctx, `
+		SELECT id, nama_lengkap, portal_pin_hash 
+		FROM jamaah 
+		WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?) 
+		ORDER BY id LIMIT 1 FOR UPDATE
+	`, brandID, canonicalPIC, localPIC).Scan(&existingPICID, &existingPICNama, &existingPICPinHash)
+
+	var picJamaahID int64
+	issuePortalToken := false
+
+	if errors.Is(err, sql.ErrNoRows) {
+		// CABANG A — jamaah BARU dibuat (nomor belum terdaftar):
+		// portal_pin dari payload wajib ada dan 6 digit angka
+		if len(req.PIC.PortalPIN) != 6 {
+			return nil, ErrPinRequired
+		}
+		picJamaahID, err = shared.ResolveJamaah(ctx, tx, brandID, shared.JamaahInput{
+			NamaLengkap:  req.PIC.NamaLengkap,
+			NoHP:         req.PIC.NoHP,
+			Email:        req.PIC.Email,
+			JenisKelamin: &req.PIC.JenisKelamin,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("resolve pic: %w", err)
+		}
+		// Hash dan simpan ke portal_pin_hash
+		pinHash, err := bcrypt.GenerateFromPassword([]byte(req.PIC.PortalPIN), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("hash pin: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE jamaah SET portal_pin_hash=? WHERE id=?`, string(pinHash), picJamaahID)
+		if err != nil {
+			return nil, fmt.Errorf("update pin: %w", err)
+		}
+		issuePortalToken = true
+	} else if err != nil {
+		return nil, fmt.Errorf("find pic: %w", err)
+	} else {
+		picJamaahID = existingPICID
+		if existingPICPinHash.Valid && strings.TrimSpace(existingPICPinHash.String) != "" {
+			// CABANG B — jamaah SUDAH ADA dan portal_pin_hash TERISI:
+			// portal_pin dari payload WAJIB cocok dengan hash tersimpan (bcrypt.CompareHashAndPassword).
+			if req.PIC.PortalPIN == "" || bcrypt.CompareHashAndPassword([]byte(existingPICPinHash.String), []byte(req.PIC.PortalPIN)) != nil {
+				return nil, ErrInvalidPin
+			}
+			// Cocok -> lanjutkan booking, portal_pin_hash TIDAK DISENTUH sama sekali.
+			issuePortalToken = true
+		} else {
+			// CABANG C — jamaah SUDAH ADA tapi portal_pin_hash NULL/kosong:
+			// Verifikasi nama: nama_lengkap dari payload WAJIB cocok dengan nama di database (pakai normalizeName).
+			if normalizeName(req.PIC.NamaLengkap) != normalizeName(existingPICNama) {
+				return nil, ErrInvalidPin // 401 "nomor atau PIN tidak cocok" persis seperti Cabang B
+			}
+			// Booking JALAN TERUS. portal_pin dari payload DIABAIKAN sepenuhnya. portal_pin_hash TIDAK DISENTUH.
+			issuePortalToken = false
+		}
 	}
 
 	// 3. Duplikasi check
@@ -94,16 +176,6 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		return nil, ErrSeatHabis
 	}
 
-	// 5. Update PIN PIC
-	pinHash, err := bcrypt.GenerateFromPassword([]byte(req.PIC.PortalPIN), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("hash pin: %w", err)
-	}
-	_, err = tx.ExecContext(ctx, `UPDATE jamaah SET portal_pin_hash=? WHERE id=?`, string(pinHash), picJamaahID)
-	if err != nil {
-		return nil, fmt.Errorf("update pin: %w", err)
-	}
-
 	// get id_jamaah pic
 	var idJamaahPIC string
 	err = tx.QueryRowContext(ctx, `SELECT id_jamaah FROM jamaah WHERE id=?`, picJamaahID).Scan(&idJamaahPIC)
@@ -111,35 +183,104 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		return nil, fmt.Errorf("get id jamaah: %w", err)
 	}
 
-	// 6. Create jamaah records for anggota
+	// 6. Create or reuse jamaah records for anggota
 	anggotaJamaahIDs := make([]int64, len(req.Anggota))
 	for i, a := range req.Anggota {
-		var brandCode string
-		var counter uint64
-		err = tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter)
-		if err != nil {
-			return nil, fmt.Errorf("lock brand: %w", err)
-		}
-		counter++
-		_, err = tx.ExecContext(ctx, `UPDATE brands SET jamaah_counter=? WHERE id=?`, counter, brandID)
-		if err != nil {
-			return nil, fmt.Errorf("update counter: %w", err)
-		}
-		idJamaah := fmt.Sprintf("%s-%02d%02d%06d", strings.ToUpper(strings.TrimSpace(brandCode)), time.Now().Year()%100, int(time.Now().Month()), counter)
-		kodeJamaah, err := shared.UniqueCode(ctx, tx, "jamaah", "kode_jamaah", "", 6)
-		if err != nil {
-			return nil, fmt.Errorf("kode jamaah: %w", err)
+		var rawPhone string
+		if a.NoHP != nil {
+			rawPhone = strings.TrimSpace(*a.NoHP)
 		}
 
-		res, err := tx.ExecContext(ctx, `
-			INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.NoHP, a.JenisKelamin)
-		if err != nil {
-			return nil, fmt.Errorf("insert anggota jamaah: %w", err)
+		if rawPhone == "" {
+			// No HP kosong (NULL) -> Selalu INSERT baru dengan no_hp NULL
+			var brandCode string
+			var counter uint64
+			err = tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter)
+			if err != nil {
+				return nil, fmt.Errorf("lock brand: %w", err)
+			}
+			counter++
+			_, err = tx.ExecContext(ctx, `UPDATE brands SET jamaah_counter=? WHERE id=?`, counter, brandID)
+			if err != nil {
+				return nil, fmt.Errorf("update counter: %w", err)
+			}
+			idJamaah := fmt.Sprintf("%s-%02d%02d%06d", strings.ToUpper(strings.TrimSpace(brandCode)), time.Now().Year()%100, int(time.Now().Month()), counter)
+			kodeJamaah, err := shared.UniqueCode(ctx, tx, "jamaah", "kode_jamaah", "", 6)
+			if err != nil {
+				return nil, fmt.Errorf("kode jamaah: %w", err)
+			}
+
+			res, err := tx.ExecContext(ctx, `
+				INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin)
+				VALUES (?, ?, ?, ?, NULL, ?)
+			`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.JenisKelamin)
+			if err != nil {
+				return nil, fmt.Errorf("insert anggota jamaah: %w", err)
+			}
+			anggotaID, _ := res.LastInsertId()
+			anggotaJamaahIDs[i] = anggotaID
+		} else {
+			// No HP terisi -> Cari apakah sudah terdaftar
+			canonicalAnggota, localAnggota := shared.PhoneVariants(rawPhone)
+			var existingAnggotaID int64
+			var existingAnggotaNama string
+
+			err = tx.QueryRowContext(ctx, `
+				SELECT id, nama_lengkap 
+				FROM jamaah 
+				WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?) 
+				ORDER BY id LIMIT 1 FOR UPDATE
+			`, brandID, canonicalAnggota, localAnggota).Scan(&existingAnggotaID, &existingAnggotaNama)
+
+			if errors.Is(err, sql.ErrNoRows) {
+				// Belum terdaftar -> INSERT baru dengan no_hp
+				var brandCode string
+				var counter uint64
+				err = tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter)
+				if err != nil {
+					return nil, fmt.Errorf("lock brand: %w", err)
+				}
+				counter++
+				_, err = tx.ExecContext(ctx, `UPDATE brands SET jamaah_counter=? WHERE id=?`, counter, brandID)
+				if err != nil {
+					return nil, fmt.Errorf("update counter: %w", err)
+				}
+				idJamaah := fmt.Sprintf("%s-%02d%02d%06d", strings.ToUpper(strings.TrimSpace(brandCode)), time.Now().Year()%100, int(time.Now().Month()), counter)
+				kodeJamaah, err := shared.UniqueCode(ctx, tx, "jamaah", "kode_jamaah", "", 6)
+				if err != nil {
+					return nil, fmt.Errorf("kode jamaah: %w", err)
+				}
+
+				res, err := tx.ExecContext(ctx, `
+					INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin)
+					VALUES (?, ?, ?, ?, ?, ?)
+				`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, rawPhone, a.JenisKelamin)
+				if err != nil {
+					return nil, fmt.Errorf("insert anggota jamaah: %w", err)
+				}
+				anggotaID, _ := res.LastInsertId()
+				anggotaJamaahIDs[i] = anggotaID
+			} else if err != nil {
+				return nil, fmt.Errorf("find anggota: %w", err)
+			} else {
+				// Sudah terdaftar -> Verifikasi Nama
+				if normalizeName(a.NamaLengkap) != normalizeName(existingAnggotaNama) {
+					return nil, ErrAnggotaNameMismatch
+				}
+				// Cocok -> pakai ulang baris jamaah itu, JANGAN UPDATE field apa pun
+				anggotaJamaahIDs[i] = existingAnggotaID
+			}
 		}
-		anggotaID, _ := res.LastInsertId()
-		anggotaJamaahIDs[i] = anggotaID
+	}
+
+	// Verifikasi tambahan: pastikan tidak ada duplikasi jamaah_id dalam satu booking
+	allJamaahMap := make(map[int64]bool)
+	allJamaahMap[picJamaahID] = true
+	for _, aid := range anggotaJamaahIDs {
+		if allJamaahMap[aid] {
+			return nil, ErrDuplicatePaxInBooking
+		}
+		allJamaahMap[aid] = true
 	}
 
 	// 7. Generate booking code
@@ -277,10 +418,14 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		rows.Close()
 	}
 
-	// 13. Create Portal Token
-	portalToken, err := identity.GeneratePortalToken(picJamaahID)
-	if err != nil {
-		return nil, fmt.Errorf("generate portal token: %w", err)
+	// 13. Create Portal Token (hanya diterbitkan untuk Cabang A dan Cabang B)
+	var portalToken string
+	if issuePortalToken {
+		var err error
+		portalToken, err = identity.GeneratePortalToken(picJamaahID)
+		if err != nil {
+			return nil, fmt.Errorf("generate portal token: %w", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

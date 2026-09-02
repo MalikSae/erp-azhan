@@ -4,18 +4,122 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
 
+type checkAttempt struct {
+	Count     int
+	FirstFail time.Time
+}
+
 type Handler struct {
-	repo *Repository
+	repo           *Repository
+	failedChecks   map[string]*checkAttempt
+	failedChecksMu sync.Mutex
 }
 
 func NewHandler(repo *Repository) *Handler {
-	return &Handler{repo: repo}
+	return &Handler{
+		repo:         repo,
+		failedChecks: make(map[string]*checkAttempt),
+	}
+}
+
+// ─── Rate Limiter Check Phone (10x gagal per 15 menit per IP) ─────────────────
+
+func (h *Handler) checkRateLimit(ip string) bool {
+	h.failedChecksMu.Lock()
+	defer h.failedChecksMu.Unlock()
+
+	attempt, exists := h.failedChecks[ip]
+	if !exists {
+		return true
+	}
+
+	if time.Since(attempt.FirstFail) > 15*time.Minute {
+		delete(h.failedChecks, ip)
+		return true
+	}
+
+	return attempt.Count < 10
+}
+
+func (h *Handler) recordFailedCheck(ip string) {
+	h.failedChecksMu.Lock()
+	defer h.failedChecksMu.Unlock()
+
+	attempt, exists := h.failedChecks[ip]
+	if !exists || time.Since(attempt.FirstFail) > 15*time.Minute {
+		h.failedChecks[ip] = &checkAttempt{
+			Count:     1,
+			FirstFail: time.Now(),
+		}
+		return
+	}
+
+	attempt.Count++
+}
+
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
+		return xrip
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// CheckPhone memeriksa status nomor HP jamaah (POST /api/public/jamaah/check).
+func (h *Handler) CheckPhone(w http.ResponseWriter, r *http.Request) {
+	clientIP := getClientIP(r)
+	if !h.checkRateLimit(clientIP) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		return
+	}
+
+	var req CheckPhoneRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
+
+	if req.BrandID == nil || *req.BrandID <= 0 {
+		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		return
+	}
+
+	req.NoHP = strings.TrimSpace(req.NoHP)
+	if req.NoHP == "" {
+		writeError(w, http.StatusBadRequest, "no_hp wajib diisi")
+		return
+	}
+
+	status, err := h.repo.CheckPhone(r.Context(), *req.BrandID, req.NoHP)
+	if err != nil {
+		log.Printf("[ERROR] CheckPhone: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		return
+	}
+
+	if status == "baru" {
+		h.recordFailedCheck(clientIP)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(CheckPhoneResponse{Status: status})
 }
 
 func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +183,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	if len(req.PIC.PortalPIN) != 6 {
+	if req.PIC.PortalPIN != "" && len(req.PIC.PortalPIN) != 6 {
 		writeError(w, http.StatusBadRequest, "PIN portal harus 6 digit")
 		return
 	}
@@ -129,7 +233,13 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	// Process
 	resp, err := h.repo.ProcessBooking(r.Context(), req.BrandID, req)
 	if err != nil {
-		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) {
+		if errors.Is(err, ErrInvalidPin) {
+			writeError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) || 
+		   errors.Is(err, ErrAnggotaNameMismatch) || errors.Is(err, ErrDuplicatePaxInBooking) ||
+		   errors.Is(err, ErrPinRequired) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -138,7 +248,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("[ERROR] ProcessBooking: %v", err)
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
 

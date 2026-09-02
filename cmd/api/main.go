@@ -176,9 +176,10 @@ func main() {
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
 	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.List)
 
-	// Public: Booking (Self-Service) & Digital Invoice
+	// Public: Booking (Self-Service) & Digital Invoice & Jamaah Check
 	r.With(requireDB(db)).Post("/api/public/book", selfBookingHandler.CreateBooking)
 	r.With(requireDB(db)).Get("/api/public/invoice/{code}", selfBookingHandler.GetPublicInvoice)
+	r.With(requireDB(db)).Post("/api/public/jamaah/check", selfBookingHandler.CheckPhone)
 
 	// Auth (public)
 	r.Route("/api/auth", func(r chi.Router) {
