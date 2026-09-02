@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -171,20 +172,16 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	if !pinHash.Valid || pinHash.String == "" {
-		// Jika belum punya PIN (misal pendaftaran manual oleh admin)
-		// Harus diarahkan untuk ganti PIN, tapi untuk MVP kita cek jika PIN adalah default "123456"
-		if req.PortalPIN != "123456" {
-			h.recordFailedLogin(clientIP)
-			writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
-			return
-		}
-	} else {
-		// Verifikasi bcrypt hash
-		if err := bcrypt.CompareHashAndPassword([]byte(pinHash.String), []byte(req.PortalPIN)); err != nil {
-			h.recordFailedLogin(clientIP)
-			writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
-			return
-		}
+		h.recordFailedLogin(clientIP)
+		writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
+		return
+	}
+
+	// Verifikasi bcrypt hash
+	if err := bcrypt.CompareHashAndPassword([]byte(pinHash.String), []byte(req.PortalPIN)); err != nil {
+		h.recordFailedLogin(clientIP)
+		writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
+		return
 	}
 
 	// Login sukses -> reset counter
@@ -246,6 +243,21 @@ func (h *Handler) ListBookings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, bookings)
 }
 
+// canAccessBooking memeriksa apakah seorang jamaah berhak atas booking (sebagai PIC atau anggota pax).
+func (h *Handler) canAccessBooking(ctx context.Context, bookingID int64, jamaahID int64) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS (
+		SELECT 1 FROM bookings b 
+		WHERE b.id = ? 
+		  AND (b.pic_jamaah_id = ? OR EXISTS (SELECT 1 FROM booking_pax bp2 WHERE bp2.booking_id = b.id AND bp2.jamaah_id = ?))
+	)`
+	err := h.db.QueryRowContext(ctx, query, bookingID, jamaahID, jamaahID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 // ─── GET /api/portal/bookings/{id} ───────────────────────────────────────────
 
 func (h *Handler) GetBookingByID(w http.ResponseWriter, r *http.Request) {
@@ -262,8 +274,18 @@ func (h *Handler) GetBookingByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	allowed, err := h.canAccessBooking(r.Context(), bookingID, jamaahID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "gagal mengambil data booking")
+		return
+	}
+	if !allowed {
+		writeError(w, http.StatusNotFound, "data tidak ditemukan")
+		return
+	}
+
 	b, err := h.bookingRepo.GetByID(r.Context(), bookingID, nil)
-	if errors.Is(err, booking.ErrNotFound) || (b != nil && (b.JamaahID == nil || *b.JamaahID != jamaahID || b.Status == "draft")) {
+	if errors.Is(err, booking.ErrNotFound) || (b != nil && b.Status == "draft") {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 		return
 	}
@@ -291,14 +313,13 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify booking belongs to this jamaah
-	b, err := h.bookingRepo.GetByID(r.Context(), bookingID, nil)
-	if errors.Is(err, booking.ErrNotFound) || (b != nil && (b.JamaahID == nil || *b.JamaahID != jamaahID)) {
-		writeError(w, http.StatusNotFound, "data tidak ditemukan")
-		return
-	}
+	allowed, err := h.canAccessBooking(r.Context(), bookingID, jamaahID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal memverifikasi booking")
+		return
+	}
+	if !allowed {
+		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 		return
 	}
 
