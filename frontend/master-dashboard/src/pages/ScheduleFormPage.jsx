@@ -55,6 +55,7 @@ const ScheduleFormPage = () => {
   const [formData, setFormData] = useState({
     jadwal_nama: '',
     is_promo: false,
+      promo_until: '',
     is_ticket_confirmed: false,
     is_direct_flight: false,
     seat_total: '',
@@ -80,6 +81,7 @@ const ScheduleFormPage = () => {
     harga_triple: '',
     harga_double: '',
     harga_infant: '',
+    minimal_dp: '',
     harga_coret: '',
     itinerary_id: '',
     include_items: [''],
@@ -215,6 +217,7 @@ const ScheduleFormPage = () => {
           setFormData({
             jadwal_nama: scheduleData.jadwal_nama || '',
             is_promo: scheduleData.is_promo || false,
+              promo_until: scheduleData.promo_until ? scheduleData.promo_until.split('T')[0] : '',
             is_ticket_confirmed: scheduleData.is_ticket_confirmed || false,
             is_direct_flight: scheduleData.is_direct_flight || false,
             seat_total: scheduleData.seat_total || '',
@@ -240,6 +243,7 @@ const ScheduleFormPage = () => {
             harga_triple: scheduleData.harga_triple || '',
             harga_double: scheduleData.harga_double || '',
             harga_infant: scheduleData.harga_infant || '',
+            minimal_dp: scheduleData.minimal_dp || '',
             harga_coret: scheduleData.harga_coret || '',
             itinerary_id: scheduleData.itinerary?.id || scheduleData.itinerary_id || '',
             include_items: safeArray(scheduleData.include_items),
@@ -530,6 +534,7 @@ const ScheduleFormPage = () => {
       const hargaTriple = parseCurrency(formData.harga_triple);
       const hargaDouble = parseCurrency(formData.harga_double);
       const hargaInfant = formData.harga_infant ? parseCurrency(formData.harga_infant) : null;
+      const minimalDP = formData.minimal_dp ? parseCurrency(formData.minimal_dp) : null;
       const hargaCoret = formData.is_promo && formData.harga_coret
         ? parseCurrency(formData.harga_coret)
         : null;
@@ -567,17 +572,37 @@ const ScheduleFormPage = () => {
         ? (currentAirlineCode + pulangFlightNo)
         : (formData.pulang_kode_penerbangan || '').trim();
 
+      const promoUntilIso = (formData.is_promo && formData.promo_until)
+        ? new Date(formData.promo_until).toISOString()
+        : null;
+
+      const seatTotalNum = parseInt(formData.seat_total, 10);
+      const kuotaTerisiNum = parseInt(formData.kuota_terisi || 0, 10);
+      const seatSisaNum = Math.max(0, seatTotalNum - kuotaTerisiNum);
+
       const payload = {
-        ...formData,
-        berangkat_kode_penerbangan: finalBerangkatKode,
-        pulang_kode_penerbangan: finalPulangKode,
-        transit_bandara: finalTransit,
+        jadwal_nama: (formData.jadwal_nama || '').trim(),
+        brand_id: parseInt(formData.brand_id, 10),
+        category_id: formData.category_id ? parseInt(formData.category_id, 10) : null,
+        status: formData.status || 'draft',
         is_promo: !!formData.is_promo,
+        promo_until: promoUntilIso,
         is_ticket_confirmed: !!formData.is_ticket_confirmed,
         is_direct_flight: !!formData.is_direct_flight,
-        seat_total: parseInt(formData.seat_total, 10),
-        seat_sisa: parseInt(formData.seat_total, 10) - parseInt(formData.kuota_terisi || 0, 10),
+        seat_total: seatTotalNum,
+        seat_sisa: seatSisaNum,
         maskapai_id: parseInt(formData.maskapai_id, 10),
+        berangkat_tanggal: formData.berangkat_tanggal,
+        berangkat_jam: formData.berangkat_jam || '',
+        berangkat_kode_penerbangan: finalBerangkatKode,
+        berangkat_bandara_asal: (formData.berangkat_bandara_asal || '').trim(),
+        berangkat_bandara_tujuan: (formData.berangkat_bandara_tujuan || '').trim(),
+        pulang_tanggal: formData.pulang_tanggal,
+        pulang_jam: formData.pulang_jam || '',
+        pulang_kode_penerbangan: finalPulangKode,
+        pulang_bandara_asal: (formData.pulang_bandara_asal || '').trim(),
+        pulang_bandara_tujuan: (formData.pulang_bandara_tujuan || '').trim(),
+        transit_bandara: finalTransit,
         hotel_mekkah_id: parseInt(formData.hotel_mekkah_id, 10),
         hotel_madinah_id: parseInt(formData.hotel_madinah_id, 10),
         transit_hotel_ids: (formData.transit_hotel_ids || []).map(Number),
@@ -585,14 +610,14 @@ const ScheduleFormPage = () => {
         harga_triple: hargaTriple,
         harga_double: hargaDouble,
         harga_infant: hargaInfant,
+        minimal_dp: minimalDP,
         harga_coret: hargaCoret,
-        status: formData.status,
         itinerary_id: formData.itinerary_id ? parseInt(formData.itinerary_id, 10) : null,
         include_items: includeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
         exclude_items: excludeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
-        add_on_ids: formData.add_on_ids,
-        brand_id: parseInt(formData.brand_id, 10),
-        category_id: formData.category_id ? parseInt(formData.category_id, 10) : null
+        add_on_ids: (formData.add_on_ids || []).map(Number),
+        brosur_url: formData.brosur_url || '',
+        brosur_thumb_url: formData.brosur_thumb_url || ''
       };
 
       if (isEditMode) {
@@ -1325,8 +1350,8 @@ const ScheduleFormPage = () => {
               icon={<DollarSign size={18} className="text-neutral-700" />}
             >
               <div className="space-y-4">
-                {/* 4 Kolom Tipe Kamar & Infant */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 3 Kolom Tipe Kamar Dewasa */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Input
                     label="Harga Quad (Ber-4)"
                     className="!mb-0"
@@ -1360,6 +1385,10 @@ const ScheduleFormPage = () => {
                     placeholder="mis. 28.000.000"
                     prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
                   />
+                </div>
+
+                {/* 2 Kolom: Infant & Minimal DP */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-neutral-200 pt-4 mt-4">
                   <Input
                     label="Harga Infant (Bayi)"
                     className="!mb-0"
@@ -1369,6 +1398,17 @@ const ScheduleFormPage = () => {
                     onChange={handleCurrencyChange}
                     placeholder="mis. 5.000.000"
                     prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
+                  />
+                  <Input
+                    label="Minimal DP"
+                    className="!mb-0"
+                    type="text"
+                    name="minimal_dp"
+                    value={formatCurrency(formData.minimal_dp)}
+                    onChange={handleCurrencyChange}
+                    placeholder="mis. 5.000.000"
+                    prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
+                    helpText="Biarkan kosong jika tidak ada batas minimal DP khusus"
                   />
                 </div>
 
@@ -1388,17 +1428,30 @@ const ScheduleFormPage = () => {
                     </div>
 
                     {formData.is_promo && (
-                      <div className="w-full sm:w-64">
-                        <Input
-                          label="Harga Coret"
-                          className="!mb-0"
-                          type="text"
-                          name="harga_coret"
-                          value={formatCurrency(formData.harga_coret)}
-                          onChange={handleCurrencyChange}
-                          placeholder="mis. 27.500.000"
-                          prefixIcon={<span className="text-xs font-bold text-amber-700">Rp</span>}
-                        />
+                      <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                        <div className="w-full sm:w-64">
+                          <Input
+                            label="Harga Coret"
+                            className="!mb-0"
+                            type="text"
+                            name="harga_coret"
+                            value={formatCurrency(formData.harga_coret)}
+                            onChange={handleCurrencyChange}
+                            placeholder="mis. 27.500.000"
+                            prefixIcon={<span className="text-xs font-bold text-amber-700">Rp</span>}
+                          />
+                        </div>
+                        <div className="w-full sm:w-48">
+                          <Input
+                            label="Batas Promo"
+                            className="!mb-0"
+                            type="date"
+                            name="promo_until"
+                            value={formData.promo_until}
+                            onChange={handleChange}
+                            min={new Date().toLocaleDateString('en-CA')}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>

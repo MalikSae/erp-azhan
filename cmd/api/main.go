@@ -171,9 +171,10 @@ func main() {
 	r.With(requireDB(db)).Get("/api/schedules/{id}", scheduleHandler.GetSchedulePublic)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
-	// Public: categories & brand
+	// Public: categories & brand & bank accounts
 	r.With(requireDB(db)).Get("/api/public/categories", categoryHandler.ListPublicCategories)
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
+	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.List)
 
 	// Public: Booking (Self-Service)
 	r.With(requireDB(db)).Post("/api/public/book", selfBookingHandler.CreateBooking)

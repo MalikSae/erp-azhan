@@ -1,0 +1,1 @@
+ALTER TABLE schedules ADD COLUMN views INT NOT NULL DEFAULT 0 AFTER is_promo;

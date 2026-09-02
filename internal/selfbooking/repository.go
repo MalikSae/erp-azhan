@@ -132,9 +132,9 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		}
 
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, jenis_kelamin)
-			VALUES (?, ?, ?, ?, ?)
-		`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.JenisKelamin)
+			INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.NoHP, a.JenisKelamin)
 		if err != nil {
 			return nil, fmt.Errorf("insert anggota jamaah: %w", err)
 		}
@@ -259,12 +259,15 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 
 	// 12. Bank Accounts
 	var bankAccounts []BankAccountInfo
-	rows, err := tx.QueryContext(ctx, `SELECT id, bank_name, account_number, account_holder, instructions FROM bank_accounts WHERE brand_id=? AND is_active=TRUE`, brandID)
+	rows, err := tx.QueryContext(ctx, `SELECT id, bank_name, logo_url, account_number, account_holder, instructions FROM bank_accounts WHERE brand_id=? AND is_active=TRUE`, brandID)
 	if err == nil {
 		for rows.Next() {
 			var b BankAccountInfo
-			var inst sql.NullString
-			if err := rows.Scan(&b.ID, &b.BankName, &b.AccountNumber, &b.AccountHolder, &inst); err == nil {
+			var logo, inst sql.NullString
+			if err := rows.Scan(&b.ID, &b.BankName, &logo, &b.AccountNumber, &b.AccountHolder, &inst); err == nil {
+				if logo.Valid && logo.String != "" {
+					b.LogoURL = &logo.String
+				}
 				if inst.Valid && inst.String != "" {
 					b.Instructions = &inst.String
 				}

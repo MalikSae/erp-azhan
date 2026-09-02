@@ -7,6 +7,7 @@ type BankAccount struct {
 	BrandID       int64     `json:"brand_id"`
 	BrandName     string    `json:"brand_name,omitempty"`
 	BankName      string    `json:"bank_name"`
+	LogoURL       *string   `json:"logo_url"`
 	AccountNumber string    `json:"account_number"`
 	AccountHolder string    `json:"account_holder"`
 	Instructions  *string   `json:"instructions"`
@@ -18,6 +19,7 @@ type BankAccount struct {
 type UpsertRequest struct {
 	BrandID       int64   `json:"brand_id"`
 	BankName      string  `json:"bank_name"`
+	LogoURL       *string `json:"logo_url"`
 	AccountNumber string  `json:"account_number"`
 	AccountHolder string  `json:"account_holder"`
 	Instructions  *string `json:"instructions"`

@@ -15,7 +15,14 @@ type Handler struct{ repo *Repository }
 func NewHandler(repo *Repository) *Handler { return &Handler{repo: repo} }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	items, err := h.repo.List(r.Context(), nil, false)
+	var brandID *int64
+	if b := r.URL.Query().Get("brand_id"); b != "" {
+		if id, err := strconv.ParseInt(b, 10, 64); err == nil && id > 0 {
+			brandID = &id
+		}
+	}
+	activeOnly := r.URL.Query().Get("active") == "true"
+	items, err := h.repo.List(r.Context(), brandID, activeOnly)
 	if err != nil {
 		writeError(w, 500, "gagal mengambil rekening")
 		return

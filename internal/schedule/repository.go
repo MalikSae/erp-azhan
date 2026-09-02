@@ -24,6 +24,8 @@ const selectFull = `
 		s.jadwal_nama,
 		s.status,
 		s.is_promo,
+		s.views,
+		s.promo_until,
 		s.is_ticket_confirmed,
 		s.is_direct_flight,
 		s.seat_total,
@@ -247,17 +249,17 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 
 	const q = `
 		INSERT INTO schedules (
-			brand_id, category_id, jadwal_nama, status, is_promo, is_ticket_confirmed, is_direct_flight, seat_total, seat_sisa,
+			brand_id, category_id, jadwal_nama, status, is_promo, views, promo_until, is_ticket_confirmed, is_direct_flight, seat_total, seat_sisa,
 			maskapai_id, berangkat_tanggal, berangkat_jam, berangkat_kode_penerbangan, berangkat_bandara_asal, berangkat_bandara_tujuan,
 			pulang_tanggal, pulang_jam, pulang_kode_penerbangan, pulang_bandara_asal, pulang_bandara_tujuan, transit_bandara,
 			hotel_mekkah_id, hotel_madinah_id,
 			harga_quad, harga_triple, harga_double, harga_infant, harga_coret, minimal_dp,
 			itinerary_id, include_items, exclude_items,
 			brosur_url, brosur_thumb_url
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	res, err := tx.ExecContext(ctx, q,
-		inp.BrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
+		inp.BrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, 0, inp.PromoUntil, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
 		nullInt64(inp.MaskapaiID),
 		inp.BerangkatTanggal, nullString(inp.BerangkatJam), nullString(inp.BerangkatKodePenerbangan),
 		nullString(inp.BerangkatBandaraAsal), nullString(inp.BerangkatBandaraTujuan),
@@ -316,7 +318,7 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 
 	const q = `
 		UPDATE schedules SET
-			brand_id=?, category_id=?, jadwal_nama=?, status=COALESCE(NULLIF(?, ''), status), is_promo=?, is_ticket_confirmed=?, is_direct_flight=?, seat_total=?, seat_sisa=?,
+			brand_id=?, category_id=?, jadwal_nama=?, status=COALESCE(NULLIF(?, ''), status), is_promo=?, promo_until=?, is_ticket_confirmed=?, is_direct_flight=?, seat_total=?, seat_sisa=?,
 			maskapai_id=?, berangkat_tanggal=?, berangkat_jam=?, berangkat_kode_penerbangan=?, berangkat_bandara_asal=?, berangkat_bandara_tujuan=?,
 			pulang_tanggal=?, pulang_jam=?, pulang_kode_penerbangan=?, pulang_bandara_asal=?, pulang_bandara_tujuan=?, transit_bandara=?,
 			hotel_mekkah_id=?, hotel_madinah_id=?,
@@ -326,7 +328,7 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 		WHERE id=?`
 
 	_, err = tx.ExecContext(ctx, q,
-		finalBrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
+		finalBrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, inp.PromoUntil, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
 		nullInt64(inp.MaskapaiID),
 		inp.BerangkatTanggal, nullString(inp.BerangkatJam), nullString(inp.BerangkatKodePenerbangan),
 		nullString(inp.BerangkatBandaraAsal), nullString(inp.BerangkatBandaraTujuan),
@@ -594,7 +596,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 
 	err := rows.Scan(
 		&s.ID, &s.BrandID, &categoryID, &categoryName, &categorySlug,
-		&s.JadwalNama, &s.Status, &s.IsPromo, &s.IsTicketConfirmed, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
+		&s.JadwalNama, &s.Status, &s.IsPromo, &s.Views, &s.PromoUntil, &s.IsTicketConfirmed, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
 		&maskapaiID, &maskapaiName, &maskapaiLogo,
 		&s.BerangkatTanggal, &s.BerangkatJam, &s.BerangkatKodePenerbangan,
 		&s.BerangkatBandaraAsal, &s.BerangkatBandaraTujuan,
@@ -711,4 +713,10 @@ func nullInt64(v int64) sql.NullInt64 {
 
 func nullString(v string) sql.NullString {
 	return sql.NullString{String: v, Valid: v != ""}
+}
+
+func (r *Repository) IncrementViews(ctx context.Context, id int64) error {
+	query := "UPDATE schedules SET views = views + 1 WHERE id = ?"
+	_, err := r.db.ExecContext(ctx, query, id)
+	return err
 }

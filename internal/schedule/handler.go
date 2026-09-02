@@ -79,6 +79,7 @@ func (h *Handler) ListSchedulesPublic(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.repo.ListPublic(r.Context(), brandID)
 	if err != nil {
+		fmt.Println("ListPublic Error:", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data jadwal")
 		return
 	}
@@ -535,12 +536,18 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 17: brosur_url dan brosur_thumb_url — tidak ada validasi format, terima apa adanya
 
+	var promoUntil *time.Time
+	if req.IsPromo && req.PromoUntil != nil && req.PromoUntil.Valid {
+		promoUntil = &req.PromoUntil.Time
+	}
+
 	return &ScheduleInput{
 		BrandID:                  finalBrandID,
 		CategoryID:               req.CategoryID,
 		JadwalNama:               strings.TrimSpace(req.JadwalNama),
 		Status:                   reqStatus,
 		IsPromo:                  req.IsPromo,
+		PromoUntil:               promoUntil,
 		IsTicketConfirmed:        req.IsTicketConfirmed,
 		IsDirectFlight:           req.IsDirectFlight,
 		SeatTotal:                req.SeatTotal,
@@ -612,4 +619,24 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func (h *Handler) IncrementViewsPublic(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	err := h.repo.IncrementViews(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "paket tidak ditemukan"})
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "gagal mencatat view"})
+		}
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "success"})
 }

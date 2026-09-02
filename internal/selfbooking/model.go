@@ -14,6 +14,7 @@ type PICInput struct {
 type AnggotaInput struct {
 	PaxType      string  `json:"pax_type"`      // "reguler" | "infant"
 	NamaLengkap  string  `json:"nama_lengkap"`
+	NoHP         *string `json:"no_hp,omitempty"`
 	JenisKelamin string  `json:"jenis_kelamin"` // "L" atau "P"
 	RoomType     *string `json:"room_type"`     // Quad/Triple/Double (null jika infant)
 	TanggalLahir *string `json:"tanggal_lahir"` // Wajib jika pax_type = infant (YYYY-MM-DD)
@@ -40,6 +41,7 @@ type PaxSummary struct {
 type BankAccountInfo struct {
 	ID            int64   `json:"id"`
 	BankName      string  `json:"bank_name"`
+	LogoURL       *string `json:"logo_url,omitempty"`
 	AccountNumber string  `json:"account_number"`
 	AccountHolder string  `json:"account_holder"`
 	Instructions  *string `json:"instructions"`
