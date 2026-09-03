@@ -181,6 +181,7 @@ func main() {
 	r.With(requireDB(db)).Get("/api/public/invoice/{code}", selfBookingHandler.GetPublicInvoice)
 	r.With(requireDB(db)).Post("/api/public/jamaah/check", selfBookingHandler.CheckPhone)
 	r.With(requireDB(db)).Post("/api/public/aktivasi/check", portalHandler.CheckActivationToken)
+	r.With(requireDB(db)).Post("/api/public/aktivasi/verify-dob", portalHandler.VerifyActivationDob)
 	r.With(requireDB(db)).Post("/api/public/aktivasi", portalHandler.ActivateAccount)
 
 	// Auth (public)

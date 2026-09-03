@@ -29,6 +29,11 @@ type CheckActivationTokenResponse struct {
 	NamaLengkap string `json:"nama_lengkap,omitempty"`
 }
 
+type VerifyActivationDobRequest struct {
+	Token        string `json:"token"`
+	TanggalLahir string `json:"tanggal_lahir"`
+}
+
 type ActivateAccountRequest struct {
 	Token        string `json:"token"`
 	TanggalLahir string `json:"tanggal_lahir"`
@@ -287,6 +292,66 @@ func isOnlyDigits(s string) bool {
 		}
 	}
 	return true
+}
+
+func (h *Handler) VerifyActivationDob(w http.ResponseWriter, r *http.Request) {
+	clientIP := getClientIP(r)
+	if !h.checkDobRateLimit(clientIP) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		return
+	}
+
+	var req VerifyActivationDobRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
+
+	req.Token = strings.TrimSpace(req.Token)
+	req.TanggalLahir = strings.TrimSpace(req.TanggalLahir)
+
+	if req.Token == "" {
+		writeError(w, http.StatusBadRequest, "Link aktivasi tidak valid atau sudah kedaluwarsa.")
+		return
+	}
+
+	// 1. Hash token, cari baris dengan syarat yang SAMA seperti endpoint aktivasi:
+	// ditemukan, used_at IS NULL, expires_at > NOW(). Tidak valid -> 400 "Link aktivasi tidak valid atau sudah kedaluwarsa."
+	hash := sha256.Sum256([]byte(req.Token))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	var (
+		tokenID      int64
+		tanggalLahir sql.NullString
+	)
+	query := `
+		SELECT t.id, DATE_FORMAT(j.tanggal_lahir, '%Y-%m-%d')
+		FROM jamaah_activation_tokens t
+		JOIN jamaah j ON t.jamaah_id = j.id
+		WHERE t.token_hash = ? AND t.used_at IS NULL AND t.expires_at > NOW()
+	`
+	err := h.db.QueryRowContext(r.Context(), query, tokenHash).Scan(&tokenID, &tanggalLahir)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Link aktivasi tidak valid atau sudah kedaluwarsa.")
+		return
+	}
+
+	// 2. Cocokkan tanggal_lahir dengan tanggal_lahir jamaah, pakai perbandingan yang SAMA PERSIS dengan ActivateAccount (DATE_FORMAT '%Y-%m-%d').
+	// Tidak cocok -> 400 "Tanggal lahir tidak sesuai."
+	dbDob := ""
+	if tanggalLahir.Valid {
+		dbDob = strings.TrimSpace(tanggalLahir.String)
+	}
+
+	if dbDob == "" || req.TanggalLahir != dbDob {
+		h.recordFailedDob(clientIP)
+		writeError(w, http.StatusBadRequest, "Tanggal lahir tidak sesuai.")
+		return
+	}
+
+	// 3. Cocok -> 200 {"valid": true}
+	h.resetFailedDob(clientIP)
+	writeJSON(w, http.StatusOK, map[string]bool{"valid": true})
 }
 
 func (h *Handler) ActivateAccount(w http.ResponseWriter, r *http.Request) {
