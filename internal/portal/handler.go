@@ -17,6 +17,7 @@ import (
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/jamaah"
 	"erp-azhan/api/internal/payment"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -112,9 +113,10 @@ func getClientIP(r *http.Request) string {
 // ─── Login Portal ─────────────────────────────────────────────────────────────
 
 type PortalLoginRequest struct {
-	BrandID   *int64 `json:"brand_id"`
-	IDJamaah  string `json:"id_jamaah"`
-	PortalPIN string `json:"portal_pin"`
+	BrandID    *int64 `json:"brand_id"`
+	Identifier string `json:"identifier"`
+	IDJamaah   string `json:"id_jamaah"`
+	PortalPIN  string `json:"portal_pin"`
 }
 
 type PortalLoginResponse struct {
@@ -127,6 +129,25 @@ type PortalJamaahSummary struct {
 	IDJamaah    string `json:"id_jamaah"`
 	NamaLengkap string `json:"nama_lengkap"`
 	BrandID     int64  `json:"brand_id"`
+}
+
+func isPhoneNumber(s string) bool {
+	s = strings.TrimPrefix(s, "+")
+	cleaned := strings.Map(func(r rune) rune {
+		if r == ' ' || r == '\t' || r == '-' || r == '(' || r == ')' {
+			return -1
+		}
+		return r
+	}, s)
+	if len(cleaned) == 0 {
+		return false
+	}
+	for _, r := range cleaned {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -147,40 +168,97 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.IDJamaah = strings.TrimSpace(req.IDJamaah)
-	req.PortalPIN = strings.TrimSpace(req.PortalPIN)
+	identifier := strings.TrimSpace(req.Identifier)
+	if identifier == "" {
+		identifier = strings.TrimSpace(req.IDJamaah)
+	}
+	pin := strings.TrimSpace(req.PortalPIN)
 
-	if req.IDJamaah == "" || req.PortalPIN == "" {
-		writeError(w, http.StatusBadRequest, "id_jamaah dan PIN wajib diisi")
+	const invalidCredentialsMsg = "ID jamaah, nomor WhatsApp, atau PIN tidak cocok"
+
+	if identifier == "" || pin == "" {
+		h.recordFailedLogin(clientIP)
+		writeError(w, http.StatusUnauthorized, invalidCredentialsMsg)
 		return
 	}
 
 	var j PortalJamaahSummary
 	var pinHash sql.NullString
-	query := `SELECT id, COALESCE(id_jamaah, ''), nama_lengkap, brand_id, portal_pin_hash FROM jamaah 
-		WHERE brand_id = ? AND UPPER(id_jamaah) = UPPER(?)`
 
-	err := h.db.QueryRowContext(r.Context(), query, *req.BrandID, req.IDJamaah).Scan(&j.ID, &j.IDJamaah, &j.NamaLengkap, &j.BrandID, &pinHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		h.recordFailedLogin(clientIP)
-		writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
-		return
+	if isPhoneNumber(identifier) {
+		canonical, local := shared.PhoneVariants(identifier)
+		if canonical == "" || local == "" {
+			h.recordFailedLogin(clientIP)
+			writeError(w, http.StatusUnauthorized, invalidCredentialsMsg)
+			return
+		}
+
+		phoneQuery := `SELECT id, COALESCE(id_jamaah, ''), nama_lengkap, brand_id, portal_pin_hash FROM jamaah 
+			WHERE brand_id = ? 
+			  AND no_hp IS NOT NULL 
+			  AND no_hp != '' 
+			  AND REGEXP_REPLACE(COALESCE(no_hp, ''), '[^0-9]', '') IN (?, ?) 
+			LIMIT 2`
+
+		rows, err := h.db.QueryContext(r.Context(), phoneQuery, *req.BrandID, canonical, local)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan pada server")
+			return
+		}
+		defer rows.Close()
+
+		type matchedJamaah struct {
+			summary PortalJamaahSummary
+			hash    sql.NullString
+		}
+		var matches []matchedJamaah
+		for rows.Next() {
+			var m matchedJamaah
+			if err := rows.Scan(&m.summary.ID, &m.summary.IDJamaah, &m.summary.NamaLengkap, &m.summary.BrandID, &m.hash); err != nil {
+				writeError(w, http.StatusInternalServerError, "terjadi kesalahan pada server")
+				return
+			}
+			matches = append(matches, m)
+		}
+		if err := rows.Err(); err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan pada server")
+			return
+		}
+
+		if len(matches) != 1 {
+			h.recordFailedLogin(clientIP)
+			writeError(w, http.StatusUnauthorized, invalidCredentialsMsg)
+			return
+		}
+
+		j = matches[0].summary
+		pinHash = matches[0].hash
+	} else {
+		query := `SELECT id, COALESCE(id_jamaah, ''), nama_lengkap, brand_id, portal_pin_hash FROM jamaah 
+			WHERE brand_id = ? AND UPPER(id_jamaah) = UPPER(?)`
+
+		err := h.db.QueryRowContext(r.Context(), query, *req.BrandID, identifier).Scan(&j.ID, &j.IDJamaah, &j.NamaLengkap, &j.BrandID, &pinHash)
+		if errors.Is(err, sql.ErrNoRows) {
+			h.recordFailedLogin(clientIP)
+			writeError(w, http.StatusUnauthorized, invalidCredentialsMsg)
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan pada server")
+			return
+		}
 	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan pada server")
-		return
-	}
-	
+
 	if !pinHash.Valid || pinHash.String == "" {
 		h.recordFailedLogin(clientIP)
-		writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
+		writeError(w, http.StatusUnauthorized, invalidCredentialsMsg)
 		return
 	}
 
 	// Verifikasi bcrypt hash
-	if err := bcrypt.CompareHashAndPassword([]byte(pinHash.String), []byte(req.PortalPIN)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(pinHash.String), []byte(pin)); err != nil {
 		h.recordFailedLogin(clientIP)
-		writeError(w, http.StatusUnauthorized, "ID jamaah atau PIN tidak cocok")
+		writeError(w, http.StatusUnauthorized, invalidCredentialsMsg)
 		return
 	}
 
