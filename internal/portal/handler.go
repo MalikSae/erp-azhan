@@ -28,13 +28,17 @@ type loginAttempt struct {
 }
 
 type Handler struct {
-	db            *sql.DB
-	jamaahRepo    *jamaah.Repository
-	bookingRepo   *booking.Repository
-	paymentRepo   *payment.Repository
-	dokumenRepo   *dokumen.Repository
-	failedLogins  map[string]*loginAttempt
-	failedLoginMu sync.Mutex
+	db                  *sql.DB
+	jamaahRepo          *jamaah.Repository
+	bookingRepo         *booking.Repository
+	paymentRepo         *payment.Repository
+	dokumenRepo         *dokumen.Repository
+	failedLogins        map[string]*loginAttempt
+	failedLoginMu       sync.Mutex
+	failedTokenChecks   map[string]*loginAttempt
+	failedTokenChecksMu sync.Mutex
+	failedDobAttempts   map[string]*loginAttempt
+	failedDobAttemptsMu sync.Mutex
 }
 
 func NewHandler(

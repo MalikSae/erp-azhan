@@ -140,7 +140,7 @@ func main() {
 	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
 	crmUserRepo := crmuser.NewRepository(db)
 	crmUserHandler := crmuser.NewHandler(crmUserRepo)
-	
+
 	selfBookingRepo := selfbooking.NewRepository(db)
 	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo)
 
@@ -180,6 +180,8 @@ func main() {
 	r.With(requireDB(db)).Post("/api/public/book", selfBookingHandler.CreateBooking)
 	r.With(requireDB(db)).Get("/api/public/invoice/{code}", selfBookingHandler.GetPublicInvoice)
 	r.With(requireDB(db)).Post("/api/public/jamaah/check", selfBookingHandler.CheckPhone)
+	r.With(requireDB(db)).Post("/api/public/aktivasi/check", portalHandler.CheckActivationToken)
+	r.With(requireDB(db)).Post("/api/public/aktivasi", portalHandler.ActivateAccount)
 
 	// Auth (public)
 	r.Route("/api/auth", func(r chi.Router) {
@@ -309,6 +311,7 @@ func main() {
 		r.Put("/jamaah/{id}", jamaahHandler.UpdateJamaah)
 		r.Put("/jamaah/{id}/catatan", jamaahHandler.UpdateCatatan)
 		r.Delete("/jamaah/{id}", jamaahHandler.DeleteJamaah)
+		r.Post("/jamaah/{id}/activation-link", portalHandler.GenerateActivationLink)
 
 		// Relasi Kekerabatan Jamaah
 		r.Get("/jamaah/{id}/relasi", jamaahHandler.ListRelasi)
