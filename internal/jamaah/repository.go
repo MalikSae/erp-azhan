@@ -176,7 +176,9 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		DATE_FORMAT(paspor_berlaku_sampai, '%Y-%m-%d') AS paspor_berlaku_sampai,
 		no_hp, email, pekerjaan, pendidikan_terakhir, penjamin_kesehatan, no_asuransi_bpjs,
 		alamat, kota, catatan, status, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat,
-		created_at
+		created_at,
+		IF(portal_pin_hash IS NOT NULL AND portal_pin_hash != '', TRUE, FALSE) AS portal_aktif,
+		(SELECT expires_at FROM jamaah_activation_tokens WHERE jamaah_id = jamaah.id AND used_at IS NULL AND expires_at > NOW() ORDER BY expires_at DESC LIMIT 1) AS link_aktivasi_aktif_sampai
 		FROM jamaah WHERE id=?`
 
 	var args []interface{}
@@ -187,6 +189,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 	}
 
 	var j Jamaah
+	var linkExpiresAt sql.NullTime
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(
 		&j.ID, &j.BrandID, &j.IDJamaah, &j.KodeJamaah, &j.NamaLengkap, &j.JenisKelamin, &j.NamaAyahKandung, &j.NIK, &j.TempatLahir,
 		&j.TanggalLahir,
@@ -195,12 +198,18 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		&j.NoHP, &j.Email, &j.Pekerjaan, &j.PendidikanTerakhir, &j.PenjaminKesehatan, &j.NoAsuransiBPJS,
 		&j.Alamat, &j.Kota, &j.Catatan, &j.Status, &j.EmergencyNama, &j.EmergencyNIK, &j.EmergencyHP, &j.EmergencyHubungan, &j.EmergencyAlamat,
 		&j.CreatedAt,
+		&j.PortalAktif,
+		&linkExpiresAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("jamaah.GetByID: %w", err)
+	}
+	if linkExpiresAt.Valid {
+		formatted := linkExpiresAt.Time.Format(time.RFC3339)
+		j.LinkAktivasiAktifSampai = &formatted
 	}
 	return &j, nil
 }
