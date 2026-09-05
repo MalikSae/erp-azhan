@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +19,11 @@ type loginAttempt struct {
 	Count     int
 	FirstFail time.Time
 }
+
+const (
+	loginAttemptLimit  = 10
+	loginAttemptWindow = 15 * time.Minute
+)
 
 type Handler struct {
 	repo          *Repository
@@ -33,31 +40,35 @@ func NewHandler(repo *Repository) *Handler {
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 
-func (h *Handler) checkRateLimit(ip string) bool {
+func (h *Handler) checkRateLimit(key string) (bool, time.Duration) {
 	h.failedLoginMu.Lock()
 	defer h.failedLoginMu.Unlock()
 
-	attempt, exists := h.failedLogins[ip]
+	attempt, exists := h.failedLogins[key]
 	if !exists {
-		return true
+		return true, 0
 	}
 
-	if time.Since(attempt.FirstFail) > 15*time.Minute {
+	if time.Since(attempt.FirstFail) >= loginAttemptWindow {
 		// Reset setelah 15 menit
-		delete(h.failedLogins, ip)
-		return true
+		delete(h.failedLogins, key)
+		return true, 0
 	}
 
-	return attempt.Count < 10
+	if attempt.Count < loginAttemptLimit {
+		return true, 0
+	}
+
+	return false, time.Until(attempt.FirstFail.Add(loginAttemptWindow))
 }
 
-func (h *Handler) recordFailedLogin(ip string) {
+func (h *Handler) recordFailedLogin(key string) {
 	h.failedLoginMu.Lock()
 	defer h.failedLoginMu.Unlock()
 
-	attempt, exists := h.failedLogins[ip]
-	if !exists || time.Since(attempt.FirstFail) > 15*time.Minute {
-		h.failedLogins[ip] = &loginAttempt{
+	attempt, exists := h.failedLogins[key]
+	if !exists || time.Since(attempt.FirstFail) >= loginAttemptWindow {
+		h.failedLogins[key] = &loginAttempt{
 			Count:     1,
 			FirstFail: time.Now(),
 		}
@@ -66,31 +77,60 @@ func (h *Handler) recordFailedLogin(ip string) {
 	attempt.Count++
 }
 
-func (h *Handler) recordSuccessLogin(ip string) {
+func (h *Handler) recordSuccessLogin(key string) {
 	h.failedLoginMu.Lock()
 	defer h.failedLoginMu.Unlock()
-	delete(h.failedLogins, ip)
+	delete(h.failedLogins, key)
 }
 
 func getClientIP(r *http.Request) string {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	remoteIP, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		remoteIP = r.RemoteAddr
 	}
-	return ip
+
+	parsedRemoteIP := net.ParseIP(strings.TrimSpace(remoteIP))
+	if parsedRemoteIP == nil || !parsedRemoteIP.IsLoopback() {
+		return remoteIP
+	}
+
+	// Header proxy hanya dipercaya ketika request benar-benar datang dari
+	// reverse proxy lokal. Di production, Cloudflare meneruskan alamat client
+	// melalui CF-Connecting-IP dan Nginx meneruskan X-Forwarded-For.
+	for _, candidate := range []string{
+		r.Header.Get("CF-Connecting-IP"),
+		strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0],
+		r.Header.Get("X-Real-IP"),
+	} {
+		candidate = strings.TrimSpace(candidate)
+		if parsed := net.ParseIP(candidate); parsed != nil {
+			return parsed.String()
+		}
+	}
+
+	return parsedRemoteIP.String()
+}
+
+func loginRateLimitKey(r *http.Request, email string) string {
+	return getClientIP(r) + "|" + email
+}
+
+func writeRateLimitError(w http.ResponseWriter, retryAfter time.Duration) {
+	retryAfterSeconds := int(math.Ceil(retryAfter.Seconds()))
+	if retryAfterSeconds < 1 {
+		retryAfterSeconds = 1
+	}
+
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+	writeJSON(w, http.StatusTooManyRequests, map[string]any{
+		"error":               "terlalu banyak percobaan, coba lagi setelah waktu tunggu selesai",
+		"retry_after_seconds": retryAfterSeconds,
+	})
 }
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	ip := getClientIP(r)
-
-	// Cek rate limit sebelum parse atau query DB
-	if !h.checkRateLimit(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi nanti")
-		return
-	}
-
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
@@ -105,10 +145,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pisahkan limit berdasarkan client dan akun. Ini mencegah kegagalan satu
+	// pengguna di balik Nginx/Cloudflare memblokir seluruh admin lainnya.
+	rateLimitKey := loginRateLimitKey(r, req.Email)
+	if allowed, retryAfter := h.checkRateLimit(rateLimitKey); !allowed {
+		writeRateLimitError(w, retryAfter)
+		return
+	}
+
 	user, err := h.repo.GetByEmail(r.Context(), req.Email)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			h.recordFailedLogin(ip)
+			h.recordFailedLogin(rateLimitKey)
 			writeError(w, http.StatusUnauthorized, "email atau password salah")
 			return
 		}
@@ -117,19 +165,19 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !user.IsActive {
-		h.recordFailedLogin(ip)
+		h.recordFailedLogin(rateLimitKey)
 		writeError(w, http.StatusUnauthorized, "email atau password salah")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		h.recordFailedLogin(ip)
+		h.recordFailedLogin(rateLimitKey)
 		writeError(w, http.StatusUnauthorized, "email atau password salah")
 		return
 	}
 
 	// Sukses
-	h.recordSuccessLogin(ip)
+	h.recordSuccessLogin(rateLimitKey)
 
 	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role)
 	if err != nil {

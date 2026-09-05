@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
@@ -7,15 +7,50 @@ import Button from '../components/ui/Button';
 import Alert from '../components/ui/Alert';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
+const RATE_LIMIT_STORAGE_KEY = 'travel_login_retry_until';
+
+const getStoredRetryUntil = () => {
+  if (typeof window === 'undefined') return 0;
+
+  const storedValue = Number(window.sessionStorage.getItem(RATE_LIMIT_STORAGE_KEY));
+  return Number.isFinite(storedValue) && storedValue > Date.now() ? storedValue : 0;
+};
+
+const formatCountdown = (seconds) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+};
+
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [retryUntil, setRetryUntil] = useState(getStoredRetryUntil);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   
   const { user, login } = useAuth();
   const navigate = useNavigate();
+  const retrySeconds = Math.max(0, Math.ceil((retryUntil - currentTime) / 1000));
+
+  useEffect(() => {
+    if (!retryUntil) return undefined;
+
+    const updateCountdown = () => {
+      const now = Date.now();
+      setCurrentTime(now);
+      if (now >= retryUntil) {
+        window.sessionStorage.removeItem(RATE_LIMIT_STORAGE_KEY);
+        setRetryUntil(0);
+      }
+    };
+
+    updateCountdown();
+    const intervalId = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [retryUntil]);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -23,6 +58,8 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (retrySeconds > 0) return;
+
     setError('');
     setIsLoading(true);
 
@@ -33,7 +70,7 @@ const LoginPage = () => {
       });
 
       const { access_token, refresh_token } = response.data;
-      const result = login(access_token, refresh_token);
+      const result = await login(access_token, refresh_token);
       
       if (result.success) {
         navigate('/');
@@ -41,7 +78,22 @@ const LoginPage = () => {
         setError(result.message);
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Terjadi kesalahan saat verifikasi login.');
+      if (err.response?.status === 429) {
+        const serverRetryAfter = Number(
+          err.response?.data?.retry_after_seconds ?? err.response?.headers?.['retry-after'],
+        );
+        const retryAfterSeconds = Number.isFinite(serverRetryAfter) && serverRetryAfter > 0
+          ? Math.ceil(serverRetryAfter)
+          : 15 * 60;
+        const nextRetryUntil = Date.now() + retryAfterSeconds * 1000;
+
+        window.sessionStorage.setItem(RATE_LIMIT_STORAGE_KEY, String(nextRetryUntil));
+        setCurrentTime(Date.now());
+        setRetryUntil(nextRetryUntil);
+        setError('');
+      } else {
+        setError(err.response?.data?.error || 'Terjadi kesalahan saat verifikasi login.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -68,9 +120,11 @@ const LoginPage = () => {
 
         {/* Card Form */}
         <div className="bg-white p-7 rounded-2xl border border-neutral-200/80 shadow-sm space-y-5">
-          {error && (
-            <Alert variant="error" onClose={() => setError('')}>
-              {error}
+          {(error || retrySeconds > 0) && (
+            <Alert variant="error" onClose={retrySeconds > 0 ? undefined : () => setError('')}>
+              {retrySeconds > 0
+                ? <>Terlalu banyak percobaan. Coba lagi dalam <strong>{formatCountdown(retrySeconds)}</strong>.</>
+                : error}
             </Alert>
           )}
 
@@ -120,10 +174,12 @@ const LoginPage = () => {
               type="submit"
               variant="primary"
               isLoading={isLoading}
-              disabled={isLoading}
+              disabled={isLoading || retrySeconds > 0}
               className="w-full h-10 text-sm font-semibold justify-center shadow-xs mt-2"
             >
-              {isLoading ? "Memproses..." : "Masuk"}
+              {retrySeconds > 0
+                ? `Coba lagi ${formatCountdown(retrySeconds)}`
+                : (isLoading ? 'Memproses...' : 'Masuk')}
             </Button>
           </form>
         </div>

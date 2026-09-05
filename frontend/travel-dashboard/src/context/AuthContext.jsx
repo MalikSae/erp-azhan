@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const decoded = jwtDecode(token);
         setUser({
-          id: decoded.user_id,
+          id: decoded.sub ?? decoded.user_id,
           brand_id: decoded.brand_id,
           role: decoded.role,
           email: decoded.email,
@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('access_token', accessToken);
       localStorage.setItem('refresh_token', refreshToken);
       setUser({
-        id: decoded.user_id,
+        id: decoded.sub ?? decoded.user_id,
         brand_id: decoded.brand_id,
         role: decoded.role,
         email: decoded.email,

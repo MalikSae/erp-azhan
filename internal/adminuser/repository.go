@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -21,6 +22,14 @@ type Repository struct {
 
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
+}
+
+func displayNameFromEmail(email string) string {
+	localPart, _, _ := strings.Cut(strings.TrimSpace(email), "@")
+	if localPart == "" {
+		return "Admin"
+	}
+	return localPart
 }
 
 func (r *Repository) List(ctx context.Context) ([]AdminUser, error) {
@@ -114,8 +123,8 @@ func (r *Repository) Create(ctx context.Context, email, passwordHash string, bra
 		}
 	}
 
-	query := "INSERT INTO admin_users (email, password_hash, brand_id) VALUES (?, ?, ?)"
-	res, err := r.db.ExecContext(ctx, query, email, passwordHash, brandID)
+	query := "INSERT INTO admin_users (email, display_name, password_hash, brand_id) VALUES (?, ?, ?, ?)"
+	res, err := r.db.ExecContext(ctx, query, email, displayNameFromEmail(email), passwordHash, brandID)
 	if err != nil {
 		return nil, fmt.Errorf("adminuser.Create: %w", err)
 	}
