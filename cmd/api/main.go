@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -64,18 +64,19 @@ func main() {
 
 	// ─── Router & Middleware ──────────────────────────────────────────────────
 	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(securityHeaders)
 
-	allowedOrigins := []string{
-		"http://localhost:5173",
-		"http://localhost:5174",
-		"http://localhost:3000",
-		"https://localhost:3000",
-		"http://*.azhan.test",
-		"http://*.azhan.test:3000",
-		"https://*.azhan.test",
-		"https://*.azhan.test:3000",
-		"http://*.test",
-		"https://*.test",
+	allowedOrigins := []string{}
+	if !strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
+		allowedOrigins = append(allowedOrigins,
+			"http://localhost:5173", "http://localhost:5174",
+			"http://localhost:3000", "https://localhost:3000",
+			"http://*.azhan.test", "http://*.azhan.test:3000",
+			"https://*.azhan.test", "https://*.azhan.test:3000",
+			"http://*.test", "https://*.test",
+		)
 	}
 	if configured := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")); configured != "" {
 		for _, origin := range strings.Split(configured, ",") {
@@ -162,9 +163,10 @@ func main() {
 	// ─── Routes ───────────────────────────────────────────────────────────────
 	r.Get("/api/health", healthHandler(db))
 
-	// Static files (public)
-	fileServer := http.FileServer(http.Dir("./uploads"))
-	r.Handle("/uploads/*", http.StripPrefix("/uploads/", fileServer))
+	// Branding media is public; sensitive documents are served only through the
+	// authenticated /api/admin/media route below. Directory listing is never
+	// enabled.
+	r.Get("/uploads/{category}/{filename}", mediaHandler.ServePublic)
 
 	// Public: jadwal yang sudah published (tanpa prefix /admin)
 	r.With(requireDB(db)).Get("/api/schedules", scheduleHandler.ListSchedulesPublic)
@@ -288,6 +290,7 @@ func main() {
 		})
 
 		// Media
+		r.Get("/media/{category}/{filename}", mediaHandler.ServeProtected)
 		r.Post("/media/upload", mediaHandler.UploadMedia)
 
 		// Itineraries
@@ -378,13 +381,39 @@ func main() {
 	})
 
 	// ─── Start Server ─────────────────────────────────────────────────────────
-	addr := fmt.Sprintf(":%s", cfg.AppPort)
+	bindHost := strings.TrimSpace(os.Getenv("APP_BIND_HOST"))
+	if bindHost == "" {
+		bindHost = "127.0.0.1"
+	}
+	addr := net.JoinHostPort(bindHost, cfg.AppPort)
 	log.Printf("[INFO] Server ERP Azhan API berjalan di http://localhost%s", addr)
 
-	if err := http.ListenAndServe(addr, r); err != nil {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("[ERROR] Server gagal berjalan: %v", err)
 		os.Exit(1)
 	}
+}
+
+// securityHeaders applies conservative browser protections to every response.
+// CSP is intentionally left to the reverse proxy because the API serves JSON
+// and is consumed by multiple frontends.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func runSeatHoldExpiry(repo *crmdeal.Repository) {

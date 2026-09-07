@@ -2,7 +2,7 @@
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { getJamaah, listRelasi, createRelasi, deleteRelasi, updateCatatan, listJamaah, createActivationLink } from "../api/jamaah";
 import { listDokumen, upsertDokumen } from "../api/dokumen";
-import { uploadMedia } from "../api/media";
+import { uploadMedia, openProtectedMedia } from "../api/media";
 import { listBookings } from "../api/bookings";
 import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
@@ -631,15 +631,14 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       {hasFile && (
-                        <a
-                          href={existing.file_url.startsWith('http') ? existing.file_url : `${import.meta.env.VITE_API_BASE_URL}${existing.file_url}`}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => openProtectedMedia(existing.file_url)}
                           className="p-1.5 text-neutral-500 hover:text-primary-600 rounded transition-colors"
                           title="Lihat Dokumen"
                         >
                           <ExternalLink size={16} />
-                        </a>
+                        </button>
                       )}
 
                       <Button

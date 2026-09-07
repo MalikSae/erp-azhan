@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { listAllPayments, verifyPayment } from 'shared';
+import { listAllPayments, verifyPayment, openProtectedMedia } from 'shared';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -83,7 +83,7 @@ export default function PaymentConfirmationsPage() {
       return <div className="max-w-[170px] whitespace-normal"><Badge variant={meta.variant}>{meta.label}</Badge>{row.rejection_reason && <p className="mt-1.5 text-xs text-danger-700">{row.rejection_reason}</p>}</div>;
     }
     if (key === 'actions') return <div className="flex items-center gap-2">
-      {row.bukti_url && <a href={proofUrl(row.bukti_url)} target="_blank" rel="noreferrer" className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50">Bukti</a>}
+      {row.bukti_url && <button type="button" onClick={() => openProtectedMedia(row.bukti_url)} className="rounded-full border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50">Bukti</button>}
       {row.status === 'pending' && <><button onClick={() => openDialog(row, 'confirmed')} className="rounded-full bg-success-50 px-3 py-1.5 text-xs font-semibold text-success-700 hover:bg-success-100">Konfirmasi</button><button onClick={() => openDialog(row, 'rejected')} className="rounded-full bg-danger-50 px-3 py-1.5 text-xs font-semibold text-danger-700 hover:bg-danger-100">Tolak</button></>}
     </div>;
     return row[key] ?? '-';

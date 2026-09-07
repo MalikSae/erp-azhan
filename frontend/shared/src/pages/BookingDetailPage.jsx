@@ -20,7 +20,7 @@ import {
 import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengkapan";
 import { getJamaah } from "../api/jamaah";
 import { listBrands } from "../api/brands";
-import { uploadMedia } from "../api/media";
+import { uploadMedia, openProtectedMedia } from "../api/media";
 import { getStatusBadgeConfig, getSeatLockIcon } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
 import Card from "../components/ui/Card";
@@ -1091,12 +1091,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                     return p.bukti_url ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          const fullUrl = p.bukti_url.startsWith('http') 
-                            ? p.bukti_url 
-                            : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${p.bukti_url.startsWith('/') ? '' : '/'}${p.bukti_url}`;
-                          setSelectedBuktiUrl(fullUrl);
-                        }}
+                        onClick={() => openProtectedMedia(p.bukti_url)}
                         className="text-neutral-900 hover:text-primary-700 font-semibold inline-flex items-center gap-1.5 text-xs bg-neutral-100 hover:bg-neutral-200/80 px-2.5 py-1 rounded-lg border border-neutral-200/90 transition-colors cursor-pointer"
                         title="Lihat Bukti Pembayaran"
                       >

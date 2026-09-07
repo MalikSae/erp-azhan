@@ -30,3 +30,23 @@ export async function uploadMediaWithOptions(file, category, options = {}) {
   const response = await client.post('/api/admin/media/upload', formData);
   return response.data;
 }
+
+// Open a protected media response using the authenticated API client. This
+// keeps passport/KTP/payment proof files out of public URL navigation.
+export async function openProtectedMedia(url) {
+  const popup = window.open('', '_blank', 'noopener,noreferrer');
+  try {
+    const normalizedUrl = String(url || '').replace(
+      /^\/uploads\/(dokumen-jamaah|payment-proofs)\/(.+)$/,
+      '/api/admin/media/$1/$2',
+    );
+    const response = await client.get(normalizedUrl, { responseType: 'blob' });
+    const objectUrl = URL.createObjectURL(response.data);
+    if (popup) popup.location.href = objectUrl;
+    else window.location.href = objectUrl;
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  } catch (error) {
+    if (popup) popup.close();
+    throw error;
+  }
+}

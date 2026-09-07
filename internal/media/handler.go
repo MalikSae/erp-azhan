@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -18,9 +19,55 @@ var validCategoryRegex = regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
 // Handler struct
 type Handler struct{}
 
+var publicCategories = map[string]struct{}{
+	"brand-logos":   {},
+	"brand-icons":   {},
+	"hotel-logos":   {},
+	"airline-logos": {},
+}
+
+var protectedCategories = map[string]struct{}{
+	"dokumen-jamaah": {},
+	"payment-proofs": {},
+}
+
 // NewHandler creates a new media handler
 func NewHandler() *Handler {
 	return &Handler{}
+}
+
+// ServePublic serves only non-sensitive branding media. It deliberately
+// rejects directory requests so uploads can never be enumerated.
+func (h *Handler) ServePublic(w http.ResponseWriter, r *http.Request) {
+	category := chi.URLParam(r, "category")
+	filename := chi.URLParam(r, "filename")
+	if _, ok := publicCategories[category]; !ok || !safeFilename(filename) {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, filepath.Join(".", "uploads", category, filename))
+}
+
+// ServeProtected serves sensitive media only after the admin middleware has
+// authenticated the request. The file remains in the existing uploads folder;
+// this changes exposure, not stored data.
+func (h *Handler) ServeProtected(w http.ResponseWriter, r *http.Request) {
+	category := chi.URLParam(r, "category")
+	filename := chi.URLParam(r, "filename")
+	if _, ok := protectedCategories[category]; !ok || !safeFilename(filename) {
+		http.NotFound(w, r)
+		return
+	}
+	path := filepath.Join(".", "uploads", category, filename)
+	if info, err := os.Stat(path); err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, path)
+}
+
+func safeFilename(name string) bool {
+	return name != "" && name != "." && name != ".." && filepath.Base(name) == name && !strings.ContainsAny(name, `/\\`)
 }
 
 // UploadMedia godoc
@@ -120,6 +167,9 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	}
 
 	publicURL := fmt.Sprintf("/uploads/%s/%s", category, newFileName)
+	if _, ok := protectedCategories[category]; ok {
+		publicURL = fmt.Sprintf("/api/admin/media/%s/%s", category, newFileName)
+	}
 	response := map[string]string{"url": publicURL}
 
 	// Format asli dipertahankan agar upload tidak bergantung pada binary eksternal.

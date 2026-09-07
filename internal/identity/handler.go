@@ -149,6 +149,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// pengguna di balik Nginx/Cloudflare memblokir seluruh admin lainnya.
 	rateLimitKey := loginRateLimitKey(r, req.Email)
 	if allowed, retryAfter := h.checkRateLimit(rateLimitKey); !allowed {
+		log.Printf("[AUDIT] login_rate_limited ip=%s email=%s", getClientIP(r), maskEmail(req.Email))
 		writeRateLimitError(w, retryAfter)
 		return
 	}
@@ -157,6 +158,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			h.recordFailedLogin(rateLimitKey)
+			log.Printf("[AUDIT] login_failed ip=%s email=%s reason=unknown_account", getClientIP(r), maskEmail(req.Email))
 			writeError(w, http.StatusUnauthorized, "email atau password salah")
 			return
 		}
@@ -166,18 +168,21 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	if !user.IsActive {
 		h.recordFailedLogin(rateLimitKey)
+		log.Printf("[AUDIT] login_failed ip=%s email=%s reason=inactive", getClientIP(r), maskEmail(req.Email))
 		writeError(w, http.StatusUnauthorized, "email atau password salah")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		h.recordFailedLogin(rateLimitKey)
+		log.Printf("[AUDIT] login_failed ip=%s email=%s reason=bad_password", getClientIP(r), maskEmail(req.Email))
 		writeError(w, http.StatusUnauthorized, "email atau password salah")
 		return
 	}
 
 	// Sukses
 	h.recordSuccessLogin(rateLimitKey)
+	log.Printf("[AUDIT] login_success ip=%s user_id=%d role=%s", getClientIP(r), user.ID, user.Role)
 
 	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role, user.Email)
 	if err != nil {
@@ -205,6 +210,20 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		ExpiresIn:    ttl,
 		TokenType:    "Bearer",
 	})
+}
+
+func maskEmail(email string) string {
+	parts := strings.SplitN(email, "@", 2)
+	if len(parts) != 2 || parts[0] == "" {
+		return "***"
+	}
+	local := parts[0]
+	if len(local) > 2 {
+		local = local[:1] + "***" + local[len(local)-1:]
+	} else {
+		local = "***"
+	}
+	return local + "@" + parts[1]
 }
 
 // ─── Refresh ──────────────────────────────────────────────────────────────────
