@@ -179,7 +179,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Sukses
 	h.recordSuccessLogin(rateLimitKey)
 
-	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role)
+	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role, user.Email)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateAccessToken: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal membuat access token")
@@ -198,6 +198,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, TokenResponse{
 		UserID:       user.ID,
 		DisplayName:  user.DisplayName,
+		Email:        user.Email,
 		Role:         user.Role,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -242,7 +243,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role)
+	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role, user.Email)
 	if err != nil {
 		log.Printf("[ERROR] identity.Refresh GenerateAccessToken: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal membuat access token")
@@ -254,6 +255,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, TokenResponse{
 		UserID:      user.ID,
 		DisplayName: user.DisplayName,
+		Email:       user.Email,
 		Role:        user.Role,
 		AccessToken: accessToken,
 		ExpiresIn:   ttl,

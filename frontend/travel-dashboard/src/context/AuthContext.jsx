@@ -3,6 +3,17 @@ import { jwtDecode } from 'jwt-decode';
 import { getMyBrand } from 'shared';
 
 const AuthContext = createContext();
+const USER_EMAIL_STORAGE_KEY = 'travel_user_email';
+
+const userFromToken = (token, fallbackEmail = '') => {
+  const decoded = jwtDecode(token);
+  return {
+    id: decoded.sub ?? decoded.user_id,
+    brand_id: decoded.brand_id,
+    role: decoded.role,
+    email: decoded.email || fallbackEmail || localStorage.getItem(USER_EMAIL_STORAGE_KEY) || '',
+  };
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -13,7 +24,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await getMyBrand();
       setBrandInfo(res);
-    } catch (e) {
+    } catch {
       setBrandInfo(null);
     }
   };
@@ -22,15 +33,9 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('access_token') || localStorage.getItem('erp_access_token');
     if (token) {
       try {
-        const decoded = jwtDecode(token);
-        setUser({
-          id: decoded.sub ?? decoded.user_id,
-          brand_id: decoded.brand_id,
-          role: decoded.role,
-          email: decoded.email,
-        });
+        setUser(userFromToken(token));
         fetchBrandData();
-      } catch (e) {
+      } catch {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
       }
@@ -38,23 +43,17 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = async (accessToken, refreshToken) => {
+  const login = async (accessToken, refreshToken, profileEmail = '') => {
     try {
-      const decoded = jwtDecode(accessToken);
-
       localStorage.setItem('access_token', accessToken);
       localStorage.setItem('refresh_token', refreshToken);
-      setUser({
-        id: decoded.sub ?? decoded.user_id,
-        brand_id: decoded.brand_id,
-        role: decoded.role,
-        email: decoded.email,
-      });
+      if (profileEmail) localStorage.setItem(USER_EMAIL_STORAGE_KEY, profileEmail);
+      setUser(userFromToken(accessToken, profileEmail));
       
       await fetchBrandData();
       
       return { success: true };
-    } catch (e) {
+    } catch {
       return { success: false, message: "Token tidak valid" };
     }
   };
@@ -64,6 +63,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('erp_access_token');
     localStorage.removeItem('erp_refresh_token');
+    localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
     setUser(null);
     setBrandInfo(null);
   };

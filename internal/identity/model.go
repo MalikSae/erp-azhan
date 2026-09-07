@@ -29,6 +29,7 @@ type RefreshRequest struct {
 type TokenResponse struct {
 	UserID       int64  `json:"user_id"`
 	DisplayName  string `json:"display_name"`
+	Email        string `json:"email"`
 	Role         string `json:"role"`
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token,omitempty"` // tidak selalu ada (misal di refresh token response kalau mau disembunyikan, tapi req minta diabaikan)

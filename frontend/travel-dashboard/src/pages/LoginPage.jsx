@@ -69,8 +69,8 @@ const LoginPage = () => {
         password
       });
 
-      const { access_token, refresh_token } = response.data;
-      const result = await login(access_token, refresh_token);
+      const { access_token, refresh_token, email: accountEmail } = response.data;
+      const result = await login(access_token, refresh_token, accountEmail || email);
       
       if (result.success) {
         navigate('/');

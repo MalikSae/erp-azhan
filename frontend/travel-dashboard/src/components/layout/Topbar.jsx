@@ -69,7 +69,7 @@ const Topbar = ({ toggleSidebar }) => {
               {brandInfo?.name || "Admin Travel"}
             </span>
             <span className="text-[10px] text-neutral-500 font-medium block leading-tight truncate max-w-[140px]">
-              {user?.email || "admin@travel.id"}
+              {user?.email || "Email belum tersedia"}
             </span>
           </div>
           <svg className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -31,8 +31,9 @@ func getRefreshTTL() time.Duration {
 	return time.Duration(days) * 24 * time.Hour
 }
 
-// GenerateAccessToken membuat token access baru
-func GenerateAccessToken(adminUserID int64, brandID *int64, role string) (string, error) {
+// GenerateAccessToken membuat token access baru.
+// Email dibuat variadic agar pemanggil internal lama tetap kompatibel.
+func GenerateAccessToken(adminUserID int64, brandID *int64, role string, emails ...string) (string, error) {
 	now := time.Now()
 	ttl := getAccessTTL()
 	claims := jwt.MapClaims{
@@ -43,6 +44,9 @@ func GenerateAccessToken(adminUserID int64, brandID *int64, role string) (string
 		"jti":      uuid.New().String(),
 		"exp":      now.Add(ttl).Unix(),
 		"iat":      now.Unix(),
+	}
+	if len(emails) > 0 && emails[0] != "" {
+		claims["email"] = emails[0]
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(getJWTSecret())
