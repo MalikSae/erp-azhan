@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { LayoutDashboard, Users, CalendarDays, Package, Boxes, Banknote } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Package, Boxes, Banknote, Settings } from "lucide-react";
 
 function isLightColor(hexColor) {
   if (!hexColor || typeof hexColor !== 'string' || !hexColor.startsWith('#')) return false;
@@ -23,6 +23,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     { name: "Kelola Jamaah", path: "/jamaah", icon: Users },
     { name: "Kelola Booking", path: "/bookings", icon: CalendarDays },
     { name: "Pembayaran", path: "/payments", icon: Banknote },
+    { name: "Pengaturan", path: "/pengaturan", icon: Settings },
   ];
 
   const brandColor = brandInfo?.primary_color || '#FED853';

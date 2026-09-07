@@ -174,6 +174,62 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	h.sendJSON(w, http.StatusOK, map[string]string{"message": "password berhasil diubah"})
 }
 
+// ChangeOwnPassword: PUT /api/admin/account/password
+// Hanya Admin Travel yang boleh mengubah password akunnya sendiri.
+func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
+	if identity.GetRole(r.Context()) != "admin" || identity.GetBrandID(r.Context()) == nil {
+		h.sendError(w, http.StatusForbidden, "hanya Admin Travel yang dapat mengubah password akunnya sendiri")
+		return
+	}
+
+	var req ChangeOwnPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid")
+		return
+	}
+	currentPassword := strings.TrimSpace(req.CurrentPassword)
+	newPassword := strings.TrimSpace(req.NewPassword)
+	if currentPassword == "" || newPassword == "" {
+		h.sendError(w, http.StatusBadRequest, "Password saat ini dan password baru wajib diisi")
+		return
+	}
+	if len(newPassword) < 8 {
+		h.sendError(w, http.StatusBadRequest, "Password baru minimal 8 karakter")
+		return
+	}
+	if currentPassword == newPassword {
+		h.sendError(w, http.StatusBadRequest, "Password baru harus berbeda dari password saat ini")
+		return
+	}
+
+	userID := uint64(identity.GetAdminUserID(r.Context()))
+	passwordHash, err := h.repo.GetPasswordHash(r.Context(), userID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			h.sendError(w, http.StatusNotFound, "Akun tidak ditemukan")
+			return
+		}
+		h.sendError(w, http.StatusInternalServerError, "Gagal memverifikasi password saat ini")
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(currentPassword)); err != nil {
+		h.sendError(w, http.StatusUnauthorized, "Password saat ini salah")
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		h.sendError(w, http.StatusInternalServerError, "Gagal memproses password baru")
+		return
+	}
+	if err := h.repo.ResetPassword(r.Context(), userID, string(newHash)); err != nil {
+		h.sendError(w, http.StatusInternalServerError, "Gagal menyimpan password baru")
+		return
+	}
+
+	h.sendJSON(w, http.StatusOK, map[string]string{"message": "password berhasil diubah"})
+}
+
 // DeleteUser: DELETE /api/admin/users/{id}
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")

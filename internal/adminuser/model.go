@@ -4,8 +4,8 @@ import "time"
 
 // AdminUser merepresentasikan data admin_users yang aman untuk dikembalikan ke client (tanpa password_hash).
 type AdminUser struct {
-	ID        uint64    `json:"id"`
-	Email     string    `json:"email"`
+	ID         uint64    `json:"id"`
+	Email      string    `json:"email"`
 	BrandID    *uint64   `json:"brand_id"`
 	BrandName  *string   `json:"brand_name"`
 	BrandColor *string   `json:"brand_color"`
@@ -28,4 +28,10 @@ type UpdateAdminUserRequest struct {
 // ResetPasswordRequest payload untuk PUT /api/admin/users/{id}/password.
 type ResetPasswordRequest struct {
 	Password string `json:"password"`
+}
+
+// ChangeOwnPasswordRequest payload untuk akun Admin Travel.
+type ChangeOwnPasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }

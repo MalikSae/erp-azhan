@@ -218,6 +218,7 @@ func main() {
 		r.Use(identity.RequireAdminOrCRMAccess)
 
 		r.Get("/my-brand", brandHandler.GetMyBrand)
+		r.With(identity.RequireAdminRole).Put("/account/password", adminuserHandler.ChangeOwnPassword)
 
 		r.Route("/crm/users", func(r chi.Router) {
 			r.Use(identity.RequireAdminRole)

@@ -7,6 +7,7 @@ import PaketPage from './pages/PaketPage';
 import PaketDetailPage from './pages/PaketDetailPage';
 import StokPerlengkapanPage from './pages/StokPerlengkapanPage';
 import PaymentConfirmationsPage from './pages/PaymentConfirmationsPage';
+import AccountSettingsPage from './pages/AccountSettingsPage';
 
 import {
   JamaahPage,
@@ -44,6 +45,8 @@ function App() {
           <Route path="/bookings/:id" element={<BookingDetailPage showBrandColumn={false} />} />
           <Route path="/bookings/:id/edit" element={<BookingFormPage showBrandColumn={false} />} />
           <Route path="/payments" element={<PaymentConfirmationsPage />} />
+          <Route path="/pengaturan" element={<AccountSettingsPage />} />
+          <Route path="/settings" element={<AccountSettingsPage />} />
         </Route>
       </Route>
     </Routes>

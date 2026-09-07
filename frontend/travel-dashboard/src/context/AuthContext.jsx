@@ -4,14 +4,16 @@ import { getMyBrand } from 'shared';
 
 const AuthContext = createContext();
 const USER_EMAIL_STORAGE_KEY = 'travel_user_email';
+const USER_DISPLAY_NAME_STORAGE_KEY = 'travel_user_display_name';
 
-const userFromToken = (token, fallbackEmail = '') => {
+const userFromToken = (token, fallbackEmail = '', fallbackDisplayName = '') => {
   const decoded = jwtDecode(token);
   return {
     id: decoded.sub ?? decoded.user_id,
     brand_id: decoded.brand_id,
     role: decoded.role,
     email: decoded.email || fallbackEmail || localStorage.getItem(USER_EMAIL_STORAGE_KEY) || '',
+    display_name: decoded.display_name || fallbackDisplayName || localStorage.getItem(USER_DISPLAY_NAME_STORAGE_KEY) || '',
   };
 };
 
@@ -43,12 +45,13 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = async (accessToken, refreshToken, profileEmail = '') => {
+  const login = async (accessToken, refreshToken, profileEmail = '', profileDisplayName = '') => {
     try {
       localStorage.setItem('access_token', accessToken);
       localStorage.setItem('refresh_token', refreshToken);
       if (profileEmail) localStorage.setItem(USER_EMAIL_STORAGE_KEY, profileEmail);
-      setUser(userFromToken(accessToken, profileEmail));
+      if (profileDisplayName) localStorage.setItem(USER_DISPLAY_NAME_STORAGE_KEY, profileDisplayName);
+      setUser(userFromToken(accessToken, profileEmail, profileDisplayName));
       
       await fetchBrandData();
       
@@ -64,6 +67,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('erp_access_token');
     localStorage.removeItem('erp_refresh_token');
     localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
+    localStorage.removeItem(USER_DISPLAY_NAME_STORAGE_KEY);
     setUser(null);
     setBrandInfo(null);
   };

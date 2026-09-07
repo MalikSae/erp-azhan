@@ -210,6 +210,18 @@ func (r *Repository) ResetPassword(ctx context.Context, id uint64, passwordHash 
 	return nil
 }
 
+func (r *Repository) GetPasswordHash(ctx context.Context, id uint64) (string, error) {
+	var passwordHash string
+	err := r.db.QueryRowContext(ctx, "SELECT password_hash FROM admin_users WHERE id = ?", id).Scan(&passwordHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("adminuser.GetPasswordHash: %w", err)
+	}
+	return passwordHash, nil
+}
+
 func (r *Repository) Delete(ctx context.Context, id uint64, currentLoggedInID uint64) error {
 	// SAFETY CHECK 1: Tidak bisa menghapus diri sendiri
 	if id == currentLoggedInID {
