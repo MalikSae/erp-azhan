@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,6 +14,16 @@ import (
 
 func getJWTSecret() []byte {
 	return []byte(os.Getenv("JWT_SECRET"))
+}
+
+// ValidateJWTSecret enforces a cryptographically meaningful secret in
+// production. It is intentionally separate from token generation so startup
+// can fail fast before serving requests.
+func ValidateJWTSecret() error {
+	if len(strings.TrimSpace(os.Getenv("JWT_SECRET"))) < 32 {
+		return errors.New("JWT_SECRET harus berisi minimal 32 karakter")
+	}
+	return nil
 }
 
 func getAccessTTL() time.Duration {

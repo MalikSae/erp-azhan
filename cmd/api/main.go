@@ -48,6 +48,11 @@ func main() {
 
 	// ─── Config ───────────────────────────────────────────────────────────────
 	cfg := shared.LoadConfig()
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
+		if err := identity.ValidateJWTSecret(); err != nil {
+			log.Fatalf("[ERROR] konfigurasi JWT tidak aman: %v", err)
+		}
+	}
 
 	// ─── Database ─────────────────────────────────────────────────────────────
 	var db *sql.DB
