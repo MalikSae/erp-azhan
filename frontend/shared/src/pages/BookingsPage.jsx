@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { listBookings, deleteDraftBooking } from "../api/bookings";
 import { listBrands } from "../api/brands";
@@ -12,7 +12,7 @@ import LoadingSpinner from "../components/ui/LoadingSpinner";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import Modal from "../components/ui/Modal";
 import BrandCell from "../components/BrandCell";
-import { Eye, Trash2, Loader, CircleCheckBig } from "lucide-react";
+import { Loader, CircleCheckBig } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -237,7 +237,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
         accessor: (row) => {
           const lockInfo = getSeatLockIcon(row.status, row.is_seat_blocked);
           if (!lockInfo) {
-            return <span className="text-xs text-neutral-400 font-medium">–</span>;
+            return <span className="text-xs text-neutral-400 font-medium">-</span>;
           }
           const IconComponent = lockInfo.icon === 'CircleCheckBig' ? CircleCheckBig : Loader;
           return (
@@ -246,42 +246,11 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
             </span>
           );
         }
-      },
-      {
-        header: "Aksi",
-        key: "aksi",
-        accessor: (row) => (
-          <div className="flex items-center gap-1">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => navigate(row.status === 'draft' ? `/bookings/${row.id}/edit` : `/bookings/${row.id}`)}
-              title={row.status === 'draft' ? "Lanjutkan Draft" : "Detail"}
-              className="p-1.5 text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg"
-            >
-              <Eye size={16} />
-            </Button>
-            {row.status === 'draft' && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => {
-                  setSelectedDraft(row);
-                  setIsDeleteModalOpen(true);
-                }}
-                title="Hapus Draft"
-                className="p-1.5 text-danger-400 hover:text-danger-700 hover:bg-danger-50 rounded-lg"
-              >
-                <Trash2 size={16} />
-              </Button>
-            )}
-          </div>
-        )
       }
     );
 
     return cols;
-  }, [showBrandColumn, brandsMap, navigate]);
+  }, [showBrandColumn, brandsMap]);
 
   return (
     <div className="space-y-6">
@@ -303,6 +272,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
             columns={columns}
             data={filteredBookings}
             itemsPerPage={15}
+            onRowClick={(row) => navigate(row.status === 'draft' ? `/bookings/${row.id}/edit` : `/bookings/${row.id}`)}
             searchPlaceholder="Cari no. booking, nama jamaah, atau paket..."
             emptyMessage={filterBrandId || filterStatus || filterSeat || filterDate ? "Data booking tidak ditemukan" : "Belum ada data booking. Klik \"Buat Booking Baru\" untuk menambahkan."}
             toolbarActions={

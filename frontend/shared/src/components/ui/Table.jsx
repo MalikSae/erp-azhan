@@ -1,8 +1,8 @@
-import React from 'react';
+﻿import React from 'react';
 import EmptyState from './EmptyState';
 import LoadingSpinner from './LoadingSpinner';
 
-const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell, sortConfig, onSort, loading }) => {
+const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell, sortConfig, onSort, loading, onRowClick }) => {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -65,7 +65,14 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
         </thead>
         <tbody className="divide-y divide-neutral-100">
           {data.map((row, rowIndex) => (
-            <tr key={rowIndex} className="hover:bg-neutral-50/70 transition-colors">
+            <tr 
+              key={rowIndex} 
+              onClick={(e) => {
+                if (e.target.closest('button, a, input, select, textarea')) return;
+                if (onRowClick) onRowClick(row, rowIndex);
+              }}
+              className={`hover:bg-neutral-50/70 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+            >
               {columns.map((col, colIndex) => (
                 <td key={colIndex} className={`px-3 py-3 ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''}`}>
                   {getCellContent(row, col, rowIndex)}

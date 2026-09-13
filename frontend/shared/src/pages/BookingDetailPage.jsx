@@ -502,7 +502,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       return;
     }
     if (jumlahNum > sisaTagihan) {
-      setPaymentFormError(`Jumlah pembayaran tidak boleh lebih dari sisa tagihan (${formatRupiah(sisaTagihan)})`);
+      setPaymentFormError(`Maks. ${formatRupiah(sisaTagihan)}`);
       return;
     }
 
@@ -786,7 +786,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
           {/* Section: Checklist Dokumen & Kesiapan Jamaah */}
           <MetaBox 
-            title="Checklist Dokumen & Kesiapan Jamaah"
+            title="Kesiapan Dokumen & Operasional Pax"
             icon={<Shield size={18} className="text-neutral-700" />}
           >
             {activePaxList.length === 0 ? (
@@ -794,14 +794,22 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             ) : (
               <div className="overflow-x-auto -mx-5 -mb-4 sm:mx-0 sm:mb-0">
                 <table className="w-full text-left text-sm font-body">
-                  <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
-                    <tr>
-                      <th className="py-3 px-4">Nama Jamaah</th>
-                      <th className="py-3 px-3 text-center">Paspor</th>
-                      <th className="py-3 px-3 text-center">Vaksin Meningitis</th>
-                      <th className="py-3 px-3 text-center">Visa</th>
-                      <th className="py-3 px-3 text-center">Siskopatuh</th>
-                      <th className="py-3 px-3 text-center">Manasik</th>
+                  <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 font-semibold">
+                    <tr className="border-b border-neutral-200/60 text-[11px] uppercase tracking-wider">
+                      <th className="py-2 px-4" rowSpan={2}>Nama Jamaah</th>
+                      <th className="py-1.5 px-3 text-center bg-primary-50/70 text-primary-800 border-x border-neutral-200" colSpan={2}>
+                        Dokumen Jamaah (Upload)
+                      </th>
+                      <th className="py-1.5 px-3 text-center bg-neutral-100 text-neutral-700" colSpan={3}>
+                        Operasional Travel
+                      </th>
+                    </tr>
+                    <tr className="uppercase tracking-wider text-[10px] text-neutral-600">
+                      <th className="py-2 px-3 text-center bg-primary-50/30 border-l border-neutral-200">Paspor</th>
+                      <th className="py-2 px-3 text-center bg-primary-50/30 border-r border-neutral-200">Vaksin</th>
+                      <th className="py-2 px-3 text-center">Visa</th>
+                      <th className="py-2 px-3 text-center">Siskopatuh</th>
+                      <th className="py-2 px-3 text-center">Manasik</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
@@ -1214,7 +1222,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
           {/* Progress Paket Card */}
           <MetaBox
-            title="Progress Paket"
+            title="Fasilitas Paket (Travel)"
             icon={<Shield size={18} className="text-neutral-700" />}
             headerAction={
               booking.siap_berangkat ? (
@@ -1297,21 +1305,28 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 type="button"
                 size="sm"
                 variant="secondary"
-                onClick={() => setPaymentForm(prev => ({ ...prev, jumlah: sisaTagihan }))}
+                onClick={() => {
+                  setPaymentForm(prev => ({ ...prev, jumlah: sisaTagihan }));
+                  setPaymentFormError(null);
+                }}
                 className="text-xs shrink-0 self-start sm:self-auto"
               >
-                Bayar Penuh Sisa
+                Bayar Penuh
               </Button>
             )}
           </div>
 
           <CurrencyInput
-            label="Jumlah Pembayaran (Rp)"
+            label="Jumlah Pembayaran"
             value={paymentForm.jumlah}
-            onChange={(val) => setPaymentForm(prev => ({ ...prev, jumlah: val }))}
+            onChange={(val) => {
+              setPaymentForm(prev => ({ ...prev, jumlah: val }));
+              if (paymentFormError) setPaymentFormError(null);
+            }}
             required
             placeholder="0"
             className="!mb-0"
+            error={sisaTagihan > 0 && parseFloat(paymentForm.jumlah) > sisaTagihan ? `Maks. ${formatRupiah(sisaTagihan)}` : undefined}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1388,7 +1403,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               type="submit" 
               variant="primary" 
               isLoading={paymentSubmitting}
-              disabled={paymentSubmitting}
+              disabled={paymentSubmitting || (sisaTagihan > 0 && parseFloat(paymentForm.jumlah) > sisaTagihan) || !parseFloat(paymentForm.jumlah)}
             >
               {paymentSubmitting ? "Menyimpan..." : "Simpan Pembayaran"}
             </Button>

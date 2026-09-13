@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import Table from './Table';
 import Input from './Input';
 import Button from './Button';
@@ -12,7 +12,8 @@ const DataTable = ({
   itemsPerPage = 10,
   emptyMessage = "Tidak ada data",
   renderCell,
-  toolbarActions
+  toolbarActions,
+  onRowClick
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -114,6 +115,7 @@ const DataTable = ({
         renderCell={renderCell}
         sortConfig={sortConfig}
         onSort={handleSort}
+        onRowClick={onRowClick}
       />
 
       {/* Footer / Pagination */}
