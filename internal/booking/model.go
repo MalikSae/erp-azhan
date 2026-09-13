@@ -52,6 +52,7 @@ type Booking struct {
 	BrandID           int64    `json:"brand_id"`
 	JadwalNama        string   `json:"jadwal_nama"`
 	BerangkatTanggal  *string  `json:"berangkat_tanggal"`
+	ItineraryID       *int64   `json:"itinerary_id,omitempty"`
 	PicJamaahID       *int64   `json:"pic_jamaah_id"`
 	JamaahID          *int64   `json:"jamaah_id"` // alias untuk kompatibilitas endpoint/frontend
 	NamaJamaah        *string  `json:"nama_jamaah"`

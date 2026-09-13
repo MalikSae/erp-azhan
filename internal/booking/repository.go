@@ -74,7 +74,7 @@ var AllowedPaxProgressFields = map[string]string{
 
 // selectBookingFull adalah query SELECT booking dengan JOIN ke jamaah + schedules + primary pax.
 const selectBookingFull = `
-	SELECT b.id, b.id_booking, b.schedule_id, s.brand_id, s.jadwal_nama, s.berangkat_tanggal,
+	SELECT b.id, b.id_booking, b.schedule_id, s.brand_id, s.jadwal_nama, s.berangkat_tanggal, s.itinerary_id,
 		b.pic_jamaah_id, j.nama_lengkap,
 		bp.room_type,
 		bp.harga_pax,
@@ -1765,6 +1765,7 @@ func computeSiapBerangkat(b *Booking) {
 // ─── Internal scan helper ─────────────────────────────────────────────────────
 
 func scanBookingRow(rows *sql.Rows) (*Booking, error) {
+	var itineraryID sql.NullInt64
 	var b Booking
 	var idBooking sql.NullString
 	var picJamaahID sql.NullInt64
@@ -1779,7 +1780,7 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	var roomType sql.NullString
 
 	err := rows.Scan(
-		&b.ID, &idBooking, &b.ScheduleID, &b.BrandID, &b.JadwalNama, &berangkatTanggal,
+		&b.ID, &idBooking, &b.ScheduleID, &b.BrandID, &b.JadwalNama, &berangkatTanggal, &itineraryID,
 		&picJamaahID, &namaJamaah,
 		&roomType, &hargaDasar,
 		&b.SeatCount, &b.Status, &b.IsSeatBlocked, &seatHoldExpiresAt,
@@ -1811,6 +1812,9 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	}
 	if namaJamaah.Valid && strings.TrimSpace(namaJamaah.String) != "" {
 		b.NamaJamaah = &namaJamaah.String
+	}
+	if itineraryID.Valid && itineraryID.Int64 > 0 {
+		b.ItineraryID = &itineraryID.Int64
 	}
 	if berangkatTanggal.Valid {
 		b.BerangkatTanggal = &berangkatTanggal.String

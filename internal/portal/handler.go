@@ -425,7 +425,7 @@ func (h *Handler) ListBankAccounts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized")
 		return
 	}
-	rows, err := h.db.QueryContext(r.Context(), `SELECT a.id,a.bank_name,a.account_number,a.account_holder,a.instructions FROM bank_accounts a JOIN jamaah j ON j.brand_id=a.brand_id WHERE j.id=? AND a.is_active=TRUE ORDER BY a.sort_order,a.id`, jamaahID)
+	rows, err := h.db.QueryContext(r.Context(), `SELECT a.id, a.bank_name, a.logo_url, a.account_number, a.account_holder, a.instructions FROM bank_accounts a JOIN jamaah j ON j.brand_id=a.brand_id WHERE j.id=? AND a.is_active=TRUE ORDER BY a.sort_order,a.id`, jamaahID)
 	if err != nil {
 		writeError(w, 500, "gagal mengambil rekening")
 		return
@@ -434,6 +434,7 @@ func (h *Handler) ListBankAccounts(w http.ResponseWriter, r *http.Request) {
 	type account struct {
 		ID            int64   `json:"id"`
 		BankName      string  `json:"bank_name"`
+		LogoURL       *string `json:"logo_url"`
 		AccountNumber string  `json:"account_number"`
 		AccountHolder string  `json:"account_holder"`
 		Instructions  *string `json:"instructions"`
@@ -441,9 +442,13 @@ func (h *Handler) ListBankAccounts(w http.ResponseWriter, r *http.Request) {
 	items := []account{}
 	for rows.Next() {
 		var a account
-		if rows.Scan(&a.ID, &a.BankName, &a.AccountNumber, &a.AccountHolder, &a.Instructions) != nil {
+		var logo sql.NullString
+		if rows.Scan(&a.ID, &a.BankName, &logo, &a.AccountNumber, &a.AccountHolder, &a.Instructions) != nil {
 			writeError(w, 500, "gagal membaca rekening")
 			return
+		}
+		if logo.Valid && strings.TrimSpace(logo.String) != "" {
+			a.LogoURL = &logo.String
 		}
 		items = append(items, a)
 	}
@@ -562,6 +567,7 @@ func (h *Handler) UploadDokumen(w http.ResponseWriter, r *http.Request) {
 		"ktp":               true,
 		"kk":                true,
 		"buku_nikah":        true,
+		"akte_lahir":        true,
 		"pas_foto":          true,
 		"vaksin_meningitis": true,
 	}

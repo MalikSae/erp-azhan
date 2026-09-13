@@ -24,6 +24,7 @@ type Payment struct {
 	VerifiedAt               *time.Time `json:"verified_at"`
 	JamaahName               string     `json:"jamaah_name,omitempty"`
 	ScheduleName             string     `json:"schedule_name,omitempty"`
+	DepartureDate            *string    `json:"departure_date,omitempty"`
 	BrandName                string     `json:"brand_name,omitempty"`
 	BookingIDBooking         string     `json:"booking_id_booking,omitempty"`
 	CreatedAt                time.Time  `json:"created_at"`

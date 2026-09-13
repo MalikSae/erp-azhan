@@ -168,6 +168,27 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 	}
 	defer tx.Rollback()
 
+	// Validasi nilai pembayaran tidak boleh lebih besar dari sisa tagihan
+	var totalHarga sql.NullFloat64
+	var totalPaid float64
+	err = tx.QueryRowContext(ctx, `SELECT total_harga FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&totalHarga)
+	if err != nil {
+		return nil, fmt.Errorf("payment.Create check booking: %w", err)
+	}
+	err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id=? AND status='confirmed'`, bookingID).Scan(&totalPaid)
+	if err != nil {
+		return nil, fmt.Errorf("payment.Create check paid: %w", err)
+	}
+	if totalHarga.Valid && totalHarga.Float64 > 0 {
+		sisaTagihan := totalHarga.Float64 - totalPaid
+		if sisaTagihan < 0 {
+			sisaTagihan = 0
+		}
+		if req.Jumlah > sisaTagihan {
+			return nil, fmt.Errorf("jumlah pembayaran (Rp %.0f) melebihi sisa tagihan (Rp %.0f)", req.Jumlah, sisaTagihan)
+		}
+	}
+
 	var bankName, accountNumber, accountHolder *string
 	if req.BankAccountID != nil {
 		var n, no, h string
@@ -302,6 +323,38 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 		return err
 	}
 
+	// Ambil konfigurasi minimal DP dari paket (schedule) atau fallback ke brand
+	var schedMinDP sql.NullFloat64
+	var brandMinDP float64
+	err = tx.QueryRowContext(ctx, `
+		SELECT s.minimal_dp, b.minimal_dp
+		FROM schedules s
+		JOIN brands b ON b.id = s.brand_id
+		WHERE s.id = ?`, scheduleID).Scan(&schedMinDP, &brandMinDP)
+	if err != nil {
+		return err
+	}
+
+	dpPerPax := brandMinDP
+	if schedMinDP.Valid && schedMinDP.Float64 > 0 {
+		dpPerPax = schedMinDP.Float64
+	}
+
+	var activeRegularPax int
+	_ = tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM booking_pax
+		WHERE booking_id=? AND counts_for_seat=TRUE AND pax_status='aktif'`, bookingID,
+	).Scan(&activeRegularPax)
+	if activeRegularPax <= 0 {
+		if seatCount > 0 {
+			activeRegularPax = seatCount
+		} else {
+			activeRegularPax = 1
+		}
+	}
+
+	requiredDP := dpPerPax * float64(activeRegularPax)
+
 	targetStatus := currentStatus
 	targetHarga := 0.0
 	if totalHarga.Valid {
@@ -310,6 +363,20 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 
 	if targetHarga > 0 && totalPaid >= targetHarga {
 		targetStatus = "lunas"
+	} else if requiredDP > 0 {
+		if totalPaid >= requiredDP {
+			if currentStatus == "baru" || currentStatus == "lunas" {
+				targetStatus = "dp"
+			}
+		} else {
+			// Pembayaran belum mencapai ambang batas akumulasi minimal DP:
+			// status booking tetap 'baru' dan seat belum terkunci permanen
+			if currentStatus == "lunas" {
+				targetStatus = "dp"
+			} else if currentStatus == "dp" && !isSeatBlocked {
+				targetStatus = "baru"
+			}
+		}
 	} else if totalPaid > 0 {
 		if currentStatus == "baru" || currentStatus == "lunas" {
 			targetStatus = "dp"

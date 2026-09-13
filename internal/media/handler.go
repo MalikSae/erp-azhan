@@ -24,6 +24,7 @@ var publicCategories = map[string]struct{}{
 	"brand-icons":   {},
 	"hotel-logos":   {},
 	"airline-logos": {},
+	"bank-logos":    {},
 }
 
 var protectedCategories = map[string]struct{}{

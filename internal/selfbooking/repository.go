@@ -21,6 +21,7 @@ var (
 	ErrAnggotaNameMismatch   = errors.New("nomor tidak dapat digunakan, gunakan nomor lain atau kosongkan")
 	ErrDuplicatePaxInBooking = errors.New("jamaah tidak boleh terdaftar lebih dari sekali dalam satu pemesanan")
 	ErrPinRequired           = errors.New("PIN portal harus 6 digit")
+	ErrCutoffBooking         = errors.New("pendaftaran untuk jadwal ini telah ditutup (batas cut-off H-14 keberangkatan)")
 )
 
 type Repository struct {
@@ -56,7 +57,7 @@ func normalizeName(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), " "))
 }
 
-func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req BookingRequest) (*BookingResponse, error) {
+func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req BookingRequest, authenticatedJamaahID int64) (*BookingResponse, error) {
 	// Serializable ensures atomic check-then-act
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -70,12 +71,13 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 	var seatSisa int
 	var hargaQuad, hargaTriple, hargaDouble float64
 	var hargaInfant, scheduleMinDP sql.NullFloat64
+	var berangkatTanggal time.Time
 
 	err = tx.QueryRowContext(ctx, `
-		SELECT brand_id, status, seat_sisa, harga_quad, harga_triple, harga_double, harga_infant, minimal_dp
+		SELECT brand_id, status, seat_sisa, harga_quad, harga_triple, harga_double, harga_infant, minimal_dp, berangkat_tanggal
 		FROM schedules WHERE id=? FOR UPDATE`, req.ScheduleID).Scan(
 		&scheduleBrandID, &scheduleStatus, &seatSisa,
-		&hargaQuad, &hargaTriple, &hargaDouble, &hargaInfant, &scheduleMinDP,
+		&hargaQuad, &hargaTriple, &hargaDouble, &hargaInfant, &scheduleMinDP, &berangkatTanggal,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -85,6 +87,14 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 	}
 	if scheduleStatus != "published" || scheduleBrandID != brandID {
 		return nil, ErrNotFound
+	}
+
+	// Cutoff H-14: online booking ditutup H-14 sebelum tanggal keberangkatan
+	now := time.Now()
+	cutoffDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 14)
+	depDate := time.Date(berangkatTanggal.Year(), berangkatTanggal.Month(), berangkatTanggal.Day(), 0, 0, 0, 0, now.Location())
+	if depDate.Before(cutoffDate) {
+		return nil, ErrCutoffBooking
 	}
 
 	// 2. Resolve PIC (Jamaah Utama) dengan 3 Cabang
@@ -132,22 +142,27 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		return nil, fmt.Errorf("find pic: %w", err)
 	} else {
 		picJamaahID = existingPICID
+		isAuthPIC := authenticatedJamaahID > 0 && authenticatedJamaahID == existingPICID
+
 		if existingPICPinHash.Valid && strings.TrimSpace(existingPICPinHash.String) != "" {
-			// CABANG B — jamaah SUDAH ADA dan portal_pin_hash TERISI:
-			// portal_pin dari payload WAJIB cocok dengan hash tersimpan (bcrypt.CompareHashAndPassword).
-			if req.PIC.PortalPIN == "" || bcrypt.CompareHashAndPassword([]byte(existingPICPinHash.String), []byte(req.PIC.PortalPIN)) != nil {
-				return nil, ErrInvalidPin
+			// CABANG B - jamaah SUDAH ADA dan portal_pin_hash TERISI:
+			// Jika user sedang login sebagai PIC ini, PIN tidak perlu diverifikasi ulang.
+			// Jika belum terautentikasi, portal_pin dari payload WAJIB cocok dengan hash tersimpan.
+			if !isAuthPIC {
+				if req.PIC.PortalPIN == "" || bcrypt.CompareHashAndPassword([]byte(existingPICPinHash.String), []byte(req.PIC.PortalPIN)) != nil {
+					return nil, ErrInvalidPin
+				}
 			}
-			// Cocok -> lanjutkan booking, portal_pin_hash TIDAK DISENTUH sama sekali.
+			// Cocok / Terautentikasi -> lanjutkan booking, portal_pin_hash TIDAK DISENTUH sama sekali.
 			issuePortalToken = true
 		} else {
-			// CABANG C — jamaah SUDAH ADA tapi portal_pin_hash NULL/kosong:
-			// Verifikasi nama: nama_lengkap dari payload WAJIB cocok dengan nama di database (pakai normalizeName).
-			if normalizeName(req.PIC.NamaLengkap) != normalizeName(existingPICNama) {
+			// CABANG C - jamaah SUDAH ADA tapi portal_pin_hash NULL/kosong:
+			// Verifikasi nama: nama_lengkap dari payload WAJIB cocok dengan nama di database jika belum login.
+			if !isAuthPIC && normalizeName(req.PIC.NamaLengkap) != normalizeName(existingPICNama) {
 				return nil, ErrInvalidPin // 401 "nomor atau PIN tidak cocok" persis seperti Cabang B
 			}
 			// Booking JALAN TERUS. portal_pin dari payload DIABAIKAN sepenuhnya. portal_pin_hash TIDAK DISENTUH.
-			issuePortalToken = false
+			issuePortalToken = isAuthPIC
 		}
 	}
 
@@ -626,7 +641,7 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 
 	var totalDibayar float64
 	_ = r.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id = ? AND status = 'verified'
+		SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id = ? AND status = 'confirmed'
 	`, bookingID).Scan(&totalDibayar)
 
 	sisaTagihan := totalHarga - totalDibayar

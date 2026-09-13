@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -146,6 +147,15 @@ func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
+	// Optional Portal Auth Header
+	var authenticatedJamaahID int64
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	if len(authHeader) > 7 && strings.EqualFold(authHeader[:7], "Bearer ") {
+		tokenStr := strings.TrimSpace(authHeader[7:])
+		if jID, err := identity.ValidatePortalToken(tokenStr); err == nil && jID > 0 {
+			authenticatedJamaahID = jID
+		}
+	}
 	var req BookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
@@ -183,7 +193,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	if req.PIC.PortalPIN != "" && len(req.PIC.PortalPIN) != 6 {
+	if authenticatedJamaahID == 0 && req.PIC.PortalPIN != "" && len(req.PIC.PortalPIN) != 6 {
 		writeError(w, http.StatusBadRequest, "PIN portal harus 6 digit")
 		return
 	}
@@ -231,7 +241,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	// Rate Limiting could be added here (per IP/Phone)
 
 	// Process
-	resp, err := h.repo.ProcessBooking(r.Context(), req.BrandID, req)
+	resp, err := h.repo.ProcessBooking(r.Context(), req.BrandID, req, authenticatedJamaahID)
 	if err != nil {
 		if errors.Is(err, ErrInvalidPin) {
 			writeError(w, http.StatusUnauthorized, err.Error())
@@ -239,7 +249,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) || 
 		   errors.Is(err, ErrAnggotaNameMismatch) || errors.Is(err, ErrDuplicatePaxInBooking) ||
-		   errors.Is(err, ErrPinRequired) {
+		   errors.Is(err, ErrPinRequired) || errors.Is(err, ErrCutoffBooking) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
