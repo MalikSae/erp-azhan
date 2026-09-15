@@ -493,11 +493,11 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 
 	// 2. Get Brand info
 	var brand InvoiceBrandInfo
-	var logo, phone, wa, address, city, prov, ppiu, akreditasi sql.NullString
+	var logo, phone, wa, address, city, prov, ppiu, pihk, akreditasi sql.NullString
 	err = r.db.QueryRowContext(ctx, `
-		SELECT id, name, COALESCE(legalitas, name), logo_url, primary_color, phone, whatsapp_number, address, city, province, ppiu_number, akreditasi
+		SELECT id, name, COALESCE(legalitas, name), logo_url, primary_color, phone, whatsapp_number, address, city, province, ppiu_number, pihk_number, akreditasi
 		FROM brands WHERE id = ?
-	`, brandID).Scan(&brand.ID, &brand.Name, &brand.PTName, &logo, &brand.PrimaryColor, &phone, &wa, &address, &city, &prov, &ppiu, &akreditasi)
+	`, brandID).Scan(&brand.ID, &brand.Name, &brand.PTName, &logo, &brand.PrimaryColor, &phone, &wa, &address, &city, &prov, &ppiu, &pihk, &akreditasi)
 	if err == nil {
 		if logo.Valid && logo.String != "" {
 			brand.LogoURL = &logo.String
@@ -519,6 +519,9 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 		}
 		if ppiu.Valid && ppiu.String != "" {
 			brand.PPIUNumber = &ppiu.String
+		}
+		if pihk.Valid && pihk.String != "" {
+			brand.PIHKNumber = &pihk.String
 		}
 		if akreditasi.Valid && akreditasi.String != "" {
 			brand.Akreditasi = &akreditasi.String

@@ -88,6 +88,7 @@ type InvoiceBrandInfo struct {
 	Name           string  `json:"name"`
 	PTName         string  `json:"pt_name"`
 	PPIUNumber     *string `json:"ppiu_number,omitempty"`
+	PIHKNumber     *string `json:"pihk_number,omitempty"`
 	Akreditasi     *string `json:"akreditasi,omitempty"`
 	LogoURL      *string `json:"logo_url,omitempty"`
 	PrimaryColor string  `json:"primary_color"`

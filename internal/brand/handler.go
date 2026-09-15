@@ -136,6 +136,9 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	req.Province = sanitizeString(req.Province)
 	req.GmapsURL = sanitizeString(req.GmapsURL)
 	req.Legalitas = sanitizeString(req.Legalitas)
+	req.PPIUNumber = sanitizeString(req.PPIUNumber)
+	req.PIHKNumber = sanitizeString(req.PIHKNumber)
+	req.Akreditasi = sanitizeString(req.Akreditasi)
 	req.BankName = sanitizeString(req.BankName)
 	req.BankAccountNumber = sanitizeString(req.BankAccountNumber)
 	req.BankAccountHolder = sanitizeString(req.BankAccountHolder)
@@ -238,6 +241,9 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	req.Province = sanitizeString(req.Province)
 	req.GmapsURL = sanitizeString(req.GmapsURL)
 	req.Legalitas = sanitizeString(req.Legalitas)
+	req.PPIUNumber = sanitizeString(req.PPIUNumber)
+	req.PIHKNumber = sanitizeString(req.PIHKNumber)
+	req.Akreditasi = sanitizeString(req.Akreditasi)
 	req.BankName = sanitizeString(req.BankName)
 	req.BankAccountNumber = sanitizeString(req.BankAccountNumber)
 	req.BankAccountHolder = sanitizeString(req.BankAccountHolder)
@@ -321,6 +327,21 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 		socialMedia["youtube"] = *b.SocialYoutube
 	}
 
+	legalInfo := b.Legalitas
+	if legalInfo == nil || *legalInfo == "" {
+		var parts []string
+		if b.PPIUNumber != nil && *b.PPIUNumber != "" {
+			parts = append(parts, "PPIU: "+*b.PPIUNumber)
+		}
+		if b.PIHKNumber != nil && *b.PIHKNumber != "" {
+			parts = append(parts, "PIHK: "+*b.PIHKNumber)
+		}
+		if len(parts) > 0 {
+			formatted := strings.Join(parts, " | ")
+			legalInfo = &formatted
+		}
+	}
+
 	resp := map[string]any{
 		"id":                       b.ID,
 		"name":                     b.Name,
@@ -331,8 +352,10 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 		"city":                     b.City,
 		"province":                 b.Province,
 		"gmaps_url":                b.GmapsURL,
-		"legalitas":                b.Legalitas,
-		"legal_info":               b.Legalitas,
+		"legalitas":                legalInfo,
+		"legal_info":               legalInfo,
+		"ppiu_number":              b.PPIUNumber,
+		"pihk_number":              b.PIHKNumber,
 		"logo_url":                 b.LogoURL,
 		"icon_url":                 b.IconURL,
 		"primary_color":            b.PrimaryColor,

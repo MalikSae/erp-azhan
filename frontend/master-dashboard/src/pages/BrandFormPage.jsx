@@ -28,7 +28,8 @@ const initialFormData = {
   city: '',
   province: '',
   gmaps_url: '',
-  legalitas: '',
+  ppiu_number: '',
+  pihk_number: '',
   bank_name: '',
   bank_account_number: '',
   bank_account_holder: '',
@@ -81,7 +82,8 @@ const BrandFormPage = () => {
             city: data.city || '',
             province: data.province || '',
             gmaps_url: data.gmaps_url || '',
-            legalitas: data.legalitas || '',
+            ppiu_number: data.ppiu_number || '',
+            pihk_number: data.pihk_number || '',
             bank_name: data.bank_name || '',
             bank_account_number: data.bank_account_number || '',
             bank_account_holder: data.bank_account_holder || '',
@@ -207,7 +209,8 @@ const BrandFormPage = () => {
         city: formData.city ? formData.city.trim() : null,
         province: formData.province ? formData.province.trim() : null,
         gmaps_url: formData.gmaps_url ? formData.gmaps_url.trim() : null,
-        legalitas: formData.legalitas ? formData.legalitas.trim() : null,
+        ppiu_number: formData.ppiu_number ? formData.ppiu_number.trim() : null,
+        pihk_number: formData.pihk_number ? formData.pihk_number.trim() : null,
         bank_name: formData.bank_name ? formData.bank_name.trim() : null,
         bank_account_number: formData.bank_account_number ? formData.bank_account_number.trim() : null,
         bank_account_holder: formData.bank_account_holder ? formData.bank_account_holder.trim() : null,
@@ -538,18 +541,27 @@ const BrandFormPage = () => {
             {/* MetaBox Legalitas */}
             <MetaBox 
               title="Legalitas & Izin Usaha" 
-              subtitle="Nomor SK Kemenag PPIU / PIHK resmi"
+              subtitle="Izin resmi Kemenag RI (PPIU & PIHK)"
               icon={<CreditCard size={18} className="text-neutral-700" />}
             >
-              <FormField label="Keterangan Legalitas Resmi">
-                <Textarea 
-                  name="legalitas"
-                  value={formData.legalitas}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="PPIU"
+                  name="ppiu_number"
+                  value={formData.ppiu_number}
                   onChange={handleChange}
-                  placeholder="mis. Nomor izin PPIU: No. 123 Tahun 2024, Izin PIHK: No. 456..."
-                  rows={3}
+                  placeholder="cth. No. 484/2020"
+                  className="!mb-0"
                 />
-              </FormField>
+                <Input
+                  label="PIHK"
+                  name="pihk_number"
+                  value={formData.pihk_number}
+                  onChange={handleChange}
+                  placeholder="cth. No. 395/2021"
+                  className="!mb-0"
+                />
+              </div>
             </MetaBox>
 
             {/* MetaBox Media Sosial */}

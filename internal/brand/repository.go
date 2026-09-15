@@ -19,7 +19,7 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-const selectCols = `id, kode_brand, jamaah_counter, name, domain, whatsapp_number, email, phone, address, city, province, gmaps_url, legalitas, ppiu_number, akreditasi, bank_name, bank_account_number, bank_account_holder, social_facebook, social_instagram, social_tiktok, social_youtube, logo_url, icon_url, primary_color, meta_title, meta_description, og_image_url, google_verification_code, minimal_dp, created_at`
+const selectCols = `id, kode_brand, jamaah_counter, name, domain, whatsapp_number, email, phone, address, city, province, gmaps_url, legalitas, ppiu_number, pihk_number, akreditasi, bank_name, bank_account_number, bank_account_holder, social_facebook, social_instagram, social_tiktok, social_youtube, logo_url, icon_url, primary_color, meta_title, meta_description, og_image_url, google_verification_code, minimal_dp, created_at`
 
 func scanBrand(scanner interface{ Scan(dest ...any) error }, b *Brand) error {
 	return scanner.Scan(
@@ -37,6 +37,7 @@ func scanBrand(scanner interface{ Scan(dest ...any) error }, b *Brand) error {
 		&b.GmapsURL,
 		&b.Legalitas,
 		&b.PPIUNumber,
+		&b.PIHKNumber,
 		&b.Akreditasi,
 		&b.BankName,
 		&b.BankAccountNumber,
@@ -126,15 +127,15 @@ func (r *Repository) GetByKodeBrand(ctx context.Context, kode string) (*Brand, e
 func (r *Repository) Create(ctx context.Context, req CreateBrandRequest) (*Brand, error) {
 	const q = `
 		INSERT INTO brands (
-			kode_brand, name, domain, whatsapp_number, email, phone, address, city, province, gmaps_url, legalitas, ppiu_number, akreditasi,
+			kode_brand, name, domain, whatsapp_number, email, phone, address, city, province, gmaps_url, legalitas, ppiu_number, pihk_number, akreditasi,
 			bank_name, bank_account_number, bank_account_holder,
 			social_facebook, social_instagram, social_tiktok, social_youtube,
 			logo_url, icon_url, primary_color,
 			meta_title, meta_description, og_image_url, google_verification_code, minimal_dp
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	res, err := r.db.ExecContext(ctx, q,
-		req.KodeBrand, req.Name, req.Domain, req.WhatsappNumber, req.Email, req.Phone, req.Address, req.City, req.Province, req.GmapsURL, req.Legalitas, req.PPIUNumber, req.Akreditasi,
+		req.KodeBrand, req.Name, req.Domain, req.WhatsappNumber, req.Email, req.Phone, req.Address, req.City, req.Province, req.GmapsURL, req.Legalitas, req.PPIUNumber, req.PIHKNumber, req.Akreditasi,
 		req.BankName, req.BankAccountNumber, req.BankAccountHolder,
 		req.SocialFacebook, req.SocialInstagram, req.SocialTiktok, req.SocialYoutube,
 		req.LogoURL, req.IconURL, req.PrimaryColor,
@@ -159,7 +160,7 @@ func (r *Repository) Update(ctx context.Context, id uint64, req UpdateBrandReque
 
 	const q = `
 		UPDATE brands 
-		SET kode_brand = ?, name = ?, domain = ?, whatsapp_number = ?, email = ?, phone = ?, address = ?, city = ?, province = ?, gmaps_url = ?, legalitas = ?, ppiu_number = ?, akreditasi = ?,
+		SET kode_brand = ?, name = ?, domain = ?, whatsapp_number = ?, email = ?, phone = ?, address = ?, city = ?, province = ?, gmaps_url = ?, legalitas = ?, ppiu_number = ?, pihk_number = ?, akreditasi = ?,
 		    bank_name = ?, bank_account_number = ?, bank_account_holder = ?,
 		    social_facebook = ?, social_instagram = ?, social_tiktok = ?, social_youtube = ?,
 		    logo_url = ?, icon_url = ?, primary_color = ?,
@@ -167,7 +168,7 @@ func (r *Repository) Update(ctx context.Context, id uint64, req UpdateBrandReque
 		WHERE id = ?
 	`
 	_, err := r.db.ExecContext(ctx, q,
-		req.KodeBrand, req.Name, req.Domain, req.WhatsappNumber, req.Email, req.Phone, req.Address, req.City, req.Province, req.GmapsURL, req.Legalitas, req.PPIUNumber, req.Akreditasi,
+		req.KodeBrand, req.Name, req.Domain, req.WhatsappNumber, req.Email, req.Phone, req.Address, req.City, req.Province, req.GmapsURL, req.Legalitas, req.PPIUNumber, req.PIHKNumber, req.Akreditasi,
 		req.BankName, req.BankAccountNumber, req.BankAccountHolder,
 		req.SocialFacebook, req.SocialInstagram, req.SocialTiktok, req.SocialYoutube,
 		req.LogoURL, req.IconURL, req.PrimaryColor,
