@@ -17,6 +17,8 @@ type Brand struct {
 	Province               *string   `json:"province"`
 	GmapsURL               *string   `json:"gmaps_url"`
 	Legalitas              *string   `json:"legalitas"`
+	PPIUNumber             *string   `json:"ppiu_number"`
+	Akreditasi             *string   `json:"akreditasi"`
 	BankName               *string   `json:"bank_name"`
 	BankAccountNumber      *string   `json:"bank_account_number"`
 	BankAccountHolder      *string   `json:"bank_account_holder"`
@@ -48,6 +50,8 @@ type CreateBrandRequest struct {
 	Province               *string `json:"province"`
 	GmapsURL               *string `json:"gmaps_url"`
 	Legalitas              *string `json:"legalitas"`
+	PPIUNumber             *string `json:"ppiu_number"`
+	Akreditasi             *string `json:"akreditasi"`
 	BankName               *string `json:"bank_name"`
 	BankAccountNumber      *string `json:"bank_account_number"`
 	BankAccountHolder      *string `json:"bank_account_holder"`
@@ -78,6 +82,8 @@ type UpdateBrandRequest struct {
 	Province               *string `json:"province"`
 	GmapsURL               *string `json:"gmaps_url"`
 	Legalitas              *string `json:"legalitas"`
+	PPIUNumber             *string `json:"ppiu_number"`
+	Akreditasi             *string `json:"akreditasi"`
 	BankName               *string `json:"bank_name"`
 	BankAccountNumber      *string `json:"bank_account_number"`
 	BankAccountHolder      *string `json:"bank_account_holder"`
