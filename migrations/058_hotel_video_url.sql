@@ -1,0 +1,1 @@
+ALTER TABLE hotels ADD COLUMN video_url VARCHAR(500) NULL AFTER photo_url;

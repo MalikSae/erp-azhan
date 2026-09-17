@@ -27,7 +27,7 @@ func NewRepository(db *sql.DB) *Repository {
 // List mengambil semua hotel, diurutkan by name ASC.
 func (r *Repository) List(ctx context.Context) ([]Hotel, error) {
 	const q = `
-		SELECT id, name, city, star_rating, distance_m, photo_url, created_at
+		SELECT id, name, city, star_rating, distance_m, photo_url, video_url, created_at
 		FROM hotels
 		ORDER BY name ASC`
 
@@ -37,10 +37,10 @@ func (r *Repository) List(ctx context.Context) ([]Hotel, error) {
 	}
 	defer rows.Close()
 
-	hotels := make([]Hotel, 0) // pastikan tidak nil → serialisasi jadi []
+	hotels := make([]Hotel, 0) // pastikan tidak nil -> serialisasi jadi []
 	for rows.Next() {
 		var h Hotel
-		if err := rows.Scan(&h.ID, &h.Name, &h.City, &h.StarRating, &h.DistanceM, &h.PhotoURL, &h.CreatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.Name, &h.City, &h.StarRating, &h.DistanceM, &h.PhotoURL, &h.VideoURL, &h.CreatedAt); err != nil {
 			return nil, fmt.Errorf("hotel.List scan: %w", err)
 		}
 		hotels = append(hotels, h)
@@ -87,7 +87,7 @@ func (r *Repository) normalizeCity(ctx context.Context, city string) string {
 
 // Create menyisipkan hotel baru. Mengembalikan Hotel lengkap dengan ID & CreatedAt.
 // Cek duplikat case-insensitive dilakukan SEBELUM insert.
-func (r *Repository) Create(ctx context.Context, name, city string, starRating *int, distanceM *int, photoURL *string) (*Hotel, error) {
+func (r *Repository) Create(ctx context.Context, name, city string, starRating *int, distanceM *int, photoURL *string, videoURL *string) (*Hotel, error) {
 	// Cek duplikat (exclude tidak diperlukan pada create)
 	if exists, err := r.nameExists(ctx, name, 0); err != nil {
 		return nil, err
@@ -97,8 +97,8 @@ func (r *Repository) Create(ctx context.Context, name, city string, starRating *
 
 	city = r.normalizeCity(ctx, city)
 
-	const q = `INSERT INTO hotels (name, city, star_rating, distance_m, photo_url) VALUES (?, ?, ?, ?, ?)`
-	res, err := r.db.ExecContext(ctx, q, name, city, starRating, distanceM, photoURL)
+	const q = `INSERT INTO hotels (name, city, star_rating, distance_m, photo_url, video_url) VALUES (?, ?, ?, ?, ?, ?)`
+	res, err := r.db.ExecContext(ctx, q, name, city, starRating, distanceM, photoURL, videoURL)
 	if err != nil {
 		return nil, fmt.Errorf("hotel.Create: %w", err)
 	}
@@ -113,7 +113,7 @@ func (r *Repository) Create(ctx context.Context, name, city string, starRating *
 
 // Update memperbarui hotel berdasarkan id.
 // Mengembalikan ErrNotFound jika id tidak ada, ErrDuplicate jika nama sudah dipakai hotel lain.
-func (r *Repository) Update(ctx context.Context, id uint64, name, city string, starRating *int, distanceM *int, photoURL *string) (*Hotel, error) {
+func (r *Repository) Update(ctx context.Context, id uint64, name, city string, starRating *int, distanceM *int, photoURL *string, videoURL *string) (*Hotel, error) {
 	// Pastikan row ada
 	if _, err := r.getByID(ctx, id); err != nil {
 		return nil, err
@@ -128,8 +128,8 @@ func (r *Repository) Update(ctx context.Context, id uint64, name, city string, s
 
 	city = r.normalizeCity(ctx, city)
 
-	const q = `UPDATE hotels SET name=?, city=?, star_rating=?, distance_m=?, photo_url=? WHERE id=?`
-	if _, err := r.db.ExecContext(ctx, q, name, city, starRating, distanceM, photoURL, id); err != nil {
+	const q = `UPDATE hotels SET name=?, city=?, star_rating=?, distance_m=?, photo_url=?, video_url=? WHERE id=?`
+	if _, err := r.db.ExecContext(ctx, q, name, city, starRating, distanceM, photoURL, videoURL, id); err != nil {
 		return nil, fmt.Errorf("hotel.Update: %w", err)
 	}
 
@@ -150,14 +150,14 @@ func (r *Repository) Delete(ctx context.Context, id uint64) error {
 	return err
 }
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
+// --- Internal helpers --------------------------------------------------------
 
 // getByID mengambil satu hotel berdasarkan id. Mengembalikan ErrNotFound jika tidak ada.
 func (r *Repository) getByID(ctx context.Context, id uint64) (*Hotel, error) {
-	const q = `SELECT id, name, city, star_rating, distance_m, photo_url, created_at FROM hotels WHERE id=?`
+	const q = `SELECT id, name, city, star_rating, distance_m, photo_url, video_url, created_at FROM hotels WHERE id=?`
 	var h Hotel
 	err := r.db.QueryRowContext(ctx, q, id).Scan(
-		&h.ID, &h.Name, &h.City, &h.StarRating, &h.DistanceM, &h.PhotoURL, &h.CreatedAt,
+		&h.ID, &h.Name, &h.City, &h.StarRating, &h.DistanceM, &h.PhotoURL, &h.VideoURL, &h.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

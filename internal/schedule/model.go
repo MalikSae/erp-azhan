@@ -26,6 +26,7 @@ type HotelRef struct {
 	StarRating int     `json:"star_rating"`
 	DistanceM  *int    `json:"distance_m"`
 	PhotoURL   *string `json:"photo_url"`
+	VideoURL   *string `json:"video_url"`
 }
 
 // TransitHotel menyimpan hotel transit beserta urutannya.
@@ -36,6 +37,7 @@ type TransitHotel struct {
 	Kota       string  `json:"kota"`
 	StarRating int     `json:"star_rating"`
 	PhotoURL   *string `json:"photo_url"`
+	VideoURL   *string `json:"video_url"`
 }
 
 // AddOnRef menyimpan data add-on dari tabel relasi schedule_add_ons.

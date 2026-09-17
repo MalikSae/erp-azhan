@@ -49,11 +49,13 @@ const selectFull = `
 		COALESCE(hm.star_rating, 0) AS hm_star,
 		hm.distance_m AS hm_dist,
 		hm.photo_url AS hm_photo,
+		hm.video_url AS hm_video,
 		s.hotel_madinah_id,
 		COALESCE(hmd.name, '') AS hmd_name,
 		COALESCE(hmd.star_rating, 0) AS hmd_star,
 		hmd.distance_m AS hmd_dist,
 		hmd.photo_url AS hmd_photo,
+		hmd.video_url AS hmd_video,
 		s.harga_quad,
 		s.harga_triple,
 		s.harga_double,
@@ -520,7 +522,7 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 // GetTransitHotelsByScheduleID mengambil daftar hotel transit untuk schedule tertentu terurut ASC.
 func (r *Repository) GetTransitHotelsByScheduleID(ctx context.Context, scheduleID int64) ([]TransitHotel, error) {
 	q := `
-		SELECT sth.hotel_id, h.name, COALESCE(h.city, ''), COALESCE(h.star_rating, 0), h.photo_url
+		SELECT sth.hotel_id, h.name, COALESCE(h.city, ''), COALESCE(h.star_rating, 0), h.photo_url, h.video_url
 		FROM schedule_transit_hotels sth
 		JOIN hotels h ON h.id = sth.hotel_id
 		WHERE sth.schedule_id = ?
@@ -536,11 +538,15 @@ func (r *Repository) GetTransitHotelsByScheduleID(ctx context.Context, scheduleI
 	for rows.Next() {
 		var th TransitHotel
 		var photoURL sql.NullString
-		if err := rows.Scan(&th.HotelID, &th.Nama, &th.Kota, &th.StarRating, &photoURL); err != nil {
+		var videoURL sql.NullString
+		if err := rows.Scan(&th.HotelID, &th.Nama, &th.Kota, &th.StarRating, &photoURL, &videoURL); err != nil {
 			return nil, fmt.Errorf("schedule.GetTransitHotelsByScheduleID scan: %w", err)
 		}
 		if photoURL.Valid && photoURL.String != "" {
 			th.PhotoURL = &photoURL.String
+		}
+		if videoURL.Valid && videoURL.String != "" {
+			th.VideoURL = &videoURL.String
 		}
 		items = append(items, th)
 	}
@@ -580,11 +586,13 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		hmStar         int
 		hmDist         sql.NullInt64
 		hmPhoto        sql.NullString
+		hmVideo        sql.NullString
 		hotelMadinahID sql.NullInt64
 		hmdName        string
 		hmdStar        int
 		hmdDist        sql.NullInt64
 		hmdPhoto       sql.NullString
+		hmdVideo       sql.NullString
 		hargaInfant    sql.NullFloat64
 		hargaCoret     sql.NullFloat64
 		minimalDP      sql.NullFloat64
@@ -602,8 +610,8 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		&s.BerangkatBandaraAsal, &s.BerangkatBandaraTujuan,
 		&s.PulangTanggal, &s.PulangJam, &s.PulangKodePenerbangan,
 		&s.PulangBandaraAsal, &s.PulangBandaraTujuan, &s.TransitBandara,
-		&hotelMekkahID, &hmName, &hmStar, &hmDist, &hmPhoto,
-		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist, &hmdPhoto,
+		&hotelMekkahID, &hmName, &hmStar, &hmDist, &hmPhoto, &hmVideo,
+		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist, &hmdPhoto, &hmdVideo,
 		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret, &minimalDP,
 		&itineraryID, &addOnsJSON, &includeJSON, &excludeJSON,
 		&s.BrosurURL, &s.BrosurThumbURL,
@@ -642,6 +650,9 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		if hmPhoto.Valid && hmPhoto.String != "" {
 			s.HotelMekkah.PhotoURL = &hmPhoto.String
 		}
+		if hmVideo.Valid && hmVideo.String != "" {
+			s.HotelMekkah.VideoURL = &hmVideo.String
+		}
 	}
 
 	// Hotel Madinah ref
@@ -655,6 +666,9 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		}
 		if hmdPhoto.Valid && hmdPhoto.String != "" {
 			s.HotelMadinah.PhotoURL = &hmdPhoto.String
+		}
+		if hmdVideo.Valid && hmdVideo.String != "" {
+			s.HotelMadinah.VideoURL = &hmdVideo.String
 		}
 	}
 

@@ -23,7 +23,7 @@ func NewHandler(repo *Repository) *Handler {
 	return &Handler{repo: repo}
 }
 
-// ─── List ─────────────────────────────────────────────────────────────────────
+// --- List -------------------------------------------------------------------
 
 // ListHotels godoc
 // GET /api/admin/hotels
@@ -49,7 +49,7 @@ func (h *Handler) ListCities(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cities)
 }
 
-// ─── Create ───────────────────────────────────────────────────────────────────
+// --- Create -----------------------------------------------------------------
 
 // CreateHotel godoc
 // POST /api/admin/hotels
@@ -66,7 +66,14 @@ func (h *Handler) CreateHotel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hotel, err := h.repo.Create(r.Context(), name, city, starRating, distanceM, req.PhotoURL)
+	if req.PhotoURL != nil && strings.TrimSpace(*req.PhotoURL) == "" {
+		req.PhotoURL = nil
+	}
+	if req.VideoURL != nil && strings.TrimSpace(*req.VideoURL) == "" {
+		req.VideoURL = nil
+	}
+
+	hotel, err := h.repo.Create(r.Context(), name, city, starRating, distanceM, req.PhotoURL, req.VideoURL)
 	if err != nil {
 		handleHotelRepoError(w, err)
 		return
@@ -74,7 +81,7 @@ func (h *Handler) CreateHotel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, hotel)
 }
 
-// ─── Update ───────────────────────────────────────────────────────────────────
+// --- Update -----------------------------------------------------------------
 
 // UpdateHotel godoc
 // PUT /api/admin/hotels/{id}
@@ -96,7 +103,14 @@ func (h *Handler) UpdateHotel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hotel, err := h.repo.Update(r.Context(), id, name, city, starRating, distanceM, req.PhotoURL)
+	if req.PhotoURL != nil && strings.TrimSpace(*req.PhotoURL) == "" {
+		req.PhotoURL = nil
+	}
+	if req.VideoURL != nil && strings.TrimSpace(*req.VideoURL) == "" {
+		req.VideoURL = nil
+	}
+
+	hotel, err := h.repo.Update(r.Context(), id, name, city, starRating, distanceM, req.PhotoURL, req.VideoURL)
 	if err != nil {
 		handleHotelRepoError(w, err)
 		return
@@ -104,7 +118,7 @@ func (h *Handler) UpdateHotel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, hotel)
 }
 
-// ─── Delete ───────────────────────────────────────────────────────────────────
+// --- Delete -----------------------------------------------------------------
 
 // DeleteHotel godoc
 // DELETE /api/admin/hotels/{id}
@@ -122,7 +136,7 @@ func (h *Handler) DeleteHotel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
 }
 
-// ─── Validation ───────────────────────────────────────────────────────────────
+// --- Validation -------------------------------------------------------------
 
 // validateHotelInput menjalankan semua validasi hotel sesuai urutan yang ditentukan.
 // Mengembalikan (normalizedName, normalizedCity, starRating, distanceM, ok).
@@ -159,7 +173,7 @@ func validateHotelInput(w http.ResponseWriter, rawName, rawCity string, starRati
 	return name, city, starRating, distanceM, true
 }
 
-// ─── Error handling ───────────────────────────────────────────────────────────
+// --- Error handling ---------------------------------------------------------
 
 // handleHotelRepoError memetakan sentinel error ke respons HTTP yang tepat.
 func handleHotelRepoError(w http.ResponseWriter, err error) {
@@ -179,7 +193,7 @@ func handleHotelRepoError(w http.ResponseWriter, err error) {
 	}
 }
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+// --- Shared helpers ---------------------------------------------------------
 
 // parseID mengekstrak URL param "id" dan mengonversi ke uint64.
 func parseID(w http.ResponseWriter, r *http.Request) (uint64, bool) {

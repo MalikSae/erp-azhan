@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import DataTable from '../components/ui/DataTable';
@@ -19,7 +19,8 @@ const initialForm = {
   city: '',
   star_rating: '',
   distance_m: '',
-  photo_url: ''
+  photo_url: '',
+  video_url: ''
 };
 
 const PhotoCell = ({ url, name }) => {
@@ -112,7 +113,8 @@ const HotelsPage = () => {
         city: hotel.city || '',
         star_rating: hotel.star_rating !== null ? hotel.star_rating.toString() : '',
         distance_m: hotel.distance_m === null ? '' : hotel.distance_m.toString(),
-        photo_url: hotel.photo_url || ''
+        photo_url: hotel.photo_url || '',
+        video_url: hotel.video_url || ''
       });
       setLocalPreview(null);
     } else {
@@ -175,7 +177,8 @@ const HotelsPage = () => {
         city: formData.city.trim(),
         star_rating: parseInt(formData.star_rating, 10),
         distance_m: formData.distance_m === '' ? null : parseInt(formData.distance_m, 10),
-        photo_url: formData.photo_url === '' ? null : formData.photo_url
+        photo_url: formData.photo_url === '' ? null : formData.photo_url,
+        video_url: formData.video_url.trim() === '' ? null : formData.video_url.trim()
       };
 
       if (editingHotel) {
@@ -220,12 +223,8 @@ const HotelsPage = () => {
   const hotelToDelete = hotels.find(h => h.id === deleteConfirmId);
 
   const filteredHotels = hotels.filter(hotel => {
-    if (cityFilter) {
-      const hCity = (hotel.city || '').trim().toLowerCase();
-      const fCity = cityFilter.trim().toLowerCase();
-      if (hCity !== fCity) {
-        return false;
-      }
+    if (cityFilter && (hotel.city || '').toLowerCase() !== cityFilter.toLowerCase()) {
+      return false;
     }
     return true;
   });
@@ -254,6 +253,7 @@ const HotelsPage = () => {
             { header: 'Kota', key: 'city' },
             { header: 'Bintang', key: 'star_rating' },
             { header: 'Jarak (m)', key: 'distance_m' },
+            { header: 'Video', key: 'video_url' },
             { header: 'Aksi', key: 'aksi' },
           ]}
           data={filteredHotels}
@@ -278,6 +278,21 @@ const HotelsPage = () => {
             }
             if (key === 'star_rating') return `${row.star_rating} bintang`;
             if (key === 'distance_m') return row.distance_m !== null ? `±${row.distance_m}m` : '-';
+            if (key === 'video_url') {
+              if (!row.video_url) return <span className="text-neutral-400 text-xs">-</span>;
+              return (
+                <a
+                  href={row.video_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 hover:text-neutral-900 rounded text-xs font-medium transition-colors border border-neutral-200"
+                  title={row.video_url}
+                >
+                  <svg className="w-3.5 h-3.5 fill-current text-neutral-600 shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  <span>Video</span>
+                </a>
+              );
+            }
             if (key === 'aksi') return (
               <div className="flex gap-3">
                 <button 
@@ -407,6 +422,15 @@ const HotelsPage = () => {
             uploadingText="Mengupload foto hotel..."
             placeholder="Pilih file foto hotel (JPG, PNG, WebP)..."
             helperText="Format JPG, PNG, atau WebP"
+          />
+
+          <Input 
+            label="Link Video Hotel (Opsional)"
+            name="video_url"
+            value={formData.video_url}
+            onChange={handleChange}
+            placeholder="Contoh: https://www.youtube.com/watch?v=... atau https://youtu.be/..."
+            helperText="Link video review atau tur hotel"
           />
 
           {formErrors && (

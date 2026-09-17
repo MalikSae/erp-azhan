@@ -20,11 +20,13 @@ var validCategoryRegex = regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
 type Handler struct{}
 
 var publicCategories = map[string]struct{}{
-	"brand-logos":   {},
-	"brand-icons":   {},
-	"hotel-logos":   {},
-	"airline-logos": {},
-	"bank-logos":    {},
+	"brand-logos":     {},
+	"brand-icons":     {},
+	"hotel-logos":     {},
+	"hotel-photos":    {},
+	"airline-logos":   {},
+	"bank-logos":      {},
+	"schedule-brosur": {},
 }
 
 var protectedCategories = map[string]struct{}{
