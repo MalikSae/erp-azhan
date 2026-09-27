@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,16 +20,29 @@ type checkAttempt struct {
 	FirstFail time.Time
 }
 
+// Batas self-booking publik. Setiap booking menahan kursi 24 jam, jadi
+// pembuatan booking massal harus dibatasi.
+const (
+	bookingIPAttemptLimit    = 20 // percobaan POST /api/public/book per IP per jam
+	bookingPhoneSuccessLimit = 3  // booking berhasil per nomor HP PIC per 24 jam
+)
+
 type Handler struct {
 	repo           *Repository
 	failedChecks   map[string]*checkAttempt
 	failedChecksMu sync.Mutex
+	captcha        *turnstileVerifier
+	bookingByIP    *windowLimiter
+	bookingByPhone *windowLimiter
 }
 
 func NewHandler(repo *Repository) *Handler {
 	return &Handler{
-		repo:         repo,
-		failedChecks: make(map[string]*checkAttempt),
+		repo:           repo,
+		failedChecks:   make(map[string]*checkAttempt),
+		captcha:        newTurnstileVerifier(),
+		bookingByIP:    newWindowLimiter(bookingIPAttemptLimit, time.Hour),
+		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
 	}
 }
 
@@ -136,6 +150,13 @@ func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
+	clientIP := getClientIP(r)
+	if !h.bookingByIP.allow(clientIP) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan booking, coba lagi dalam 1 jam")
+		return
+	}
+	h.bookingByIP.record(clientIP)
+
 	// Optional Portal Auth Header
 	var authenticatedJamaahID int64
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
@@ -152,11 +173,20 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Gate 1: Captcha
-	if req.CaptchaToken == "" {
+	if strings.TrimSpace(req.CaptchaToken) == "" {
 		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
 		return
 	}
-	// TODO: verify turnstile token against cloudflare API here (skipped for now as per usual demo/MVP, or mocked)
+	valid, err := h.captcha.verify(r.Context(), strings.TrimSpace(req.CaptchaToken), clientIP)
+	if err != nil {
+		log.Printf("[ERROR] selfbooking captcha: %v", err)
+		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
+		return
+	}
+	if !valid {
+		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+		return
+	}
 
 	// Gate 2: Brand ID
 	if req.BrandID <= 0 {
@@ -227,7 +257,16 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rate Limiting could be added here (per IP/Phone)
+	// Gate 8: Batas booking per nomor HP PIC
+	phoneKey, _ := shared.PhoneVariants(req.PIC.NoHP)
+	if phoneKey == "" {
+		phoneKey = req.PIC.NoHP
+	}
+	phoneKey = "brand:" + strconv.FormatInt(req.BrandID, 10) + "|" + phoneKey
+	if !h.bookingByPhone.allow(phoneKey) {
+		writeError(w, http.StatusTooManyRequests, "nomor ini sudah mencapai batas booking hari ini, silakan hubungi admin travel")
+		return
+	}
 
 	// Process
 	resp, err := h.repo.ProcessBooking(r.Context(), req.BrandID, req, authenticatedJamaahID)
@@ -250,6 +289,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
+	h.bookingByPhone.record(phoneKey)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
