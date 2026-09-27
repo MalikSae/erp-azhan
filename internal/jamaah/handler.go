@@ -340,6 +340,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrDuplicateNIK):
 		writeError(w, http.StatusConflict, "NIK sudah terdaftar")
+	case errors.Is(err, ErrDuplicateNoHP):
+		writeError(w, http.StatusConflict, "nomor HP sudah dipakai jamaah lain di brand ini")
 	case errors.Is(err, ErrKodeBrandNotSet):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:

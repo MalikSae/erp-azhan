@@ -17,6 +17,7 @@ import (
 var (
 	ErrNotFound        = errors.New("data tidak ditemukan")
 	ErrDuplicateNIK    = errors.New("NIK sudah terdaftar")
+	ErrDuplicateNoHP   = errors.New("nomor HP sudah dipakai jamaah lain di brand ini")
 	ErrKodeBrandNotSet = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
 )
 
@@ -255,7 +256,7 @@ func (r *Repository) Create(ctx context.Context, brandID int64, req *CreateJamaa
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
-			return nil, ErrDuplicateNIK
+			return nil, duplicateJamaahError(mysqlErr)
 		}
 		return nil, fmt.Errorf("jamaah.Create: %w", err)
 	}
@@ -303,11 +304,22 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
-			return nil, ErrDuplicateNIK
+			return nil, duplicateJamaahError(mysqlErr)
 		}
 		return nil, fmt.Errorf("jamaah.Update: %w", err)
 	}
 	return r.GetByID(ctx, id, brandID)
+}
+
+// duplicateJamaahError memetakan pelanggaran unique key jamaah ke error
+// domain berdasarkan nama key: uq_jamaah_brand_hp (migrasi 060, nomor
+// ternormalisasi) atau uq_jamaah_brand_phone (nomor mentah, ada di sebagian
+// database karena pernah ditambahkan manual di luar folder migrations).
+func duplicateJamaahError(mysqlErr *mysql.MySQLError) error {
+	if strings.Contains(mysqlErr.Message, "uq_jamaah_brand_hp") || strings.Contains(mysqlErr.Message, "uq_jamaah_brand_phone") {
+		return ErrDuplicateNoHP
+	}
+	return ErrDuplicateNIK
 }
 
 // ─── Update Catatan ───────────────────────────────────────────────────────────
