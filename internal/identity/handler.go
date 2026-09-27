@@ -5,13 +5,13 @@ import (
 	"errors"
 	"log"
 	"math"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"erp-azhan/api/internal/shared"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -84,31 +84,7 @@ func (h *Handler) recordSuccessLogin(key string) {
 }
 
 func getClientIP(r *http.Request) string {
-	remoteIP, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		remoteIP = r.RemoteAddr
-	}
-
-	parsedRemoteIP := net.ParseIP(strings.TrimSpace(remoteIP))
-	if parsedRemoteIP == nil || !parsedRemoteIP.IsLoopback() {
-		return remoteIP
-	}
-
-	// Header proxy hanya dipercaya ketika request benar-benar datang dari
-	// reverse proxy lokal. Di production, Cloudflare meneruskan alamat client
-	// melalui CF-Connecting-IP dan Nginx meneruskan X-Forwarded-For.
-	for _, candidate := range []string{
-		r.Header.Get("CF-Connecting-IP"),
-		strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0],
-		r.Header.Get("X-Real-IP"),
-	} {
-		candidate = strings.TrimSpace(candidate)
-		if parsed := net.ParseIP(candidate); parsed != nil {
-			return parsed.String()
-		}
-	}
-
-	return parsedRemoteIP.String()
+	return shared.ClientIP(r)
 }
 
 func loginRateLimitKey(r *http.Request, email string) string {

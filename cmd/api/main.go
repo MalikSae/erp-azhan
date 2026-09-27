@@ -70,7 +70,9 @@ func main() {
 	// ─── Router & Middleware ──────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// middleware.RealIP sengaja tidak dipakai: ia menimpa RemoteAddr dari header
+	// True-Client-IP/X-Forwarded-For tanpa cek proxy, sehingga rate limit bisa
+	// diakali. IP client untuk rate limit diambil lewat shared.ClientIP.
 	r.Use(securityHeaders)
 
 	allowedOrigins := []string{}

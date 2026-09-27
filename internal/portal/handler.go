@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -58,23 +57,35 @@ func NewHandler(
 	}
 }
 
-// ─── Rate Limiter Portal (5x per 15 menit per IP) ────────────────────────────
+// ─── Rate Limiter Portal ─────────────────────────────────────────────────────
+// Dua lapis: per IP (5x gagal / 15 menit) dan per akun jamaah (10x PIN salah /
+// 15 menit). Batas per akun menahan brute-force PIN 6 digit meski penyerang
+// berganti-ganti IP.
 
-func (h *Handler) checkRateLimit(ip string) bool {
+const (
+	portalIPAttemptLimit      = 5
+	portalAccountAttemptLimit = 10
+)
+
+func portalAccountKey(jamaahID int64) string {
+	return "jamaah:" + strconv.FormatInt(jamaahID, 10)
+}
+
+func (h *Handler) checkRateLimit(key string, limit int) bool {
 	h.failedLoginMu.Lock()
 	defer h.failedLoginMu.Unlock()
 
-	attempt, exists := h.failedLogins[ip]
+	attempt, exists := h.failedLogins[key]
 	if !exists {
 		return true
 	}
 
 	if time.Since(attempt.FirstFail) > 15*time.Minute {
-		delete(h.failedLogins, ip)
+		delete(h.failedLogins, key)
 		return true
 	}
 
-	return attempt.Count < 5
+	return attempt.Count < limit
 }
 
 func (h *Handler) recordFailedLogin(ip string) {
@@ -100,18 +111,7 @@ func (h *Handler) resetFailedLogin(ip string) {
 }
 
 func getClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
-	}
-	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
-		return xrip
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return shared.ClientIP(r)
 }
 
 // ─── Login Portal ─────────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ func isPhoneNumber(s string) bool {
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	clientIP := getClientIP(r)
-	if !h.checkRateLimit(clientIP) {
+	if !h.checkRateLimit(clientIP, portalIPAttemptLimit) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan login yang gagal, coba lagi dalam 15 menit")
 		return
 	}
@@ -259,15 +259,23 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	accountKey := portalAccountKey(j.ID)
+	if !h.checkRateLimit(accountKey, portalAccountAttemptLimit) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan login yang gagal, coba lagi dalam 15 menit")
+		return
+	}
+
 	// Verifikasi bcrypt hash
 	if err := bcrypt.CompareHashAndPassword([]byte(pinHash.String), []byte(pin)); err != nil {
 		h.recordFailedLogin(clientIP)
+		h.recordFailedLogin(accountKey)
 		writeError(w, http.StatusUnauthorized, invalidCredentialsMsg)
 		return
 	}
 
 	// Login sukses -> reset counter
 	h.resetFailedLogin(clientIP)
+	h.resetFailedLogin(accountKey)
 
 	token, err := identity.GeneratePortalToken(j.ID)
 	if err != nil {
