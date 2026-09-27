@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/shared"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -319,6 +320,9 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		return nil, fmt.Errorf("insert booking: %w", err)
 	}
 	bookingID, _ := res.LastInsertId()
+	if err := komisi.SnapshotNominal(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("snapshot komisi: %w", err)
+	}
 
 	// 9. Create booking pax
 	var paxSummary []PaxSummary

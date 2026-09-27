@@ -89,6 +89,96 @@ func NewBooking(t *testing.T, tx *sql.Tx, o BookingOpts) Booking {
 	return b
 }
 
+var seq int64
+
+// uniq menghasilkan akhiran unik untuk kolom UNIQUE global (id_jamaah,
+// kode_jamaah, id_booking) di dalam satu proses test.
+func uniq() string {
+	seq++
+	return fmt.Sprintf("%05d", (time.Now().UnixNano()/1000+seq)%100000)
+}
+
+// ScheduleOpts mengatur jadwal fixture. Nominal nil = tidak ikut program Syiar.
+type ScheduleOpts struct {
+	KomisiLangsung  *float64
+	BonusPembinaan  *float64
+	BerangkatTanggal string // YYYY-MM-DD
+}
+
+// Schedule memakai jadwal pertama yang brand-nya punya kode_brand, lalu
+// mengatur nominal komisi, tanggal berangkat, minimal DP 0, dan menambah kuota.
+func Schedule(t *testing.T, tx *sql.Tx, o ScheduleOpts) (scheduleID, brandID int64) {
+	t.Helper()
+	if err := tx.QueryRowContext(context.Background(), `
+		SELECT s.id, s.brand_id FROM schedules s JOIN brands br ON br.id = s.brand_id
+		WHERE br.kode_brand IS NOT NULL ORDER BY s.id LIMIT 1`).Scan(&scheduleID, &brandID); err != nil {
+		t.Fatalf("fixture schedule: %v", err)
+	}
+	mustExec(t, tx, `UPDATE schedules SET nominal_komisi_langsung=?, nominal_bonus_pembinaan=?,
+		berangkat_tanggal=?, minimal_dp=0, seat_sisa=seat_sisa+100 WHERE id=?`,
+		o.KomisiLangsung, o.BonusPembinaan, o.BerangkatTanggal, scheduleID)
+	return scheduleID, brandID
+}
+
+// JamaahOpts mengatur jamaah fixture. Direkrut/Upline 0 = NULL.
+type JamaahOpts struct {
+	Nama       string
+	StatusAgen string // default tidak_aktif
+	Direkrut   int64
+	Upline     int64
+	TanpaAgen  bool
+}
+
+func NewJamaah(t *testing.T, tx *sql.Tx, brandID int64, o JamaahOpts) int64 {
+	t.Helper()
+	if o.StatusAgen == "" {
+		o.StatusAgen = "tidak_aktif"
+	}
+	kaitan := "belum_ditentukan"
+	var direkrut, upline any
+	if o.Direkrut > 0 {
+		direkrut, kaitan = o.Direkrut, "terikat_agen"
+	} else if o.TanpaAgen {
+		kaitan = "tanpa_agen"
+	}
+	if o.Upline > 0 {
+		upline = o.Upline
+	}
+	u := uniq()
+	res := mustExec(t, tx, `INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap,
+		status_agen, direkrut_oleh_jamaah_id, upline_jamaah_id, kaitan_status) VALUES (?,?,?,?,?,?,?,?)`,
+		brandID, "TST-"+u, "T"+u, o.Nama+" (uji)", o.StatusAgen, direkrut, upline, kaitan)
+	id, _ := res.LastInsertId()
+	return id
+}
+
+// Pax dalam booking fixture.
+type Pax struct {
+	JamaahID int64
+	Batal    bool
+}
+
+// NewBookingPax membuat booking berisi beberapa pax di jadwal tertentu.
+// Mengembalikan ID booking dan ID booking_pax sesuai urutan input.
+func NewBookingPax(t *testing.T, tx *sql.Tx, scheduleID int64, status string, total float64, paxes ...Pax) (int64, []int64) {
+	t.Helper()
+	res := mustExec(t, tx, `INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, total_harga)
+		VALUES (?,?,?,?,?,TRUE,?)`, "TB"+uniq()[1:], scheduleID, paxes[0].JamaahID, len(paxes), status, total)
+	bookingID, _ := res.LastInsertId()
+	var paxIDs []int64
+	for _, p := range paxes {
+		st := "aktif"
+		if p.Batal {
+			st = "batal"
+		}
+		r := mustExec(t, tx, `INSERT INTO booking_pax (booking_id, jamaah_id, pax_type, room_type, harga_pax, counts_for_seat, pax_status)
+			VALUES (?,?,'reguler','Quad',?,TRUE,?)`, bookingID, p.JamaahID, total/float64(len(paxes)), st)
+		id, _ := r.LastInsertId()
+		paxIDs = append(paxIDs, id)
+	}
+	return bookingID, paxIDs
+}
+
 // AddPayment menambah pembayaran dengan status tertentu, mengembalikan ID-nya.
 func AddPayment(t *testing.T, tx *sql.Tx, bookingID int64, jumlah float64, status string) int64 {
 	t.Helper()

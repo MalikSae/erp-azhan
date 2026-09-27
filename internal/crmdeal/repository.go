@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/shared"
 	"github.com/go-sql-driver/mysql"
 )
@@ -193,6 +194,9 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 	bookingID, err := result.LastInsertId()
 	if err != nil {
 		return nil, fmt.Errorf("booking id: %w", err)
+	}
+	if err := komisi.SnapshotNominal(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("snapshot komisi: %w", err)
 	}
 
 	// CRM saat ini menerima jumlah pax dan satu PIC. Simpan satu detail per kursi

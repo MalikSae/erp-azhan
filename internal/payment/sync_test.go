@@ -90,6 +90,38 @@ func TestSyncBookingStatusTransitions(t *testing.T) {
 	}
 }
 
+// TestSyncLunasMencatatKomisi memakai hook komisi asli: pembayaran lunas yang
+// dikonfirmasi harus menghasilkan komisi langsung untuk agen pemilik pax.
+func TestSyncLunasMencatatKomisi(t *testing.T) {
+	db, tx := testdb.Tx(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+	langsung := 750_000.0
+
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{KomisiLangsung: &langsung, BerangkatTanggal: "2099-01-01"})
+	agen := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Agen", StatusAgen: "aktif"})
+	x := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "X", Direkrut: agen})
+	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: x})
+	if err := komisi.SnapshotNominal(ctx, tx, b); err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+
+	testdb.AddPayment(t, tx, b, 1000, "confirmed")
+	if err := repo.syncBookingStatusTx(ctx, tx, b); err != nil {
+		t.Fatalf("syncBookingStatusTx: %v", err)
+	}
+	var penerima int64
+	var jenis string
+	var nominal float64
+	if err := tx.QueryRow(`SELECT jamaah_penerima_id, jenis, nominal FROM transaksi_komisi WHERE booking_id=?`, b).
+		Scan(&penerima, &jenis, &nominal); err != nil {
+		t.Fatalf("komisi tidak tercatat: %v", err)
+	}
+	if penerima != agen || jenis != "langsung" || nominal != langsung {
+		t.Fatalf("komisi = (%d, %s, %.0f), want (%d, langsung, 750000)", penerima, jenis, nominal, agen)
+	}
+}
+
 func TestSyncBookingStatusIgnoresBatal(t *testing.T) {
 	db, tx := testdb.Tx(t)
 	repo := NewRepository(db)

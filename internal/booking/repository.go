@@ -467,6 +467,9 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 	if err != nil {
 		return nil, fmt.Errorf("booking.Create LastInsertId: %w", err)
 	}
+	if err := komisi.SnapshotNominal(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.Create snapshot komisi: %w", err)
+	}
 
 	// 7. Insert detail booking_pax
 	const qPax = `INSERT INTO booking_pax (booking_id, jamaah_id, pax_type, room_type, harga_pax, counts_for_seat, pax_status)
@@ -926,6 +929,9 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 		idBooking, bookingID)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Finalize update booking: %w", err)
+	}
+	if err := komisi.SnapshotNominal(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.Finalize snapshot komisi: %w", err)
 	}
 
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
