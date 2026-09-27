@@ -56,6 +56,18 @@ func mustErr(t *testing.T, label string, err, want error) {
 	}
 }
 
+func findPengajuan(t *testing.T, f fixture, jamaahID int64) *Pengajuan {
+	t.Helper()
+	items, err := listPengajuan(context.Background(), f.tx, &f.brandID)
+	must(t, "listPengajuan", err)
+	for i := range items {
+		if items[i].JamaahID == jamaahID {
+			return &items[i]
+		}
+	}
+	return nil
+}
+
 var ajuan = AjukanRequest{FotoAgenURL: fotoUji, Domisili: "Kota Bekasi", SetujuSyaratKetentuan: true}
 
 // Langkah 17: brand berbayar, upload bukti, approve TANPA menunggu verifikasi,
@@ -89,9 +101,17 @@ func TestLangkah17ApproveTidakMenungguPembayaran(t *testing.T) {
 		t.Fatalf("upline=%v, want %d (agen perekrut)", upline, adam)
 	}
 
+	// Sudah aktif tapi pembayaran belum beres -> tetap di antrian B1.
+	if row := findPengajuan(t, f, zainab); row == nil || row.StatusAgen != "aktif" {
+		t.Fatalf("agen aktif dengan pembayaran menunggu harus tetap di antrian B1: %+v", row)
+	}
+
 	must(t, "verifikasi", verifikasiPembayaranTx(ctx, f.tx, s.Pembayaran.ID, &f.brandID, f.adminID))
 	if st := f.status(t, zainab).Pembayaran.Status; st != "terverifikasi" {
 		t.Fatalf("status pembayaran=%s, want terverifikasi", st)
+	}
+	if row := findPengajuan(t, f, zainab); row != nil {
+		t.Fatal("setelah terverifikasi, agen aktif harus keluar dari antrian B1")
 	}
 	mustErr(t, "verifikasi ulang", verifikasiPembayaranTx(ctx, f.tx, s.Pembayaran.ID, &f.brandID, f.adminID), ErrPembayaranFinal)
 }

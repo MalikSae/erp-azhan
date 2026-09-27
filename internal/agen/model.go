@@ -61,6 +61,7 @@ type Pengajuan struct {
 	BrandID      int64       `json:"brand_id"`
 	NamaLengkap  string      `json:"nama_lengkap"`
 	NoHP         *string     `json:"no_hp"`
+	StatusAgen   string      `json:"status_agen"` // 'pengajuan', atau 'aktif'/'nonaktif' bila tinggal pembayaran
 	FotoAgenURL  *string     `json:"foto_agen_url"`
 	Domisili     *string     `json:"domisili"`
 	SetujuSKAt   *time.Time  `json:"menyetujui_syarat_ketentuan_agen_at"`

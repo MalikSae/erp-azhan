@@ -159,16 +159,22 @@ func uploadBuktiJamaahTx(ctx context.Context, tx *sql.Tx, jamaahID int64, url st
 
 // ─── Admin Travel ─────────────────────────────────────────────────────────────
 
-// listPengajuan mengembalikan antrian jamaah berstatus 'pengajuan' (screen B1).
-// brandID nil = Super Admin (semua brand).
+// listPengajuan mengembalikan antrian screen B1: jamaah berstatus 'pengajuan',
+// ditambah agen yang sudah disetujui tetapi pembayaran pendaftarannya belum
+// beres (approval tidak menunggu pembayaran, §5 poin 20, jadi verifikasinya
+// tetap perlu tempat). brandID nil = Super Admin (semua brand).
 func listPengajuan(ctx context.Context, db querier, brandID *int64) ([]Pengajuan, error) {
 	q := `
-		SELECT j.id, COALESCE(j.id_jamaah, ''), j.brand_id, j.nama_lengkap, j.no_hp,
+		SELECT j.id, COALESCE(j.id_jamaah, ''), j.brand_id, j.nama_lengkap, j.no_hp, j.status_agen,
 		       j.foto_agen_url, j.domisili, j.menyetujui_syarat_ketentuan_agen_at, j.diajukan_agen_at,
 		       rek.nama_lengkap
 		FROM jamaah j
 		LEFT JOIN jamaah rek ON rek.id = j.direkrut_oleh_jamaah_id
-		WHERE j.status_agen = 'pengajuan'`
+		WHERE (j.status_agen = 'pengajuan'
+		       OR EXISTS (
+		         SELECT 1 FROM pembayaran_pendaftaran_agen p
+		         WHERE p.id = (SELECT MAX(p2.id) FROM pembayaran_pendaftaran_agen p2 WHERE p2.jamaah_id = j.id)
+		           AND p.keputusan_agen = 'disetujui' AND p.status <> 'terverifikasi' AND p.nominal_tagihan > 0))`
 	args := []any{}
 	if brandID != nil {
 		q += ` AND j.brand_id = ?`
@@ -183,7 +189,7 @@ func listPengajuan(ctx context.Context, db querier, brandID *int64) ([]Pengajuan
 	items := []Pengajuan{}
 	for rows.Next() {
 		var p Pengajuan
-		if err := rows.Scan(&p.JamaahID, &p.IDJamaah, &p.BrandID, &p.NamaLengkap, &p.NoHP,
+		if err := rows.Scan(&p.JamaahID, &p.IDJamaah, &p.BrandID, &p.NamaLengkap, &p.NoHP, &p.StatusAgen,
 			&p.FotoAgenURL, &p.Domisili, &p.SetujuSKAt, &p.DiajukanAt, &p.DirekrutOleh); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("agen.ListPengajuan scan: %w", err)
