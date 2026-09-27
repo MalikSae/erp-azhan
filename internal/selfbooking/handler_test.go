@@ -18,8 +18,8 @@ const validBookingBody = `{
 func newTestHandler(t *testing.T, siteverifyBody string, siteverifyStatus int) *Handler {
 	t.Helper()
 	h := &Handler{
-		failedChecks:   make(map[string]*checkAttempt),
 		captcha:        &turnstileVerifier{},
+		phoneCheckByIP: newWindowLimiter(phoneCheckIPLimit, 15*time.Minute),
 		bookingByIP:    newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
 	}
@@ -85,6 +85,27 @@ func TestCreateBookingPhoneLimitBeforeProcessing(t *testing.T) {
 	rec := postBook(h, validBookingBody)
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("got %d %s, want 429", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCheckPhoneCountsEveryCheck(t *testing.T) {
+	// Semua percobaan dihitung, apa pun hasilnya. Body tanpa brand_id ditolak
+	// sebelum menyentuh repository, jadi repo nil aman di sini.
+	h := newTestHandler(t, "", 0)
+	post := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/public/jamaah/check", strings.NewReader(`{"no_hp":"0812"}`))
+		req.RemoteAddr = "198.51.100.9:5555"
+		rec := httptest.NewRecorder()
+		h.CheckPhone(rec, req)
+		return rec
+	}
+	for i := 1; i <= phoneCheckIPLimit; i++ {
+		if rec := post(); rec.Code != http.StatusBadRequest {
+			t.Fatalf("percobaan #%d: got %d, want 400", i, rec.Code)
+		}
+	}
+	if rec := post(); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("percobaan #%d: got %d %s, want 429", phoneCheckIPLimit+1, rec.Code, rec.Body.String())
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"erp-azhan/api/internal/identity"
@@ -20,18 +19,20 @@ type checkAttempt struct {
 	FirstFail time.Time
 }
 
-// Batas self-booking publik. Setiap booking menahan kursi 24 jam, jadi
-// pembuatan booking massal harus dibatasi.
+// Batas endpoint publik. Setiap booking menahan kursi 24 jam, jadi pembuatan
+// booking massal harus dibatasi. Cek nomor HP membocorkan apakah nomor
+// terdaftar (baru / perlu_pin / tanpa_pin), jadi SETIAP pengecekan dihitung,
+// bukan hanya yang hasilnya "baru".
 const (
 	bookingIPAttemptLimit    = 20 // percobaan POST /api/public/book per IP per jam
 	bookingPhoneSuccessLimit = 3  // booking berhasil per nomor HP PIC per 24 jam
+	phoneCheckIPLimit        = 10 // pengecekan POST /api/public/jamaah/check per IP per 15 menit
 )
 
 type Handler struct {
 	repo           *Repository
-	failedChecks   map[string]*checkAttempt
-	failedChecksMu sync.Mutex
 	captcha        *turnstileVerifier
+	phoneCheckByIP *windowLimiter
 	bookingByIP    *windowLimiter
 	bookingByPhone *windowLimiter
 }
@@ -39,46 +40,11 @@ type Handler struct {
 func NewHandler(repo *Repository) *Handler {
 	return &Handler{
 		repo:           repo,
-		failedChecks:   make(map[string]*checkAttempt),
 		captcha:        newTurnstileVerifier(),
+		phoneCheckByIP: newWindowLimiter(phoneCheckIPLimit, 15*time.Minute),
 		bookingByIP:    newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
 	}
-}
-
-// ─── Rate Limiter Check Phone (10x gagal per 15 menit per IP) ─────────────────
-
-func (h *Handler) checkRateLimit(ip string) bool {
-	h.failedChecksMu.Lock()
-	defer h.failedChecksMu.Unlock()
-
-	attempt, exists := h.failedChecks[ip]
-	if !exists {
-		return true
-	}
-
-	if time.Since(attempt.FirstFail) > 15*time.Minute {
-		delete(h.failedChecks, ip)
-		return true
-	}
-
-	return attempt.Count < 10
-}
-
-func (h *Handler) recordFailedCheck(ip string) {
-	h.failedChecksMu.Lock()
-	defer h.failedChecksMu.Unlock()
-
-	attempt, exists := h.failedChecks[ip]
-	if !exists || time.Since(attempt.FirstFail) > 15*time.Minute {
-		h.failedChecks[ip] = &checkAttempt{
-			Count:     1,
-			FirstFail: time.Now(),
-		}
-		return
-	}
-
-	attempt.Count++
 }
 
 func getClientIP(r *http.Request) string {
@@ -88,10 +54,11 @@ func getClientIP(r *http.Request) string {
 // CheckPhone memeriksa status nomor HP jamaah (POST /api/public/jamaah/check).
 func (h *Handler) CheckPhone(w http.ResponseWriter, r *http.Request) {
 	clientIP := getClientIP(r)
-	if !h.checkRateLimit(clientIP) {
+	if !h.phoneCheckByIP.allow(clientIP) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
 		return
 	}
+	h.phoneCheckByIP.record(clientIP)
 
 	var req CheckPhoneRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -115,10 +82,6 @@ func (h *Handler) CheckPhone(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ERROR] CheckPhone: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
-	}
-
-	if status == "baru" {
-		h.recordFailedCheck(clientIP)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
