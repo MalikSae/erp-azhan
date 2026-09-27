@@ -55,8 +55,15 @@ Backup database sebelum migrasi. Migrasi 061–064 hanya menambah kolom/tabel; t
 | Variabel | Repo | Nilai |
 |---|---|---|
 | `TRUSTED_PROXIES` | erp-azhan | IP/CIDR server microsite dan reverse proxy. Tanpa ini rate limit per IP berlaku bersama untuk semua pengunjung microsite |
-| `TURNSTILE_SECRET_KEY` | erp-azhan | **Biarkan kosong** sampai widget Turnstile asli terpasang di microsite (saat ini `BookingWizard` dan `/daftar-agen` masih mengirim token demo). Mengisinya sekarang akan membuat booking publik dan daftar agen selalu gagal |
+| `TURNSTILE_SECRET_KEY` | erp-azhan | Secret key widget Cloudflare Turnstile. **Wajib diisi bersamaan** dengan `NEXT_PUBLIC_TURNSTILE_SITE_KEY` di microsite. Kosong = verifikasi captcha nonaktif (hanya untuk development) |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | azhan-microsite | Site key pasangan secret di atas. Di build production tanpa nilai ini, booking publik dan daftar agen menampilkan "Verifikasi keamanan belum dikonfigurasi" dan tidak bisa dikirim (sengaja, supaya salah konfigurasi langsung terlihat) |
+| `APP_TIMEZONE` | erp-azhan | Default `Asia/Jakarta`. Dipakai `time.Now()`, JSON, dan sesi MySQL (`NOW()`, `CURRENT_DATE`) |
 | `API_BASE_URL_INTERNAL`, `NEXT_PUBLIC_API_BASE_URL` | azhan-microsite | Tidak berubah |
+
+**Zona waktu (perubahan perilaku):** koneksi database kini selalu memakai zona `APP_TIMEZONE` (DSN `loc` + `time_zone='+07:00'`), tidak lagi bergantung pada zona sistem server MySQL. Sebelum deploy, cek `SELECT @@system_time_zone, @@global.time_zone` di produksi:
+- Bila zona MySQL produksi sudah WIB, data lama tetap benar.
+- Bila zona MySQL produksi UTC, kolom `DATETIME` lama yang diisi `NOW()` tersimpan dalam UTC dan akan terbaca 7 jam lebih awal; perlu penyesuaian data sebelum rilis (hubungi pengembang).
+- Kolom `TIMESTAMP` tidak terpengaruh. Hold kursi, token aktivasi, dan refresh token lama yang ditulis dari Go dalam UTC akan terbaca 7 jam lebih awal; semuanya berumur pendek (≤ 7 hari).
 
 ---
 
@@ -134,10 +141,11 @@ UAT belum dilakukan; perlu pengguna nyata. Gunakan brand uji dengan jadwal yang 
 
 ## 8. Keterbatasan & temuan di luar scope
 
-- **Turnstile:** widget asli belum dipasang di microsite (lihat §3).
+- **Turnstile:** ~~widget asli belum dipasang~~ — diperbaiki: `BookingWizard` (booking publik) dan `/daftar-agen` memakai widget asli, token sekali pakai di-reset setelah submit gagal. Booking agen (A5) tidak memakai captcha karena endpoint-nya terautentikasi.
+- **Minimal DP brand:** ~~ter-reset ke 0 setiap form brand disimpan~~ — diperbaiki: form brand kini punya field "Minimal DP per Jamaah" yang dimuat dan dikirim.
 - **Pajak komisi (D7):** diproses manual di luar sistem.
 - **OTP (D3):** belum ada; daftar agen hanya dilindungi captcha dan rate limit.
-- **Tanggal lahir infant** pada booking publik tidak tersimpan (validasi ada, insert tidak mengisi kolom). Belum diperbaiki.
-- **Zona waktu:** beberapa tanggal tampil maju satu hari/berjam-jam (mis. `created_at` komisi, `diganti_at`). Kemungkinan waktu DB dikirim sebagai UTC lalu browser menambah zona waktu lagi; perlu dicek konfigurasi DSN (`loc`). Belum diperbaiki.
+- **Tanggal lahir infant:** ~~tidak tersimpan~~ — diperbaiki untuk booking publik dan booking agen; server kini juga menolak tanggal tidak valid/di masa depan dan infant berusia ≥ 2 tahun saat berangkat.
+- **Zona waktu:** ~~tanggal tampil maju 7 jam~~ — diperbaiki (lihat §3, perlu cek zona MySQL produksi sebelum deploy).
 - **Pindah brand jamaah:** `PUT /api/admin/jamaah/{id}` masih menerima `brand_id` baru dari Super Admin (UI menguncinya). Untuk jamaah yang terkait agen, perpindahan brand melanggar aturan "semua perhitungan per brand". Disarankan menolak perubahan brand bila jamaah punya kaitan agen, status agen, atau riwayat komisi. Belum diperbaiki.
 - **Komisi infant:** mengikuti spesifikasi (per pax aktif, termasuk infant). Perlu konfirmasi bisnis.

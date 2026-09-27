@@ -41,7 +41,8 @@ const initialFormData = {
   meta_description: '',
   google_verification_code: '',
   biaya_pendaftaran_agen: '',
-  no_wa_admin_travel: ''
+  no_wa_admin_travel: '',
+  minimal_dp: ''
 };
 
 const BrandFormPage = () => {
@@ -97,7 +98,8 @@ const BrandFormPage = () => {
             meta_description: data.meta_description || '',
             google_verification_code: data.google_verification_code || '',
             biaya_pendaftaran_agen: data.biaya_pendaftaran_agen ? String(data.biaya_pendaftaran_agen) : '',
-            no_wa_admin_travel: data.no_wa_admin_travel || ''
+            no_wa_admin_travel: data.no_wa_admin_travel || '',
+            minimal_dp: data.minimal_dp ? String(data.minimal_dp) : ''
           });
         } catch (err) {
           if (err.response?.status === 404) {
@@ -231,6 +233,9 @@ const BrandFormPage = () => {
         // Kosong = Rp0 (brand tidak memungut biaya pendaftaran agen).
         biaya_pendaftaran_agen: Number(String(formData.biaya_pendaftaran_agen).replace(/\D/g, '')) || 0,
         no_wa_admin_travel: formData.no_wa_admin_travel ? formData.no_wa_admin_travel.trim() : null,
+        // Wajib dikirim: backend menyimpan minimal_dp apa adanya, jadi field
+        // yang tidak terkirim akan me-reset nilainya ke 0.
+        minimal_dp: Number(String(formData.minimal_dp).replace(/\D/g, '')) || 0,
       };
 
       if (isEditMode) {
@@ -569,6 +574,28 @@ const BrandFormPage = () => {
                   className="!mb-0"
                 />
               </div>
+            </MetaBox>
+
+            {/* MetaBox Kebijakan Pembayaran */}
+            <MetaBox
+              title="Kebijakan Pembayaran"
+              subtitle="Nilai default untuk seluruh jadwal brand ini"
+              icon={<CreditCard size={18} className="text-neutral-700" />}
+            >
+              <FormField
+                label="Minimal DP per Jamaah (Rp)"
+                helpText="Dipakai bila jadwal tidak mengatur minimal DP sendiri. Kosongkan atau isi 0 jika tidak ada minimal DP."
+                className="!mb-0 sm:max-w-sm"
+              >
+                <Input
+                  name="minimal_dp"
+                  value={formData.minimal_dp ? Number(formData.minimal_dp).toLocaleString('id-ID') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, minimal_dp: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="mis. 5.000.000"
+                  inputMode="numeric"
+                  className="!mb-0"
+                />
+              </FormField>
             </MetaBox>
 
             {/* MetaBox Program Agen (Syiar) */}
