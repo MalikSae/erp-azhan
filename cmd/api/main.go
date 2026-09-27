@@ -235,24 +235,28 @@ func main() {
 			r.Put("/{id}/password", crmUserHandler.ResetPassword)
 		})
 
+		// Master data global milik holding: semua admin boleh baca,
+		// hanya Super Admin Grup yang boleh tambah/ubah/hapus.
+		superAdmin := r.With(brand.RequireSuperAdmin)
+
 		// Hotels
 		r.Get("/hotels", hotelHandler.ListHotels)
 		r.Get("/hotels/cities", hotelHandler.ListCities)
-		r.Post("/hotels", hotelHandler.CreateHotel)
-		r.Put("/hotels/{id}", hotelHandler.UpdateHotel)
-		r.Delete("/hotels/{id}", hotelHandler.DeleteHotel)
+		superAdmin.Post("/hotels", hotelHandler.CreateHotel)
+		superAdmin.Put("/hotels/{id}", hotelHandler.UpdateHotel)
+		superAdmin.Delete("/hotels/{id}", hotelHandler.DeleteHotel)
 
 		// Airlines
 		r.Get("/airlines", airlineHandler.ListAirlines)
-		r.Post("/airlines", airlineHandler.CreateAirline)
-		r.Put("/airlines/{id}", airlineHandler.UpdateAirline)
-		r.Delete("/airlines/{id}", airlineHandler.DeleteAirline)
+		superAdmin.Post("/airlines", airlineHandler.CreateAirline)
+		superAdmin.Put("/airlines/{id}", airlineHandler.UpdateAirline)
+		superAdmin.Delete("/airlines/{id}", airlineHandler.DeleteAirline)
 
 		// Airports
 		r.Get("/airports", airportHandler.ListAirports)
-		r.Post("/airports", airportHandler.CreateAirport)
-		r.Put("/airports/{id}", airportHandler.UpdateAirport)
-		r.Delete("/airports/{id}", airportHandler.DeleteAirport)
+		superAdmin.Post("/airports", airportHandler.CreateAirport)
+		superAdmin.Put("/airports/{id}", airportHandler.UpdateAirport)
+		superAdmin.Delete("/airports/{id}", airportHandler.DeleteAirport)
 
 		// Categories
 		r.Get("/categories", categoryHandler.ListCategories)
@@ -263,9 +267,9 @@ func main() {
 
 		// Add-Ons
 		r.Get("/addons", addonHandler.ListAddOns)
-		r.Post("/addons", addonHandler.CreateAddOn)
-		r.Put("/addons/{id}", addonHandler.UpdateAddOn)
-		r.Delete("/addons/{id}", addonHandler.DeleteAddOn)
+		superAdmin.Post("/addons", addonHandler.CreateAddOn)
+		superAdmin.Put("/addons/{id}", addonHandler.UpdateAddOn)
+		superAdmin.Delete("/addons/{id}", addonHandler.DeleteAddOn)
 
 		r.Route("/brands", func(r chi.Router) {
 			r.Use(brand.RequireSuperAdmin)
@@ -301,9 +305,9 @@ func main() {
 		// Itineraries
 		r.Get("/itineraries", itineraryHandler.ListItineraries)
 		r.Get("/itineraries/{id}", itineraryHandler.GetItinerary)
-		r.Post("/itineraries", itineraryHandler.CreateItinerary)
-		r.Put("/itineraries/{id}", itineraryHandler.UpdateItinerary)
-		r.Delete("/itineraries/{id}", itineraryHandler.DeleteItinerary)
+		superAdmin.Post("/itineraries", itineraryHandler.CreateItinerary)
+		superAdmin.Put("/itineraries/{id}", itineraryHandler.UpdateItinerary)
+		superAdmin.Delete("/itineraries/{id}", itineraryHandler.DeleteItinerary)
 
 		// Schedules
 		r.Get("/schedules", scheduleHandler.ListSchedulesAdmin)
@@ -358,9 +362,9 @@ func main() {
 
 		// Perlengkapan Items (Global)
 		r.Get("/perlengkapan-items", perlengkapanHandler.ListItems)
-		r.Post("/perlengkapan-items", perlengkapanHandler.CreateItem)
-		r.Put("/perlengkapan-items/{id}", perlengkapanHandler.UpdateItem)
-		r.Delete("/perlengkapan-items/{id}", perlengkapanHandler.DeleteItem)
+		superAdmin.Post("/perlengkapan-items", perlengkapanHandler.CreateItem)
+		superAdmin.Put("/perlengkapan-items/{id}", perlengkapanHandler.UpdateItem)
+		superAdmin.Delete("/perlengkapan-items/{id}", perlengkapanHandler.DeleteItem)
 
 		// Perlengkapan Stok (Per Brand)
 		r.Get("/perlengkapan-stok", perlengkapanHandler.ListStok)
@@ -368,7 +372,7 @@ func main() {
 
 		// Perlengkapan Set Template (Global)
 		r.Get("/perlengkapan-set-template", perlengkapanHandler.GetSetTemplate)
-		r.Put("/perlengkapan-set-template", perlengkapanHandler.UpdateSetTemplate)
+		superAdmin.Put("/perlengkapan-set-template", perlengkapanHandler.UpdateSetTemplate)
 
 		// Payments
 		r.Get("/payments", paymentHandler.ListAllPayments)
