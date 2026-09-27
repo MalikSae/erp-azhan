@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"erp-azhan/api/internal/komisi"
 )
 
 // Sentinel errors
@@ -416,6 +418,11 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 			targetStatus, targetStatus, targetStatus, targetStatus, bookingID)
 		if err != nil {
 			return err
+		}
+		if targetStatus == "lunas" {
+			if err := komisi.OnBookingLunas(ctx, tx, bookingID); err != nil {
+				return err
+			}
 		}
 	}
 

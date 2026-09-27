@@ -9,6 +9,8 @@ import (
 	"math/big"
 	"strings"
 	"time"
+
+	"erp-azhan/api/internal/komisi"
 )
 
 const idBookingCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -1447,8 +1449,10 @@ func (r *Repository) recalculateTotalTx(ctx context.Context, tx *sql.Tx, booking
 	}
 
 	if targetHarga > 0 && totalPaid >= targetHarga && currentStatus != "lunas" {
-		_, err := tx.ExecContext(ctx, `UPDATE bookings SET status='lunas' WHERE id=?`, bookingID)
-		return err
+		if _, err := tx.ExecContext(ctx, `UPDATE bookings SET status='lunas' WHERE id=?`, bookingID); err != nil {
+			return err
+		}
+		return komisi.OnBookingLunas(ctx, tx, bookingID)
 	} else if totalPaid < targetHarga && currentStatus == "lunas" {
 		_, err := tx.ExecContext(ctx, `UPDATE bookings SET status='dp' WHERE id=?`, bookingID)
 		return err
