@@ -24,6 +24,7 @@ func newTestHandler(t *testing.T, siteverifyBody string, siteverifyStatus int) *
 		bookingByIP:    newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
 		daftarByIP:     newWindowLimiter(daftarAgenIPLimit, time.Hour),
+		bookingByAgen:  newWindowLimiter(agenBookingLimit, time.Hour),
 	}
 	if siteverifyBody != "" {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -24,6 +24,11 @@ var (
 	ErrDuplicatePaxInBooking = errors.New("jamaah tidak boleh terdaftar lebih dari sekali dalam satu pemesanan")
 	ErrPinRequired           = errors.New("PIN portal harus 6 digit")
 	ErrCutoffBooking         = errors.New("pendaftaran untuk jadwal ini telah ditutup (batas cut-off H-14 keberangkatan)")
+	// Booking agen (Jalur 1). Pesan sengaja umum: tidak membocorkan data
+	// pemilik nomor yang sudah terdaftar (D8).
+	ErrBukanAgenAktif    = errors.New("akun agen tidak aktif")
+	ErrNomorMilikLain    = errors.New("nomor sudah terdaftar, minta jamaah booking sendiri atau hubungi admin")
+	ErrJamaahBukanMilik  = errors.New("jamaah tidak ada di daftar Jamaah Saya")
 )
 
 type Repository struct {
@@ -59,13 +64,53 @@ func normalizeName(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), " "))
 }
 
+// inisiator menentukan siapa yang membuat booking. Booking publik (Jalur 2)
+// bisa dibuat pengunjung anonim atau jamaah yang login (jamaahLogin, otomatis
+// menjadi PIC). Booking agen (Jalur 1, agenID) dibuat agen untuk jamaahnya:
+// agen bukan PIC, dan hanya jamaah yang dibuat di booking ini yang diikat ke
+// agen (keputusan D8).
+type inisiator struct {
+	jamaahLogin int64
+	agenID      int64
+}
+
 func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req BookingRequest, authenticatedJamaahID int64) (*BookingResponse, error) {
+	return r.processBooking(ctx, brandID, req, inisiator{jamaahLogin: authenticatedJamaahID})
+}
+
+// ProcessBookingAgen POST /api/portal/agen/bookings (Jalur 1).
+func (r *Repository) ProcessBookingAgen(ctx context.Context, brandID int64, req BookingRequest, agenID int64) (*BookingResponse, error) {
+	return r.processBooking(ctx, brandID, req, inisiator{agenID: agenID})
+}
+
+func (r *Repository) processBooking(ctx context.Context, brandID int64, req BookingRequest, ini inisiator) (*BookingResponse, error) {
 	// Serializable ensures atomic check-then-act
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
+	resp, err := processBookingTx(ctx, tx, brandID, req, ini)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+	return resp, nil
+}
+
+func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req BookingRequest, ini inisiator) (*BookingResponse, error) {
+	var err error
+	authenticatedJamaahID := ini.jamaahLogin
+	modeAgen := ini.agenID > 0
+	if modeAgen {
+		if err := agen.ValidasiAgenAktif(ctx, tx, brandID, ini.agenID); err != nil {
+			return nil, ErrBukanAgenAktif
+		}
+	}
+	// Jamaah yang dibuat oleh booking agen ini; hanya mereka yang diikat (D8).
+	var jamaahBaruAgen []int64
 
 	// 1. Lock schedule
 	var scheduleStatus string
@@ -99,23 +144,41 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		return nil, ErrCutoffBooking
 	}
 
+	var picJamaahID int64
+	issuePortalToken := false
+
+	// 2a. Booking agen: PIC baru dibuat tanpa PIN (jamaah mengaktifkan akun
+	// portalnya sendiri), atau dipilih dari "Jamaah Saya".
+	if modeAgen {
+		noHP := req.PIC.NoHP
+		var baru bool
+		picJamaahID, baru, err = resolvePaxAgen(ctx, tx, brandID, ini.agenID, req.PIC.JamaahID, req.PIC.NamaLengkap, &noHP, req.PIC.JenisKelamin, req.PIC.Email)
+		if err != nil {
+			return nil, err
+		}
+		if baru {
+			jamaahBaruAgen = append(jamaahBaruAgen, picJamaahID)
+		}
+	}
+
 	// 2. Resolve PIC (Jamaah Utama) dengan 3 Cabang
 	canonicalPIC, localPIC := shared.PhoneVariants(req.PIC.NoHP)
 	var existingPICID int64
 	var existingPICNama string
 	var existingPICPinHash sql.NullString
 
-	err = tx.QueryRowContext(ctx, `
-		SELECT id, nama_lengkap, portal_pin_hash 
-		FROM jamaah 
-		WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?) 
+	if !modeAgen {
+		err = tx.QueryRowContext(ctx, `
+		SELECT id, nama_lengkap, portal_pin_hash
+		FROM jamaah
+		WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?)
 		ORDER BY id LIMIT 1 FOR UPDATE
 	`, brandID, canonicalPIC, localPIC).Scan(&existingPICID, &existingPICNama, &existingPICPinHash)
+	}
 
-	var picJamaahID int64
-	issuePortalToken := false
-
-	if errors.Is(err, sql.ErrNoRows) {
+	if modeAgen {
+		// PIC sudah ditetapkan di 2a.
+	} else if errors.Is(err, sql.ErrNoRows) {
 		// CABANG A — jamaah BARU dibuat (nomor belum terdaftar):
 		// portal_pin dari payload wajib ada dan 6 digit angka
 		if len(req.PIC.PortalPIN) != 6 {
@@ -203,6 +266,17 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 	// 6. Create or reuse jamaah records for anggota
 	anggotaJamaahIDs := make([]int64, len(req.Anggota))
 	for i, a := range req.Anggota {
+		if modeAgen {
+			id, baru, err := resolvePaxAgen(ctx, tx, brandID, ini.agenID, a.JamaahID, a.NamaLengkap, a.NoHP, a.JenisKelamin, nil)
+			if err != nil {
+				return nil, err
+			}
+			if baru {
+				jamaahBaruAgen = append(jamaahBaruAgen, id)
+			}
+			anggotaJamaahIDs[i] = id
+			continue
+		}
 		var rawPhone string
 		if a.NoHP != nil {
 			rawPhone = strings.TrimSpace(*a.NoHP)
@@ -300,14 +374,23 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		allJamaahMap[aid] = true
 	}
 
-	// Kaitan agen Jalur 2 (3.2–3.4): kode referral dari cookie, lalu auto-bind
-	// seluruh pax yang belum punya kaitan ke agen booking ini.
-	agenReferral, err := agen.ResolveKodeReferral(ctx, tx, brandID, req.KodeReferral)
-	if err != nil {
-		return nil, err
-	}
-	if err := agen.IkatRombongan(ctx, tx, picJamaahID, anggotaJamaahIDs, agenReferral); err != nil {
-		return nil, err
+	if modeAgen {
+		// Jalur 1 (D8): hanya jamaah yang dibuat di booking ini yang diikat.
+		for _, id := range jamaahBaruAgen {
+			if err := agen.IkatJamaah(ctx, tx, id, ini.agenID); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// Kaitan agen Jalur 2 (3.2–3.4): kode referral dari cookie, lalu auto-bind
+		// seluruh pax yang belum punya kaitan ke agen booking ini.
+		agenReferral, err := agen.ResolveKodeReferral(ctx, tx, brandID, req.KodeReferral)
+		if err != nil {
+			return nil, err
+		}
+		if err := agen.IkatRombongan(ctx, tx, picJamaahID, anggotaJamaahIDs, agenReferral); err != nil {
+			return nil, err
+		}
 	}
 
 	// 7. Generate booking code
@@ -456,10 +539,6 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 		if err != nil {
 			return nil, fmt.Errorf("generate portal token: %w", err)
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
 	}
 
 	return &BookingResponse{

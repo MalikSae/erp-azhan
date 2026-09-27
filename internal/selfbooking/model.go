@@ -8,6 +8,9 @@ type PICInput struct {
 	JenisKelamin string  `json:"jenis_kelamin"` // "L" atau "P"
 	RoomType     string  `json:"room_type"`     // "Quad" | "Triple" | "Double"
 	PortalPIN    string  `json:"portal_pin"`    // 6 digit PIN
+	// JamaahID hanya dipakai booking agen (Jalur 1): memilih jamaah dari
+	// daftar "Jamaah Saya". Booking publik mengabaikannya.
+	JamaahID *int64 `json:"jamaah_id,omitempty"`
 }
 
 // AnggotaInput adalah data anggota rombongan (minimal).
@@ -18,6 +21,7 @@ type AnggotaInput struct {
 	JenisKelamin string  `json:"jenis_kelamin"` // "L" atau "P"
 	RoomType     *string `json:"room_type"`     // Quad/Triple/Double (null jika infant)
 	TanggalLahir *string `json:"tanggal_lahir"` // Wajib jika pax_type = infant (YYYY-MM-DD)
+	JamaahID     *int64  `json:"jamaah_id,omitempty"` // lihat PICInput.JamaahID
 }
 
 // CheckPhoneRequest adalah payload untuk POST /api/public/jamaah/check.
