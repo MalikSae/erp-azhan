@@ -37,6 +37,7 @@ import CustomDropdown from "../components/ui/CustomDropdown";
 import CurrencyInput from "../components/ui/CurrencyInput";
 import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
+import KreditCashbackPanel from "../components/KreditCashbackPanel";
 import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Users, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig, Building2, CreditCard, Receipt } from "lucide-react";
 
 const formatRupiah = (angka) => {
@@ -1060,6 +1061,13 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               </div>
             )}
           </MetaBox>
+
+          {/* Section: Kredit Cashback (B5) — hanya tampil bila ada pax dengan kredit */}
+          <KreditCashbackPanel
+            bookingId={id}
+            refreshKey={`${booking.total_harga}-${discounts.length}-${booking.status}`}
+            onApplied={fetchAll}
+          />
 
           {/* Section: Riwayat Pembayaran */}
           <MetaBox

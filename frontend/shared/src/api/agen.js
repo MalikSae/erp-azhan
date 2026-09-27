@@ -47,3 +47,33 @@ export async function listAgenAktif({ brandId, q } = {}) {
   const { data } = await client.get('/api/admin/agen/aktif', { params });
   return data || [];
 }
+
+// B2 Daftar Agen (aktif & nonaktif).
+export async function listAgen(q) {
+  const { data } = await client.get('/api/admin/agen', { params: q ? { q } : {} });
+  return data || [];
+}
+
+// B2a Detail Agen (8 kelompok data).
+export async function getDetailAgen(jamaahId) {
+  const { data } = await client.get(`/api/admin/agen/${jamaahId}`);
+  return data;
+}
+
+// B3 Riwayat Komisi brand. filter: { agen_id, jenis, dari, sampai, limit, offset }.
+export async function listRiwayatKomisi(filter = {}) {
+  const params = Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== '' && v != null));
+  const { data } = await client.get('/api/admin/agen/komisi', { params });
+  return data || [];
+}
+
+// B5 Pakai Kredit Cashback di detail booking.
+export async function getKreditCashback(bookingId) {
+  const { data } = await client.get(`/api/admin/bookings/${bookingId}/cashback`);
+  return data;
+}
+
+export async function pakaiKreditCashback(bookingId, jamaahId, nominal) {
+  const { data } = await client.post(`/api/admin/bookings/${bookingId}/cashback`, { jamaah_id: jamaahId, nominal });
+  return data;
+}

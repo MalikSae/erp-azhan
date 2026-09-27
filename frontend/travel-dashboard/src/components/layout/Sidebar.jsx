@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { LayoutDashboard, Users, CalendarDays, Package, Boxes, Banknote, Settings, UserCheck } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Package, Boxes, Banknote, Settings, UserCheck, Network, Coins } from "lucide-react";
 
 function isLightColor(hexColor) {
   if (!hexColor || typeof hexColor !== 'string' || !hexColor.startsWith('#')) return false;
@@ -24,6 +24,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     { name: "Kelola Booking", path: "/bookings", icon: CalendarDays },
     { name: "Pembayaran", path: "/payments", icon: Banknote },
     { name: "Persetujuan Agen", path: "/agen/pengajuan", icon: UserCheck },
+    { name: "Daftar Agen", path: "/agen", icon: Network },
+    { name: "Riwayat Komisi", path: "/agen/komisi", icon: Coins },
     { name: "Pengaturan", path: "/pengaturan", icon: Settings },
   ];
 
@@ -75,7 +77,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
             <NavLink
               key={item.name}
               to={item.path}
-              end={item.path === '/'}
+              end={item.path === '/' || item.path === '/agen'}
               onClick={closeDrawer}
               style={({ isActive }) => 
                 isActive 
