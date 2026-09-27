@@ -125,6 +125,8 @@ Rekomendasi: **jangan mulai coding fitur sebelum Sprint 0 selesai.** Sprint 0 be
 
 **Selesai jika:** skenario §6 menghasilkan ledger yang persis sama dengan tabel dokumen, dan status lunas ganda tidak menggandakan komisi.
 
+**Status: SELESAI 27 Sep 2026.** Migrasi 061 (model data) dan 062 (`bookings.pertama_lunas_at`, tambahan untuk D5 karena status bisa mundur dari lunas); `komisi.SnapshotNominal` di 4 jalur pembuatan booking; `komisi.ProcessBookingLunas` + `HitungSaldo`; C2 dan C5 di Master Dashboard. Test: skenario §6 langkah 2, 4, 5, 7, 10, 11, 12, 13 + idempotensi + agen nonaktif + snapshot + saldo, semua lulus.
+
 ### Sprint 2 — Menjadi agen (jalur jamaah existing)
 **Tujuan:** jamaah yang sudah punya akun bisa mengajukan diri, membayar, dan disetujui.
 
