@@ -27,12 +27,17 @@ const (
 	bookingIPAttemptLimit    = 20 // percobaan POST /api/public/book per IP per jam
 	bookingPhoneSuccessLimit = 3  // booking berhasil per nomor HP PIC per 24 jam
 	phoneCheckIPLimit        = 10 // pengecekan POST /api/public/jamaah/check per IP per 15 menit
+	// Kode invoice hanya 4 karakter acak (~1 juta kombinasi per brand), jadi
+	// kode yang salah dibatasi agar tidak bisa ditebak massal. Kode yang benar
+	// tidak dihitung, sehingga jamaah bisa membuka invoice-nya berulang kali.
+	invoiceMissIPLimit = 20 // kode invoice tidak ditemukan per IP per 15 menit
 )
 
 type Handler struct {
 	repo           *Repository
 	captcha        *turnstileVerifier
 	phoneCheckByIP *windowLimiter
+	invoiceMissIP  *windowLimiter
 	bookingByIP    *windowLimiter
 	bookingByPhone *windowLimiter
 }
@@ -42,7 +47,8 @@ func NewHandler(repo *Repository) *Handler {
 		repo:           repo,
 		captcha:        newTurnstileVerifier(),
 		phoneCheckByIP: newWindowLimiter(phoneCheckIPLimit, 15*time.Minute),
-		bookingByIP:    newWindowLimiter(bookingIPAttemptLimit, time.Hour),
+		invoiceMissIP:  newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
+		bookingByIP:   newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
 	}
 }
@@ -90,6 +96,12 @@ func (h *Handler) CheckPhone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
+	clientIP := getClientIP(r)
+	if !h.invoiceMissIP.allow(clientIP) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		return
+	}
+
 	code := chi.URLParam(r, "code")
 	if strings.TrimSpace(code) == "" {
 		writeError(w, http.StatusBadRequest, "kode booking wajib diisi")
@@ -99,6 +111,7 @@ func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
 	invoice, err := h.repo.GetInvoiceByCode(r.Context(), code)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
+			h.invoiceMissIP.record(clientIP)
 			writeError(w, http.StatusNotFound, "invoice pendaftaran tidak ditemukan")
 			return
 		}
