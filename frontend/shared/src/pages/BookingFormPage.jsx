@@ -32,6 +32,7 @@ import {
   getBooking 
 } from "../api/bookings";
 import { listJamaah, updateJamaah, createJamaah } from "../api/jamaah";
+import KaitanAgenPicker, { EMPTY_KAITAN, validateKaitan, toKaitanPayload } from "../components/KaitanAgenPicker";
 import { listSchedulesAdmin, getScheduleAdmin } from "../api/schedules";
 import { listBrands } from "../api/brands";
 import { listAirports } from "../api/airports";
@@ -231,6 +232,8 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
   const [quickCreateForm, setQuickCreateForm] = useState({ nama_lengkap: '', jenis_kelamin: '', nik: '', tanggal_lahir: '', no_hp: '' });
   const [quickCreateError, setQuickCreateError] = useState(null);
   const [quickCreateLoading, setQuickCreateLoading] = useState(false);
+  const [quickCreateKaitan, setQuickCreateKaitan] = useState(EMPTY_KAITAN);
+  const [quickCreateKaitanHint, setQuickCreateKaitanHint] = useState(null);
 
   // === Inline DOB Quick Save ===
   // Map: jamaah_id -> { value: 'YYYY-MM-DD', saving: bool, error: str }
@@ -761,12 +764,29 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
     setQuickCreatePaxId(paxId);
     setQuickCreateForm({ nama_lengkap: '', jenis_kelamin: '', nik: '', tanggal_lahir: '', no_hp: '' });
     setQuickCreateError(null);
+    // Jalur 3: default "sama seperti PIC" bila PIC terikat agen.
+    const pic = jamaahList.find((j) => String(j.id) === String(picJamaahId));
+    if (pic?.kaitan_status === 'terikat_agen' && pic.direkrut_oleh_jamaah_id) {
+      setQuickCreateKaitan({
+        mode: 'agen',
+        agen: { id: pic.direkrut_oleh_jamaah_id, nama_lengkap: pic.direkrut_oleh_nama || `Agen #${pic.direkrut_oleh_jamaah_id}` },
+      });
+      setQuickCreateKaitanHint(`Sama seperti PIC (${pic.nama_lengkap}). Ganti bila jamaah ini milik agen lain.`);
+    } else {
+      setQuickCreateKaitan(EMPTY_KAITAN);
+      setQuickCreateKaitanHint(null);
+    }
     setQuickCreateOpen(true);
   };
 
   const handleQuickCreateSubmit = async () => {
     if (!quickCreateForm.nama_lengkap.trim()) {
       setQuickCreateError('Nama lengkap wajib diisi');
+      return;
+    }
+    const kaitanErr = validateKaitan(quickCreateKaitan);
+    if (kaitanErr) {
+      setQuickCreateError(kaitanErr);
       return;
     }
     setQuickCreateLoading(true);
@@ -779,6 +799,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
         tanggal_lahir: quickCreateForm.tanggal_lahir || null,
         no_hp: quickCreateForm.no_hp.trim() || null,
         status: 'aktif',
+        kaitan_agen: toKaitanPayload(quickCreateKaitan),
         ...(showBrandColumn && selectedBrandId ? { brand_id: parseInt(selectedBrandId, 10) } : {})
       };
       const newJamaah = await createJamaah(payload);
@@ -795,6 +816,9 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
           tanggal_lahir: newJamaah.tanggal_lahir,
           no_hp: newJamaah.no_hp,
           status: newJamaah.status,
+          kaitan_status: newJamaah.kaitan_status,
+          direkrut_oleh_jamaah_id: newJamaah.direkrut_oleh_jamaah_id,
+          direkrut_oleh_nama: newJamaah.direkrut_oleh_nama,
           created_at: newJamaah.created_at
         }
       ]);
@@ -2104,6 +2128,15 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 className="h-11 w-full rounded-xl border border-neutral-200/90 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs"
               />
             </div>
+            {/* Kaitan Agen (Jalur 3) */}
+            <KaitanAgenPicker
+              name="quick_create_kaitan_agen"
+              value={quickCreateKaitan}
+              onChange={(v) => { setQuickCreateKaitan(v); setQuickCreateKaitanHint(null); }}
+              brandId={selectedBrandId}
+              brandRequired={showBrandColumn}
+              hint={quickCreateKaitanHint}
+            />
           </div>
         </div>
       </Modal>

@@ -38,3 +38,12 @@ export async function uploadBuktiPembayaranAgen(pembayaranId, buktiTransferUrl) 
   });
   return data;
 }
+
+// Picker Jalur 3: agen aktif satu brand. brandId wajib untuk super admin.
+export async function listAgenAktif({ brandId, q } = {}) {
+  const params = {};
+  if (brandId) params.brand_id = brandId;
+  if (q) params.q = q;
+  const { data } = await client.get('/api/admin/agen/aktif', { params });
+  return data || [];
+}

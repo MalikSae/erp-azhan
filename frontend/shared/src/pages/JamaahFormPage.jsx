@@ -20,6 +20,7 @@ import Textarea from "../components/ui/Textarea";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import KaitanAgenPicker, { EMPTY_KAITAN, validateKaitan, toKaitanPayload } from "../components/KaitanAgenPicker";
 import { INDONESIAN_CITIES } from "../data/indonesianCities";
 import { 
   Building2, 
@@ -32,7 +33,8 @@ import {
   Plus, 
   X, 
   Save,
-  CheckCircle2
+  CheckCircle2,
+  UserCheck
 } from "lucide-react";
 
 const HUBUNGAN_OPTIONS = [
@@ -56,6 +58,10 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   // Brands State (Khusus Master Dashboard / Super Admin)
   const [brands, setBrands] = useState([]);
   const [brandError, setBrandError] = useState(null);
+
+  // Kaitan agen (Jalur 3) — hanya dipilih saat membuat jamaah baru.
+  const [kaitan, setKaitan] = useState(EMPTY_KAITAN);
+  const [kaitanError, setKaitanError] = useState(null);
 
   const [formData, setFormData] = useState({
     brand_id: "",
@@ -172,6 +178,8 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     const actualVal = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
     setFormData(prev => ({ ...prev, brand_id: actualVal ? Number(actualVal) : "" }));
     if (brandError) setBrandError(null);
+    // Agen terikat brand; pilihan agen lama tidak berlaku di brand lain.
+    setKaitan(prev => (prev.agen ? { mode: "agen", agen: null } : prev));
   };
 
   // Repeater Relasi Handlers
@@ -285,6 +293,16 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
       return;
     }
 
+    if (!isEdit) {
+      const kErr = validateKaitan(kaitan);
+      setKaitanError(kErr);
+      if (kErr) {
+        setError(kErr);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+    }
+
     // Validasi relasi jika ada baris relasi (berlaku di mode create dan edit)
     if (relasiList.length > 0) {
       const rErrors = {};
@@ -378,7 +396,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
 
         navigate(`/jamaah/${id}`);
       } else {
-        const res = await createJamaah(payload);
+        const res = await createJamaah({ ...payload, kaitan_agen: toKaitanPayload(kaitan) });
         const newJamaahId = res?.id;
 
         if (newJamaahId && relasiList.length > 0) {
@@ -872,6 +890,33 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                 </div>
               </MetaBox>
             )}
+
+            {/* Panel Kaitan Agen Syiar (Jalur 3) */}
+            <MetaBox
+              title="Kaitan Agen"
+              subtitle={isEdit ? "Agen Syiar yang terkait dengan jamaah" : "Wajib dipilih untuk jamaah baru"}
+              icon={<UserCheck size={18} className="text-neutral-700" />}
+            >
+              {isEdit ? (
+                <div className="text-sm font-body text-neutral-700">
+                  {formData.kaitan_status === "terikat_agen" && (
+                    <p>Terikat ke agen <span className="font-semibold text-neutral-900">{formData.direkrut_oleh_nama || `#${formData.direkrut_oleh_jamaah_id}`}</span></p>
+                  )}
+                  {formData.kaitan_status === "tanpa_agen" && <p>Tanpa agen</p>}
+                  {(!formData.kaitan_status || formData.kaitan_status === "belum_ditentukan") && <p>Belum ditentukan</p>}
+                  <p className="text-[11px] text-neutral-500 mt-1.5">Kaitan tidak dapat diubah dari form ini.</p>
+                </div>
+              ) : (
+                <KaitanAgenPicker
+                  value={kaitan}
+                  onChange={(v) => { setKaitan(v); setKaitanError(null); }}
+                  brandId={formData.brand_id}
+                  brandRequired={showBrandColumn}
+                  error={kaitanError}
+                  hint="Jamaah yang dikaitkan ke agen akan menghasilkan komisi untuk agen tersebut saat booking lunas."
+                />
+              )}
+            </MetaBox>
 
             {/* Panel Catatan Khusus Internal */}
             <MetaBox 

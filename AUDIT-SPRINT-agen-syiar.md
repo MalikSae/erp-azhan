@@ -153,6 +153,8 @@ Rekomendasi: **jangan mulai coding fitur sebelum Sprint 0 selesai.** Sprint 0 be
 | A0 `/daftar-agen` (D3: PIN 6 digit, tanpa OTP, dengan captcha dan rate limit) yang langsung lanjut ke A1a | M |
 | Test skenario §6 langkah 3, 3b, 11, 12, 14, 19 | S |
 
+**Status: SELESAI 27 Sep 2026.** Backend: `agen/kaitan.go` (resolve kode referral per brand, first-set wins, auto-bind rombongan), `POST /api/public/agen/daftar`, `GET /api/admin/agen/aktif`, `kaitan_agen` wajib di `POST /api/admin/jamaah`, auto-bind di booking admin (create/finalize), selfbooking, dan CRM deal. Frontend: komponen `KaitanAgenPicker` (shared) di `JamaahFormPage` (create; edit menampilkan kaitan read-only) dan modal quick-create `BookingFormPage` (pre-fill "Sama seperti PIC"). Microsite: cookie `azhan_ref` httpOnly 90 hari (last-click wins, kode tidak valid diabaikan), route `book` dan `agen/daftar` mengambil kode hanya dari cookie, halaman `/daftar-agen` → `/portal/daftar-agen` yang login otomatis lalu lanjut ke A1a. Test integrasi langkah 3, 3b, 11, 12, 14 lulus; E2E browser (375 px & 1440 px) untuk picker, pre-fill PIC, daftar agen via link referral, nomor terdaftar (409), dan booking publik via cookie; data uji dibersihkan. Sisa: widget Turnstile asli di microsite (A0 masih memakai token demo, sama seperti `BookingWizard`).
+
 ### Sprint 4 — Jalur 1 & dashboard agen
 **Tujuan:** agen aktif bisa membuat booking untuk jamaahnya dan melihat kinerjanya.
 
