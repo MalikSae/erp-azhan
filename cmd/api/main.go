@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	_ "time/tzdata" // zona waktu tersedia tanpa bergantung pada OS server
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -49,6 +50,9 @@ func main() {
 
 	// ─── Config ───────────────────────────────────────────────────────────────
 	cfg := shared.LoadConfig()
+	// Zona waktu bisnis untuk time.Now(), JSON, dan koneksi DB (lihat shared.Config.DSN).
+	time.Local = cfg.Location()
+	log.Printf("[INFO] zona waktu aplikasi: %s", time.Local)
 	if strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
 		if err := identity.ValidateJWTSecret(); err != nil {
 			log.Fatalf("[ERROR] konfigurasi JWT tidak aman: %v", err)

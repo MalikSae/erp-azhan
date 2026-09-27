@@ -295,7 +295,7 @@ func (r *Repository) ReleaseExpiredSeatHolds(ctx context.Context) (int64, error)
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id FROM bookings
 		WHERE status='baru' AND is_seat_blocked=TRUE
-		  AND seat_hold_expires_at IS NOT NULL AND seat_hold_expires_at <= UTC_TIMESTAMP()
+		  AND seat_hold_expires_at IS NOT NULL AND seat_hold_expires_at <= NOW()
 		ORDER BY id`)
 	if err != nil {
 		return 0, fmt.Errorf("find expired seat hold candidates: %w", err)

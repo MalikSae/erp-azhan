@@ -37,7 +37,7 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 		return fmt.Errorf("komisi: baca booking %d: %w", bookingID, err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE bookings SET pertama_lunas_at = UTC_TIMESTAMP() WHERE id = ? AND pertama_lunas_at IS NULL`, bookingID); err != nil {
+		`UPDATE bookings SET pertama_lunas_at = NOW() WHERE id = ? AND pertama_lunas_at IS NULL`, bookingID); err != nil {
 		return fmt.Errorf("komisi: tandai lunas pertama: %w", err)
 	}
 

@@ -48,7 +48,7 @@ func (r *Repository) IsRefreshTokenActive(ctx context.Context, jti string, admin
 	var n int
 	err := r.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM admin_refresh_tokens
-		 WHERE jti = ? AND admin_user_id = ? AND revoked_at IS NULL AND expires_at > UTC_TIMESTAMP()`,
+		 WHERE jti = ? AND admin_user_id = ? AND revoked_at IS NULL AND expires_at > NOW()`,
 		jti, adminUserID).Scan(&n)
 	if err != nil {
 		return false, fmt.Errorf("identity.IsRefreshTokenActive: %w", err)
@@ -59,7 +59,7 @@ func (r *Repository) IsRefreshTokenActive(ctx context.Context, jti string, admin
 // RevokeRefreshToken mencabut satu refresh token (logout).
 func (r *Repository) RevokeRefreshToken(ctx context.Context, jti string) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE admin_refresh_tokens SET revoked_at = UTC_TIMESTAMP() WHERE jti = ? AND revoked_at IS NULL`, jti)
+		`UPDATE admin_refresh_tokens SET revoked_at = NOW() WHERE jti = ? AND revoked_at IS NULL`, jti)
 	if err != nil {
 		return fmt.Errorf("identity.RevokeRefreshToken: %w", err)
 	}
@@ -71,7 +71,7 @@ func (r *Repository) RevokeRefreshToken(ctx context.Context, jti string) error {
 // interface, bukan query langsung ke tabel ini.
 func (r *Repository) RevokeAllRefreshTokens(ctx context.Context, adminUserID int64) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE admin_refresh_tokens SET revoked_at = UTC_TIMESTAMP() WHERE admin_user_id = ? AND revoked_at IS NULL`, adminUserID)
+		`UPDATE admin_refresh_tokens SET revoked_at = NOW() WHERE admin_user_id = ? AND revoked_at IS NULL`, adminUserID)
 	if err != nil {
 		return fmt.Errorf("identity.RevokeAllRefreshTokens: %w", err)
 	}
