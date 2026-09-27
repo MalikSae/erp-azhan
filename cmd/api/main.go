@@ -17,6 +17,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"erp-azhan/api/internal/addon"
+	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/airline"
 	"erp-azhan/api/internal/airport"
@@ -167,6 +168,9 @@ func main() {
 
 	portalHandler := portal.NewHandler(db, jamaahRepo, bookingRepo, paymentRepo, dokumenRepo)
 
+	agenRepo := agen.NewRepository(db)
+	agenHandler := agen.NewHandler(agenRepo)
+
 	// ─── Routes ───────────────────────────────────────────────────────────────
 	r.Get("/api/health", healthHandler(db))
 
@@ -217,6 +221,11 @@ func main() {
 			r.Get("/dokumen", portalHandler.ListDokumen)
 			r.Post("/dokumen", portalHandler.UploadDokumen)
 			r.Post("/media/upload", mediaHandler.UploadPortalMedia)
+
+			// Agen Syiar (screen A1–A4)
+			r.Get("/agen", agenHandler.GetStatus)
+			r.Post("/agen/pengajuan", agenHandler.Ajukan)
+			r.Post("/agen/pembayaran/bukti", agenHandler.UploadBukti)
 		})
 	})
 
@@ -385,6 +394,19 @@ func main() {
 
 		// CRM: konversi lead menjadi jamaah, booking, seat hold/payment dalam satu transaksi.
 		r.Post("/crm/deals", crmDealHandler.ProcessDeal)
+
+		// Agen Syiar — Persetujuan Agen & status (screen B1/B2a). Akun CS sudah
+		// diblokir oleh RequireAdminOrCRMAccess; brand scope dicek di repository.
+		r.Route("/agen", func(r chi.Router) {
+			r.Use(identity.RequireAdminRole)
+			r.Get("/pengajuan", agenHandler.ListPengajuan)
+			r.Post("/{jamaahID}/setujui", agenHandler.Setujui)
+			r.Post("/{jamaahID}/tolak", agenHandler.Tolak)
+			r.Put("/{jamaahID}/status", agenHandler.UbahStatus)
+			r.Post("/pembayaran/{id}/verifikasi", agenHandler.VerifikasiPembayaran)
+			r.Post("/pembayaran/{id}/tolak", agenHandler.TolakPembayaran)
+			r.Post("/pembayaran/{id}/bukti", agenHandler.UploadBuktiAdmin)
+		})
 
 		// Analytics lintas brand (Super Admin Only)
 		r.With(brand.RequireSuperAdmin).Get("/analytics/transactions-30-days", paymentHandler.ListDailyBrandTransactions)
