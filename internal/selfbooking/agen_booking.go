@@ -27,7 +27,7 @@ const agenBookingLimit = 20 // booking agen per agen per jam
 //   - nomor HP sudah terdaftar: hanya boleh bila milik agen ini, selain itu
 //     ditolak dengan pesan umum tanpa data pemilik;
 //   - selain itu: jamaah baru dibuat (tanpa PIN), baru=true.
-func resolvePaxAgen(ctx context.Context, tx *sql.Tx, brandID, agenID int64, jamaahID *int64, nama string, noHP *string, jenisKelamin string, email *string) (int64, bool, error) {
+func resolvePaxAgen(ctx context.Context, tx *sql.Tx, brandID, agenID int64, jamaahID *int64, nama string, noHP *string, jenisKelamin string, email *string, tanggalLahir *string) (int64, bool, error) {
 	if jamaahID != nil && *jamaahID > 0 {
 		var owner sql.NullInt64
 		err := tx.QueryRowContext(ctx,
@@ -51,7 +51,7 @@ func resolvePaxAgen(ctx context.Context, tx *sql.Tx, brandID, agenID int64, jama
 		jk = &jenisKelamin
 	}
 	if phone == "" {
-		id, err := insertJamaahTanpaHP(ctx, tx, brandID, nama, jk)
+		id, err := insertJamaahTanpaHP(ctx, tx, brandID, nama, jk, tanggalLahir)
 		return id, err == nil, err
 	}
 
@@ -80,10 +80,15 @@ func resolvePaxAgen(ctx context.Context, tx *sql.Tx, brandID, agenID int64, jama
 	if err != nil {
 		return 0, false, fmt.Errorf("booking agen buat jamaah: %w", err)
 	}
+	if tl := tanggalLahirOrNil(tanggalLahir); tl != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir = ? WHERE id = ?`, tl, id); err != nil {
+			return 0, false, fmt.Errorf("booking agen tanggal lahir: %w", err)
+		}
+	}
 	return id, true, nil
 }
 
-func insertJamaahTanpaHP(ctx context.Context, tx *sql.Tx, brandID int64, nama string, jk *string) (int64, error) {
+func insertJamaahTanpaHP(ctx context.Context, tx *sql.Tx, brandID int64, nama string, jk *string, tanggalLahir *string) (int64, error) {
 	var brandCode sql.NullString
 	var counter uint64
 	if err := tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter); err != nil {
@@ -102,8 +107,8 @@ func insertJamaahTanpaHP(ctx context.Context, tx *sql.Tx, brandID int64, nama st
 		return 0, fmt.Errorf("kode jamaah: %w", err)
 	}
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin) VALUES (?, ?, ?, ?, NULL, ?)`,
-		brandID, idJamaah, kodeJamaah, nama, jk)
+		`INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir) VALUES (?, ?, ?, ?, NULL, ?, ?)`,
+		brandID, idJamaah, kodeJamaah, nama, jk, tanggalLahirOrNil(tanggalLahir))
 	if err != nil {
 		return 0, fmt.Errorf("insert jamaah: %w", err)
 	}
@@ -259,7 +264,8 @@ func (h *Handler) writeAgenBookingError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrNomorMilikLain), errors.Is(err, ErrJamaahBukanMilik),
 		errors.Is(err, ErrSeatHabis), errors.Is(err, ErrDuplicate),
-		errors.Is(err, ErrDuplicatePaxInBooking), errors.Is(err, ErrCutoffBooking):
+		errors.Is(err, ErrDuplicatePaxInBooking), errors.Is(err, ErrCutoffBooking),
+		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan")

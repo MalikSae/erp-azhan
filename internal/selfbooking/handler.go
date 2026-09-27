@@ -257,7 +257,8 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		}
 		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) || 
 		   errors.Is(err, ErrAnggotaNameMismatch) || errors.Is(err, ErrDuplicatePaxInBooking) ||
-		   errors.Is(err, ErrPinRequired) || errors.Is(err, ErrCutoffBooking) {
+		   errors.Is(err, ErrPinRequired) || errors.Is(err, ErrCutoffBooking) ||
+		   errors.Is(err, ErrTanggalLahirTidakValid) || errors.Is(err, ErrUsiaInfant) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}

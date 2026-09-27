@@ -159,3 +159,50 @@ func TestBookingPublikReferralSetelahRefactor(t *testing.T) {
 		t.Fatalf("PIC publik = %s/%d pin=%v, want terikat_agen/%d dengan PIN", st, by, pin, agenID)
 	}
 }
+
+// Tanggal lahir anggota (infant) tersimpan dan usia infant divalidasi
+// terhadap tanggal berangkat.
+func TestBookingPublikInfantTanggalLahir(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	hariIni := time.Now()
+	berangkat := hariIni.AddDate(0, 2, 0).Format("2006-01-02")
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: berangkat})
+	testdb.Exec(t, tx, `UPDATE schedules SET status='published' WHERE id=?`, sched)
+
+	booking := func(tanggalLahir string, n int) (*BookingResponse, error) {
+		tl := tanggalLahir
+		req := BookingRequest{
+			ScheduleID: sched,
+			PIC:        PICInput{NamaLengkap: "PIC Infant", NoHP: nomorUji(10 + n), JenisKelamin: "P", RoomType: "Quad", PortalPIN: "135790"},
+			Anggota:    []AnggotaInput{{PaxType: "infant", NamaLengkap: "Bayi Uji", JenisKelamin: "L", TanggalLahir: &tl}},
+		}
+		return processBookingTx(ctx, tx, brand, req, inisiator{})
+	}
+
+	lahir := hariIni.AddDate(0, -8, 0).Format("2006-01-02")
+	resp, err := booking(lahir, 1)
+	if err != nil {
+		t.Fatalf("booking infant: %v", err)
+	}
+	var tersimpan sql.NullString
+	if err := tx.QueryRow(`
+		SELECT DATE_FORMAT(j.tanggal_lahir, '%Y-%m-%d') FROM booking_pax bp
+		JOIN bookings b ON b.id = bp.booking_id JOIN jamaah j ON j.id = bp.jamaah_id
+		WHERE b.id_booking = ? AND bp.pax_type = 'infant'`, resp.Booking.BookingCode).Scan(&tersimpan); err != nil {
+		t.Fatalf("baca infant: %v", err)
+	}
+	if tersimpan.String != lahir {
+		t.Fatalf("tanggal lahir infant tersimpan %q, want %q", tersimpan.String, lahir)
+	}
+
+	if _, err := booking(hariIni.AddDate(-3, 0, 0).Format("2006-01-02"), 2); !errors.Is(err, ErrUsiaInfant) {
+		t.Fatalf("infant 3 tahun: %v", err)
+	}
+	if _, err := booking(hariIni.AddDate(0, 0, 5).Format("2006-01-02"), 3); !errors.Is(err, ErrTanggalLahirTidakValid) {
+		t.Fatalf("tanggal lahir masa depan: %v", err)
+	}
+	if _, err := booking("12-01-2026", 4); !errors.Is(err, ErrTanggalLahirTidakValid) {
+		t.Fatalf("format salah: %v", err)
+	}
+}

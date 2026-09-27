@@ -143,6 +143,9 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	if depDate.Before(cutoffDate) {
 		return nil, ErrCutoffBooking
 	}
+	if err := validasiTanggalLahirAnggota(req.Anggota, depDate, time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())); err != nil {
+		return nil, err
+	}
 
 	var picJamaahID int64
 	issuePortalToken := false
@@ -152,7 +155,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	if modeAgen {
 		noHP := req.PIC.NoHP
 		var baru bool
-		picJamaahID, baru, err = resolvePaxAgen(ctx, tx, brandID, ini.agenID, req.PIC.JamaahID, req.PIC.NamaLengkap, &noHP, req.PIC.JenisKelamin, req.PIC.Email)
+		picJamaahID, baru, err = resolvePaxAgen(ctx, tx, brandID, ini.agenID, req.PIC.JamaahID, req.PIC.NamaLengkap, &noHP, req.PIC.JenisKelamin, req.PIC.Email, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +270,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	anggotaJamaahIDs := make([]int64, len(req.Anggota))
 	for i, a := range req.Anggota {
 		if modeAgen {
-			id, baru, err := resolvePaxAgen(ctx, tx, brandID, ini.agenID, a.JamaahID, a.NamaLengkap, a.NoHP, a.JenisKelamin, nil)
+			id, baru, err := resolvePaxAgen(ctx, tx, brandID, ini.agenID, a.JamaahID, a.NamaLengkap, a.NoHP, a.JenisKelamin, nil, a.TanggalLahir)
 			if err != nil {
 				return nil, err
 			}
@@ -302,9 +305,9 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 			}
 
 			res, err := tx.ExecContext(ctx, `
-				INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin)
-				VALUES (?, ?, ?, ?, NULL, ?)
-			`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.JenisKelamin)
+				INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir)
+				VALUES (?, ?, ?, ?, NULL, ?, ?)
+			`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.JenisKelamin, tanggalLahirOrNil(a.TanggalLahir))
 			if err != nil {
 				return nil, fmt.Errorf("insert anggota jamaah: %w", err)
 			}
@@ -343,9 +346,9 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 				}
 
 				res, err := tx.ExecContext(ctx, `
-					INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin)
-					VALUES (?, ?, ?, ?, ?, ?)
-				`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, rawPhone, a.JenisKelamin)
+					INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir)
+					VALUES (?, ?, ?, ?, ?, ?, ?)
+				`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, rawPhone, a.JenisKelamin, tanggalLahirOrNil(a.TanggalLahir))
 				if err != nil {
 					return nil, fmt.Errorf("insert anggota jamaah: %w", err)
 				}
