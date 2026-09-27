@@ -167,9 +167,14 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refreshToken, err := GenerateRefreshToken(user.ID)
+	refreshToken, refreshJTI, refreshExp, err := GenerateRefreshToken(user.ID)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateRefreshToken: %v", err)
+		writeError(w, http.StatusInternalServerError, "gagal membuat refresh token")
+		return
+	}
+	if err := h.repo.SaveRefreshToken(r.Context(), refreshJTI, user.ID, refreshExp); err != nil {
+		log.Printf("[ERROR] identity.Login SaveRefreshToken: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal membuat refresh token")
 		return
 	}
@@ -216,8 +221,19 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adminUserID, _, _, err := ValidateToken(req.RefreshToken, "refresh")
+	adminUserID, jti, err := ParseRefreshToken(req.RefreshToken)
 	if err != nil {
+		writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
+		return
+	}
+
+	active, err := h.repo.IsRefreshTokenActive(r.Context(), jti, adminUserID)
+	if err != nil {
+		log.Printf("[ERROR] identity.Refresh IsRefreshTokenActive: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		return
+	}
+	if !active {
 		writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
 		return
 	}
@@ -260,9 +276,23 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 // ─── Logout ───────────────────────────────────────────────────────────────────
 
+// Logout mencabut refresh token yang dikirim. Selalu 200 agar client tetap
+// bisa membersihkan sesi lokal walau token sudah kedaluwarsa/tidak valid.
+// Access token yang sudah terbit tetap berlaku sampai habis (maks. 15 menit).
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	// Limitasi sementara: karena token stateless, server tidak menyimpan token blacklist
-	// Invalidasi sesungguhnya adalah tanggung jawab client (hapus token dari storage)
+	var req RefreshRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if token := strings.TrimSpace(req.RefreshToken); token != "" {
+		if _, jti, err := ParseRefreshToken(token); err == nil {
+			if err := h.repo.RevokeRefreshToken(r.Context(), jti); err != nil {
+				log.Printf("[ERROR] identity.Logout RevokeRefreshToken: %v", err)
+				writeError(w, http.StatusInternalServerError, "gagal logout, silakan coba lagi")
+				return
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "logout berhasil"})
 }
 

@@ -63,19 +63,39 @@ func GenerateAccessToken(adminUserID int64, brandID *int64, role string, emails 
 	return token.SignedString(getJWTSecret())
 }
 
-// GenerateRefreshToken membuat token refresh baru
-func GenerateRefreshToken(adminUserID int64) (string, error) {
+// GenerateRefreshToken membuat token refresh baru. jti dan expiresAt
+// dikembalikan agar pemanggil bisa mencatatnya di admin_refresh_tokens.
+func GenerateRefreshToken(adminUserID int64) (token string, jti string, expiresAt time.Time, err error) {
 	now := time.Now()
-	ttl := getRefreshTTL()
+	jti = uuid.New().String()
+	expiresAt = now.Add(getRefreshTTL())
 	claims := jwt.MapClaims{
 		"sub":  adminUserID,
 		"type": "refresh",
-		"jti":  uuid.New().String(),
-		"exp":  now.Add(ttl).Unix(),
+		"jti":  jti,
+		"exp":  expiresAt.Unix(),
 		"iat":  now.Unix(),
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(getJWTSecret())
+	token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(getJWTSecret())
+	return token, jti, expiresAt, err
+}
+
+// ParseRefreshToken memvalidasi signature, exp, dan type refresh token, lalu
+// mengembalikan admin user ID dan jti-nya.
+func ParseRefreshToken(tokenString string) (int64, string, error) {
+	adminUserID, _, _, err := ValidateToken(tokenString, "refresh")
+	if err != nil {
+		return 0, "", err
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := jwt.NewParser().ParseUnverified(tokenString, claims); err != nil {
+		return 0, "", fmt.Errorf("refresh token tidak valid: %w", err)
+	}
+	jti, _ := claims["jti"].(string)
+	if jti == "" {
+		return 0, "", errors.New("jti claim tidak valid")
+	}
+	return adminUserID, jti, nil
 }
 
 // ValidateToken memvalidasi signature, exp, dan type token.

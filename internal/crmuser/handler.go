@@ -1,8 +1,10 @@
 package crmuser
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -15,9 +17,20 @@ import (
 
 var emailPattern = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
-type Handler struct{ repo *Repository }
+// TokenRevoker mencabut semua refresh token milik seorang user (diimplementasi
+// oleh identity.Repository), dipakai saat password direset atau akun dinonaktifkan.
+type TokenRevoker interface {
+	RevokeAllRefreshTokens(ctx context.Context, adminUserID int64) error
+}
 
-func NewHandler(repo *Repository) *Handler { return &Handler{repo: repo} }
+type Handler struct {
+	repo    *Repository
+	revoker TokenRevoker
+}
+
+func NewHandler(repo *Repository, revoker TokenRevoker) *Handler {
+	return &Handler{repo: repo, revoker: revoker}
+}
 
 func (h *Handler) brandID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	if current := identity.GetBrandID(r.Context()); current != nil {
@@ -132,6 +145,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		h.error(w, 500, "gagal memperbarui akun CS")
 		return
 	}
+	if !user.IsActive {
+		if err := h.revoker.RevokeAllRefreshTokens(r.Context(), int64(userID)); err != nil {
+			log.Printf("[ERROR] crmuser.Update RevokeAllRefreshTokens user_id=%d: %v", userID, err)
+			h.error(w, 500, "akun dinonaktifkan, tetapi gagal mengakhiri sesi lama. Silakan simpan ulang")
+			return
+		}
+	}
 	h.json(w, 200, user)
 }
 
@@ -162,6 +182,11 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		h.error(w, 500, "gagal mereset password")
+		return
+	}
+	if err := h.revoker.RevokeAllRefreshTokens(r.Context(), int64(userID)); err != nil {
+		log.Printf("[ERROR] crmuser.ResetPassword RevokeAllRefreshTokens user_id=%d: %v", userID, err)
+		h.error(w, 500, "password tersimpan, tetapi gagal mengakhiri sesi lama. Silakan reset ulang")
 		return
 	}
 	h.json(w, 200, map[string]string{"message": "password berhasil diubah"})

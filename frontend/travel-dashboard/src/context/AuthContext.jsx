@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { getMyBrand } from 'shared';
+import api from '../api/client';
 
 const AuthContext = createContext();
 const USER_EMAIL_STORAGE_KEY = 'travel_user_email';
@@ -62,6 +63,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    // Cabut refresh token di server; sesi lokal tetap dibersihkan walau
+    // request gagal (fire and forget).
+    const refreshToken = localStorage.getItem('refresh_token') || localStorage.getItem('erp_refresh_token');
+    if (refreshToken) {
+      api.post('/api/auth/logout', { refresh_token: refreshToken }).catch(() => {});
+    }
+
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('erp_access_token');

@@ -147,7 +147,7 @@ func main() {
 	crmDealRepo := crmdeal.NewRepository(db)
 	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
 	crmUserRepo := crmuser.NewRepository(db)
-	crmUserHandler := crmuser.NewHandler(crmUserRepo)
+	crmUserHandler := crmuser.NewHandler(crmUserRepo, identityRepo)
 
 	selfBookingRepo := selfbooking.NewRepository(db)
 	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo)
@@ -163,7 +163,7 @@ func main() {
 	perlengkapanHandler := perlengkapan.NewHandler(perlengkapanRepo)
 
 	adminuserRepo := adminuser.NewRepository(db)
-	adminuserHandler := adminuser.NewHandler(adminuserRepo)
+	adminuserHandler := adminuser.NewHandler(adminuserRepo, identityRepo)
 
 	portalHandler := portal.NewHandler(db, jamaahRepo, bookingRepo, paymentRepo, dokumenRepo)
 

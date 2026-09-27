@@ -1,8 +1,10 @@
 package adminuser
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -16,12 +18,19 @@ import (
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
-type Handler struct {
-	repo *Repository
+// TokenRevoker mencabut semua refresh token milik seorang user (diimplementasi
+// oleh identity.Repository), dipakai setelah password berubah.
+type TokenRevoker interface {
+	RevokeAllRefreshTokens(ctx context.Context, adminUserID int64) error
 }
 
-func NewHandler(repo *Repository) *Handler {
-	return &Handler{repo: repo}
+type Handler struct {
+	repo    *Repository
+	revoker TokenRevoker
+}
+
+func NewHandler(repo *Repository, revoker TokenRevoker) *Handler {
+	return &Handler{repo: repo, revoker: revoker}
 }
 
 func (h *Handler) sendJSON(w http.ResponseWriter, status int, data any) {
@@ -170,6 +179,11 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusInternalServerError, "Gagal mereset password")
 		return
 	}
+	if err := h.revoker.RevokeAllRefreshTokens(r.Context(), int64(id)); err != nil {
+		log.Printf("[ERROR] adminuser.ResetPassword RevokeAllRefreshTokens user_id=%d: %v", id, err)
+		h.sendError(w, http.StatusInternalServerError, "Password tersimpan, tetapi gagal mengakhiri sesi lama. Silakan reset ulang")
+		return
+	}
 
 	h.sendJSON(w, http.StatusOK, map[string]string{"message": "password berhasil diubah"})
 }
@@ -224,6 +238,13 @@ func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.repo.ResetPassword(r.Context(), userID, string(newHash)); err != nil {
 		h.sendError(w, http.StatusInternalServerError, "Gagal menyimpan password baru")
+		return
+	}
+	// Semua sesi akun ini diakhiri, termasuk sesi saat ini: setelah access token
+	// habis (maks. 15 menit) pengguna login ulang dengan password baru.
+	if err := h.revoker.RevokeAllRefreshTokens(r.Context(), int64(userID)); err != nil {
+		log.Printf("[ERROR] adminuser.ChangeOwnPassword RevokeAllRefreshTokens user_id=%d: %v", userID, err)
+		h.sendError(w, http.StatusInternalServerError, "Password tersimpan, tetapi gagal mengakhiri sesi lama. Silakan ganti ulang")
 		return
 	}
 
