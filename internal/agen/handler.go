@@ -104,6 +104,27 @@ func (h *Handler) ListPengajuan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// ListAgenAktif GET /api/admin/agen/aktif?brand_id=&q= — sumber picker
+// "Kaitkan ke Agen" (screen B4/C3). Admin Travel selalu brand-nya sendiri;
+// Super Admin wajib menyebut brand_id jamaah yang sedang diinput.
+func (h *Handler) ListAgenAktif(w http.ResponseWriter, r *http.Request) {
+	brandID := identity.GetBrandID(r.Context())
+	if brandID == nil {
+		id, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64)
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+			return
+		}
+		brandID = &id
+	}
+	items, err := ListAgenAktif(r.Context(), h.repo.db, *brandID, r.URL.Query().Get("q"))
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 // Setujui POST /api/admin/agen/{jamaahID}/setujui — selalu bisa, tanpa gate pembayaran.
 func (h *Handler) Setujui(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r, "jamaahID")

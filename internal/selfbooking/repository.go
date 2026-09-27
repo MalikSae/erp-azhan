@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/shared"
@@ -297,6 +298,16 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID int64, req Book
 			return nil, ErrDuplicatePaxInBooking
 		}
 		allJamaahMap[aid] = true
+	}
+
+	// Kaitan agen Jalur 2 (3.2–3.4): kode referral dari cookie, lalu auto-bind
+	// seluruh pax yang belum punya kaitan ke agen booking ini.
+	agenReferral, err := agen.ResolveKodeReferral(ctx, tx, brandID, req.KodeReferral)
+	if err != nil {
+		return nil, err
+	}
+	if err := agen.IkatRombongan(ctx, tx, picJamaahID, anggotaJamaahIDs, agenReferral); err != nil {
+		return nil, err
 	}
 
 	// 7. Generate booking code

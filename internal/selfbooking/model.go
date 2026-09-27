@@ -12,7 +12,7 @@ type PICInput struct {
 
 // AnggotaInput adalah data anggota rombongan (minimal).
 type AnggotaInput struct {
-	PaxType      string  `json:"pax_type"`      // "reguler" | "infant"
+	PaxType      string  `json:"pax_type"` // "reguler" | "infant"
 	NamaLengkap  string  `json:"nama_lengkap"`
 	NoHP         *string `json:"no_hp,omitempty"`
 	JenisKelamin string  `json:"jenis_kelamin"` // "L" atau "P"
@@ -33,9 +33,12 @@ type CheckPhoneResponse struct {
 
 // BookingRequest adalah payload untuk POST /api/public/book.
 type BookingRequest struct {
-	BrandID      int64          `json:"brand_id"`
-	ScheduleID   int64          `json:"schedule_id"`
-	CaptchaToken string         `json:"captcha_token"`
+	BrandID      int64  `json:"brand_id"`
+	ScheduleID   int64  `json:"schedule_id"`
+	CaptchaToken string `json:"captcha_token"`
+	// KodeReferral diisi route handler microsite dari cookie referral
+	// (last-click 90 hari), bukan dari input pengguna.
+	KodeReferral string         `json:"kode_referral"`
 	PIC          PICInput       `json:"pic"`
 	Anggota      []AnggotaInput `json:"anggota"`
 }
@@ -90,13 +93,13 @@ type InvoiceBrandInfo struct {
 	PPIUNumber     *string `json:"ppiu_number,omitempty"`
 	PIHKNumber     *string `json:"pihk_number,omitempty"`
 	Akreditasi     *string `json:"akreditasi,omitempty"`
-	LogoURL      *string `json:"logo_url,omitempty"`
-	PrimaryColor string  `json:"primary_color"`
-	Phone        *string `json:"phone,omitempty"`
+	LogoURL        *string `json:"logo_url,omitempty"`
+	PrimaryColor   string  `json:"primary_color"`
+	Phone          *string `json:"phone,omitempty"`
 	WhatsappNumber *string `json:"whatsapp_number,omitempty"`
-	Alamat       *string `json:"alamat,omitempty"`
-	City         *string `json:"city,omitempty"`
-	Province     *string `json:"province,omitempty"`
+	Alamat         *string `json:"alamat,omitempty"`
+	City           *string `json:"city,omitempty"`
+	Province       *string `json:"province,omitempty"`
 }
 
 // InvoiceMaskapaiInfo berisi info maskapai penerbangan.
@@ -153,4 +156,3 @@ type InvoiceResponse struct {
 	Financial         InvoiceFinancial    `json:"financial"`
 	BankAccounts      []BankAccountInfo   `json:"bank_accounts"`
 }
-

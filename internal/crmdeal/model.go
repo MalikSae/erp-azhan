@@ -21,6 +21,9 @@ type DealRequest struct {
 	PaymentMethod     *string     `json:"payment_method,omitempty"`
 	PaymentDate       *string     `json:"payment_date,omitempty"`
 	PaymentProofURL   *string     `json:"payment_proof_url,omitempty"`
+	// KodeReferral opsional: kode agen Syiar; hanya mengikat jamaah yang
+	// belum punya kaitan agen (agen-azhan.md 7.3).
+	KodeReferral *string `json:"kode_referral,omitempty"`
 }
 
 type DealResponse struct {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/agen"
 	"github.com/go-sql-driver/mysql"
 )
 
@@ -129,7 +130,10 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([
 		ROUND(
 			(SELECT COUNT(*) FROM dokumen_jamaah dj WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status IN ('submitted', 'approved')) / 6.0 * 100
 		) AS pct_dokumen,
-		created_at
+		created_at,
+		kaitan_status, direkrut_oleh_jamaah_id,
+		(SELECT a.nama_lengkap FROM jamaah a WHERE a.id = jamaah.direkrut_oleh_jamaah_id) AS direkrut_oleh_nama,
+		status_agen
 		FROM jamaah WHERE 1=1`
 
 	var args []interface{}
@@ -158,7 +162,8 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([
 	items := make([]JamaahListItem, 0)
 	for rows.Next() {
 		var item JamaahListItem
-		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &item.PctDokumen, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &item.PctDokumen, &item.CreatedAt,
+			&item.KaitanStatus, &item.DirekrutOlehJamaahID, &item.DirekrutOlehNama, &item.StatusAgen); err != nil {
 			return nil, fmt.Errorf("jamaah.List scan: %w", err)
 		}
 		items = append(items, item)
@@ -179,7 +184,10 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		alamat, kota, catatan, status, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat,
 		created_at,
 		IF(portal_pin_hash IS NOT NULL AND portal_pin_hash != '', TRUE, FALSE) AS portal_aktif,
-		(SELECT expires_at FROM jamaah_activation_tokens WHERE jamaah_id = jamaah.id AND used_at IS NULL AND expires_at > NOW() ORDER BY expires_at DESC LIMIT 1) AS link_aktivasi_aktif_sampai
+		(SELECT expires_at FROM jamaah_activation_tokens WHERE jamaah_id = jamaah.id AND used_at IS NULL AND expires_at > NOW() ORDER BY expires_at DESC LIMIT 1) AS link_aktivasi_aktif_sampai,
+		kaitan_status, direkrut_oleh_jamaah_id,
+		(SELECT a.nama_lengkap FROM jamaah a WHERE a.id = jamaah.direkrut_oleh_jamaah_id) AS direkrut_oleh_nama,
+		status_agen
 		FROM jamaah WHERE id=?`
 
 	var args []interface{}
@@ -201,6 +209,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		&j.CreatedAt,
 		&j.PortalAktif,
 		&linkExpiresAt,
+		&j.KaitanStatus, &j.DirekrutOlehJamaahID, &j.DirekrutOlehNama, &j.StatusAgen,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -264,6 +273,20 @@ func (r *Repository) Create(ctx context.Context, brandID int64, req *CreateJamaa
 	id, err := res.LastInsertId()
 	if err != nil {
 		return nil, fmt.Errorf("jamaah.Create LastInsertId: %w", err)
+	}
+
+	// Kaitan agen Jalur 3 (3.5): pilihan eksplisit Admin, di transaksi yang sama.
+	if req.KaitanAgen != nil {
+		var agenID int64
+		if req.KaitanAgen.Mode == "agen" {
+			agenID = *req.KaitanAgen.AgenJamaahID
+			if err := agen.ValidasiAgenAktif(ctx, tx, brandID, agenID); err != nil {
+				return nil, err
+			}
+		}
+		if err := agen.TetapkanKaitanJalur3(ctx, tx, id, req.KaitanAgen.Mode, agenID); err != nil {
+			return nil, fmt.Errorf("jamaah.Create kaitan agen: %w", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

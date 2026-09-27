@@ -23,6 +23,7 @@ func newTestHandler(t *testing.T, siteverifyBody string, siteverifyStatus int) *
 		invoiceMissIP:  newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
 		bookingByIP:    newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
+		daftarByIP:     newWindowLimiter(daftarAgenIPLimit, time.Hour),
 	}
 	if siteverifyBody != "" {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,5 +137,37 @@ func TestWindowLimiterResetsAfterWindow(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	if !l.allow("k") {
 		t.Fatal("allow() = false setelah jendela berakhir")
+	}
+}
+
+func postDaftar(h *Handler, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/api/public/agen/daftar", strings.NewReader(body))
+	req.RemoteAddr = "198.51.100.9:5555"
+	rec := httptest.NewRecorder()
+	h.DaftarAgen(rec, req)
+	return rec
+}
+
+func TestDaftarAgenValidasi(t *testing.T) {
+	h := newTestHandler(t, `{"success":true}`, http.StatusOK)
+	cases := []struct{ body, want string }{
+		{`{"brand_id":2,"nama_lengkap":"Uji","no_hp":"081234567890","portal_pin":"123456"}`, "Verifikasi keamanan gagal"},
+		{`{"captcha_token":"token-uji","nama_lengkap":"Uji","no_hp":"081234567890","portal_pin":"123456"}`, "brand_id wajib diisi"},
+		{`{"captcha_token":"token-uji","brand_id":2,"nama_lengkap":"U","no_hp":"081234567890","portal_pin":"123456"}`, "nama lengkap wajib diisi"},
+		{`{"captcha_token":"token-uji","brand_id":2,"nama_lengkap":"Uji","no_hp":"0812","portal_pin":"123456"}`, "nomor WhatsApp tidak valid"},
+		{`{"captcha_token":"token-uji","brand_id":2,"nama_lengkap":"Uji","no_hp":"081234567890","portal_pin":"12a456"}`, "PIN portal harus 6 digit angka"},
+	}
+	for _, c := range cases {
+		rec := postDaftar(h, c.body)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), c.want) {
+			t.Fatalf("body %s: got %d %s, want 400 %q", c.body, rec.Code, rec.Body.String(), c.want)
+		}
+	}
+	// Batas per IP: percobaan ke-11 dalam satu jam ditolak.
+	for i := len(cases); i < daftarAgenIPLimit; i++ {
+		postDaftar(h, `{}`)
+	}
+	if rec := postDaftar(h, `{}`); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("batas IP: got %d, want 429", rec.Code)
 	}
 }

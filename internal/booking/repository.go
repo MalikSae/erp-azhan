@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/komisi"
 )
 
@@ -538,6 +539,12 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 		return nil, fmt.Errorf("booking.Create recalc: %w", err)
 	}
 
+	// Auto-bind kaitan agen multi-pax (agen-azhan.md 3.4): pax yang belum punya
+	// kaitan ikut agen PIC.
+	if err := agen.IkatRombonganBooking(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.Create kaitan agen: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("booking.Create commit: %w", err)
 	}
@@ -936,6 +943,10 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.Finalize recalc: %w", err)
+	}
+
+	if err := agen.IkatRombonganBooking(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.Finalize kaitan agen: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -191,6 +191,7 @@ func main() {
 
 	// Public: Booking (Self-Service) & Digital Invoice & Jamaah Check
 	r.With(requireDB(db)).Post("/api/public/book", selfBookingHandler.CreateBooking)
+	r.With(requireDB(db)).Post("/api/public/agen/daftar", selfBookingHandler.DaftarAgen)
 	r.With(requireDB(db)).Get("/api/public/invoice/{code}", selfBookingHandler.GetPublicInvoice)
 	r.With(requireDB(db)).Post("/api/public/jamaah/check", selfBookingHandler.CheckPhone)
 	r.With(requireDB(db)).Post("/api/public/aktivasi/check", portalHandler.CheckActivationToken)
@@ -400,6 +401,7 @@ func main() {
 		r.Route("/agen", func(r chi.Router) {
 			r.Use(identity.RequireAdminRole)
 			r.Get("/pengajuan", agenHandler.ListPengajuan)
+			r.Get("/aktif", agenHandler.ListAgenAktif)
 			r.Post("/{jamaahID}/setujui", agenHandler.Setujui)
 			r.Post("/{jamaahID}/tolak", agenHandler.Tolak)
 			r.Put("/{jamaahID}/status", agenHandler.UbahStatus)

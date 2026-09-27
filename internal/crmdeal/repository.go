@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/shared"
 	"github.com/go-sql-driver/mysql"
@@ -210,6 +211,18 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 		); err != nil {
 			return nil, fmt.Errorf("create booking pax: %w", err)
 		}
+	}
+
+	var kodeReferral string
+	if req.KodeReferral != nil {
+		kodeReferral = *req.KodeReferral
+	}
+	agenReferral, err := agen.ResolveKodeReferral(ctx, tx, brandID, kodeReferral)
+	if err != nil {
+		return nil, err
+	}
+	if err := agen.IkatRombongan(ctx, tx, jamaahID, nil, agenReferral); err != nil {
+		return nil, err
 	}
 
 	if isSeatBlocked {

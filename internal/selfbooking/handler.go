@@ -40,6 +40,7 @@ type Handler struct {
 	invoiceMissIP  *windowLimiter
 	bookingByIP    *windowLimiter
 	bookingByPhone *windowLimiter
+	daftarByIP     *windowLimiter
 }
 
 func NewHandler(repo *Repository) *Handler {
@@ -50,6 +51,7 @@ func NewHandler(repo *Repository) *Handler {
 		invoiceMissIP:  newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
 		bookingByIP:   newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
+		daftarByIP:     newWindowLimiter(daftarAgenIPLimit, time.Hour),
 	}
 }
 

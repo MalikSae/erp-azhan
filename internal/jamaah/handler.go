@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
+	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/identity"
 )
 
@@ -82,6 +83,16 @@ func (h *Handler) CreateJamaah(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Status = &s
+	}
+
+	// Kaitan agen wajib dipilih eksplisit untuk jamaah baru (Jalur 3, 3.5).
+	if req.KaitanAgen == nil || (req.KaitanAgen.Mode != "agen" && req.KaitanAgen.Mode != "tanpa_agen") {
+		writeError(w, http.StatusBadRequest, "kaitan agen wajib dipilih: kaitkan ke agen atau tanpa agen")
+		return
+	}
+	if req.KaitanAgen.Mode == "agen" && (req.KaitanAgen.AgenJamaahID == nil || *req.KaitanAgen.AgenJamaahID <= 0) {
+		writeError(w, http.StatusBadRequest, "agen wajib dipilih")
+		return
 	}
 
 	// Brand resolution — pola sama dengan schedule
@@ -340,6 +351,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrDuplicateNIK):
 		writeError(w, http.StatusConflict, "NIK sudah terdaftar")
+	case errors.Is(err, agen.ErrAgenTidakValid):
+		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrDuplicateNoHP):
 		writeError(w, http.StatusConflict, "nomor HP sudah dipakai jamaah lain di brand ini")
 	case errors.Is(err, ErrKodeBrandNotSet):

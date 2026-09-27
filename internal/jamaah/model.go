@@ -38,6 +38,10 @@ type Jamaah struct {
 	CreatedAt               time.Time `json:"created_at"`
 	PortalAktif             bool      `json:"portal_aktif"`
 	LinkAktivasiAktifSampai *string   `json:"link_aktivasi_aktif_sampai"`
+	KaitanStatus            string    `json:"kaitan_status"`
+	DirekrutOlehJamaahID    *int64    `json:"direkrut_oleh_jamaah_id"`
+	DirekrutOlehNama        *string   `json:"direkrut_oleh_nama"`
+	StatusAgen              string    `json:"status_agen"`
 }
 
 // JamaahListItem adalah ringkasan untuk endpoint list.
@@ -56,6 +60,10 @@ type JamaahListItem struct {
 	PctData      int       `json:"pct_data"`
 	PctDokumen   int       `json:"pct_dokumen"`
 	CreatedAt    time.Time `json:"created_at"`
+	KaitanStatus            string    `json:"kaitan_status"`
+	DirekrutOlehJamaahID    *int64    `json:"direkrut_oleh_jamaah_id"`
+	DirekrutOlehNama        *string   `json:"direkrut_oleh_nama"`
+	StatusAgen              string    `json:"status_agen"`
 }
 
 // ─── Relasi Kekerabatan ────────────────────────────────────────────────────────
@@ -125,6 +133,16 @@ type CreateJamaahRequest struct {
 	EmergencyHP         *string `json:"emergency_hp"`
 	EmergencyHubungan   *string `json:"emergency_hubungan"`
 	EmergencyAlamat     *string `json:"emergency_alamat"`
+	// KaitanAgen wajib saat membuat jamaah baru (Jalur 3, agen-azhan.md 3.5).
+	// Diabaikan saat update: kaitan hanya bisa diganti Admin Master (C4).
+	KaitanAgen *KaitanAgenInput `json:"kaitan_agen"`
+}
+
+// KaitanAgenInput: mode "agen" (wajib agen_jamaah_id agen aktif di brand yang
+// sama) atau "tanpa_agen".
+type KaitanAgenInput struct {
+	Mode         string `json:"mode"`
+	AgenJamaahID *int64 `json:"agen_jamaah_id"`
 }
 
 // UpdateJamaahRequest memiliki struktur yang sama dengan Create.
