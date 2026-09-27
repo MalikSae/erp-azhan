@@ -11,7 +11,7 @@ import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { getBrand, createBrand, updateBrand } from '../api/brands';
 import { uploadMedia } from '../api/media';
-import { Building2, Upload, Phone, CreditCard, Globe, Save, CheckCircle2, Search, X } from 'lucide-react';
+import { Building2, Upload, Phone, CreditCard, Globe, Save, CheckCircle2, Search, X, Users } from 'lucide-react';
 
 const initialFormData = {
   kode_brand: '',
@@ -39,7 +39,9 @@ const initialFormData = {
   social_youtube: '',
   meta_title: '',
   meta_description: '',
-  google_verification_code: ''
+  google_verification_code: '',
+  biaya_pendaftaran_agen: '',
+  no_wa_admin_travel: ''
 };
 
 const BrandFormPage = () => {
@@ -93,7 +95,9 @@ const BrandFormPage = () => {
             social_youtube: data.social_youtube || '',
             meta_title: data.meta_title || '',
             meta_description: data.meta_description || '',
-            google_verification_code: data.google_verification_code || ''
+            google_verification_code: data.google_verification_code || '',
+            biaya_pendaftaran_agen: data.biaya_pendaftaran_agen ? String(data.biaya_pendaftaran_agen) : '',
+            no_wa_admin_travel: data.no_wa_admin_travel || ''
           });
         } catch (err) {
           if (err.response?.status === 404) {
@@ -224,6 +228,9 @@ const BrandFormPage = () => {
         meta_title: formData.meta_title ? formData.meta_title.trim() : null,
         meta_description: formData.meta_description ? formData.meta_description.trim() : null,
         google_verification_code: formData.google_verification_code ? formData.google_verification_code.trim() : null,
+        // Kosong = Rp0 (brand tidak memungut biaya pendaftaran agen).
+        biaya_pendaftaran_agen: Number(String(formData.biaya_pendaftaran_agen).replace(/\D/g, '')) || 0,
+        no_wa_admin_travel: formData.no_wa_admin_travel ? formData.no_wa_admin_travel.trim() : null,
       };
 
       if (isEditMode) {
@@ -561,6 +568,44 @@ const BrandFormPage = () => {
                   placeholder="cth. No. 395/2021"
                   className="!mb-0"
                 />
+              </div>
+            </MetaBox>
+
+            {/* MetaBox Program Agen (Syiar) */}
+            <MetaBox
+              title="Program Agen (Syiar)"
+              subtitle="Biaya pendaftaran agen & kontak konfirmasi pembayaran"
+              icon={<Users size={18} className="text-neutral-700" />}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  label="Biaya Pendaftaran Agen (Rp)"
+                  helpText="Kosongkan atau isi 0 jika brand tidak memungut biaya. Perubahan hanya berlaku untuk pengajuan baru."
+                  className="!mb-0"
+                >
+                  <Input
+                    name="biaya_pendaftaran_agen"
+                    value={formData.biaya_pendaftaran_agen ? Number(formData.biaya_pendaftaran_agen).toLocaleString('id-ID') : ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, biaya_pendaftaran_agen: e.target.value.replace(/\D/g, '') }))}
+                    placeholder="mis. 150.000"
+                    inputMode="numeric"
+                    className="!mb-0"
+                  />
+                </FormField>
+                <FormField
+                  label="No. WhatsApp Admin Travel"
+                  helpText="Tujuan tombol “Konfirmasi Pembayaran via WhatsApp” di halaman pendaftaran agen."
+                  className="!mb-0"
+                >
+                  <Input
+                    name="no_wa_admin_travel"
+                    value={formData.no_wa_admin_travel}
+                    onChange={handleChange}
+                    placeholder="mis. 081234567890"
+                    inputMode="tel"
+                    className="!mb-0"
+                  />
+                </FormField>
               </div>
             </MetaBox>
 

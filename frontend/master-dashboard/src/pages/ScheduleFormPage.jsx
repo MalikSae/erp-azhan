@@ -82,6 +82,8 @@ const ScheduleFormPage = () => {
     harga_double: '',
     harga_infant: '',
     minimal_dp: '',
+    nominal_komisi_langsung: '',
+    nominal_bonus_pembinaan: '',
     harga_coret: '',
     itinerary_id: '',
     include_items: [''],
@@ -244,6 +246,8 @@ const ScheduleFormPage = () => {
             harga_double: scheduleData.harga_double || '',
             harga_infant: scheduleData.harga_infant || '',
             minimal_dp: scheduleData.minimal_dp || '',
+            nominal_komisi_langsung: scheduleData.nominal_komisi_langsung ?? '',
+            nominal_bonus_pembinaan: scheduleData.nominal_bonus_pembinaan ?? '',
             harga_coret: scheduleData.harga_coret || '',
             itinerary_id: scheduleData.itinerary?.id || scheduleData.itinerary_id || '',
             include_items: safeArray(scheduleData.include_items),
@@ -535,6 +539,9 @@ const ScheduleFormPage = () => {
       const hargaDouble = parseCurrency(formData.harga_double);
       const hargaInfant = formData.harga_infant ? parseCurrency(formData.harga_infant) : null;
       const minimalDP = formData.minimal_dp ? parseCurrency(formData.minimal_dp) : null;
+      // Kosong = jadwal tidak ikut program Syiar (NULL), 0 tetap disimpan sebagai 0.
+      const komisiLangsung = formData.nominal_komisi_langsung !== '' ? parseCurrency(formData.nominal_komisi_langsung) : null;
+      const bonusPembinaan = formData.nominal_bonus_pembinaan !== '' ? parseCurrency(formData.nominal_bonus_pembinaan) : null;
       const hargaCoret = formData.is_promo && formData.harga_coret
         ? parseCurrency(formData.harga_coret)
         : null;
@@ -611,6 +618,8 @@ const ScheduleFormPage = () => {
         harga_double: hargaDouble,
         harga_infant: hargaInfant,
         minimal_dp: minimalDP,
+        nominal_komisi_langsung: komisiLangsung,
+        nominal_bonus_pembinaan: bonusPembinaan,
         harga_coret: hargaCoret,
         itinerary_id: formData.itinerary_id ? parseInt(formData.itinerary_id, 10) : null,
         include_items: includeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
@@ -1410,6 +1419,35 @@ const ScheduleFormPage = () => {
                     prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
                     helpText="Biarkan kosong jika tidak ada batas minimal DP khusus"
                   />
+                </div>
+
+                {/* 2 Kolom: Komisi Agen Syiar (per pax aktif, dibayar saat booking lunas) */}
+                <div className="border-t border-neutral-200 pt-4 mt-4 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Komisi Langsung Agen (Rp/pax)"
+                      className="!mb-0"
+                      type="text"
+                      name="nominal_komisi_langsung"
+                      value={formatCurrency(formData.nominal_komisi_langsung)}
+                      onChange={handleCurrencyChange}
+                      placeholder="mis. 1.000.000"
+                      inputMode="numeric"
+                    />
+                    <Input
+                      label="Bonus Pembinaan Upline (Rp/pax)"
+                      className="!mb-0"
+                      type="text"
+                      name="nominal_bonus_pembinaan"
+                      value={formatCurrency(formData.nominal_bonus_pembinaan)}
+                      onChange={handleCurrencyChange}
+                      placeholder="mis. 300.000"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <p className="text-xs text-neutral-500 font-body">
+                    Komisi Agen Syiar. Kosongkan komisi langsung jika jadwal ini tidak ikut program. Repeat order &amp; cashback = 50% dari komisi langsung. Perubahan hanya berlaku untuk booking baru.
+                  </p>
                 </div>
 
                 {/* Promo Divider & Row */}

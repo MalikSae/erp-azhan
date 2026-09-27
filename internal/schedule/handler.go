@@ -463,6 +463,16 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		}
 	}
 
+	// Gate 14.3: Nominal komisi Syiar (opsional; kosong = jadwal tidak ikut program)
+	if req.NominalKomisiLangsung != nil && *req.NominalKomisiLangsung < 0 {
+		writeError(w, http.StatusBadRequest, "nominal_komisi_langsung tidak boleh kurang dari 0")
+		return nil, false
+	}
+	if req.NominalBonusPembinaan != nil && *req.NominalBonusPembinaan < 0 {
+		writeError(w, http.StatusBadRequest, "nominal_bonus_pembinaan tidak boleh kurang dari 0")
+		return nil, false
+	}
+
 	// Gate 14.5: Validasi harga_coret
 	var finalHargaCoret *float64
 	if req.IsPromo {
@@ -573,6 +583,8 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		HargaInfant:              finalHargaInfant,
 		HargaCoret:               finalHargaCoret,
 		MinimalDP:                req.MinimalDP,
+		NominalKomisiLangsung:    req.NominalKomisiLangsung,
+		NominalBonusPembinaan:    req.NominalBonusPembinaan,
 		ItineraryID:              req.ItineraryID,
 		IncludeItems:             includeItems,
 		ExcludeItems:             excludeItems,

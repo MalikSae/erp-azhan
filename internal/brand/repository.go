@@ -19,7 +19,7 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-const selectCols = `id, kode_brand, jamaah_counter, name, domain, whatsapp_number, email, phone, address, city, province, gmaps_url, legalitas, ppiu_number, pihk_number, akreditasi, bank_name, bank_account_number, bank_account_holder, social_facebook, social_instagram, social_tiktok, social_youtube, logo_url, icon_url, primary_color, meta_title, meta_description, og_image_url, google_verification_code, minimal_dp, created_at`
+const selectCols = `id, kode_brand, jamaah_counter, name, domain, whatsapp_number, email, phone, address, city, province, gmaps_url, legalitas, ppiu_number, pihk_number, akreditasi, bank_name, bank_account_number, bank_account_holder, social_facebook, social_instagram, social_tiktok, social_youtube, logo_url, icon_url, primary_color, meta_title, meta_description, og_image_url, google_verification_code, minimal_dp, biaya_pendaftaran_agen, no_wa_admin_travel, created_at`
 
 func scanBrand(scanner interface{ Scan(dest ...any) error }, b *Brand) error {
 	return scanner.Scan(
@@ -54,6 +54,8 @@ func scanBrand(scanner interface{ Scan(dest ...any) error }, b *Brand) error {
 		&b.OgImageURL,
 		&b.GoogleVerificationCode,
 		&b.MinimalDP,
+		&b.BiayaPendaftaranAgen,
+		&b.NoWAAdminTravel,
 		&b.CreatedAt,
 	)
 }
@@ -131,8 +133,9 @@ func (r *Repository) Create(ctx context.Context, req CreateBrandRequest) (*Brand
 			bank_name, bank_account_number, bank_account_holder,
 			social_facebook, social_instagram, social_tiktok, social_youtube,
 			logo_url, icon_url, primary_color,
-			meta_title, meta_description, og_image_url, google_verification_code, minimal_dp
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			meta_title, meta_description, og_image_url, google_verification_code, minimal_dp,
+			biaya_pendaftaran_agen, no_wa_admin_travel
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	res, err := r.db.ExecContext(ctx, q,
 		req.KodeBrand, req.Name, req.Domain, req.WhatsappNumber, req.Email, req.Phone, req.Address, req.City, req.Province, req.GmapsURL, req.Legalitas, req.PPIUNumber, req.PIHKNumber, req.Akreditasi,
@@ -140,6 +143,7 @@ func (r *Repository) Create(ctx context.Context, req CreateBrandRequest) (*Brand
 		req.SocialFacebook, req.SocialInstagram, req.SocialTiktok, req.SocialYoutube,
 		req.LogoURL, req.IconURL, req.PrimaryColor,
 		req.MetaTitle, req.MetaDescription, req.OgImageURL, req.GoogleVerificationCode, req.MinimalDP,
+		req.BiayaPendaftaranAgen, req.NoWAAdminTravel,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("brand.Create Exec: %w", err)
@@ -164,7 +168,8 @@ func (r *Repository) Update(ctx context.Context, id uint64, req UpdateBrandReque
 		    bank_name = ?, bank_account_number = ?, bank_account_holder = ?,
 		    social_facebook = ?, social_instagram = ?, social_tiktok = ?, social_youtube = ?,
 		    logo_url = ?, icon_url = ?, primary_color = ?,
-		    meta_title = ?, meta_description = ?, og_image_url = ?, google_verification_code = ?, minimal_dp = ?
+		    meta_title = ?, meta_description = ?, og_image_url = ?, google_verification_code = ?, minimal_dp = ?,
+		    biaya_pendaftaran_agen = ?, no_wa_admin_travel = ?
 		WHERE id = ?
 	`
 	_, err := r.db.ExecContext(ctx, q,
@@ -173,6 +178,7 @@ func (r *Repository) Update(ctx context.Context, id uint64, req UpdateBrandReque
 		req.SocialFacebook, req.SocialInstagram, req.SocialTiktok, req.SocialYoutube,
 		req.LogoURL, req.IconURL, req.PrimaryColor,
 		req.MetaTitle, req.MetaDescription, req.OgImageURL, req.GoogleVerificationCode, req.MinimalDP,
+		req.BiayaPendaftaranAgen, req.NoWAAdminTravel,
 		id,
 	)
 	if err != nil {

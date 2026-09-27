@@ -62,6 +62,8 @@ const selectFull = `
 		s.harga_infant,
 		s.harga_coret,
 		s.minimal_dp,
+		s.nominal_komisi_langsung,
+		s.nominal_bonus_pembinaan,
 		s.itinerary_id,
 		(
 			SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('id', ao.id, 'name', ao.name)), '[]')
@@ -256,9 +258,10 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 			pulang_tanggal, pulang_jam, pulang_kode_penerbangan, pulang_bandara_asal, pulang_bandara_tujuan, transit_bandara,
 			hotel_mekkah_id, hotel_madinah_id,
 			harga_quad, harga_triple, harga_double, harga_infant, harga_coret, minimal_dp,
+			nominal_komisi_langsung, nominal_bonus_pembinaan,
 			itinerary_id, include_items, exclude_items,
 			brosur_url, brosur_thumb_url
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	res, err := tx.ExecContext(ctx, q,
 		inp.BrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, 0, inp.PromoUntil, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
@@ -269,6 +272,7 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
 		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret, inp.MinimalDP,
+		inp.NominalKomisiLangsung, inp.NominalBonusPembinaan,
 		inp.ItineraryID, includeJSON, excludeJSON,
 		nullString(inp.BrosurURL), nullString(inp.BrosurThumbURL),
 	)
@@ -325,6 +329,7 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 			pulang_tanggal=?, pulang_jam=?, pulang_kode_penerbangan=?, pulang_bandara_asal=?, pulang_bandara_tujuan=?, transit_bandara=?,
 			hotel_mekkah_id=?, hotel_madinah_id=?,
 			harga_quad=?, harga_triple=?, harga_double=?, harga_infant=?, harga_coret=?, minimal_dp=?,
+			nominal_komisi_langsung=?, nominal_bonus_pembinaan=?,
 			itinerary_id=?, include_items=?, exclude_items=?,
 			brosur_url=?, brosur_thumb_url=?
 		WHERE id=?`
@@ -338,6 +343,7 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
 		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret, inp.MinimalDP,
+		inp.NominalKomisiLangsung, inp.NominalBonusPembinaan,
 		inp.ItineraryID, includeJSON, excludeJSON,
 		nullString(inp.BrosurURL), nullString(inp.BrosurThumbURL),
 		id,
@@ -596,6 +602,8 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		hargaInfant    sql.NullFloat64
 		hargaCoret     sql.NullFloat64
 		minimalDP      sql.NullFloat64
+		komisiLangsung sql.NullFloat64
+		bonusPembinaan sql.NullFloat64
 		itineraryID    sql.NullInt64
 		addOnsJSON     []byte
 		includeJSON    []byte
@@ -613,6 +621,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		&hotelMekkahID, &hmName, &hmStar, &hmDist, &hmPhoto, &hmVideo,
 		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist, &hmdPhoto, &hmdVideo,
 		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret, &minimalDP,
+		&komisiLangsung, &bonusPembinaan,
 		&itineraryID, &addOnsJSON, &includeJSON, &excludeJSON,
 		&s.BrosurURL, &s.BrosurThumbURL,
 		&s.CreatedAt, &s.UpdatedAt,
@@ -685,6 +694,14 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 	}
 
 	// Minimal DP nullable
+	if komisiLangsung.Valid {
+		v := komisiLangsung.Float64
+		s.NominalKomisiLangsung = &v
+	}
+	if bonusPembinaan.Valid {
+		v := bonusPembinaan.Float64
+		s.NominalBonusPembinaan = &v
+	}
 	if minimalDP.Valid {
 		v := minimalDP.Float64
 		s.MinimalDP = &v

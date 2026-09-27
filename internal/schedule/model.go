@@ -86,6 +86,8 @@ type Schedule struct {
 	HargaInfant              *float64       `json:"harga_infant"`
 	HargaCoret               *float64       `json:"harga_coret"`
 	MinimalDP                *float64       `json:"minimal_dp"`
+	NominalKomisiLangsung    *float64       `json:"nominal_komisi_langsung"`
+	NominalBonusPembinaan    *float64       `json:"nominal_bonus_pembinaan"`
 	ItineraryID              *int64         `json:"itinerary_id"`
 	IncludeItems             []string       `json:"include_items"`
 	ExcludeItems             []string       `json:"exclude_items"`
@@ -263,6 +265,8 @@ type ScheduleInput struct {
 	HargaInfant              *float64
 	HargaCoret               *float64
 	MinimalDP                *float64
+	NominalKomisiLangsung    *float64
+	NominalBonusPembinaan    *float64
 	ItineraryID              *int64
 	IncludeItems             []string
 	ExcludeItems             []string
@@ -337,6 +341,8 @@ type CreateScheduleRequest struct {
 	HargaInfant              *float64   `json:"harga_infant"`
 	HargaCoret               *float64   `json:"harga_coret"`
 	MinimalDP                *float64   `json:"minimal_dp"`
+	NominalKomisiLangsung    *float64   `json:"nominal_komisi_langsung"`
+	NominalBonusPembinaan    *float64   `json:"nominal_bonus_pembinaan"`
 	ItineraryID              *int64     `json:"itinerary_id"`
 	IncludeItems             []string   `json:"include_items"`
 	ExcludeItems             []string   `json:"exclude_items"`

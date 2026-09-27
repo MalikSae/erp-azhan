@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 var hexColorRegex = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
@@ -153,6 +154,9 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	req.MetaDescription = sanitizeString(req.MetaDescription)
 	req.OgImageURL = sanitizeString(req.OgImageURL)
 	req.GoogleVerificationCode = sanitizeString(req.GoogleVerificationCode)
+	if !normalizeAgenSettings(w, &req.BiayaPendaftaranAgen, &req.NoWAAdminTravel) {
+		return
+	}
 
 	b, err := h.repo.Create(r.Context(), req)
 	if err != nil {
@@ -258,6 +262,9 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	req.MetaDescription = sanitizeString(req.MetaDescription)
 	req.OgImageURL = sanitizeString(req.OgImageURL)
 	req.GoogleVerificationCode = sanitizeString(req.GoogleVerificationCode)
+	if !normalizeAgenSettings(w, &req.BiayaPendaftaranAgen, &req.NoWAAdminTravel) {
+		return
+	}
 
 	b, err := h.repo.Update(r.Context(), id, req)
 	if err != nil {
@@ -416,4 +423,24 @@ func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// normalizeAgenSettings memvalidasi pengaturan agen Syiar per brand
+// (agen-azhan.md 7.9). Nomor WA disimpan dalam format 62... agar langsung
+// bisa dipakai untuk tautan wa.me.
+func normalizeAgenSettings(w http.ResponseWriter, biaya *float64, noWA **string) bool {
+	if *biaya < 0 {
+		writeError(w, http.StatusBadRequest, "biaya_pendaftaran_agen tidak boleh kurang dari 0")
+		return false
+	}
+	*noWA = sanitizeString(*noWA)
+	if *noWA != nil {
+		canonical, _ := shared.PhoneVariants(**noWA)
+		if len(canonical) < 9 || len(canonical) > 15 {
+			writeError(w, http.StatusBadRequest, "no_wa_admin_travel tidak valid")
+			return false
+		}
+		*noWA = &canonical
+	}
+	return true
 }

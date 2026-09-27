@@ -35,6 +35,8 @@ type Brand struct {
 	OgImageURL             *string   `json:"og_image_url"`
 	GoogleVerificationCode *string   `json:"google_verification_code"`
 	MinimalDP              float64   `json:"minimal_dp"`
+	BiayaPendaftaranAgen   float64   `json:"biaya_pendaftaran_agen"`
+	NoWAAdminTravel        *string   `json:"no_wa_admin_travel"`
 	CreatedAt              time.Time `json:"created_at"`
 }
 
@@ -69,6 +71,8 @@ type CreateBrandRequest struct {
 	OgImageURL             *string `json:"og_image_url"`
 	GoogleVerificationCode *string `json:"google_verification_code"`
 	MinimalDP              float64 `json:"minimal_dp"`
+	BiayaPendaftaranAgen   float64 `json:"biaya_pendaftaran_agen"`
+	NoWAAdminTravel        *string `json:"no_wa_admin_travel"`
 }
 
 // UpdateBrandRequest adalah payload untuk PUT /api/admin/brands/{id}.
@@ -102,4 +106,6 @@ type UpdateBrandRequest struct {
 	OgImageURL             *string `json:"og_image_url"`
 	GoogleVerificationCode *string `json:"google_verification_code"`
 	MinimalDP              float64 `json:"minimal_dp"`
+	BiayaPendaftaranAgen   float64 `json:"biaya_pendaftaran_agen"`
+	NoWAAdminTravel        *string `json:"no_wa_admin_travel"`
 }
