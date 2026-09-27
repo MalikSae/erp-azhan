@@ -139,6 +139,8 @@ Rekomendasi: **jangan mulai coding fitur sebelum Sprint 0 selesai.** Sprint 0 be
 
 **Selesai jika:** skenario 17–20 berjalan end-to-end, tampilan responsif (375 px & 1440 px), dengan screenshot sebagai bukti.
 
+**Status: SELESAI 27 Sep 2026.** Backend `internal/agen` (portal + admin), microsite A1/A1a/A1b/A2/A4 (+ state aktif sementara dengan kode referral), Travel Dashboard B1. Test integrasi langkah 17–20 lulus; alur UI penuh diuji di browser (ajukan → upload → tolak pembayaran → setujui → revisi → verifikasi). Temuan: antrian B1 diperluas untuk agen yang sudah disetujui tapi pembayarannya belum terverifikasi (celah di spesifikasi, `screen-agen.md` B1 diperbarui).
+
 ### Sprint 3 — Akuisisi jamaah (Jalur 2, Jalur 3, CRM) & `/daftar-agen`
 **Tujuan:** kaitan agen terisi dengan benar dari semua pintu masuk.
 
