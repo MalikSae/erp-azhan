@@ -151,7 +151,7 @@ func (r *Repository) DaftarAkunAgen(ctx context.Context, req DaftarAgenRequest) 
 	if err != nil {
 		return err
 	}
-	if err := agen.IkatJamaah(ctx, tx, jamaahID, agenReferral); err != nil {
+	if err := agen.IkatJamaah(ctx, tx, jamaahID, agenReferral, agen.SumberReferral); err != nil {
 		return err
 	}
 	return tx.Commit()

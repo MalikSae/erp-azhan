@@ -233,6 +233,11 @@ func main() {
 			r.Get("/agen/komisi", agenHandler.RiwayatKomisiPortal)
 			r.Get("/agen/jamaah", selfBookingHandler.ListJamaahSaya)
 			r.Post("/agen/bookings", selfBookingHandler.CreateBookingAgen)
+
+			// Agen Syiar: tarik saldo (screen A7)
+			r.Get("/agen/pencairan", agenHandler.GetPencairan)
+			r.Post("/agen/pencairan", agenHandler.AjukanPencairan)
+			r.Get("/agen/pencairan/{id}/bukti", agenHandler.BuktiPencairanPortal)
 		})
 	})
 
@@ -419,6 +424,18 @@ func main() {
 			r.Post("/pembayaran/{id}/verifikasi", agenHandler.VerifikasiPembayaran)
 			r.Post("/pembayaran/{id}/tolak", agenHandler.TolakPembayaran)
 			r.Post("/pembayaran/{id}/bukti", agenHandler.UploadBuktiAdmin)
+		})
+
+		// Agen Syiar — Admin Master lintas brand: Persetujuan Pencairan (C1) dan
+		// Ganti Kaitan Agen (C4). Admin Travel tidak punya akses.
+		r.Group(func(r chi.Router) {
+			r.Use(identity.RequireAdminRole, brand.RequireSuperAdmin)
+			r.Get("/pencairan", agenHandler.ListPencairanAdmin)
+			r.Post("/pencairan/{id}/setujui", agenHandler.SetujuiPencairan)
+			r.Post("/pencairan/{id}/tolak", agenHandler.TolakPencairan)
+			r.Get("/kaitan-agen", agenHandler.CariJamaahKaitan)
+			r.Get("/kaitan-agen/{jamaahID}/log", agenHandler.LogKaitan)
+			r.Put("/kaitan-agen/{jamaahID}", agenHandler.GantiKaitan)
 		})
 
 		// Analytics lintas brand (Super Admin Only)

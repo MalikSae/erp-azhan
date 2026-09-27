@@ -377,7 +377,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	if modeAgen {
 		// Jalur 1 (D8): hanya jamaah yang dibuat di booking ini yang diikat.
 		for _, id := range jamaahBaruAgen {
-			if err := agen.IkatJamaah(ctx, tx, id, ini.agenID); err != nil {
+			if err := agen.IkatJamaah(ctx, tx, id, ini.agenID, agen.SumberJalur1); err != nil {
 				return nil, err
 			}
 		}

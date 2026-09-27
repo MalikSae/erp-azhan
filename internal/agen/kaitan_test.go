@@ -70,8 +70,8 @@ func TestLangkah3JalurReferralDanUpline(t *testing.T) {
 	lain := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "AgenLain", StatusAgen: "aktif"})
 	nuh := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Nuh"})
 
-	must(t, "ikat ke Adam", IkatJamaah(ctx, tx, nuh, adam))
-	must(t, "coba rebut", IkatJamaah(ctx, tx, nuh, lain)) // tidak boleh menimpa
+	must(t, "ikat ke Adam", IkatJamaah(ctx, tx, nuh, adam, SumberReferral))
+	must(t, "coba rebut", IkatJamaah(ctx, tx, nuh, lain, SumberReferral)) // tidak boleh menimpa
 	if st, by := kaitanOf(t, tx, nuh); st != "terikat_agen" || by != adam {
 		t.Fatalf("Nuh = %s/%d, want terikat_agen/%d (first-set wins)", st, by, adam)
 	}
@@ -85,12 +85,12 @@ func TestLangkah3JalurReferralDanUpline(t *testing.T) {
 	}
 
 	// Tidak pernah mengikat diri sendiri; 'tanpa_agen' tidak pernah diikat otomatis.
-	must(t, "ikat diri sendiri", IkatJamaah(ctx, tx, adam, adam))
+	must(t, "ikat diri sendiri", IkatJamaah(ctx, tx, adam, adam, SumberReferral))
 	if st, _ := kaitanOf(t, tx, adam); st != "belum_ditentukan" {
 		t.Fatalf("Adam terikat ke dirinya sendiri: %s", st)
 	}
 	yusuf := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Yusuf", TanpaAgen: true})
-	must(t, "ikat tanpa_agen", IkatJamaah(ctx, tx, yusuf, adam))
+	must(t, "ikat tanpa_agen", IkatJamaah(ctx, tx, yusuf, adam, SumberReferral))
 	if st, _ := kaitanOf(t, tx, yusuf); st != "tanpa_agen" {
 		t.Fatalf("Yusuf tanpa_agen berubah menjadi %s", st)
 	}

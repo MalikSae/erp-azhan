@@ -15,6 +15,15 @@ import (
 
 var ErrAgenTidakValid = errors.New("agen tidak ditemukan atau tidak aktif di brand ini")
 
+// Asal kaitan (kolom jamaah.kaitan_sumber, migrasi 064). Hanya SumberJalur3
+// yang boleh diganti Admin Master lewat C4.
+const (
+	SumberJalur1   = "jalur1"
+	SumberReferral = "jalur2"
+	SumberJalur3   = "jalur3"
+	SumberIkutPIC  = "ikut_pic"
+)
+
 // ResolveKodeReferral mengembalikan ID agen aktif pemilik kode di brand ini.
 // Kode kosong, tidak dikenal, milik agen nonaktif, atau brand lain -> 0 tanpa
 // error (diabaikan diam-diam, keputusan L8).
@@ -49,14 +58,14 @@ func ValidasiAgenAktif(ctx context.Context, q querier, brandID, agenID int64) er
 }
 
 // IkatJamaah mengikat jamaah ke agen bila masih 'belum_ditentukan'. Jamaah
-// tidak pernah diikat ke dirinya sendiri.
-func IkatJamaah(ctx context.Context, tx *sql.Tx, jamaahID, agenID int64) error {
+// tidak pernah diikat ke dirinya sendiri. sumber: salah satu konstanta Sumber*.
+func IkatJamaah(ctx context.Context, tx *sql.Tx, jamaahID, agenID int64, sumber string) error {
 	if jamaahID <= 0 || agenID <= 0 || jamaahID == agenID {
 		return nil
 	}
 	_, err := tx.ExecContext(ctx, `
-		UPDATE jamaah SET direkrut_oleh_jamaah_id = ?, kaitan_status = 'terikat_agen'
-		WHERE id = ? AND kaitan_status = 'belum_ditentukan'`, agenID, jamaahID)
+		UPDATE jamaah SET direkrut_oleh_jamaah_id = ?, kaitan_status = 'terikat_agen', kaitan_sumber = ?
+		WHERE id = ? AND kaitan_status = 'belum_ditentukan'`, agenID, sumber, jamaahID)
 	if err != nil {
 		return fmt.Errorf("agen: ikat jamaah: %w", err)
 	}
@@ -68,7 +77,9 @@ func IkatJamaah(ctx context.Context, tx *sql.Tx, jamaahID, agenID int64) error {
 // masih 'belum_ditentukan' diikat ke agen tersebut.
 func IkatRombongan(ctx context.Context, tx *sql.Tx, picID int64, jamaahIDs []int64, agenReferral int64) error {
 	agen := agenReferral
+	sumber := SumberReferral
 	if agen <= 0 {
+		sumber = SumberIkutPIC
 		var direkrut sql.NullInt64
 		if err := tx.QueryRowContext(ctx, `SELECT direkrut_oleh_jamaah_id FROM jamaah WHERE id = ?`, picID).Scan(&direkrut); err != nil {
 			return fmt.Errorf("agen: baca agen PIC: %w", err)
@@ -78,11 +89,11 @@ func IkatRombongan(ctx context.Context, tx *sql.Tx, picID int64, jamaahIDs []int
 		}
 		agen = direkrut.Int64
 	}
-	if err := IkatJamaah(ctx, tx, picID, agen); err != nil {
+	if err := IkatJamaah(ctx, tx, picID, agen, sumber); err != nil {
 		return err
 	}
 	for _, id := range jamaahIDs {
-		if err := IkatJamaah(ctx, tx, id, agen); err != nil {
+		if err := IkatJamaah(ctx, tx, id, agen, sumber); err != nil {
 			return err
 		}
 	}
@@ -125,11 +136,11 @@ func TetapkanKaitanJalur3(ctx context.Context, tx *sql.Tx, jamaahID int64, mode 
 	switch mode {
 	case "agen":
 		_, err := tx.ExecContext(ctx,
-			`UPDATE jamaah SET direkrut_oleh_jamaah_id = ?, kaitan_status = 'terikat_agen' WHERE id = ?`, agenID, jamaahID)
+			`UPDATE jamaah SET direkrut_oleh_jamaah_id = ?, kaitan_status = 'terikat_agen', kaitan_sumber = 'jalur3' WHERE id = ?`, agenID, jamaahID)
 		return err
 	case "tanpa_agen":
 		_, err := tx.ExecContext(ctx,
-			`UPDATE jamaah SET direkrut_oleh_jamaah_id = NULL, kaitan_status = 'tanpa_agen' WHERE id = ?`, jamaahID)
+			`UPDATE jamaah SET direkrut_oleh_jamaah_id = NULL, kaitan_status = 'tanpa_agen', kaitan_sumber = 'jalur3' WHERE id = ?`, jamaahID)
 		return err
 	}
 	return fmt.Errorf("agen: mode kaitan tidak dikenal: %q", mode)
