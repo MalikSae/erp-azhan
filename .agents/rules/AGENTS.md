@@ -75,7 +75,15 @@ Detail lengkap field & formula ada di `analisis-modul-booking-jamaah.md` — WAJ
 - **2 konsep "Add-On" BEDA, jangan tertukar**: `add_ons`+`schedule_add_ons` (master paket, TANPA harga) vs `booking_addons` (per transaksi booking, ADA `nominal`). Kalau prompt sebut "add-on" tanpa konteks jelas, TANYA dulu.
 - `bookings.harga_dasar` = snapshot harga kamar saat dibuat (bukan referensi live ke `schedules`)
 - `total_harga = GREATEST(0, harga_dasar + SUM(booking_addons.nominal) - diskon)`
-- `seat_sisa` berkurang HANYA saat booking pertama kali masuk status `dp` (row-level lock wajib), dikembalikan kalau `batal` setelah sempat terkunci
+- **Kuota kursi (`seat_sisa`)** — kursi "terkunci" ditandai `bookings.is_seat_blocked = TRUE`. Setiap pengurangan/pengembalian WAJIB pakai row-level lock (`SELECT ... FOR UPDATE` pada `schedules`) dan hanya untuk pax `counts_for_seat = TRUE` + `pax_status = 'aktif'` (infant tidak makan kursi). Aturan yang berlaku (keputusan 2026-09-27: ikuti kode, bukan aturan lama "hanya saat `dp`"):
+  - **Booking admin** (`POST /bookings`) dan **finalisasi draft** (`POST /bookings/{id}/finalize`): kursi langsung dikurangi saat booking masuk status `baru`, **tanpa batas waktu** (`seat_hold_expires_at` NULL). Draft (`status = 'draft'`) belum mengurangi kursi.
+  - **Self-booking publik** (`POST /api/public/book`): kursi dikurangi saat `baru` dengan hold **24 jam** (`seat_hold_expires_at`).
+  - **CRM deal** (`POST /crm/deals`): kursi dikurangi saat dibuat hanya untuk `commitment_type = "book_seat"` (hold dengan `seat_hold_expires_at` dari request). Komitmen `dp`/`lunas` belum mengurangi kursi sampai pembayarannya dikonfirmasi.
+  - **Hold manual** (`PUT /bookings/{id}/seat-block`): mengunci kursi booking `baru` yang belum terkunci, opsional dengan batas waktu; `DELETE` mengembalikannya.
+  - **Hold kedaluwarsa**: worker tiap menit (`ReleaseExpiredSeatHolds`) mengembalikan kursi booking `baru` yang `seat_hold_expires_at`-nya lewat.
+  - **Masuk `dp`/`lunas`** (via konfirmasi pembayaran atau ubah status): jika kursi belum terkunci, kursi dikurangi saat itu; hold jadi permanen (`seat_hold_expires_at` di-NULL-kan).
+  - **`batal`** (booking) atau **batal per pax**: kursi dikembalikan hanya jika sebelumnya terkunci, dibatasi `LEAST(seat_total, ...)`.
+  - Implikasi yang disadari: booking admin berstatus `baru` yang tidak pernah dibayar menahan kursi sampai dibatalkan manual.
 - "Turut Serta"/rombongan sengaja TIDAK dibangun — jangan tambahkan kecuali diminta ulang eksplisit
 
 ---
