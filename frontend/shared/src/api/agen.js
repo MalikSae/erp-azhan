@@ -77,3 +77,46 @@ export async function pakaiKreditCashback(bookingId, jamaahId, nominal) {
   const { data } = await client.post(`/api/admin/bookings/${bookingId}/cashback`, { jamaah_id: jamaahId, nominal });
   return data;
 }
+
+// C1 Persetujuan Pencairan (Admin Master, lintas brand).
+export async function listPencairanAdmin({ status, brandId } = {}) {
+  const params = {};
+  if (status) params.status = status;
+  if (brandId) params.brand_id = brandId;
+  const { data } = await client.get('/api/admin/pencairan', { params });
+  return data || [];
+}
+
+export async function setujuiPencairan(id, buktiTransferKeluarUrl) {
+  const { data } = await client.post(`/api/admin/pencairan/${id}/setujui`, {
+    bukti_transfer_keluar_url: buktiTransferKeluarUrl,
+  });
+  return data;
+}
+
+export async function tolakPencairan(id, alasan) {
+  const { data } = await client.post(`/api/admin/pencairan/${id}/tolak`, { alasan });
+  return data;
+}
+
+// C4 Ganti Kaitan Agen (Admin Master).
+export async function cariJamaahKaitan(q, brandId) {
+  const params = { q };
+  if (brandId) params.brand_id = brandId;
+  const { data } = await client.get('/api/admin/kaitan-agen', { params });
+  return data || [];
+}
+
+export async function listKaitanLog(jamaahId) {
+  const { data } = await client.get(`/api/admin/kaitan-agen/${jamaahId}/log`);
+  return data || [];
+}
+
+export async function gantiKaitanAgen(jamaahId, { mode, agenJamaahId, alasan }) {
+  const { data } = await client.put(`/api/admin/kaitan-agen/${jamaahId}`, {
+    mode,
+    agen_jamaah_id: mode === 'agen' ? agenJamaahId : null,
+    alasan,
+  });
+  return data;
+}

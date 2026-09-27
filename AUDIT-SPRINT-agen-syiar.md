@@ -180,6 +180,8 @@ Rekomendasi: **jangan mulai coding fitur sebelum Sprint 0 selesai.** Sprint 0 be
 
 **Selesai jika:** 20 skenario §6 lulus, tidak ada temuan keamanan tingkat tinggi, dan UAT disetujui.
 
+**Status: PENGEMBANGAN SELESAI 27 Sep 2026, UAT MENUNGGU.** A7 (`/api/portal/agen/pencairan`, bukti transfer bisa dibuka agen pemiliknya) dan C1 (`/api/admin/pencairan`, Super Admin saja): minimal Rp500rb, satu pending per agen dengan row lock, saldo dicek saat diajukan dan saat disetujui, bukti transfer keluar wajib. C4 (`/api/admin/kaitan-agen`, Super Admin saja): hanya kaitan Jalur 3, ditolak bila jamaah sudah menghasilkan komisi atau sudah menjadi/mengajukan agen, alasan wajib, tercatat di `jamaah_kaitan_log`, tidak cascading. **Migrasi 064** menambah `jamaah.kaitan_sumber` karena skema belum bisa membedakan kaitan Jalur 1/2/3 (dibutuhkan gate C4); semua jalur pengikatan kini mencatat asalnya. Test otomatis mencakup ke-20 skenario §6 (pemetaan di `RELEASE-agen-syiar.md` §5); review keamanan tanpa temuan tingkat tinggi. E2E browser 375 px & 1440 px: A7 ajukan → C1 setujui dengan unggah bukti → agen membuka buktinya; C4 ganti kaitan Jalur 3 dan penolakan untuk kaitan Jalur 2; Admin Travel mendapat 403 di C1/C4. Data dan file uji dibersihkan. Catatan rilis, urutan migrasi, konfigurasi, dan checklist UAT ada di `RELEASE-agen-syiar.md`. **UAT dengan Admin Travel belum dilakukan** (butuh pengguna nyata).
+
 ---
 
 ## 6. Dependensi & risiko jadwal

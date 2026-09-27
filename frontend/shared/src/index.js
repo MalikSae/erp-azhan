@@ -8,6 +8,7 @@ export { default as BookingFormPage } from './pages/BookingFormPage';
 
 // Components
 export { default as BrandCell } from './components/BrandCell';
+export { default as KaitanAgenPicker, EMPTY_KAITAN, validateKaitan, toKaitanPayload } from './components/KaitanAgenPicker';
 export { default as Alert } from './components/ui/Alert';
 export { default as Button } from './components/ui/Button';
 export { default as Badge } from './components/ui/Badge';

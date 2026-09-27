@@ -20,6 +20,7 @@ import InventoryPerlengkapanPage from './pages/InventoryPerlengkapanPage';
 import InventoryStokPerlengkapanPage from './pages/InventoryStokPerlengkapanPage';
 import StokBrandCabangPage from './pages/StokBrandCabangPage';
 import KomisiReferralPage from './pages/KomisiReferralPage';
+import GantiKaitanAgenPage from './pages/GantiKaitanAgenPage';
 import AnalyticsLintasBrandPage from './pages/AnalyticsLintasBrandPage';
 import LaporanKeuanganPage from './pages/LaporanKeuanganPage';
 import CompliancePage from './pages/CompliancePage';
@@ -78,6 +79,7 @@ function App() {
               
               {/* Komisi Agen */}
               <Route path="/komisi" element={<KomisiReferralPage />} />
+              <Route path="/komisi/ganti-kaitan" element={<GantiKaitanAgenPage />} />
               
               {/* Analytics & Laporan */}
               <Route path="/analytics/lintas-brand" element={<AnalyticsLintasBrandPage />} />

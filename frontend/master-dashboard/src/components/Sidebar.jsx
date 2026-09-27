@@ -18,7 +18,8 @@ import {
   Building2,
   Landmark,
   UserCog,
-  ChevronDown
+  ChevronDown,
+  Link2
 } from 'lucide-react';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
@@ -68,7 +69,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     {
       name: 'KOMISI & ANALYTICS',
       items: [
-        { name: 'Komisi & Referral', path: '/komisi', icon: Percent, status: 'inactive' },
+        { name: 'Persetujuan Pencairan', path: '/komisi', icon: Percent, status: 'active' },
+        { name: 'Ganti Kaitan Agen', path: '/komisi/ganti-kaitan', icon: Link2, status: 'active' },
         { name: 'Analytics Lintas Brand', path: '/analytics/lintas-brand', icon: BarChart3, status: 'inactive' },
         { name: 'Legalitas & Perizinan', path: '/compliance', icon: ShieldCheck, status: 'inactive' },
       ],
@@ -155,6 +157,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                         <NavLink
                           key={item.path}
                           to={item.path}
+                          end={item.path === '/komisi'}
                           onClick={closeDrawer}
                           className={({ isActive }) => {
                             if (isInactive) {
