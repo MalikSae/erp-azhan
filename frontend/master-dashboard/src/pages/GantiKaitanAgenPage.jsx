@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   cariJamaahKaitan,
   gantiKaitanAgen,
@@ -8,11 +9,12 @@ import {
   EMPTY_KAITAN,
   validateKaitan,
 } from 'shared';
-import { Search, Lock, History } from 'lucide-react';
+import { Lock, History } from 'lucide-react';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import CustomDropdown from '../components/ui/CustomDropdown';
+import Input from '../components/ui/Input';
 import MetaBox from '../components/ui/MetaBox';
 import PageHeader from '../components/ui/PageHeader';
 import Textarea from '../components/ui/Textarea';
@@ -34,9 +36,12 @@ const kaitanLabel = (j) => {
 // Screen C4 — ganti kaitan agen hasil Jalur 3 (Admin Master saja). Ditolak
 // sistem bila jamaah sudah pernah menghasilkan komisi (agen-azhan.md 7.8).
 export default function GantiKaitanAgenPage() {
+  // Dari form edit jamaah: ?q=<ID jamaah/nama>&jamaah=<id> langsung mencari dan memilih jamaah itu.
+  const [params] = useSearchParams();
+  const [autoPilihId, setAutoPilihId] = useState(() => Number(params.get('jamaah')) || null);
   const [brands, setBrands] = useState([]);
   const [brandId, setBrandId] = useState('');
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(() => params.get('q') || '');
   const [hasil, setHasil] = useState([]);
   const [mencari, setMencari] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -61,6 +66,11 @@ export default function GantiKaitanAgenPage() {
       const items = await cariJamaahKaitan(q.trim(), brandId);
       setHasil(items);
       if (keepSelectedId) setSelected(items.find((it) => it.jamaah_id === keepSelectedId) || null);
+      if (autoPilihId) {
+        const target = items.find((it) => it.jamaah_id === autoPilihId);
+        setAutoPilihId(null);
+        if (target) pilih(target);
+      }
     } catch {
       setError('Pencarian gagal. Silakan coba kembali.');
     } finally {
@@ -124,19 +134,13 @@ export default function GantiKaitanAgenPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
         <div className="lg:col-span-2 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-neutral-900 font-heading">Cari jamaah</label>
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                <input
-                  type="text"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Nama, no HP, atau ID jamaah (min. 3 huruf)"
-                  className="h-11 w-full min-w-0 rounded-xl border border-neutral-200/90 bg-white pl-9 pr-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-                />
-              </div>
-            </div>
+            <Input
+              label="Cari jamaah"
+              name="cari_jamaah"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Nama, no HP, atau ID jamaah (min. 3 huruf)"
+            />
             <CustomDropdown
               label="Brand"
               name="brand_id"
@@ -147,7 +151,7 @@ export default function GantiKaitanAgenPage() {
             />
           </div>
 
-          <div className="rounded-xl border border-neutral-200 bg-white divide-y divide-neutral-100 max-h-[480px] overflow-y-auto">
+          <div className="rounded-xl border border-neutral-200 bg-white divide-y divide-neutral-100 max-h-96 overflow-y-auto">
             {mencari && <p className="p-3 text-sm text-neutral-500">Mencari...</p>}
             {!mencari && q.trim().length >= 3 && hasil.length === 0 && <p className="p-3 text-sm text-neutral-500">Jamaah tidak ditemukan.</p>}
             {!mencari && q.trim().length < 3 && <p className="p-3 text-sm text-neutral-500">Ketik minimal 3 huruf untuk mencari.</p>}
@@ -164,7 +168,9 @@ export default function GantiKaitanAgenPage() {
                     <p className="text-xs text-neutral-500 truncate">{j.brand_name} • {j.id_jamaah || '-'}{j.no_hp ? ` • ${j.no_hp}` : ''}</p>
                     <p className="text-xs text-neutral-700 mt-0.5">{kaitanLabel(j)}</p>
                   </div>
-                  {j.bisa_diganti ? <Badge variant="success">Bisa diganti</Badge> : <Badge variant="neutral" icon={<Lock size={12} />}>Terkunci</Badge>}
+                  <div className="shrink-0">
+                    {j.bisa_diganti ? <Badge variant="success">Bisa diganti</Badge> : <Badge variant="neutral" icon={<Lock size={12} />}>Terkunci</Badge>}
+                  </div>
                 </div>
               </button>
             ))}
@@ -183,6 +189,7 @@ export default function GantiKaitanAgenPage() {
                   <div className="flex justify-between gap-3"><span className="text-neutral-500">Kaitan saat ini</span><span className="font-medium text-neutral-900 text-right">{kaitanLabel(selected)}</span></div>
                   <div className="flex justify-between gap-3"><span className="text-neutral-500">Asal kaitan</span><span className="font-medium text-neutral-900 text-right">{SUMBER[selected.kaitan_sumber] || 'Tidak diketahui'}</span></div>
                   <div className="flex justify-between gap-3"><span className="text-neutral-500">Sudah menghasilkan komisi</span><span className="font-medium text-neutral-900">{selected.punya_komisi ? 'Ya' : 'Belum'}</span></div>
+                  <div className="flex justify-between gap-3"><span className="text-neutral-500">Booking belum lunas</span><span className="font-medium text-neutral-900">{selected.booking_belum_lunas}</span></div>
                 </div>
 
                 {sukses && <Alert variant="success" message={sukses} />}
@@ -190,18 +197,25 @@ export default function GantiKaitanAgenPage() {
 
                 {selected.bisa_diganti ? (
                   <div className="space-y-4 border-t border-neutral-100 pt-4">
+                    {selected.booking_belum_lunas > 0 && (
+                      <Alert
+                        variant="warning"
+                        message={`Jamaah ini punya ${selected.booking_belum_lunas} booking belum lunas. Komisi booking tersebut dicatat saat lunas, jadi akan diberikan ke agen yang baru (atau tidak ada komisi bila tanpa agen).`}
+                      />
+                    )}
                     <KaitanAgenPicker
                       name="ganti_kaitan"
                       value={kaitan}
-                      onChange={(v) => { setKaitan(v); setError(''); }}
+                      onChange={(v) => { setKaitan(v); setError(''); setSukses(''); }}
                       brandId={selected.brand_id}
                       brandRequired
+                      excludeAgenId={selected.kaitan_status === 'terikat_agen' ? selected.agen_id : undefined}
                       hint="Perubahan tidak mengubah kaitan jamaah lain dalam booking yang sama."
                     />
                     <Textarea
                       label="Alasan penggantian *"
                       value={alasan}
-                      onChange={(e) => setAlasan(e.target.value)}
+                      onChange={(e) => { setAlasan(e.target.value); setSukses(''); }}
                       rows={3}
                       placeholder="Contoh: salah pilih agen saat input, seharusnya tanpa agen"
                     />

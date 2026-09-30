@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -14,29 +14,36 @@ import {
   Boxes,
   Percent,
   BarChart3,
+  FileBarChart,
   ShieldCheck,
   Building2,
   Landmark,
   UserCog,
   ChevronDown,
-  Link2
+  Link2,
+  Network,
+  Coins,
+  Trophy
 } from 'lucide-react';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
 const Sidebar = ({ isOpen, closeDrawer }) => {
-  const [expandedGroups, setExpandedGroups] = useState({
-    'MASTER PAKET': true,
-    'JAMAAH & BOOKING': true,
-    'INVENTORY': false,
-    'KOMISI & ANALYTICS': false,
-    'ADMINISTRASI': true,
-  });
+  // Akordeon: semua grup tertutup secara default dan hanya satu grup yang
+  // terbuka pada satu waktu.
+  const [openGroup, setOpenGroup] = useState(null);
+
+  // Grup yang berisi halaman aktif dibuka otomatis saat pindah halaman,
+  // agar menu aktif selalu terlihat (tetap bisa ditutup manual).
+  const location = useLocation();
+  useEffect(() => {
+    const aktif = menuGroups.find((g) =>
+      g.items.some((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
+    );
+    if (aktif) setOpenGroup(aktif.name);
+  }, [location.pathname]);
 
   const toggleGroup = (groupName) => {
-    setExpandedGroups((prev) => ({
-      ...prev,
-      [groupName]: !prev[groupName],
-    }));
+    setOpenGroup((prev) => (prev === groupName ? null : groupName));
   };
 
   const menuGroups = [
@@ -67,12 +74,20 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       ],
     },
     {
-      name: 'KOMISI & ANALYTICS',
+      name: 'AGEN & KOMISI',
       items: [
+        { name: 'Daftar Agen', path: '/agen', icon: Network, status: 'active' },
+        { name: 'Riwayat Komisi', path: '/agen/komisi', icon: Coins, status: 'active' },
         { name: 'Persetujuan Pencairan', path: '/komisi', icon: Percent, status: 'active' },
         { name: 'Ganti Kaitan Agen', path: '/komisi/ganti-kaitan', icon: Link2, status: 'active' },
+      ],
+    },
+    {
+      name: 'LAPORAN & ANALYTICS',
+      items: [
+        { name: 'Peringkat Agen', path: '/analytics/peringkat-agen', icon: Trophy, status: 'active' },
         { name: 'Analytics Lintas Brand', path: '/analytics/lintas-brand', icon: BarChart3, status: 'inactive' },
-        { name: 'Legalitas & Perizinan', path: '/compliance', icon: ShieldCheck, status: 'inactive' },
+        { name: 'Laporan Keuangan', path: '/analytics/keuangan', icon: FileBarChart, status: 'inactive' },
       ],
     },
     {
@@ -81,6 +96,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         { name: 'Kelola Brand', path: '/brands', icon: Building2, status: 'active' },
         { name: 'Rekening Bank', path: '/bank-accounts', icon: Landmark, status: 'active' },
         { name: 'User Management', path: '/users', icon: UserCog, status: 'active' },
+        { name: 'Legalitas & Perizinan', path: '/compliance', icon: ShieldCheck, status: 'inactive' },
       ],
     },
   ];
@@ -133,7 +149,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
 
           {/* Menu Groups */}
           {menuGroups.map((group) => {
-            const isExpanded = expandedGroups[group.name] !== false;
+            const isExpanded = openGroup === group.name;
             return (
               <div key={group.name} className="space-y-1">
                 <button
@@ -157,7 +173,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                         <NavLink
                           key={item.path}
                           to={item.path}
-                          end={item.path === '/komisi'}
+                          end={item.path === '/komisi' || item.path === '/agen'}
                           onClick={closeDrawer}
                           className={({ isActive }) => {
                             if (isInactive) {

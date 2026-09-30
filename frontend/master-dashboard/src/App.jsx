@@ -22,13 +22,13 @@ import StokBrandCabangPage from './pages/StokBrandCabangPage';
 import KomisiReferralPage from './pages/KomisiReferralPage';
 import GantiKaitanAgenPage from './pages/GantiKaitanAgenPage';
 import AnalyticsLintasBrandPage from './pages/AnalyticsLintasBrandPage';
+import PeringkatAgenPage from './pages/PeringkatAgenPage';
 import LaporanKeuanganPage from './pages/LaporanKeuanganPage';
 import CompliancePage from './pages/CompliancePage';
 import UserManagementPage from './pages/UserManagementPage';
 import BrandsPage from './pages/BrandsPage';
 import BrandFormPage from './pages/BrandFormPage';
 import BankAccountsPage from './pages/BankAccountsPage';
-import PaymentConfirmationsPage from './pages/PaymentConfirmationsPage';
 
 import {
   JamaahPage,
@@ -37,6 +37,10 @@ import {
   BookingsPage,
   BookingDetailPage,
   BookingFormPage,
+  DaftarAgenPage,
+  DetailAgenPage,
+  RiwayatKomisiPage,
+  PaymentConfirmationsPage,
 } from 'shared';
 
 function App() {
@@ -80,9 +84,13 @@ function App() {
               {/* Komisi Agen */}
               <Route path="/komisi" element={<KomisiReferralPage />} />
               <Route path="/komisi/ganti-kaitan" element={<GantiKaitanAgenPage />} />
+              <Route path="/agen" element={<DaftarAgenPage showBrandColumn={true} />} />
+              <Route path="/agen/komisi" element={<RiwayatKomisiPage showBrandColumn={true} />} />
+              <Route path="/agen/:id" element={<DetailAgenPage showBrandColumn={true} />} />
               
               {/* Analytics & Laporan */}
               <Route path="/analytics/lintas-brand" element={<AnalyticsLintasBrandPage />} />
+              <Route path="/analytics/peringkat-agen" element={<PeringkatAgenPage />} />
               <Route path="/analytics/keuangan" element={<LaporanKeuanganPage />} />
               
               {/* Compliance */}
@@ -94,7 +102,7 @@ function App() {
               <Route path="/brands/:id/edit" element={<BrandFormPage />} />
               <Route path="/users" element={<UserManagementPage />} />
               <Route path="/bank-accounts" element={<BankAccountsPage />} />
-              <Route path="/payments" element={<PaymentConfirmationsPage />} />
+              <Route path="/payments" element={<PaymentConfirmationsPage showBrandColumn={true} />} />
             </Route>
           </Route>
 
