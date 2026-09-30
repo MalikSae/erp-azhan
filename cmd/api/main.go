@@ -293,9 +293,9 @@ func main() {
 		// Categories
 		r.Get("/categories", categoryHandler.ListCategories)
 		r.Get("/categories/{id}", categoryHandler.GetCategory)
-		r.Post("/categories", categoryHandler.CreateCategory)
-		r.Put("/categories/{id}", categoryHandler.UpdateCategory)
-		r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
+		superAdmin.Post("/categories", categoryHandler.CreateCategory)
+		superAdmin.Put("/categories/{id}", categoryHandler.UpdateCategory)
+		superAdmin.Delete("/categories/{id}", categoryHandler.DeleteCategory)
 
 		// Add-Ons
 		r.Get("/addons", addonHandler.ListAddOns)

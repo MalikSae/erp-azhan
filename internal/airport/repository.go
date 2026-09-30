@@ -14,6 +14,9 @@ var ErrNotFound = errors.New("data tidak ditemukan")
 // ErrDuplicateCode dikembalikan saat kode bandara sudah ada (case-insensitive).
 var ErrDuplicateCode = errors.New("kode bandara sudah digunakan")
 
+// ErrInUse dikembalikan saat bandara masih dirujuk paket.
+var ErrInUse = errors.New("tidak bisa dihapus, masih dipakai oleh")
+
 // Repository mengelola semua query ke tabel airports.
 type Repository struct {
 	db *sql.DB
@@ -110,12 +113,25 @@ func (r *Repository) Update(ctx context.Context, id uint64, name string, code st
 
 // Delete menghapus bandara berdasarkan id.
 func (r *Repository) Delete(ctx context.Context, id uint64) error {
-	if _, err := r.getByID(ctx, id); err != nil {
+	ap, err := r.getByID(ctx, id)
+	if err != nil {
 		return err
 	}
 
+	// Paket menyimpan kode bandara sebagai teks (tanpa FK); tolak hapus bila masih dirujuk (MP-06).
+	var dipakai int
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM schedules
+		WHERE UPPER(?) IN (UPPER(berangkat_bandara_asal), UPPER(berangkat_bandara_tujuan),
+		                   UPPER(pulang_bandara_asal), UPPER(pulang_bandara_tujuan))`, ap.Code).Scan(&dipakai); err != nil {
+		return fmt.Errorf("airport.Delete cek pemakaian: %w", err)
+	}
+	if dipakai > 0 {
+		return fmt.Errorf("%w %d paket", ErrInUse, dipakai)
+	}
+
 	const q = `DELETE FROM airports WHERE id=?`
-	_, err := r.db.ExecContext(ctx, q, id)
+	_, err = r.db.ExecContext(ctx, q, id)
 	return err
 }
 

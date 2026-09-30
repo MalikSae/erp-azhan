@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
+	"erp-azhan/api/internal/shared"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler airline.
@@ -66,6 +67,10 @@ func (h *Handler) CreateAirline(w http.ResponseWriter, r *http.Request) {
 	var logoURL *string
 	if req.LogoURL != nil && strings.TrimSpace(*req.LogoURL) != "" {
 		val := strings.TrimSpace(*req.LogoURL)
+		if !shared.ValidMediaURL(val) {
+			writeError(w, http.StatusBadRequest, "logo_url harus berkas unggahan atau URL http(s)")
+			return
+		}
 		logoURL = &val
 	}
 
@@ -113,6 +118,10 @@ func (h *Handler) UpdateAirline(w http.ResponseWriter, r *http.Request) {
 	var logoURL *string
 	if req.LogoURL != nil && strings.TrimSpace(*req.LogoURL) != "" {
 		val := strings.TrimSpace(*req.LogoURL)
+		if !shared.ValidMediaURL(val) {
+			writeError(w, http.StatusBadRequest, "logo_url harus berkas unggahan atau URL http(s)")
+			return
+		}
 		logoURL = &val
 	}
 

@@ -11,6 +11,7 @@ import (
 
 	// MySQL driver error codes
 	"github.com/go-sql-driver/mysql"
+	"erp-azhan/api/internal/shared"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler hotel.
@@ -72,6 +73,10 @@ func (h *Handler) CreateHotel(w http.ResponseWriter, r *http.Request) {
 	if req.VideoURL != nil && strings.TrimSpace(*req.VideoURL) == "" {
 		req.VideoURL = nil
 	}
+	if (req.PhotoURL != nil && !shared.ValidMediaURL(*req.PhotoURL)) || (req.VideoURL != nil && !shared.ValidMediaURL(*req.VideoURL)) {
+		writeError(w, http.StatusBadRequest, "photo_url/video_url harus berkas unggahan atau URL http(s)")
+		return
+	}
 
 	hotel, err := h.repo.Create(r.Context(), name, city, starRating, distanceM, req.PhotoURL, req.VideoURL)
 	if err != nil {
@@ -108,6 +113,10 @@ func (h *Handler) UpdateHotel(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.VideoURL != nil && strings.TrimSpace(*req.VideoURL) == "" {
 		req.VideoURL = nil
+	}
+	if (req.PhotoURL != nil && !shared.ValidMediaURL(*req.PhotoURL)) || (req.VideoURL != nil && !shared.ValidMediaURL(*req.VideoURL)) {
+		writeError(w, http.StatusBadRequest, "photo_url/video_url harus berkas unggahan atau URL http(s)")
+		return
 	}
 
 	hotel, err := h.repo.Update(r.Context(), id, name, city, starRating, distanceM, req.PhotoURL, req.VideoURL)

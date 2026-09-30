@@ -67,6 +67,10 @@ func (e *ErrSeatNotEnough) Error() string {
 	return e.Message
 }
 
+// sqlEffectiveDP adalah subquery DP per pax efektif paket (override paket atau
+// default brand) untuk satu schedule_id; dipakai sebagai snapshot bookings.dp_per_pax.
+const sqlEffectiveDP = `SELECT COALESCE(s.minimal_dp, br.minimal_dp, 0) FROM schedules s JOIN brands br ON br.id = s.brand_id WHERE s.id = ?`
+
 // Status yang menandakan kursi sudah terkunci (pernah dp/lebih).
 var lockedStatuses = map[string]bool{
 	"dp":    true,
@@ -513,10 +517,12 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 
 	// seat_count = jumlah pax reguler (invariant yang sama dengan self-booking & CRM);
 	// dipakai blokir ulang, worker hold, dan penyesuaian kuota.
-	const qBooking = `INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, created_by)
-		VALUES (?, ?, ?, ?, 'baru', ?, ?)`
+	// dp_per_pax: snapshot DP efektif saat booking dibuat agar perubahan DP paket
+	// tidak berlaku surut (MP-02).
+	const qBooking = `INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, created_by, dp_per_pax)
+		VALUES (?, ?, ?, ?, 'baru', ?, ?, (` + sqlEffectiveDP + `))`
 
-	res, err := tx.ExecContext(ctx, qBooking, idBooking, req.ScheduleID, picID, regularCount, isSeatBlocked, createdBy)
+	res, err := tx.ExecContext(ctx, qBooking, idBooking, req.ScheduleID, picID, regularCount, isSeatBlocked, createdBy, req.ScheduleID)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Create insert header: %w", err)
 	}
@@ -1008,8 +1014,9 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 
 	// 5. Update status ke 'baru' dan is_seat_blocked = true
 	_, err = tx.ExecContext(ctx, `
-		UPDATE bookings SET id_booking = ?, status = 'baru', is_seat_blocked = TRUE, seat_count = ? WHERE id = ?`,
-		idBooking, activeRegularPax, bookingID)
+		UPDATE bookings SET id_booking = ?, status = 'baru', is_seat_blocked = TRUE, seat_count = ?,
+			dp_per_pax = (`+sqlEffectiveDP+`) WHERE id = ?`,
+		idBooking, activeRegularPax, scheduleID, bookingID)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Finalize update booking: %w", err)
 	}

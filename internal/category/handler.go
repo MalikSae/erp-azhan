@@ -3,7 +3,7 @@ package category
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -63,7 +63,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh paket umroh")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("terjadi kesalahan internal: %v", err))
+		log.Printf("[ERROR] category: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
 	}
 }
 
@@ -105,6 +106,21 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Admin brand hanya melihat kategori yang terhubung ke brand-nya (MP-01).
+	if ctxBrandID := identity.GetBrandID(r.Context()); ctxBrandID != nil {
+		linked := false
+		for _, b := range cat.Brands {
+			if b.ID == *ctxBrandID {
+				linked = true
+				break
+			}
+		}
+		if !linked {
+			writeError(w, http.StatusNotFound, "kategori tidak ditemukan")
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, cat)
 }
 
@@ -119,6 +135,10 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "nama kategori wajib diisi")
+		return
+	}
+	if len([]rune(req.Name)) > 100 {
+		writeError(w, http.StatusBadRequest, "nama kategori maksimal 100 karakter")
 		return
 	}
 
@@ -170,6 +190,10 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "nama kategori wajib diisi")
+		return
+	}
+	if len([]rune(req.Name)) > 100 {
+		writeError(w, http.StatusBadRequest, "nama kategori maksimal 100 karakter")
 		return
 	}
 
