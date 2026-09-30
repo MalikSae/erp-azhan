@@ -23,11 +23,11 @@
   --brand-primary-200: #FDEE9F;
   --brand-primary-300: #FCE366;
   --brand-primary-400: #FBD836;
-  --brand-primary-600: #F5CD3E;
-  --brand-primary-700: #E5BD2C;
-  --brand-primary-800: #D4AA1E;
-  --brand-primary-900: #B89014;
-  --brand-primary-950: #8A6A0B;
+  --brand-primary-600: #D9A514;
+  --brand-primary-700: #946C08;
+  --brand-primary-800: #7A5906;
+  --brand-primary-900: #5E4405;
+  --brand-primary-950: #3F2E03;
 }
 
 @layer base {
