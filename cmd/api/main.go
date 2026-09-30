@@ -428,6 +428,7 @@ func main() {
 			r.Get("/aktif", agenHandler.ListAgenAktif)
 			r.Get("/", agenHandler.ListAgen)
 			r.Get("/komisi", agenHandler.RiwayatKomisiAdmin)
+			r.Get("/peringkat", agenHandler.PeringkatAgen)
 			r.Get("/{jamaahID}", agenHandler.DetailAgen)
 			r.Post("/{jamaahID}/setujui", agenHandler.Setujui)
 			r.Post("/{jamaahID}/tolak", agenHandler.Tolak)

@@ -99,6 +99,9 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 
 func positive(v sql.NullFloat64) bool { return v.Valid && v.Float64 > 0 }
 
+// loadPax mengunci baris jamaah pax (FOR SHARE) agar kaitan agen yang dibaca
+// tetap berlaku sampai komisi tercatat: Ganti Kaitan Agen (C4) yang datang
+// bersamaan menunggu, lalu melihat komisi dan ditolak (audit KA-01).
 func loadPax(ctx context.Context, tx *sql.Tx, bookingID int64) ([]paxKomisi, error) {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT bp.id, bp.jamaah_id, j.direkrut_oleh_jamaah_id,
@@ -110,7 +113,8 @@ func loadPax(ctx context.Context, tx *sql.Tx, bookingID int64) ([]paxKomisi, err
 		LEFT JOIN jamaah a ON a.id = j.direkrut_oleh_jamaah_id
 		LEFT JOIN jamaah u ON u.id = a.upline_jamaah_id
 		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif'
-		ORDER BY bp.id`, bookingID)
+		ORDER BY bp.id
+		FOR SHARE OF j`, bookingID)
 	if err != nil {
 		return nil, fmt.Errorf("komisi: baca pax: %w", err)
 	}

@@ -72,4 +72,57 @@ func TestKinerjaAgen(t *testing.T) {
 	if found[adam] != "aktif" || found[nuh] != "nonaktif" || found[umar] != "" {
 		t.Fatalf("daftar agen = %v", found)
 	}
+	for _, a := range list {
+		if a.JamaahID == nuh && (a.JumlahClosing != 1 || a.TotalKomisi != 1_000_000) {
+			t.Fatalf("metrik Nuh = %+v", a)
+		}
+		if a.JamaahID == adam && (a.JumlahClosing != 1 || a.TotalKomisi != 300_000) {
+			t.Fatalf("metrik Adam = %+v", a)
+		}
+	}
+}
+
+// Peringkat per periode: urut total komisi (tanpa cashback), closing dihitung
+// dari komisi langsung/repeat order, periode mengacu waktu komisi tercatat.
+func TestPeringkatAgen(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{
+		KomisiLangsung: rp(1_000_000), BonusPembinaan: rp(300_000), BerangkatTanggal: "2099-01-01",
+	})
+	adam := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Adam", StatusAgen: "aktif"})
+	nuh := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Nuh", StatusAgen: "aktif", Direkrut: adam, Upline: adam})
+	umar := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Umar", Direkrut: nuh})
+	ali := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Ali", Direkrut: nuh})
+
+	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: umar}, testdb.Pax{JamaahID: ali})
+	must(t, "snapshot", komisi.SnapshotNominal(ctx, tx, b))
+	testdb.Exec(t, tx, `UPDATE bookings SET status='lunas' WHERE id=?`, b)
+	must(t, "komisi", komisi.ProcessBookingLunas(ctx, tx, b))
+
+	var hariIni string
+	if err := tx.QueryRowContext(ctx, `SELECT DATE_FORMAT(CURRENT_DATE, '%Y-%m-%d')`).Scan(&hariIni); err != nil {
+		t.Fatal(err)
+	}
+	items, err := peringkatAgen(ctx, tx, &brand, hariIni, hariIni)
+	must(t, "peringkat", err)
+	if len(items) != 2 {
+		t.Fatalf("peringkat = %+v", items)
+	}
+	if p := items[0]; p.JamaahID != nuh || p.Peringkat != 1 || p.PaxClosing != 2 || p.BookingClosing != 1 || p.Langsung != 2_000_000 || p.TotalKomisi != 2_000_000 {
+		t.Fatalf("peringkat 1 = %+v", p)
+	}
+	if p := items[1]; p.JamaahID != adam || p.Peringkat != 2 || p.PaxClosing != 0 || p.Pembinaan != 600_000 || p.TotalKomisi != 600_000 {
+		t.Fatalf("peringkat 2 = %+v", p)
+	}
+
+	// Periode di luar tanggal komisi tercatat: kosong.
+	if items, err := peringkatAgen(ctx, tx, &brand, "2000-01-01", "2000-12-31"); err != nil || len(items) != 0 {
+		t.Fatalf("periode lampau = %+v, %v", items, err)
+	}
+	for _, p := range [][2]string{{"", hariIni}, {"2026-13-01", hariIni}, {"2026-02-01", "2026-01-01"}} {
+		if _, err := peringkatAgen(ctx, tx, &brand, p[0], p[1]); err != ErrPeriodeTidakValid {
+			t.Fatalf("periode %v: %v, want ErrPeriodeTidakValid", p, err)
+		}
+	}
 }

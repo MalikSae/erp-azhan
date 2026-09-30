@@ -178,11 +178,22 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 
 	// Langkah 16: Utsman sudah pernah lunas (Hud dapat komisi) -> ditolak.
 	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: utsman})
+	// Booking belum lunas dihitung untuk peringatan UI (audit KA-03).
+	if h, err := cariJamaahKaitan(ctx, tx, &brand, "Utsman (uji)"); err != nil || len(h) != 1 || h[0].BookingBelumLunas != 1 || !h[0].BisaDiganti {
+		t.Fatalf("booking belum lunas = %+v, %v", h, err)
+	}
 	must(t, "snapshot", komisi.SnapshotNominal(ctx, tx, b))
 	testdb.Exec(t, tx, `UPDATE bookings SET status='lunas' WHERE id=?`, b)
 	must(t, "komisi", komisi.ProcessBookingLunas(ctx, tx, b))
 	if err := ganti(utsman, "tanpa_agen", 0); err != ErrKaitanSudahKomisi {
 		t.Fatalf("langkah 16: %v", err)
+	}
+	if h, err := cariJamaahKaitan(ctx, tx, &brand, "Utsman (uji)"); err != nil || len(h) != 1 || h[0].BookingBelumLunas != 0 || h[0].BisaDiganti {
+		t.Fatalf("setelah lunas = %+v, %v", h, err)
+	}
+	// Log jamaah yang tidak ada: ErrNotFound, bukan daftar kosong (audit KA-04).
+	if _, err := listKaitanLog(ctx, tx, utsman+999_999); err != ErrNotFound {
+		t.Fatalf("log jamaah tidak ada: %v", err)
 	}
 
 	// Kaitan Jalur 2 (referral) dan ikut PIC tidak bisa diganti lewat C4.

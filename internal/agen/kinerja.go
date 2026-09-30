@@ -224,11 +224,20 @@ type AgenListItem struct {
 	KodeReferral    *string    `json:"kode_referral"`
 	StatusAgen      string     `json:"status_agen"`
 	DisetujuiAgenAt *time.Time `json:"disetujui_agen_at"`
+	// Sepanjang waktu. JumlahClosing = jamaah yang direkrut agen ini (sama
+	// dengan Detail Agen). TotalKomisi = langsung + pembinaan + repeat order;
+	// cashback tidak dihitung karena diterima agen sebagai jamaah, bukan hasil
+	// closing.
+	JumlahClosing int     `json:"jumlah_closing"`
+	TotalKomisi   float64 `json:"total_komisi"`
 }
 
 func listAgen(ctx context.Context, q querier, brandID *int64, cari string) ([]AgenListItem, error) {
 	query := `
-		SELECT j.id, j.brand_id, b.name, j.nama_lengkap, j.kode_referral, j.status_agen, j.disetujui_agen_at
+		SELECT j.id, j.brand_id, b.name, j.nama_lengkap, j.kode_referral, j.status_agen, j.disetujui_agen_at,
+		       (SELECT COUNT(*) FROM jamaah r WHERE r.direkrut_oleh_jamaah_id = j.id),
+		       (SELECT COALESCE(SUM(tk.nominal),0) FROM transaksi_komisi tk
+		         WHERE tk.jamaah_penerima_id = j.id AND tk.jenis <> 'cashback')
 		FROM jamaah j JOIN brands b ON b.id = j.brand_id
 		WHERE j.status_agen IN ('aktif','nonaktif')`
 	args := []any{}
@@ -249,7 +258,8 @@ func listAgen(ctx context.Context, q querier, brandID *int64, cari string) ([]Ag
 	items := []AgenListItem{}
 	for rows.Next() {
 		var a AgenListItem
-		if err := rows.Scan(&a.JamaahID, &a.BrandID, &a.BrandName, &a.NamaLengkap, &a.KodeReferral, &a.StatusAgen, &a.DisetujuiAgenAt); err != nil {
+		if err := rows.Scan(&a.JamaahID, &a.BrandID, &a.BrandName, &a.NamaLengkap, &a.KodeReferral, &a.StatusAgen, &a.DisetujuiAgenAt,
+			&a.JumlahClosing, &a.TotalKomisi); err != nil {
 			return nil, fmt.Errorf("agen: scan agen: %w", err)
 		}
 		items = append(items, a)
@@ -394,4 +404,77 @@ func (r *Repository) GetDetailAgen(ctx context.Context, jamaahID int64, brandID 
 
 func (r *Repository) ListKomisiBrand(ctx context.Context, f KomisiFilter) ([]KomisiItem, error) {
 	return listKomisi(ctx, r.db, f)
+}
+
+// ─── Peringkat agen per periode (Laporan & Analytics) ────────────────────────
+
+// PeringkatItem: kinerja satu agen dalam periode, dihitung dari ledger
+// transaksi_komisi (tercatat saat booking pertama kali lunas). PaxClosing dan
+// BookingClosing hanya menghitung closing yang menghasilkan komisi langsung
+// atau repeat order untuk agen ini.
+type PeringkatItem struct {
+	Peringkat      int     `json:"peringkat"`
+	JamaahID       int64   `json:"jamaah_id"`
+	BrandID        int64   `json:"brand_id"`
+	BrandName      string  `json:"brand_name"`
+	NamaLengkap    string  `json:"nama_lengkap"`
+	KodeReferral   *string `json:"kode_referral"`
+	StatusAgen     string  `json:"status_agen"`
+	PaxClosing     int     `json:"pax_closing"`
+	BookingClosing int     `json:"booking_closing"`
+	Langsung       float64 `json:"komisi_langsung"`
+	Pembinaan      float64 `json:"bonus_pembinaan"`
+	RepeatOrder    float64 `json:"repeat_order"`
+	TotalKomisi    float64 `json:"total_komisi"`
+}
+
+var ErrPeriodeTidakValid = errors.New("periode tidak valid: isi dari dan sampai (YYYY-MM-DD), dari tidak boleh setelah sampai")
+
+func peringkatAgen(ctx context.Context, q querier, brandID *int64, dari, sampai string) ([]PeringkatItem, error) {
+	d1, err1 := time.Parse("2006-01-02", dari)
+	d2, err2 := time.Parse("2006-01-02", sampai)
+	if err1 != nil || err2 != nil || d1.After(d2) {
+		return nil, ErrPeriodeTidakValid
+	}
+	query := `
+		SELECT j.id, j.brand_id, b.name, j.nama_lengkap, j.kode_referral, j.status_agen,
+		       COUNT(DISTINCT CASE WHEN tk.jenis IN ('langsung','repeat_order') THEN tk.booking_pax_id END),
+		       COUNT(DISTINCT CASE WHEN tk.jenis IN ('langsung','repeat_order') THEN tk.booking_id END),
+		       COALESCE(SUM(CASE WHEN tk.jenis='langsung' THEN tk.nominal END),0),
+		       COALESCE(SUM(CASE WHEN tk.jenis='pembinaan' THEN tk.nominal END),0),
+		       COALESCE(SUM(CASE WHEN tk.jenis='repeat_order' THEN tk.nominal END),0),
+		       SUM(tk.nominal)
+		FROM transaksi_komisi tk
+		JOIN jamaah j ON j.id = tk.jamaah_penerima_id
+		JOIN brands b ON b.id = j.brand_id
+		WHERE tk.jenis <> 'cashback'
+		  AND tk.created_at >= ? AND tk.created_at < DATE_ADD(?, INTERVAL 1 DAY)`
+	args := []any{dari, sampai}
+	if brandID != nil {
+		query += ` AND tk.brand_id = ?`
+		args = append(args, *brandID)
+	}
+	query += `
+		GROUP BY j.id, j.brand_id, b.name, j.nama_lengkap, j.kode_referral, j.status_agen
+		ORDER BY SUM(tk.nominal) DESC, 7 DESC, j.nama_lengkap ASC`
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("agen: peringkat: %w", err)
+	}
+	defer rows.Close()
+	items := []PeringkatItem{}
+	for rows.Next() {
+		var p PeringkatItem
+		if err := rows.Scan(&p.JamaahID, &p.BrandID, &p.BrandName, &p.NamaLengkap, &p.KodeReferral, &p.StatusAgen,
+			&p.PaxClosing, &p.BookingClosing, &p.Langsung, &p.Pembinaan, &p.RepeatOrder, &p.TotalKomisi); err != nil {
+			return nil, fmt.Errorf("agen: scan peringkat: %w", err)
+		}
+		p.Peringkat = len(items) + 1
+		items = append(items, p)
+	}
+	return items, rows.Err()
+}
+
+func (r *Repository) PeringkatAgen(ctx context.Context, brandID *int64, dari, sampai string) ([]PeringkatItem, error) {
+	return peringkatAgen(ctx, r.db, brandID, dari, sampai)
 }
