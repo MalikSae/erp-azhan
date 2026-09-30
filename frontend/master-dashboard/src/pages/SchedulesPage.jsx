@@ -100,6 +100,15 @@ const SchedulesPage = () => {
     return true;
   };
 
+  // Paket yang tanggal berangkatnya sudah lewat tetapi belum diarsipkan (MP-09).
+  // Tidak diarsipkan otomatis: admin masih perlu mengurus booking setelah berangkat.
+  const isScheduleDeparted = (s) => {
+    if (s.status === 'archived' || !s.berangkat_tanggal) return false;
+    const departDate = new Date(s.berangkat_tanggal);
+    departDate.setHours(0, 0, 0, 0);
+    return departDate < today;
+  };
+
   const getDaysRemaining = (dateStr) => {
     if (!dateStr) return null;
     const departDate = new Date(dateStr);
@@ -188,6 +197,7 @@ const SchedulesPage = () => {
       published: base.filter(s => s.status === 'published').length,
       draft: base.filter(s => s.status === 'draft').length,
       archived: base.filter(s => s.status === 'archived').length,
+      departed: base.filter(isScheduleDeparted).length,
     };
   }, [schedules, filterBrandId, today]);
 
@@ -202,6 +212,8 @@ const SchedulesPage = () => {
         if (s.status !== 'draft') return false;
       } else if (activeTab === 'archived') {
         if (s.status !== 'archived') return false;
+      } else if (activeTab === 'departed') {
+        if (!isScheduleDeparted(s)) return false;
       }
 
       // 2. Brand Filter
@@ -227,6 +239,7 @@ const SchedulesPage = () => {
     { id: 'published', label: 'Published', count: counts.published },
     { id: 'draft', label: 'Draft', count: counts.draft },
     { id: 'archived', label: 'Archived', count: counts.archived },
+    { id: 'departed', label: 'Perlu Diarsipkan', count: counts.departed },
   ];
 
   const columns = [
@@ -366,6 +379,9 @@ const SchedulesPage = () => {
                     </button>
                     <div className="flex items-center gap-1.5 text-xs text-neutral-500 font-body">
                       <span>{formatDate(row.berangkat_tanggal)}</span>
+                      {isScheduleDeparted(row) && (
+                        <Badge variant="archived" hideIcon={true}>Sudah berangkat</Badge>
+                      )}
                       {isUrgent && days !== null && (
                         <span 
                           className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold text-danger-700 bg-danger-50 border border-danger-200"
