@@ -1,0 +1,142 @@
+﻿===== KG1 audit ganti kaitan agen 2026-10-01T05:38:14 =====
+[login-super] POST /api/auth/login -> 200 {"user_id":1,"display_name":"","email":"admin@local.test","role":"admin","access_token":"***","refresh_token":"***","expires_in":900,"token_type":"Bearer"}
+[login-tp] POST /api/auth/login -> 200 {"user_id":2,"display_name":"admin.tp","email":"admin.tp@local.test","role":"admin","access_token":"***","refresh_token":"***","expires_in":900,"token_type":"Bearer"}
+[B0-baseline] SQL SELECT kaitan_sumber, kaitan_status, status_agen, COUNT(*) n FROM jamaah GROUP BY 1,2,3; SELECT (SELECT COUNT(*) FROM jamaah_kaitan_log) log_n, (SELECT COUNT(*) FROM transaksi_komisi) komisi_n
+kaitan_sumber	kaitan_status	status_agen	n
+jalur3	tanpa_agen	tidak_aktif	38
+log_n	komisi_n
+0	0
+--- Seed sementara
+[S1-agen] SQL UPDATE jamaah SET status_agen='aktif', kode_referral=CONCAT('UJIKG',id) WHERE id IN (1,2,8); UPDATE jamaah SET status_agen='nonaktif', kode_referral='UJIKG11' WHERE id=11; UPDATE jamaah SET status_agen='pengajuan' WHERE id=12
+
+[S2-target] SQL UPDATE jamaah SET kaitan_status='terikat_agen', direkrut_oleh_jamaah_id=1 WHERE id IN (6,17); UPDATE jamaah SET kaitan_status='terikat_agen', direkrut_oleh_jamaah_id=1, kaitan_sumber='jalur2' WHERE id=18; INSERT INTO transaksi_komisi (brand_id, jamaah_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal) VALUES (1,1,17,13,15,'langsung',1000000)
+
+--- Otorisasi
+[K1-admin-travel-cari (harus 403)] GET /api/admin/kaitan-agen?q=Budi -> 403 {"error":"hanya Super Admin Grup yang dapat mengakses ini"}
+[K2-admin-travel-ganti (harus 403)] PUT /api/admin/kaitan-agen/3 -> 403 {"error":"hanya Super Admin Grup yang dapat mengakses ini"}
+[K3-admin-travel-log (harus 403)] GET /api/admin/kaitan-agen/3/log -> 403 {"error":"hanya Super Admin Grup yang dapat mengakses ini"}
+--- Pencarian & status gate
+[K4-cari-2-huruf (kosong)] GET /api/admin/kaitan-agen?q=Bu -> 200 []
+[K5-cari-Uji-brand-1 (lihat bisa_diganti per jamaah)] GET /api/admin/kaitan-agen?q=Uji&brand_id=1 -> 200 [{"jamaah_id":1,"id_jamaah":"TP-2609000001","nama_lengkap":"Ahmad Fauzi Uji","no_hp":"081201800001","brand_id":1,"brand_name":"Travel Pertama","status_agen":"aktif","kaitan_status":"tanpa_agen","kaitan_sumber":"jalur3","agen_id":null,"agen_nama":null,"punya_komisi":false,"bisa_diganti":false,"alasan_terkunci":"jamaah ini sudah menjadi atau sedang mengajukan diri sebagai agen, kaitan tidak bisa diganti"},{"jamaah_id":4,"id_jamaah":"TP-2609000004","nama_lengkap":"Bayi Fauzi Uji","no_hp":"081203260004","brand_id":1,"brand_name":"Travel Pertama","status_agen":"tidak_aktif","kaitan_status":"tanpa_a...
+--- Validasi input
+[K6-alasan-4-huruf (400)] PUT /api/admin/kaitan-agen/3 -> 400 {"error":"alasan wajib diisi (5–1000 karakter)"}
+[K7-mode-tidak-sah (400)] PUT /api/admin/kaitan-agen/3 -> 400 {"error":"pilih kaitkan ke agen atau tanpa agen"}
+[K8-agen-kosong (400)] PUT /api/admin/kaitan-agen/3 -> 400 {"error":"agen tidak ditemukan atau tidak aktif di brand ini"}
+[K9-agen-diri-sendiri (400)] PUT /api/admin/kaitan-agen/3 -> 400 {"error":"agen tidak ditemukan atau tidak aktif di brand ini"}
+[K10-agen-brand-lain (400)] PUT /api/admin/kaitan-agen/3 -> 400 {"error":"agen tidak ditemukan atau tidak aktif di brand ini"}
+[K11-agen-nonaktif (400)] PUT /api/admin/kaitan-agen/3 -> 400 {"error":"agen tidak ditemukan atau tidak aktif di brand ini"}
+[K12-tanpa-ke-tanpa (400 tidak berubah)] PUT /api/admin/kaitan-agen/3 -> 400 {"error":"kaitan baru sama dengan kaitan saat ini"}
+[K13-jamaah-tidak-ada (404)] PUT /api/admin/kaitan-agen/999999 -> 404 {"error":"data tidak ditemukan"}
+--- Gate
+[K14-sudah-komisi (409)] PUT /api/admin/kaitan-agen/17 -> 409 {"error":"jamaah ini sudah pernah menghasilkan komisi (booking sudah pernah lunas), kaitan tidak bisa diganti"}
+[K15-bukan-jalur3 (409)] PUT /api/admin/kaitan-agen/18 -> 409 {"error":"kaitan jamaah ini bukan hasil input Admin (Jalur 3), tidak bisa diganti"}
+[K16-jamaah-agen-aktif (409)] PUT /api/admin/kaitan-agen/1 -> 409 {"error":"jamaah ini sudah menjadi atau sedang mengajukan diri sebagai agen, kaitan tidak bisa diganti"}
+[K17-jamaah-pengajuan (409)] PUT /api/admin/kaitan-agen/12 -> 409 {"error":"jamaah ini sudah menjadi atau sedang mengajukan diri sebagai agen, kaitan tidak bisa diganti"}
+[K18a-jamaah-93-sudah-lunas-tanpa-komisi] SQL SELECT b.id, b.status, b.pertama_lunas_at, b.snapshot_komisi_langsung, (SELECT COUNT(*) FROM transaksi_komisi WHERE jamaah_sumber_id=93) komisi FROM bookings b JOIN booking_pax bp ON bp.booking_id=b.id WHERE bp.jamaah_id=93
+id	status	pertama_lunas_at	snapshot_komisi_langsung	komisi
+70	lunas	2026-09-30 21:26:55	NULL	0
+[K18-sudah-lunas-tanpa-komisi (lolos gate)] PUT /api/admin/kaitan-agen/93 -> 200 {"message":"kaitan agen diganti"}
+--- Sukses & log
+[K19-tanpa-ke-agen-1 (200)] PUT /api/admin/kaitan-agen/3 -> 200 {"message":"kaitan agen diganti"}
+[K20-agen-sama (400 tidak berubah)] PUT /api/admin/kaitan-agen/3 -> 400 {"error":"kaitan baru sama dengan kaitan saat ini"}
+[K21-agen-1-ke-agen-2 (200)] PUT /api/admin/kaitan-agen/3 -> 200 {"message":"kaitan agen diganti"}
+[K22-agen-2-ke-tanpa (200)] PUT /api/admin/kaitan-agen/3 -> 200 {"message":"kaitan agen diganti"}
+[K23-db-jamaah-3] SQL SELECT id, kaitan_status, kaitan_sumber, direkrut_oleh_jamaah_id FROM jamaah WHERE id=3
+id	kaitan_status	kaitan_sumber	direkrut_oleh_jamaah_id
+3	tanpa_agen	jalur3	NULL
+[K24-db-log] SQL SELECT id, jamaah_id, direkrut_oleh_jamaah_id_lama lama, direkrut_oleh_jamaah_id_baru baru, kaitan_status_lama, kaitan_status_baru, diganti_oleh, alasan FROM jamaah_kaitan_log ORDER BY id
+id	jamaah_id	lama	baru	kaitan_status_lama	kaitan_status_baru	diganti_oleh	alasan
+3	93	NULL	2	tanpa_agen	terikat_agen	1	booking lunas non-Syiar
+4	3	NULL	1	tanpa_agen	terikat_agen	1	salah input, seharusnya agen Ahmad
+5	3	1	2	terikat_agen	terikat_agen	1	pindah ke agen Siti
+6	3	2	NULL	terikat_agen	tanpa_agen	1	kembalikan tanpa agen
+[K25-api-log] GET /api/admin/kaitan-agen/3/log -> 200 [{"id":6,"agen_lama_nama":"Siti Aminah Uji","agen_baru_nama":null,"kaitan_status_lama":"terikat_agen","kaitan_status_baru":"tanpa_agen","diganti_oleh":"admin@local.test","diganti_at":"2026-10-01T05:38:17+07:00","alasan":"kembalikan tanpa agen"},{"id":5,"agen_lama_nama":"Ahmad Fauzi Uji","agen_baru_nama":"Siti Aminah Uji","kaitan_status_lama":"terikat_agen","kaitan_status_baru":"terikat_agen","diganti_oleh":"admin@local.test","diganti_at":"2026-10-01T05:38:17+07:00","alasan":"pindah ke agen Siti"},{"id":4,"agen_lama_nama":null,"agen_baru_nama":"Ahmad Fauzi Uji","kaitan_status_lama":"tanpa_agen"...
+[K26-log-jamaah-tidak-ada] GET /api/admin/kaitan-agen/999999/log -> 200 []
+--- Race 1: lunas membaca agen lama, ganti kaitan menyela, lalu komisi dicatat
+[R1-ganti-saat-lunas-berjalan] PUT /api/admin/kaitan-agen/6 -> 200 {"message":"kaitan agen diganti"}
+[R1-job] 0 lunas-commit	2026-10-01 05:38:22.082083
+[R1-hasil] SQL SELECT j.id, j.kaitan_status, j.direkrut_oleh_jamaah_id agen_sekarang, tk.jamaah_penerima_id penerima_komisi, tk.jenis FROM jamaah j LEFT JOIN transaksi_komisi tk ON tk.jamaah_sumber_id=j.id WHERE j.id=6
+id	kaitan_status	agen_sekarang	penerima_komisi	jenis
+6	terikat_agen	2	1	langsung
+--- Race 2: komisi sudah di-insert (belum commit) saat ganti kaitan
+[R2-reset] SQL UPDATE jamaah SET kaitan_status='terikat_agen', direkrut_oleh_jamaah_id=1 WHERE id=93
+
+[R2-ganti-saat-insert-komisi-belum-commit] PUT /api/admin/kaitan-agen/93 -> 409 {"error":"jamaah ini sudah pernah menghasilkan komisi (booking sudah pernah lunas), kaitan tidak bisa diganti"}
+[R2-durasi-ms] 2607
+[R2-job] 0 lunas-commit	2026-10-01 05:38:26.360894
+[R2-hasil] SQL SELECT j.id, j.kaitan_status, j.direkrut_oleh_jamaah_id agen_sekarang, tk.jamaah_penerima_id penerima_komisi FROM jamaah j LEFT JOIN transaksi_komisi tk ON tk.jamaah_sumber_id=j.id WHERE j.id=93
+id	kaitan_status	agen_sekarang	penerima_komisi
+93	terikat_agen	1	1
+--- Lock: query kunci C4 (FOR UPDATE dengan JOIN) ikut mengunci baris brands
+--- Pulihkan
+[Z1-restore] SQL DELETE FROM transaksi_komisi WHERE jamaah_sumber_id IN (6,17,93); DELETE FROM jamaah_kaitan_log; UPDATE jamaah SET status_agen='tidak_aktif', kode_referral=NULL WHERE id IN (1,2,8,11,12); UPDATE jamaah SET kaitan_status='tanpa_agen', direkrut_oleh_jamaah_id=NULL, kaitan_sumber='jalur3' WHERE id IN (3,6,17,18,93); SELECT kaitan_sumber, kaitan_status, status_agen, COUNT(*) n, SUM(kode_referral IS NOT NULL) kode FROM jamaah GROUP BY 1,2,3; SELECT (SELECT COUNT(*) FROM jamaah_kaitan_log) log_n, (SELECT COUNT(*) FROM transaksi_komisi) komisi_n
+kaitan_sumber	kaitan_status	status_agen	n	kode
+jalur3	tanpa_agen	tidak_aktif	38	0
+log_n	komisi_n
+0	0
+--- Lock (ulang terpisah): query kunci C4 = FOR UPDATE pada JOIN jamaah+brands+agen
+[L1-brands-1 FOR UPDATE NOWAIT saat C4 berjalan] exit=1 out= err=ERROR 3572 (HY000) at line 1: Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set.
+[L2-brands-2 kontrol] exit=0 out=2 err=
+[L3-jamaah-4 brand sama, kontrol] exit=0 out=4 err=
+[L4-brands-1 setelah C4 selesai] exit=0 out=1 err=
+===== KG-UI seed sementara 2026-10-01T05:39:27 =====
+[U0-seed] SQL UPDATE jamaah SET status_agen='aktif', kode_referral=CONCAT('UJIKG',id) WHERE id IN (1,2); UPDATE jamaah SET kaitan_status='terikat_agen', direkrut_oleh_jamaah_id=1 WHERE id=3; SELECT id, nama_lengkap, kaitan_status, kaitan_sumber, direkrut_oleh_jamaah_id, status_agen FROM jamaah WHERE id IN (1,2,3)
+id	nama_lengkap	kaitan_status	kaitan_sumber	direkrut_oleh_jamaah_id	status_agen
+1	Ahmad Fauzi Uji	tanpa_agen	jalur3	NULL	aktif
+2	Siti Aminah Uji	tanpa_agen	jalur3	NULL	aktif
+3	Budi Santoso Uji	terikat_agen	jalur3	1	tidak_aktif
+[U1-db-setelah-ui] SQL SELECT id, kaitan_status, direkrut_oleh_jamaah_id FROM jamaah WHERE id=3; SELECT jamaah_id, direkrut_oleh_jamaah_id_lama, direkrut_oleh_jamaah_id_baru, alasan FROM jamaah_kaitan_log
+id	kaitan_status	direkrut_oleh_jamaah_id
+3	terikat_agen	2
+jamaah_id	direkrut_oleh_jamaah_id_lama	direkrut_oleh_jamaah_id_baru	alasan
+3	1	2	Uji audit UI: salah pilih agen saat input
+[U2-restore] SQL DELETE FROM jamaah_kaitan_log; UPDATE jamaah SET status_agen='tidak_aktif', kode_referral=NULL WHERE id IN (1,2); UPDATE jamaah SET kaitan_status='tanpa_agen', direkrut_oleh_jamaah_id=NULL WHERE id=3; SELECT kaitan_sumber, kaitan_status, status_agen, COUNT(*) n, SUM(kode_referral IS NOT NULL) kode FROM jamaah GROUP BY 1,2,3; SELECT (SELECT COUNT(*) FROM jamaah_kaitan_log) log_n, (SELECT COUNT(*) FROM transaksi_komisi) komisi_n
+kaitan_sumber	kaitan_status	status_agen	n	kode
+jalur3	tanpa_agen	tidak_aktif	38	0
+log_n	komisi_n
+0	0
+===== KG2 verifikasi perbaikan KA-01..KA-04 2026-10-01T05:48:40 =====
+[login-super] POST /api/auth/login -> 200 {"user_id":1,"display_name":"","email":"admin@local.test","role":"admin","access_token":"***","refresh_token":"***","expires_in":900,"token_type":"Bearer"}
+[B0-baseline] SQL SELECT kaitan_sumber, kaitan_status, status_agen, COUNT(*) n FROM jamaah GROUP BY 1,2,3; SELECT (SELECT COUNT(*) FROM jamaah_kaitan_log) log_n, (SELECT COUNT(*) FROM transaksi_komisi) komisi_n
+kaitan_sumber	kaitan_status	status_agen	n
+jalur3	tanpa_agen	tidak_aktif	38
+log_n	komisi_n
+0	0
+[S1-seed] SQL UPDATE jamaah SET status_agen='aktif', kode_referral=CONCAT('UJIKG',id) WHERE id IN (1,2); UPDATE jamaah SET kaitan_status='terikat_agen', direkrut_oleh_jamaah_id=1 WHERE id IN (6,17); INSERT INTO transaksi_komisi (brand_id, jamaah_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal) VALUES (1,1,17,13,15,'langsung',1000000)
+
+--- KA-03: pesan gate & hitungan booking belum lunas
+[V1-sudah-komisi (409, pesan baru)] PUT /api/admin/kaitan-agen/17 -> 409 {"error":"jamaah ini sudah pernah menghasilkan komisi, kaitan tidak bisa diganti"}
+[V2-cari-Dewi (booking_belum_lunas=1, booking #10 dp)] GET /api/admin/kaitan-agen?q=Dewi&brand_id=1 -> 200 [{"jamaah_id":6,"id_jamaah":"TP-2609000006","nama_lengkap":"Dewi Lestari Uji","no_hp":"081201880006","brand_id":1,"brand_name":"Travel Pertama","status_agen":"tidak_aktif","kaitan_status":"terikat_agen","kaitan_sumber":"jalur3","agen_id":1,"agen_nama":"Ahmad Fauzi Uji","punya_komisi":false,"booking_belum_lunas":1,"bisa_diganti":true}]
+[V3-cari-Zulkifli (booking_belum_lunas=0, booking #70 lunas)] GET /api/admin/kaitan-agen?q=Zulkifli&brand_id=1 -> 200 [{"jamaah_id":93,"id_jamaah":"TP-2609000029","nama_lengkap":"Zulkifli Uji Kamar","no_hp":null,"brand_id":1,"brand_name":"Travel Pertama","status_agen":"tidak_aktif","kaitan_status":"tanpa_agen","kaitan_sumber":"jalur3","agen_id":null,"agen_nama":null,"punya_komisi":false,"booking_belum_lunas":0,"bisa_diganti":true}]
+--- KA-04: log jamaah tidak ada
+[V4-log-jamaah-tidak-ada (404)] GET /api/admin/kaitan-agen/999999/log -> 404 {"error":"data tidak ditemukan"}
+[V5-log-jamaah-ada (200 [])] GET /api/admin/kaitan-agen/6/log -> 200 []
+--- KA-01: lunas memakai query loadPax baru (FOR SHARE OF j), ganti kaitan menyela
+[R1b-ganti-saat-lunas-berjalan (harus menunggu lalu 409)] PUT /api/admin/kaitan-agen/6 -> 409 {"error":"jamaah ini sudah pernah menghasilkan komisi, kaitan tidak bisa diganti"}
+[R1b-durasi-ms] 2601
+[R1b-job] 10	1 11	NULL 0 lunas-commit	2026-10-01 05:48:46.927350
+[R1b-hasil] SQL SELECT j.id, j.kaitan_status, j.direkrut_oleh_jamaah_id agen_sekarang, tk.jamaah_penerima_id penerima_komisi FROM jamaah j LEFT JOIN transaksi_komisi tk ON tk.jamaah_sumber_id=j.id WHERE j.id=6; SELECT COUNT(*) log_n FROM jamaah_kaitan_log
+id	kaitan_status	agen_sekarang	penerima_komisi
+6	terikat_agen	1	1
+log_n
+0
+--- KA-02: query kunci C4 baru (FOR UPDATE OF j)
+[L1b-brands-1 NOWAIT saat C4 berjalan (harus bebas)] exit=0 out=1 err=
+[L2b-agen-lama jamaah 1 NOWAIT (harus bebas)] exit=0 out=1 err=
+[L3b-jamaah target 6 NOWAIT (harus terkunci)] exit=1 out= err=ERROR 3572 (HY000) at line 1: Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set.
+[Z1-restore] SQL DELETE FROM transaksi_komisi WHERE jamaah_sumber_id IN (6,17); DELETE FROM jamaah_kaitan_log; UPDATE jamaah SET status_agen='tidak_aktif', kode_referral=NULL WHERE id IN (1,2); UPDATE jamaah SET kaitan_status='tanpa_agen', direkrut_oleh_jamaah_id=NULL, kaitan_sumber='jalur3' WHERE id IN (6,17); SELECT kaitan_sumber, kaitan_status, status_agen, COUNT(*) n, SUM(kode_referral IS NOT NULL) kode FROM jamaah GROUP BY 1,2,3; SELECT (SELECT COUNT(*) FROM jamaah_kaitan_log) log_n, (SELECT COUNT(*) FROM transaksi_komisi) komisi_n
+kaitan_sumber	kaitan_status	status_agen	n	kode
+jalur3	tanpa_agen	tidak_aktif	38	0
+log_n	komisi_n
+0	0
+[U3-seed-ui] SQL UPDATE jamaah SET status_agen='aktif', kode_referral=CONCAT('UJIKG',id) WHERE id IN (1,2); UPDATE jamaah SET kaitan_status='terikat_agen', direkrut_oleh_jamaah_id=1 WHERE id=6
+
+[U4-db-setelah-ui] SQL SELECT jamaah_id, direkrut_oleh_jamaah_id_lama lama, direkrut_oleh_jamaah_id_baru baru, kaitan_status_baru, alasan FROM jamaah_kaitan_log ORDER BY id
+jamaah_id	lama	baru	kaitan_status_baru	alasan
+6	1	2	terikat_agen	Uji verifikasi perbaikan
+6	2	NULL	tanpa_agen	Uji verifikasi: tanpa agen
+[U5-restore] SQL DELETE FROM jamaah_kaitan_log; UPDATE jamaah SET status_agen='tidak_aktif', kode_referral=NULL WHERE id IN (1,2); UPDATE jamaah SET kaitan_status='tanpa_agen', direkrut_oleh_jamaah_id=NULL WHERE id=6; SELECT kaitan_sumber, kaitan_status, status_agen, COUNT(*) n, SUM(kode_referral IS NOT NULL) kode FROM jamaah GROUP BY 1,2,3; SELECT (SELECT COUNT(*) FROM jamaah_kaitan_log) log_n, (SELECT COUNT(*) FROM transaksi_komisi) komisi_n
+kaitan_sumber	kaitan_status	status_agen	n	kode
+jalur3	tanpa_agen	tidak_aktif	38	0
+log_n	komisi_n
+0	0
