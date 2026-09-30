@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { 
   getJamaah, 
@@ -54,6 +54,11 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  // Konten dashboard menggulir di container dalam, bukan window; gulir ke pesan error langsung.
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
 
   // Brands State (Khusus Master Dashboard / Super Admin)
   const [brands, setBrands] = useState([]);
@@ -289,7 +294,6 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     if (showBrandColumn && !formData.brand_id) {
       setBrandError("Pilih biro travel / brand terlebih dahulu");
       setError("Silakan pilih biro travel / brand untuk jamaah ini.");
-      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -298,7 +302,6 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
       setKaitanError(kErr);
       if (kErr) {
         setError(kErr);
-        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
     }
@@ -318,7 +321,6 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
       if (Object.keys(rErrors).length > 0) {
         setRelasiErrors(rErrors);
         setError("Silakan lengkapi baris relasi yang belum valid atau hapus baris jika tidak digunakan.");
-        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
     }
@@ -426,7 +428,6 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
       }
     } catch (err) {
       setError(err.response?.data?.error || "Gagal menyimpan data jamaah");
-      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSubmitting(false);
     }
@@ -446,7 +447,9 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
         onBack={handleBack}
       />
 
-      {error && <Alert variant="error">{error}</Alert>}
+      <div ref={errorRef}>
+        {error && <Alert variant="error">{error}</Alert>}
+      </div>
 
       <form onSubmit={handleSubmit}>
         {/* Responsive 2-Column Grid Layout: Konten Utama (Kiri) & Sidebar Aksi/Meta (Kanan) */}

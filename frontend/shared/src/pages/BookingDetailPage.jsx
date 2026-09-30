@@ -38,6 +38,7 @@ import CurrencyInput from "../components/ui/CurrencyInput";
 import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
 import KreditCashbackPanel from "../components/KreditCashbackPanel";
+import RefundPanel from "../components/RefundPanel";
 import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Users, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig, Building2, CreditCard, Receipt } from "lucide-react";
 
 const formatRupiah = (angka) => {
@@ -636,7 +637,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         onBack={() => navigate("/bookings")}
       >
         <div className="flex flex-wrap items-center gap-2">
-          {booking.status === "baru" && !booking.is_seat_blocked && (
+          {["baru", "dp", "lunas"].includes(booking.status) && !booking.is_seat_blocked && (
             <Button size="sm" variant="secondary" onClick={handleOpenBlockSeat}>
               Block Seat
             </Button>
@@ -1068,6 +1069,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             refreshKey={`${booking.total_harga}-${discounts.length}-${booking.status}`}
             onApplied={fetchAll}
           />
+
+          {/* Section: Pengembalian Dana — hanya tampil untuk booking batal yang sudah dibayar */}
+          <RefundPanel booking={booking} onRecorded={fetchAll} />
 
           {/* Section: Riwayat Pembayaran */}
           <MetaBox
@@ -1689,8 +1693,13 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         title="Konfirmasi Pembatalan Pax"
       >
         <p className="text-neutral-600 font-body text-sm mb-6 leading-relaxed">
-          Batalkan pax <strong>{selectedPaxForCancel?.nama_jamaah}</strong> dari booking ini? Kuota kursi yang terpakai akan otomatis dikembalikan jika booking masih dalam status kursi terkunci. Perubahan tagihan (jika ada) perlu disesuaikan manual.
+          Batalkan pax <strong>{selectedPaxForCancel?.nama_jamaah}</strong> dari booking ini? Kuota kursi yang terpakai akan otomatis dikembalikan jika booking masih dalam status kursi terkunci.
         </p>
+        {(booking?.status === "dp" || booking?.status === "lunas") && (
+          <p className="text-warning-800 bg-warning-50 border border-warning-200 rounded-xl font-body text-sm px-3 py-2 mb-6 leading-relaxed">
+            Booking ini sudah dibayar. Harga pax yang dibatalkan tetap masuk tagihan; pengembalian dana diproses manual oleh admin sesuai ketentuan travel.
+          </p>
+        )}
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={() => setIsCancelPaxModalOpen(false)}>Batal</Button>
           <Button variant="danger" disabled={cancelPaxSubmitting} onClick={handleCancelPaxSubmit}>
@@ -1826,6 +1835,11 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         <p className="text-neutral-600 font-body text-sm mb-6 leading-relaxed">
           Apakah Anda yakin ingin membatalkan block seat untuk booking ini? Kuota kursi yang terpakai ({regularActiveCount || booking.seat_count || 1} kursi) akan otomatis dikembalikan ke jadwal paket.
         </p>
+        {Number(booking?.total_dibayar) > 0 && (
+          <p className="text-warning-800 bg-warning-50 border border-warning-200 rounded-xl font-body text-sm px-3 py-2 mb-6 leading-relaxed">
+            Booking ini sudah dibayar. Kursi yang dilepas bisa diambil booking lain; jamaah tidak lagi dijamin mendapat kursi sampai kursi dikunci ulang lewat tombol Block Seat.
+          </p>
+        )}
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={() => setCancelSeatBlockModal(false)} disabled={seatBlockLoading}>
             Batal

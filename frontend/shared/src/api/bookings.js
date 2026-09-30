@@ -135,6 +135,16 @@ export const updatePaxRoomType = async (bookingId, paxId, roomType) => {
   return data;
 };
 
+export const listRefunds = async (bookingId) => {
+  const { data } = await api.get(`/api/admin/bookings/${bookingId}/refunds`);
+  return data;
+};
+
+export const createRefund = async (bookingId, payload) => {
+  const { data } = await api.post(`/api/admin/bookings/${bookingId}/refunds`, payload);
+  return data;
+};
+
 export const deleteDraftBooking = async (id) => {
   const { data } = await api.delete(`/api/admin/bookings/${id}`);
   return data;
