@@ -14,7 +14,7 @@ const Button = ({
   const baseClasses = 'inline-flex items-center justify-center font-heading font-semibold focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-150 ease-in-out select-none';
   
   const variantClasses = {
-    primary: 'bg-primary-500 hover:bg-primary-600 text-brand-dark border border-amber-300/60 shadow-2xs hover:shadow-xs focus:ring-primary-500/60 active:scale-[0.98]',
+    primary: 'bg-brand-dark hover:bg-sidebar-hover text-brand-ivory border border-brand-dark shadow-2xs hover:shadow-xs focus:ring-primary-500 active:scale-[0.98]',
     dark: 'bg-sidebar-bg hover:bg-sidebar-surface text-white shadow-2xs hover:shadow-xs focus:ring-neutral-700 active:scale-[0.98]',
     secondary: 'bg-white hover:bg-neutral-50 text-neutral-800 border border-neutral-200 shadow-2xs hover:border-neutral-300 focus:ring-neutral-200 active:scale-[0.98]',
     danger: 'bg-danger-600 hover:bg-danger-700 text-white shadow-2xs hover:shadow-xs focus:ring-danger-500 active:scale-[0.98]',
@@ -31,17 +31,11 @@ const Button = ({
   const isDisabled = disabled || isLoading;
   const disabledClasses = isDisabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer';
 
-  const primaryStyle = variant === 'primary' ? {
-    backgroundColor: 'var(--brand-primary, #FED853)',
-    color: 'var(--brand-primary-text, #14171A)',
-  } : undefined;
-
   return (
     <button
       type={type}
       onClick={isDisabled ? undefined : onClick}
       disabled={isDisabled}
-      style={primaryStyle}
       className={`${baseClasses} ${variantClasses[variant] || variantClasses.primary} ${sizeClasses[size] || sizeClasses.md} ${disabledClasses} ${className}`}
     >
       {isLoading ? (

@@ -8,30 +8,34 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Palet holding Azhan Grup: onyx + champagne gold di atas gading.
+        // Emas hanya aksen (menu aktif, logo, garis tipis); tombol utama memakai onyx.
+        // 50–500: latar/isi dengan teks onyx di atasnya. 600–950: teks/ikon di latar terang.
         primary: {
-          50: '#FEFDF0',
-          100: '#FEF7D6',
-          200: '#FDEE9F',
-          300: '#FCE366',
-          400: '#FBD836',
-          500: '#FED853',
-          600: '#F5CD3E',
-          700: '#E5BD2C',
-          800: '#D4AA1E',
-          900: '#B89014',
-          950: '#8A6A0B',
+          50: '#FAF7EF',
+          100: '#F3ECDC',
+          200: '#E8DBBD',
+          300: '#D9C392',
+          400: '#CFB277',
+          500: '#C4A062', // champagne gold (7.2:1 di atas onyx)
+          600: '#8C6D2F', // teks/ikon (4.8:1 vs putih), isi dengan teks putih
+          700: '#735826', // emas tua: teks & link (6.7:1)
+          800: '#5E471C',
+          900: '#453414',
+          950: '#2C210C',
         },
+        // Netral hangat (stone) agar serasi dengan latar gading.
         neutral: {
-          50: '#FAFAFA',
-          100: '#F4F4F5',
-          200: '#E4E4E7',
-          300: '#D4D4D8',
-          400: '#A1A1AA',
-          500: '#71717A',
-          600: '#52525B',
-          700: '#3F3F46',
-          800: '#27272A',
-          900: '#18181B',
+          50: '#FAFAF9',
+          100: '#F5F5F4',
+          200: '#E7E5E4',
+          300: '#D6D3D1',
+          400: '#A8A29E',
+          500: '#78716C',
+          600: '#57534E',
+          700: '#44403C',
+          800: '#292524',
+          900: '#1C1917',
         },
         success: {
           50: '#f0fdf4',
@@ -70,24 +74,25 @@ export default {
           900: '#7f1d1d',
         },
         sidebar: {
-          bg: '#181C1F',
-          surface: '#22272B',
-          hover: '#292F34',
-          active: '#FED853',
-          activeText: '#14171A',
-          muted: '#8C95A0',
-          border: '#2A3036'
+          bg: '#16181B',
+          surface: '#1F2226',
+          hover: '#26292E',
+          active: 'rgba(196, 160, 98, 0.14)', // tint champagne
+          activeText: '#D9C392',
+          muted: '#A8A49C',
+          border: '#2A2D31'
         },
         brand: {
-          dark: '#14171A'
+          dark: '#16181B', // onyx
+          ivory: '#F7F5F0' // gading
         },
         page: {
-          bg: '#F6F8FA'
+          bg: '#F7F5F0'
         },
         accent: {
-          gold: '#FED853',
-          'gold-hover': '#F5CD3E',
-          'gold-light': '#FEF7D6',
+          gold: '#C4A062',
+          'gold-hover': '#8C6D2F',
+          'gold-light': '#F3ECDC',
         }
       },
       borderRadius: {

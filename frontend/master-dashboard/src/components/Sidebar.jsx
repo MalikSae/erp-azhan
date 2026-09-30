@@ -98,7 +98,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         {/* Brand Header */}
         <div className="px-5 h-16 border-b border-sidebar-border shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-brand-dark shadow-md shadow-amber-500/20">
+            <div className="w-9 h-9 rounded-xl bg-sidebar-surface border border-primary-500/50 flex items-center justify-center text-primary-500">
               <KaabaIcon className="w-5 h-5" />
             </div>
             <div>
@@ -121,8 +121,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3.5 py-2.5 text-sm transition-all rounded-xl ${
                   isActive
-                    ? 'bg-sidebar-active text-sidebar-activeText font-semibold shadow-sm'
-                    : 'text-sidebar-muted hover:text-white hover:bg-sidebar-surface font-medium'
+                    ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
+                    :'text-sidebar-muted hover:text-white hover:bg-sidebar-surface font-medium'
                 }`
               }
             >
@@ -166,8 +166,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                             
                             return `flex items-center justify-between px-3.5 py-2.5 text-sm transition-all rounded-xl ${
                               isActive
-                                ? 'bg-sidebar-active text-sidebar-activeText font-semibold shadow-sm'
-                                : 'text-sidebar-muted hover:text-white hover:bg-sidebar-surface font-medium'
+                                ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
+                                :'text-sidebar-muted hover:text-white hover:bg-sidebar-surface font-medium'
                             }`;
                           }}
                         >

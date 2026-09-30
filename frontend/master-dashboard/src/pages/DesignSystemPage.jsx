@@ -99,27 +99,28 @@ const DesignSystemPage = () => {
         {/* Sidebar Dark Tokens */}
         <div className="space-y-3">
           <h3 className="text-sm font-heading font-bold text-neutral-700 uppercase tracking-wider">
-            A. Dark Sidebar & Charcoal Palette
+            A. Onyx (Sidebar & Tombol Utama)
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            <ColorSwatch name="Sidebar Base" hex="#181C1F" bgClass="bg-sidebar-bg" />
-            <ColorSwatch name="Sidebar Surface" hex="#22272B" bgClass="bg-sidebar-surface" />
-            <ColorSwatch name="Sidebar Hover" hex="#292F34" bgClass="bg-sidebar-hover" />
-            <ColorSwatch name="Sidebar Border" hex="#2A3036" bgClass="bg-sidebar-border" />
-            <ColorSwatch name="Sidebar Muted" hex="#8C95A0" bgClass="bg-sidebar-muted" />
+            <ColorSwatch name="Onyx Base" hex="#16181B" bgClass="bg-sidebar-bg" />
+            <ColorSwatch name="Sidebar Surface" hex="#1F2226" bgClass="bg-sidebar-surface" />
+            <ColorSwatch name="Sidebar Hover" hex="#26292E" bgClass="bg-sidebar-hover" />
+            <ColorSwatch name="Sidebar Border" hex="#2A2D31" bgClass="bg-sidebar-border" />
+            <ColorSwatch name="Sidebar Muted" hex="#A8A49C" bgClass="bg-sidebar-muted" />
           </div>
         </div>
 
-        {/* Warm Amber Gold Brand Palette */}
+        {/* Champagne Gold Holding Palette */}
         <div className="space-y-3">
           <h3 className="text-sm font-heading font-bold text-neutral-700 uppercase tracking-wider">
-            B. Warm Amber Gold Palette (Brand Basis & Aksen Emas)
+            B. Champagne Gold & Gading (Aksen Holding)
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            <ColorSwatch name="Primary Gold (Basis)" hex="#FED853" bgClass="bg-primary-500" textClass="text-brand-dark" />
-            <ColorSwatch name="Gold Hover" hex="#F5CD3E" bgClass="bg-primary-600" textClass="text-brand-dark" />
-            <ColorSwatch name="Gold Light Tint" hex="#FEF7D6" bgClass="bg-primary-100" textClass="text-neutral-800" borderClass="border-amber-200" />
-            <ColorSwatch name="Soft Cream 50" hex="#FEFDF0" bgClass="bg-primary-50" textClass="text-neutral-800" borderClass="border-neutral-200" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            <ColorSwatch name="Champagne Gold" hex="#C4A062" bgClass="bg-primary-500" textClass="text-brand-dark" />
+            <ColorSwatch name="Emas Teks" hex="#8C6D2F" bgClass="bg-primary-600" textClass="text-white" />
+            <ColorSwatch name="Emas Tua" hex="#735826" bgClass="bg-primary-700" textClass="text-white" />
+            <ColorSwatch name="Champagne Tint" hex="#F3ECDC" bgClass="bg-primary-100" textClass="text-neutral-800" borderClass="border-primary-200" />
+            <ColorSwatch name="Gading (Latar)" hex="#F7F5F0" bgClass="bg-page-bg" textClass="text-neutral-800" borderClass="border-neutral-200" />
           </div>
         </div>
 

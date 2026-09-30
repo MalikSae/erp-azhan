@@ -68,7 +68,7 @@ const Topbar = ({ toggleSidebar }) => {
             onClick={() => setDropdownOpen(!dropdownOpen)}
             className="flex items-center gap-3 p-1.5 pl-2 pr-2.5 rounded-xl hover:bg-neutral-50 transition-all border border-transparent hover:border-neutral-200/80"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-primary-600 text-white flex items-center justify-center font-bold text-xs shadow-xs ring-2 ring-primary-100">
+            <div className="w-8 h-8 rounded-full bg-brand-dark text-primary-400 flex items-center justify-center font-bold text-xs shadow-xs ring-2 ring-primary-200">
               {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
             </div>
             <div className="hidden sm:flex flex-col text-left leading-tight">

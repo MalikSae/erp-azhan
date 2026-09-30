@@ -35,12 +35,12 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] px-4 py-12 font-body text-neutral-900 antialiased selection:bg-primary-500 selection:text-neutral-900">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-page-bg px-4 py-12 font-body text-neutral-900 antialiased selection:bg-primary-200 selection:text-neutral-900">
       <div className="w-full max-w-[380px] space-y-6">
         
         {/* Header / Logo */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#181C1F] border border-neutral-800 text-primary-500 shadow-sm">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-dark border border-primary-500/50 text-primary-500 shadow-sm">
             <KaabaIcon className="w-6 h-6" />
           </div>
           <div>
@@ -89,7 +89,7 @@ const Login = () => {
                   type="checkbox" 
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-neutral-300 text-primary-500 focus:ring-primary-500/40 w-3.5 h-3.5 cursor-pointer" 
+                  className="rounded border-neutral-300 text-brand-dark focus:ring-primary-500/40 w-3.5 h-3.5 cursor-pointer" 
                 />
                 <span>Ingat saya</span>
               </label>
