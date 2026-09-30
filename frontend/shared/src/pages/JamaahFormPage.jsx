@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { 
   getJamaah, 
   createJamaah, 
@@ -907,7 +907,20 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   )}
                   {formData.kaitan_status === "tanpa_agen" && <p>Tanpa agen</p>}
                   {(!formData.kaitan_status || formData.kaitan_status === "belum_ditentukan") && <p>Belum ditentukan</p>}
-                  <p className="text-[11px] text-neutral-500 mt-1.5">Kaitan tidak dapat diubah dari form ini.</p>
+                  {/* Ganti kaitan hanya lewat menu Admin Master (C4); Admin Travel diarahkan ke Admin Master. */}
+                  {showBrandColumn ? (
+                    <p className="text-xs text-neutral-500 mt-1.5">
+                      Kaitan tidak dapat diubah dari form ini.{" "}
+                      <Link
+                        to={`/komisi/ganti-kaitan?jamaah=${id}&q=${encodeURIComponent(formData.id_jamaah || formData.nama_lengkap || "")}`}
+                        className="font-semibold text-neutral-900 underline underline-offset-2"
+                      >
+                        Buka Ganti Kaitan Agen
+                      </Link>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-neutral-500 mt-1.5">Kaitan tidak dapat diubah dari form ini. Hubungi Admin Master untuk menggantinya.</p>
+                  )}
                 </div>
               ) : (
                 <KaitanAgenPicker

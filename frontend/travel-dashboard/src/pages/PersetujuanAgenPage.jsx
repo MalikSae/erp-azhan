@@ -8,6 +8,7 @@ import {
   uploadBuktiPembayaranAgen,
   uploadMedia,
   openProtectedMedia,
+  useProtectedImage,
 } from 'shared';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
@@ -15,7 +16,6 @@ import Button from '../components/ui/Button';
 import DataTable from '../components/ui/DataTable';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
-import useProtectedImage from '../utils/useProtectedImage';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));

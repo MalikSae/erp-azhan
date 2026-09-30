@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { client } from 'shared';
+import client from '../api/client';
 
 // Memuat file dari endpoint media terproteksi sebagai blob URL (foto agen).
 export default function useProtectedImage(url) {

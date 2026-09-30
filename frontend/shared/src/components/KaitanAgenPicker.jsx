@@ -27,7 +27,9 @@ export function toKaitanPayload(value) {
 
 const agenLabel = (a) => (a.kode_referral ? `${a.nama_lengkap} · ${a.kode_referral}` : a.nama_lengkap);
 
-const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequired = false, error, hint, name = 'kaitan_agen' }) => {
+// excludeAgenId: sembunyikan satu agen dari hasil (mis. agen yang sedang terkait
+// di Ganti Kaitan Agen, karena memilihnya tidak mengubah apa pun).
+const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequired = false, error, hint, name = 'kaitan_agen', excludeAgenId }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -44,7 +46,7 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
       setLoadError(null);
       try {
         const items = await listAgenAktif({ brandId: brandRequired ? brandId : undefined, q: query.trim() });
-        if (!cancelled) setResults(items);
+        if (!cancelled) setResults(excludeAgenId ? items.filter((a) => a.id !== excludeAgenId) : items);
       } catch (err) {
         if (!cancelled) setLoadError(err.response?.data?.error || 'Gagal memuat daftar agen');
       } finally {
@@ -55,7 +57,7 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [searching, query, brandId, brandRequired]);
+  }, [searching, query, brandId, brandRequired, excludeAgenId]);
 
   const setMode = (mode) => onChange({ mode, agen: mode === 'agen' ? value.agen : null });
 

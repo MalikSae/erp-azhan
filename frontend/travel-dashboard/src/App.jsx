@@ -6,11 +6,7 @@ import DashboardPage from './pages/DashboardPage';
 import PaketPage from './pages/PaketPage';
 import PaketDetailPage from './pages/PaketDetailPage';
 import StokPerlengkapanPage from './pages/StokPerlengkapanPage';
-import PaymentConfirmationsPage from './pages/PaymentConfirmationsPage';
 import PersetujuanAgenPage from './pages/PersetujuanAgenPage';
-import DaftarAgenPage from './pages/DaftarAgenPage';
-import DetailAgenPage from './pages/DetailAgenPage';
-import RiwayatKomisiPage from './pages/RiwayatKomisiPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
 
 import {
@@ -20,6 +16,10 @@ import {
   BookingsPage,
   BookingDetailPage,
   BookingFormPage,
+  DaftarAgenPage,
+  DetailAgenPage,
+  RiwayatKomisiPage,
+  PaymentConfirmationsPage,
 } from 'shared';
 
 function App() {
@@ -48,7 +48,7 @@ function App() {
           <Route path="/bookings/new" element={<BookingFormPage showBrandColumn={false} />} />
           <Route path="/bookings/:id" element={<BookingDetailPage showBrandColumn={false} />} />
           <Route path="/bookings/:id/edit" element={<BookingFormPage showBrandColumn={false} />} />
-          <Route path="/payments" element={<PaymentConfirmationsPage />} />
+          <Route path="/payments" element={<PaymentConfirmationsPage showBrandColumn={false} />} />
           <Route path="/agen/pengajuan" element={<PersetujuanAgenPage />} />
           <Route path="/agen" element={<DaftarAgenPage />} />
           <Route path="/agen/komisi" element={<RiwayatKomisiPage />} />
