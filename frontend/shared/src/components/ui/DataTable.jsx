@@ -13,6 +13,8 @@ const DataTable = ({
   emptyMessage = "Tidak ada data",
   renderCell,
   toolbarActions,
+  // toolbarPanel: konten opsional di bawah baris toolbar (mis. panel filter lanjutan).
+  toolbarPanel,
   onRowClick
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,6 +106,11 @@ const DataTable = ({
               {toolbarActions}
             </div>
           )}
+        </div>
+      )}
+      {toolbarPanel && (
+        <div className="p-4 border-b border-neutral-200/80 bg-neutral-50/60">
+          {toolbarPanel}
         </div>
       )}
 

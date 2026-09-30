@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { listAgen, listRiwayatKomisi } from 'shared';
+import { listAgen, listRiwayatKomisi } from '../api/agen';
+import { listBrands } from '../api/brands';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
 import CustomDropdown from '../components/ui/CustomDropdown';
@@ -11,24 +12,30 @@ import { dateLabel, JENIS_KOMISI, KETERSEDIAAN, money } from '../utils/agen';
 
 const LIMIT = 200;
 
-// Screen B3 — ledger transaksi_komisi brand ini lintas agen. Read-only, tanpa
-// aksi reversal (agen-azhan.md §5.8).
-export default function RiwayatKomisiPage() {
+// Screen B3 — ledger transaksi_komisi lintas agen. Read-only, tanpa aksi
+// reversal (agen-azhan.md §5.8). showBrandColumn: Admin Master, lintas brand
+// dengan filter brand (dikirim ke server sebagai brand_id).
+export default function RiwayatKomisiPage({ showBrandColumn = false }) {
   const [params, setParams] = useSearchParams();
   const filter = {
+    brand_id: showBrandColumn ? params.get('brand_id') || '' : '',
     agen_id: params.get('agen_id') || '',
     jenis: params.get('jenis') || '',
     dari: params.get('dari') || '',
     sampai: params.get('sampai') || '',
   };
   const [agenList, setAgenList] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     listAgen().then(setAgenList).catch(() => {});
-  }, []);
+    if (showBrandColumn) listBrands().then((b) => setBrands(b || [])).catch(() => {});
+  }, [showBrandColumn]);
+
+  const agenOptions = filter.brand_id ? agenList.filter((a) => String(a.brand_id) === filter.brand_id) : agenList;
 
   const filterKey = params.toString();
   useEffect(() => {
@@ -82,14 +89,40 @@ export default function RiwayatKomisiPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Riwayat Komisi" subtitle="Seluruh transaksi komisi agen di brand ini. Hanya baca, tanpa pembatalan." />
+      <PageHeader
+        title="Riwayat Komisi"
+        subtitle={`Seluruh transaksi komisi agen ${showBrandColumn ? 'lintas brand' : 'di brand ini'}. Hanya baca, tanpa pembatalan.`}
+      />
       {error && <Alert variant="error" message={error} />}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${showBrandColumn ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+        {showBrandColumn && (
+          <CustomDropdown
+            label="Brand"
+            name="brand_id"
+            options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
+            value={filter.brand_id}
+            onChange={(e) => {
+              const next = new URLSearchParams(params);
+              const value = e?.target ? e.target.value : e;
+              if (value) next.set('brand_id', value);
+              else next.delete('brand_id');
+              next.delete('agen_id');
+              setParams(next, { replace: true });
+            }}
+            placeholder="Semua brand"
+          />
+        )}
         <CustomDropdown
           label="Agen"
           name="agen_id"
-          options={[{ value: '', label: 'Semua agen' }, ...agenList.map((a) => ({ value: String(a.jamaah_id), label: a.nama_lengkap }))]}
+          options={[
+            { value: '', label: 'Semua agen' },
+            ...agenOptions.map((a) => ({
+              value: String(a.jamaah_id),
+              label: showBrandColumn && !filter.brand_id ? `${a.nama_lengkap} (${a.brand_name})` : a.nama_lengkap,
+            })),
+          ]}
           value={filter.agen_id}
           onChange={(e) => setFilter('agen_id', e?.target ? e.target.value : e)}
           placeholder="Semua agen"

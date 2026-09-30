@@ -17,7 +17,8 @@ import CustomDropdown from "../components/ui/CustomDropdown";
 import Textarea from "../components/ui/Textarea";
 import BrandCell from "../components/BrandCell";
 import DocumentReview from "../components/DocumentReview";
-import { Edit2, Eye, Upload, ExternalLink, RefreshCw, Users, Plus, Save, ArrowRight, Building2, Copy, Check } from "lucide-react";
+import { Edit2, Eye, Upload, ExternalLink, RefreshCw, Users, Plus, Save, ArrowRight, Building2, Copy, Check, Network } from "lucide-react";
+import { STATUS_AGEN } from "../utils/agen";
 
 const DOKUMEN_TYPES = [
   { key: "pas_foto", label: "Pas Foto" },
@@ -592,6 +593,37 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
               </Button>
             </div>
           </MetaBox>
+          {/* Kaitan Agen Syiar: agen yang mengajak (read-only; penggantian lewat Admin Master) */}
+          <MetaBox title="Agen Syiar" icon={<Network size={18} className="text-neutral-700" />}>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-neutral-500 font-body">Agen yang mengajak</span>
+                {jamaah.kaitan_status === "terikat_agen" && jamaah.direkrut_oleh_jamaah_id ? (
+                  <Link
+                    to={`/agen/${jamaah.direkrut_oleh_jamaah_id}`}
+                    className="text-sm font-semibold text-neutral-900 underline underline-offset-2 text-right"
+                  >
+                    {jamaah.direkrut_oleh_nama || `#${jamaah.direkrut_oleh_jamaah_id}`}
+                  </Link>
+                ) : (
+                  <span className="text-sm font-medium text-neutral-700">
+                    {jamaah.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}
+                  </span>
+                )}
+              </div>
+              {STATUS_AGEN[jamaah.status_agen] && (
+                <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-3">
+                  <span className="text-xs font-medium text-neutral-500 font-body">Jamaah ini juga agen</span>
+                  <Link to={`/agen/${jamaah.id}`}>
+                    <Badge variant={STATUS_AGEN[jamaah.status_agen].variant}>
+                      {STATUS_AGEN[jamaah.status_agen].label}
+                    </Badge>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </MetaBox>
+
           {/* Afiliasi Biro Travel (Khusus Super Admin / Master Dashboard) */}
           {showBrandColumn && (brand || jamaah.brand_id) && (
             <MetaBox 

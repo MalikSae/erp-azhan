@@ -48,9 +48,21 @@ export async function listAgenAktif({ brandId, q } = {}) {
   return data || [];
 }
 
-// B2 Daftar Agen (aktif & nonaktif).
-export async function listAgen(q) {
-  const { data } = await client.get('/api/admin/agen', { params: q ? { q } : {} });
+// B2 Daftar Agen (aktif & nonaktif) + jumlah_closing & total_komisi.
+// brandId hanya dipakai super admin (kosong = semua brand).
+export async function listAgen({ q, brandId } = {}) {
+  const params = {};
+  if (q) params.q = q;
+  if (brandId) params.brand_id = brandId;
+  const { data } = await client.get('/api/admin/agen', { params });
+  return data || [];
+}
+
+// Peringkat agen per periode (dari/sampai YYYY-MM-DD, wajib).
+export async function getPeringkatAgen({ dari, sampai, brandId }) {
+  const params = { dari, sampai };
+  if (brandId) params.brand_id = brandId;
+  const { data } = await client.get('/api/admin/agen/peringkat', { params });
   return data || [];
 }
 

@@ -34,16 +34,26 @@ func NewRepository(db *sql.DB) *Repository {
 // ListDailyBrandTransactions mengambil pembayaran confirmed selama 30 hari,
 // termasuk hari ini, dan mengelompokkannya berdasarkan brand dan tanggal.
 func (r *Repository) ListDailyBrandTransactions(ctx context.Context) ([]DailyBrandTransaction, error) {
+	// Nilai bersih: pembayaran terkonfirmasi dikurangi pengembalian dana (booking_refunds)
+	// pada tanggal refund dicatat. Count tetap jumlah pembayaran.
 	const q = `
-		SELECT DATE_FORMAT(COALESCE(p.tanggal, DATE(p.created_at)), '%Y-%m-%d') AS payment_date,
-			s.brand_id, COALESCE(SUM(p.jumlah), 0), COUNT(*)
-		FROM payments p
-		JOIN bookings b ON b.id = p.booking_id
-		JOIN schedules s ON s.id = b.schedule_id
-		WHERE p.status = 'confirmed'
-			AND COALESCE(p.tanggal, DATE(p.created_at)) BETWEEN CURDATE() - INTERVAL 29 DAY AND CURDATE()
-		GROUP BY payment_date, s.brand_id
-		ORDER BY payment_date ASC, s.brand_id ASC`
+		SELECT DATE_FORMAT(t.tgl, '%Y-%m-%d') AS payment_date, t.brand_id,
+			COALESCE(SUM(t.jumlah), 0), SUM(t.is_payment)
+		FROM (
+			SELECT COALESCE(p.tanggal, DATE(p.created_at)) AS tgl, s.brand_id, p.jumlah, 1 AS is_payment
+			FROM payments p
+			JOIN bookings b ON b.id = p.booking_id
+			JOIN schedules s ON s.id = b.schedule_id
+			WHERE p.status = 'confirmed'
+			UNION ALL
+			SELECT rf.tanggal, s.brand_id, -rf.jumlah, 0
+			FROM booking_refunds rf
+			JOIN bookings b ON b.id = rf.booking_id
+			JOIN schedules s ON s.id = b.schedule_id
+		) t
+		WHERE t.tgl BETWEEN CURDATE() - INTERVAL 29 DAY AND CURDATE()
+		GROUP BY payment_date, t.brand_id
+		ORDER BY payment_date ASC, t.brand_id ASC`
 
 	rows, err := r.db.QueryContext(ctx, q)
 	if err != nil {
@@ -439,11 +449,14 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 				return err
 			}
 		}
+		// Hold 24 jam hanya untuk reservasi tanpa pembayaran terkonfirmasi. Booking
+		// yang sudah dibayar lalu turun ke 'baru' (mis. koreksi diskon/add-on) tetap
+		// memegang kursi tanpa batas waktu sampai admin memutuskan (JB-03).
 		_, err = tx.ExecContext(ctx,
 			`UPDATE bookings SET status=?,is_seat_blocked=IF(? IN ('dp','lunas'),TRUE,is_seat_blocked),
-			 seat_hold_expires_at=IF(? IN ('dp','lunas'),NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
+			 seat_hold_expires_at=IF(? IN ('dp','lunas') OR ? > 0,NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
 			 seat_hold_key=IF(? IN ('dp','lunas'),NULL,seat_hold_key) WHERE id=?`,
-			targetStatus, targetStatus, targetStatus, targetStatus, bookingID)
+			targetStatus, targetStatus, targetStatus, totalPaid, targetStatus, bookingID)
 		if err != nil {
 			return err
 		}

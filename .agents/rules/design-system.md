@@ -19,33 +19,35 @@ trigger: always_on
 
 ## 2. Warna (Color Tokens)
 
-Basis warna brand: **Warm Amber Gold** (`#FED853`) dengan aksen UI modern **Altezza Travel**: Dark Charcoal Sidebar (`#181C1F`) + Warm Amber Gold Active Pill (`#FED853`).
+**Master Dashboard (holding Azhan Grup)** memakai palet **Onyx & Champagne Gold di atas gading**: tombol utama onyx, emas hanya aksen (menu aktif, logo, garis tipis), latar gading hangat. Warna keempat brand (Zahara, Nava, Alsha, Hana) hanya dipakai untuk data (grafik per brand), bukan tombol/navigasi.
 
-### 2.1 Token Sidebar & Navigasi Gelap (Altezza Style)
+**Travel Dashboard** mengikuti warna tiap brand saat runtime (`applyBrandTheme` → variabel `--brand-primary*`); token bawaan di `travel-dashboard/tailwind.config.js` hanya fallback.
+
+Aturan kontras: teks/ikon di latar terang memakai `primary-600` ke atas (≥ 4.5:1 vs putih); `primary-50`–`500` hanya untuk latar/isi dengan teks onyx di atasnya.
+
+### 2.1 Token Sidebar & Navigasi Gelap (Master)
 | Token | Hex | Pemakaian |
 |---|---|---|
-| `sidebar.bg` | `#181C1F` | Background sidebar utama |
-| `sidebar.surface` | `#22272B` | Permukaan card/grup dalam sidebar |
-| `sidebar.hover` | `#292F34` | Hover item menu sidebar |
-| `sidebar.border` | `#2A3036` | Border pemisah pada sidebar gelap |
-| `sidebar.active` | `#FED853` | **Active Nav Pill** (Warm Amber Gold) |
-| `sidebar.activeText` | `#14171A` | Teks di atas active gold pill |
-| `sidebar.muted` | `#8C95A0` | Teks/label grup menu yang tidak aktif |
+| `sidebar.bg` | `#16181B` | Background sidebar utama (onyx) |
+| `sidebar.surface` | `#1F2226` | Permukaan card/grup dalam sidebar |
+| `sidebar.hover` | `#26292E` | Hover item menu sidebar |
+| `sidebar.border` | `#2A2D31` | Border pemisah pada sidebar gelap |
+| `sidebar.active` | champagne 14% | Latar menu aktif (tint emas tipis) |
+| `sidebar.activeText` | `#D9C392` | Teks menu aktif |
+| `sidebar.muted` | `#A8A49C` | Teks/label grup menu yang tidak aktif |
 
-### 2.2 Token Brand & Status
+### 2.2 Token Brand & Status (Master)
 | Token | Hex | Pemakaian |
 |---|---|---|
-| `primary-50` / `primary-soft` | `#FEFDF0` | Background highlight lembut / tint putih-krem |
-| `primary-100` / `accent-gold-light` | `#FEF7D6` | Background badge emas muda / soft highlight |
-| `primary-500` / `accent-gold` | `#FED853` | **Basis Utama Brand ERP, Primary Button, & Active Pill** |
-| `primary-600` / `accent-gold-hover` | `#F5CD3E` | Hover state tombol primary emas |
-| `brand-dark` | `#14171A` | Teks kontras di atas tombol/pill emas |
-| `neutral-50` | `#FAFAFA` | Background card terang |
-| `neutral-100` | `#F4F4F5` | Background badge netral / placeholder |
-| `neutral-200` | `#E4E4E7` | Border card & form |
-| `neutral-500` | `#71717A` | Teks sekunder / caption |
-| `neutral-900` | `#18181B` | Teks utama |
-| `page.bg` | `#F6F8FA` | Background halaman dashboard (soft slate) |
+| `primary-50` | `#FAF7EF` | Latar highlight lembut |
+| `primary-100` / `accent-gold-light` | `#F3ECDC` | Latar badge/tint champagne |
+| `primary-500` / `accent-gold` | `#C4A062` | **Champagne gold** — aksen, logo, menu aktif |
+| `primary-600` | `#8C6D2F` | Teks/ikon emas di latar terang (4.8:1) |
+| `primary-700` | `#735826` | Emas tua: teks & link (6.7:1) |
+| `brand-dark` | `#16181B` | Onyx — tombol utama, teks kontras |
+| `brand-ivory` | `#F7F5F0` | Teks di atas tombol onyx |
+| `neutral-*` | skala stone | Netral hangat (`neutral-500` `#78716C` untuk caption) |
+| `page.bg` | `#F7F5F0` | Background halaman (gading) |
 | `success-*` | skala hijau | Badge "published" / "terverifikasi", pesan sukses |
 | `warning-*` | skala kuning-emas | Badge "draft" / "perlu review" / "pending" |
 | `danger-*` | skala merah | Error, tombol delete, validasi gagal, batal |
@@ -114,7 +116,7 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 
 | Komponen | Varian | Catatan |
 |---|---|---|
-| `Button` | `primary`, `secondary`, `danger`, `ghost` × size `sm`, `md` | Semua tombol di seluruh app wajib pakai ini, tidak ada `<button>` mentah dengan class manual |
+| `Button` | `primary`, `secondary`, `danger`, `ghost` × size `sm`, `md` | Semua tombol di seluruh app wajib pakai ini, tidak ada `<button>` mentah dengan class manual. Varian `primary` di `frontend/shared` membaca `--brand-primary`/`--brand-primary-text` (diisi `master-dashboard/src/index.css` dan tema brand travel) |
 | `Input` | text, number, date, time | Wrapper konsisten: label + input + pesan error |
 | `Select` | — | Dropdown standar, dipakai untuk semua field "pilih dari data master" (hotel, maskapai, itinerary) |
 | `Textarea` | — | |

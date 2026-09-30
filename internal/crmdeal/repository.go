@@ -184,10 +184,11 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 
 	result, err := tx.ExecContext(ctx,
 		`INSERT INTO bookings
-		 (id_booking,schedule_id,pic_jamaah_id,seat_count,status,is_seat_blocked,seat_hold_expires_at,seat_hold_key,total_harga,created_by)
-		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		 (id_booking,schedule_id,pic_jamaah_id,seat_count,status,is_seat_blocked,seat_hold_expires_at,seat_hold_key,total_harga,created_by,dp_per_pax)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,
+		   (SELECT COALESCE(s.minimal_dp, br.minimal_dp, 0) FROM schedules s JOIN brands br ON br.id = s.brand_id WHERE s.id = ?))`,
 		bookingCode, req.ScheduleID, jamaahID, req.Pax, bookingStatus,
-		isSeatBlocked, holdExpiry, holdKey, totalPrice, createdBy,
+		isSeatBlocked, holdExpiry, holdKey, totalPrice, createdBy, req.ScheduleID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create booking: %w", err)

@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Komponen bersama (shared/ui/Button) membaca warna tombol utama dari variabel ini.
+   Travel Dashboard mengisinya per brand; Master Dashboard memakai palet holding
+   (tombol onyx, teks gading). */
+:root {
+  --brand-primary: theme('colors.brand.dark');
+  --brand-primary-text: theme('colors.brand.ivory');
+}
+
 @layer base {
   body {
     @apply font-body text-neutral-800 antialiased;

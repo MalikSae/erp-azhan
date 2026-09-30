@@ -122,6 +122,17 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
       { header: "NIK", key: "nik", accessor: "nik" },
       { header: "No HP", key: "no_hp", accessor: "no_hp" },
       {
+        header: "Agen",
+        key: "direkrut_oleh_nama",
+        sortable: true,
+        accessor: (row) =>
+          row.kaitan_status === "terikat_agen" && row.direkrut_oleh_nama ? (
+            <span className="font-medium text-neutral-900 whitespace-nowrap">{row.direkrut_oleh_nama}</span>
+          ) : (
+            <span className="text-neutral-500 whitespace-nowrap">{row.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}</span>
+          )
+      },
+      {
         header: "% Data",
         key: "pct_data",
         accessor: (row) => (

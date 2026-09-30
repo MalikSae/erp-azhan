@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"erp-azhan/api/internal/identity"
 	"errors"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"net/http"
 	"os"
@@ -47,6 +48,39 @@ func ValidatePortalUpload(ctx context.Context, db *sql.DB, raw string, id int64)
 	}
 	return nil
 }
+
+// ValidateAdminUpload memastikan dokumen yang disimpan admin menunjuk ke berkas
+// unggahan resmi (JB-11): kategori dokumen-jamaah, tercatat di media_uploads
+// sebagai unggahan brand jamaah, super admin, atau jamaah itu sendiri, dan
+// berkasnya ada di disk. URL eksternal dan path buatan ditolak.
+func ValidateAdminUpload(ctx context.Context, db *sql.DB, raw string, jamaahID int64) error {
+	category, name, ok := protectedPath(raw)
+	if !ok || category != "dokumen-jamaah" {
+		return &UploadError{"berkas harus diunggah melalui formulir dokumen jamaah"}
+	}
+	canonical := "/api/admin/media/" + category + "/" + name
+	var owned bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM media_uploads m JOIN jamaah j ON j.id = ?
+			WHERE m.path = ? AND (m.jamaah_id = j.id OR m.brand_id = j.brand_id OR (m.brand_id IS NULL AND m.admin_user_id IS NOT NULL))
+		)`, jamaahID, canonical).Scan(&owned); err != nil {
+		return fmt.Errorf("media.ValidateAdminUpload: %w", err)
+	}
+	if !owned {
+		return &UploadError{"berkas bukan unggahan brand jamaah ini"}
+	}
+	info, err := os.Stat(filepath.Join("uploads", category, name))
+	if err != nil || info.IsDir() {
+		return &UploadError{"berkas unggahan tidak ditemukan"}
+	}
+	return nil
+}
+
+// UploadError adalah penolakan berkas yang pesannya aman ditampilkan ke pengguna.
+type UploadError struct{ Message string }
+
+func (e *UploadError) Error() string { return e.Message }
 
 func (h *Handler) ServeDocument(w http.ResponseWriter, r *http.Request) {
 	var raw string

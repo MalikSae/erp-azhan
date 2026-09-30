@@ -816,6 +816,30 @@ func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *Sched
 	return nil
 }
 
+// CountActiveBookings menghitung booking aktif (baru/dp/lunas) pada paket (MP-09).
+func (r *Repository) CountActiveBookings(ctx context.Context, scheduleID int64) (int, error) {
+	var n int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id=? AND status IN ('baru','dp','lunas')`, scheduleID).Scan(&n)
+	return n, err
+}
+
+// HotelCity mengembalikan kota hotel; ErrNotFound bila hotel tidak ada (MP-03).
+func (r *Repository) HotelCity(ctx context.Context, id int64) (string, error) {
+	var city string
+	err := r.db.QueryRowContext(ctx, `SELECT city FROM hotels WHERE id=?`, id).Scan(&city)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return city, err
+}
+
+// AirportCodeExists memeriksa kode bandara terdaftar di master (case-insensitive, MP-06).
+func (r *Repository) AirportCodeExists(ctx context.Context, code string) (bool, error) {
+	var n int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM airports WHERE UPPER(code)=UPPER(?)`, code).Scan(&n)
+	return n > 0, err
+}
+
 func (r *Repository) BrandMinimalDP(ctx context.Context, id int64) (float64, error) {
 	var dp float64
 	err := r.db.QueryRowContext(ctx, `SELECT minimal_dp FROM brands WHERE id=?`, id).Scan(&dp)

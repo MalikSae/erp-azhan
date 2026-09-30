@@ -87,6 +87,22 @@ func (h *Handler) DetailAgen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d)
 }
 
+// PeringkatAgen GET /api/admin/agen/peringkat?dari=&sampai=&brand_id=
+// Periode wajib; tanggal mengacu ke waktu komisi tercatat (booking lunas).
+func (h *Handler) PeringkatAgen(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	items, err := h.repo.PeringkatAgen(r.Context(), adminBrandScope(r), q.Get("dari"), q.Get("sampai"))
+	if errors.Is(err, ErrPeriodeTidakValid) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 // RiwayatKomisiAdmin GET /api/admin/agen/komisi?agen_id=&jenis=&dari=&sampai= (B3)
 func (h *Handler) RiwayatKomisiAdmin(w http.ResponseWriter, r *http.Request) {
 	f := komisiFilterFromQuery(r)

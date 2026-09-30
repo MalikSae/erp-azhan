@@ -16,27 +16,30 @@ import (
 
 var (
 	ErrKaitanBukanJalur3  = errors.New("kaitan jamaah ini bukan hasil input Admin (Jalur 3), tidak bisa diganti")
-	ErrKaitanSudahKomisi  = errors.New("jamaah ini sudah pernah menghasilkan komisi (booking sudah pernah lunas), kaitan tidak bisa diganti")
+	ErrKaitanSudahKomisi  = errors.New("jamaah ini sudah pernah menghasilkan komisi, kaitan tidak bisa diganti")
 	ErrKaitanJamaahAgen   = errors.New("jamaah ini sudah menjadi atau sedang mengajukan diri sebagai agen, kaitan tidak bisa diganti")
 	ErrKaitanTidakBerubah = errors.New("kaitan baru sama dengan kaitan saat ini")
 	ErrKaitanModeTidakSah = errors.New("pilih kaitkan ke agen atau tanpa agen")
 )
 
 type JamaahKaitan struct {
-	JamaahID       int64   `json:"jamaah_id"`
-	IDJamaah       string  `json:"id_jamaah"`
-	NamaLengkap    string  `json:"nama_lengkap"`
-	NoHP           *string `json:"no_hp"`
-	BrandID        int64   `json:"brand_id"`
-	BrandName      string  `json:"brand_name"`
-	StatusAgen     string  `json:"status_agen"`
-	KaitanStatus   string  `json:"kaitan_status"`
-	KaitanSumber   *string `json:"kaitan_sumber"`
-	AgenID         *int64  `json:"agen_id"`
-	AgenNama       *string `json:"agen_nama"`
-	PunyaKomisi    bool    `json:"punya_komisi"`
-	BisaDiganti    bool    `json:"bisa_diganti"`
-	AlasanTerkunci string  `json:"alasan_terkunci,omitempty"`
+	JamaahID     int64   `json:"jamaah_id"`
+	IDJamaah     string  `json:"id_jamaah"`
+	NamaLengkap  string  `json:"nama_lengkap"`
+	NoHP         *string `json:"no_hp"`
+	BrandID      int64   `json:"brand_id"`
+	BrandName    string  `json:"brand_name"`
+	StatusAgen   string  `json:"status_agen"`
+	KaitanStatus string  `json:"kaitan_status"`
+	KaitanSumber *string `json:"kaitan_sumber"`
+	AgenID       *int64  `json:"agen_id"`
+	AgenNama     *string `json:"agen_nama"`
+	PunyaKomisi  bool    `json:"punya_komisi"`
+	// BookingBelumLunas: booking aktif (draft/baru/dp) jamaah ini. Komisinya
+	// dicatat saat lunas ke agen yang terkait saat itu, jadi ikut agen baru.
+	BookingBelumLunas int    `json:"booking_belum_lunas"`
+	BisaDiganti       bool   `json:"bisa_diganti"`
+	AlasanTerkunci    string `json:"alasan_terkunci,omitempty"`
 }
 
 type GantiKaitanRequest struct {
@@ -72,7 +75,9 @@ func alasanTerkunci(j JamaahKaitan) error {
 const qJamaahKaitan = `
 	SELECT j.id, COALESCE(j.id_jamaah,''), j.nama_lengkap, j.no_hp, j.brand_id, b.name, j.status_agen,
 	       j.kaitan_status, j.kaitan_sumber, j.direkrut_oleh_jamaah_id, ag.nama_lengkap,
-	       EXISTS (SELECT 1 FROM transaksi_komisi tk WHERE tk.jamaah_sumber_id = j.id)
+	       EXISTS (SELECT 1 FROM transaksi_komisi tk WHERE tk.jamaah_sumber_id = j.id),
+	       (SELECT COUNT(DISTINCT bp.booking_id) FROM booking_pax bp JOIN bookings bk ON bk.id = bp.booking_id
+	         WHERE bp.jamaah_id = j.id AND bp.pax_status = 'aktif' AND bk.status IN ('draft','baru','dp'))
 	FROM jamaah j
 	JOIN brands b ON b.id = j.brand_id
 	LEFT JOIN jamaah ag ON ag.id = j.direkrut_oleh_jamaah_id`
@@ -81,7 +86,7 @@ func scanJamaahKaitan(sc interface{ Scan(...any) error }) (JamaahKaitan, error) 
 	var j JamaahKaitan
 	var agen sql.NullInt64
 	err := sc.Scan(&j.JamaahID, &j.IDJamaah, &j.NamaLengkap, &j.NoHP, &j.BrandID, &j.BrandName, &j.StatusAgen,
-		&j.KaitanStatus, &j.KaitanSumber, &agen, &j.AgenNama, &j.PunyaKomisi)
+		&j.KaitanStatus, &j.KaitanSumber, &agen, &j.AgenNama, &j.PunyaKomisi, &j.BookingBelumLunas)
 	if err != nil {
 		return j, err
 	}
@@ -126,7 +131,9 @@ func cariJamaahKaitan(ctx context.Context, q querier, brandID *int64, cari strin
 }
 
 func gantiKaitanTx(ctx context.Context, tx *sql.Tx, jamaahID, adminID int64, req GantiKaitanRequest) error {
-	j, err := scanJamaahKaitan(tx.QueryRowContext(ctx, qJamaahKaitan+` WHERE j.id = ? FOR UPDATE`, jamaahID))
+	// FOR UPDATE OF j: kunci hanya baris jamaah target, bukan baris brands
+	// (kunci counter nomor jamaah) atau baris agen lama (audit KA-02).
+	j, err := scanJamaahKaitan(tx.QueryRowContext(ctx, qJamaahKaitan+` WHERE j.id = ? FOR UPDATE OF j`, jamaahID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -175,6 +182,13 @@ func gantiKaitanTx(ctx context.Context, tx *sql.Tx, jamaahID, adminID int64, req
 }
 
 func listKaitanLog(ctx context.Context, q querier, jamaahID int64) ([]KaitanLog, error) {
+	var ada bool
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jamaah WHERE id = ?)`, jamaahID).Scan(&ada); err != nil {
+		return nil, fmt.Errorf("agen: cek jamaah log kaitan: %w", err)
+	}
+	if !ada {
+		return nil, ErrNotFound
+	}
 	rows, err := q.QueryContext(ctx, `
 		SELECT l.id, lama.nama_lengkap, baru.nama_lengkap, l.kaitan_status_lama, l.kaitan_status_baru,
 		       COALESCE(au.display_name, au.email), l.diganti_at, l.alasan

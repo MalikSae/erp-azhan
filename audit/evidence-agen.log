@@ -1,0 +1,85 @@
+﻿===== AG1 daftar agen lintas brand + peringkat 2026-10-01T05:22:49 =====
+[login-super] POST /api/auth/login -> 200 {"user_id":1,"display_name":"","email":"admin@local.test","role":"admin","access_token":"***","refresh_token":"***","expires_in":900,"token_type":"Bearer"}
+[login-tp] POST /api/auth/login -> 200 {"user_id":2,"display_name":"admin.tp","email":"admin.tp@local.test","role":"admin","access_token":"***","refresh_token":"***","expires_in":900,"token_type":"Bearer"}
+--- Daftar agen + metrik
+[A1-super-semua-brand] GET /api/admin/agen -> 200 []
+[A2-super-filter-brand-2] GET /api/admin/agen?brand_id=2 -> 200 []
+[A3-admin-tp-coba-brand-2 (harus tetap brand 1)] GET /api/admin/agen?brand_id=2 -> 200 []
+[A4-cek-metrik-db] SQL SELECT j.id, j.brand_id, j.nama_lengkap, (SELECT COUNT(*) FROM jamaah r WHERE r.direkrut_oleh_jamaah_id=j.id) closing, (SELECT COALESCE(SUM(nominal),0) FROM transaksi_komisi tk WHERE tk.jamaah_penerima_id=j.id AND tk.jenis<>'cashback') komisi FROM jamaah j WHERE j.status_agen IN ('aktif','nonaktif') ORDER BY j.id
+
+--- Peringkat
+[P1-super-semua-brand] GET /api/admin/agen/peringkat?dari=2020-01-01&sampai=2026-12-31 -> 200 []
+[P2-super-brand-2] GET /api/admin/agen/peringkat?dari=2020-01-01&sampai=2026-12-31&brand_id=2 -> 200 []
+[P3-admin-tp-coba-brand-2 (harus brand 1)] GET /api/admin/agen/peringkat?dari=2020-01-01&sampai=2026-12-31&brand_id=2 -> 200 []
+[P4-periode-kosong] GET /api/admin/agen/peringkat?dari=2000-01-01&sampai=2000-12-31 -> 200 []
+[P5-dari-setelah-sampai (400)] GET /api/admin/agen/peringkat?dari=2026-02-01&sampai=2026-01-01 -> 400 {"error":"periode tidak valid: isi dari dan sampai (YYYY-MM-DD), dari tidak boleh setelah sampai"}
+[P6-tanpa-periode (400)] GET /api/admin/agen/peringkat -> 400 {"error":"periode tidak valid: isi dari dan sampai (YYYY-MM-DD), dari tidak boleh setelah sampai"}
+[P7-cek-ledger-db] SQL SELECT tk.jamaah_penerima_id, tk.brand_id, tk.jenis, COUNT(*) n, SUM(tk.nominal) total, MIN(DATE(tk.created_at)) dari, MAX(DATE(tk.created_at)) sampai FROM transaksi_komisi tk GROUP BY tk.jamaah_penerima_id, tk.brand_id, tk.jenis ORDER BY 1,3
+
+--- Detail & riwayat komisi lintas brand
+[D0-ambil-agen-brand-2] GET /api/admin/agen?brand_id=2 -> 200 []
+[K1-super-komisi-brand-2] GET /api/admin/agen/komisi?brand_id=2&limit=5 -> 200 []
+===== AG-SEED data uji sementara 2026-10-01T05:23:33 =====
+[S1-agen] SQL UPDATE jamaah SET status_agen='aktif', disetujui_agen_at=NOW(), kode_referral=CASE id WHEN 1 THEN 'UJIAHMAD' WHEN 2 THEN 'UJISITI' WHEN 8 THEN 'UJIBRAND2' END WHERE id IN (1,2,8)
+
+[S2-kaitan] SQL UPDATE jamaah SET upline_jamaah_id=1 WHERE id=2; UPDATE jamaah SET direkrut_oleh_jamaah_id=2 WHERE id IN (3,6); UPDATE jamaah SET direkrut_oleh_jamaah_id=1 WHERE id IN (2,11)
+
+[S3-komisi] SQL INSERT INTO transaksi_komisi (brand_id, jamaah_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal, created_at) VALUES
+ (1, 2, 3, 9, 9, 'langsung', 1000000, NOW()),
+ (1, 1, 3, 9, 9, 'pembinaan', 300000, NOW()),
+ (1, 2, 6, 10, 10, 'langsung', 1000000, NOW()),
+ (1, 1, 11, 11, 12, 'langsung', 1500000, '2026-08-15 10:00:00'),
+ (1, 12, 12, 11, 13, 'cashback', 500000, NOW()),
+ (2, 8, 93, 70, 83, 'langsung', 750000, NOW())
+
+===== AG1 daftar agen lintas brand + peringkat 2026-10-01T05:23:33 =====
+[login-super] POST /api/auth/login -> 200 {"user_id":1,"display_name":"","email":"admin@local.test","role":"admin","access_token":"***","refresh_token":"***","expires_in":900,"token_type":"Bearer"}
+[login-tp] POST /api/auth/login -> 200 {"user_id":2,"display_name":"admin.tp","email":"admin.tp@local.test","role":"admin","access_token":"***","refresh_token":"***","expires_in":900,"token_type":"Bearer"}
+--- Daftar agen + metrik
+[A1-super-semua-brand] GET /api/admin/agen -> 200 [{"jamaah_id":1,"brand_id":1,"brand_name":"Travel Pertama","nama_lengkap":"Ahmad Fauzi Uji","kode_referral":"UJIAHMAD","status_agen":"aktif","disetujui_agen_at":"2026-10-01T05:23:33+07:00","jumlah_closing":2,"total_komisi":1800000},{"jamaah_id":8,"brand_id":2,"brand_name":"Brand Uji Dua","nama_lengkap":"Jamaah Brand Dua","kode_referral":"UJIBRAND2","status_agen":"aktif","disetujui_agen_at":"2026-10-01T05:23:33+07:00","jumlah_closing":0,"total_komisi":750000},{"jamaah_id":2,"brand_id":1,"brand_name":"Travel Pertama","nama_lengkap":"Siti Aminah Uji","kode_referral":"UJISITI","status_agen":"aktif...
+[A2-super-filter-brand-2] GET /api/admin/agen?brand_id=2 -> 200 [{"jamaah_id":8,"brand_id":2,"brand_name":"Brand Uji Dua","nama_lengkap":"Jamaah Brand Dua","kode_referral":"UJIBRAND2","status_agen":"aktif","disetujui_agen_at":"2026-10-01T05:23:33+07:00","jumlah_closing":0,"total_komisi":750000}]
+[A3-admin-tp-coba-brand-2 (harus tetap brand 1)] GET /api/admin/agen?brand_id=2 -> 200 [{"jamaah_id":1,"brand_id":1,"brand_name":"Travel Pertama","nama_lengkap":"Ahmad Fauzi Uji","kode_referral":"UJIAHMAD","status_agen":"aktif","disetujui_agen_at":"2026-10-01T05:23:33+07:00","jumlah_closing":2,"total_komisi":1800000},{"jamaah_id":2,"brand_id":1,"brand_name":"Travel Pertama","nama_lengkap":"Siti Aminah Uji","kode_referral":"UJISITI","status_agen":"aktif","disetujui_agen_at":"2026-10-01T05:23:33+07:00","jumlah_closing":2,"total_komisi":2000000}]
+[A4-cek-metrik-db] SQL SELECT j.id, j.brand_id, j.nama_lengkap, (SELECT COUNT(*) FROM jamaah r WHERE r.direkrut_oleh_jamaah_id=j.id) closing, (SELECT COALESCE(SUM(nominal),0) FROM transaksi_komisi tk WHERE tk.jamaah_penerima_id=j.id AND tk.jenis<>'cashback') komisi FROM jamaah j WHERE j.status_agen IN ('aktif','nonaktif') ORDER BY j.id
+id	brand_id	nama_lengkap	closing	komisi
+1	1	Ahmad Fauzi Uji	2	1800000
+2	1	Siti Aminah Uji	2	2000000
+8	2	Jamaah Brand Dua	0	750000
+--- Peringkat
+[P1-super-semua-brand] GET /api/admin/agen/peringkat?dari=2020-01-01&sampai=2026-12-31 -> 200 [{"peringkat":1,"jamaah_id":2,"brand_id":1,"brand_name":"Travel Pertama","nama_lengkap":"Siti Aminah Uji","kode_referral":"UJISITI","status_agen":"aktif","pax_closing":2,"booking_closing":2,"komisi_langsung":2000000,"bonus_pembinaan":0,"repeat_order":0,"total_komisi":2000000},{"peringkat":2,"jamaah_id":1,"brand_id":1,"brand_name":"Travel Pertama","nama_lengkap":"Ahmad Fauzi Uji","kode_referral":"UJIAHMAD","status_agen":"aktif","pax_closing":1,"booking_closing":1,"komisi_langsung":1500000,"bonus_pembinaan":300000,"repeat_order":0,"total_komisi":1800000},{"peringkat":3,"jamaah_id":8,"brand_id":2...
+[P2-super-brand-2] GET /api/admin/agen/peringkat?dari=2020-01-01&sampai=2026-12-31&brand_id=2 -> 200 [{"peringkat":1,"jamaah_id":8,"brand_id":2,"brand_name":"Brand Uji Dua","nama_lengkap":"Jamaah Brand Dua","kode_referral":"UJIBRAND2","status_agen":"aktif","pax_closing":1,"booking_closing":1,"komisi_langsung":750000,"bonus_pembinaan":0,"repeat_order":0,"total_komisi":750000}]
+[P3-admin-tp-coba-brand-2 (harus brand 1)] GET /api/admin/agen/peringkat?dari=2020-01-01&sampai=2026-12-31&brand_id=2 -> 200 [{"peringkat":1,"jamaah_id":2,"brand_id":1,"brand_name":"Travel Pertama","nama_lengkap":"Siti Aminah Uji","kode_referral":"UJISITI","status_agen":"aktif","pax_closing":2,"booking_closing":2,"komisi_langsung":2000000,"bonus_pembinaan":0,"repeat_order":0,"total_komisi":2000000},{"peringkat":2,"jamaah_id":1,"brand_id":1,"brand_name":"Travel Pertama","nama_lengkap":"Ahmad Fauzi Uji","kode_referral":"UJIAHMAD","status_agen":"aktif","pax_closing":1,"booking_closing":1,"komisi_langsung":1500000,"bonus_pembinaan":300000,"repeat_order":0,"total_komisi":1800000}]
+[P4-periode-kosong] GET /api/admin/agen/peringkat?dari=2000-01-01&sampai=2000-12-31 -> 200 []
+[P5-dari-setelah-sampai (400)] GET /api/admin/agen/peringkat?dari=2026-02-01&sampai=2026-01-01 -> 400 {"error":"periode tidak valid: isi dari dan sampai (YYYY-MM-DD), dari tidak boleh setelah sampai"}
+[P6-tanpa-periode (400)] GET /api/admin/agen/peringkat -> 400 {"error":"periode tidak valid: isi dari dan sampai (YYYY-MM-DD), dari tidak boleh setelah sampai"}
+[P7-cek-ledger-db] SQL SELECT tk.jamaah_penerima_id, tk.brand_id, tk.jenis, COUNT(*) n, SUM(tk.nominal) total, MIN(DATE(tk.created_at)) dari, MAX(DATE(tk.created_at)) sampai FROM transaksi_komisi tk GROUP BY tk.jamaah_penerima_id, tk.brand_id, tk.jenis ORDER BY 1,3
+jamaah_penerima_id	brand_id	jenis	n	total	dari	sampai
+1	1	langsung	1	1500000	2026-08-15	2026-08-15
+1	1	pembinaan	1	300000	2026-10-01	2026-10-01
+2	1	langsung	2	2000000	2026-10-01	2026-10-01
+8	2	langsung	1	750000	2026-10-01	2026-10-01
+12	1	cashback	1	500000	2026-10-01	2026-10-01
+--- Detail & riwayat komisi lintas brand
+[D0-ambil-agen-brand-2] GET /api/admin/agen?brand_id=2 -> 200 [{"jamaah_id":8,"brand_id":2,"brand_name":"Brand Uji Dua","nama_lengkap":"Jamaah Brand Dua","kode_referral":"UJIBRAND2","status_agen":"aktif","disetujui_agen_at":"2026-10-01T05:23:33+07:00","jumlah_closing":0,"total_komisi":750000}]
+[D1-super-detail-agen-brand-2] GET /api/admin/agen/8 -> 200 {"jamaah_id":8,"brand_id":2,"brand_name":"Brand Uji Dua","nama_lengkap":"Jamaah Brand Dua","no_hp":"081201700009","foto_agen_url":null,"domisili":null,"menyetujui_syarat_ketentuan_agen_at":null,"status_agen":"aktif","kode_referral":"UJIBRAND2","diajukan_agen_at":null,"disetujui_agen_at":"2026-10-01T05:23:33+07:00","disetujui_agen_oleh_nama":null,"upline_jamaah_id":null,"upline_nama":null,"jumlah_downline":0,"jumlah_closing":0,"saldo":{"saldo_tersedia":0,"saldo_tertahan":750000,"kredit_cashback":0},"total_per_jenis":{"langsung":750000,"pembinaan":0,"repeat_order":0,"cashback":0},"pencairan":[],...
+[D2-admin-tp-detail-agen-brand-2 (404)] GET /api/admin/agen/8 -> 404 {"error":"data tidak ditemukan"}
+[K1-super-komisi-brand-2] GET /api/admin/agen/komisi?brand_id=2&limit=5 -> 200 [{"id":30,"jenis":"langsung","nominal":750000,"booking_id":70,"booking_code":"TPPZ5Z","penerima_id":8,"penerima_nama":"Jamaah Brand Dua","sumber_nama":"Zulkifli Uji Kamar","berangkat_tanggal":"2026-12-20T00:00:00+07:00","ketersediaan":"tertahan","created_at":"2026-10-01T05:23:33+07:00"}]
+===== AG-SEED restore 2026-10-01T05:26:17 =====
+[R1-hapus-komisi-uji] SQL DELETE FROM transaksi_komisi WHERE booking_pax_id IN (9,10,12,13,83)
+
+[R2-lepas-kaitan] SQL UPDATE jamaah SET direkrut_oleh_jamaah_id=NULL, upline_jamaah_id=NULL WHERE id IN (1,2,3,6,8,11)
+
+[R3-status-awal] SQL UPDATE jamaah SET status_agen='tidak_aktif', kode_referral=NULL, disetujui_agen_at=NULL WHERE id IN (1,2,8)
+
+[R4-cek] SQL SELECT (SELECT COUNT(*) FROM transaksi_komisi) komisi, (SELECT COUNT(*) FROM jamaah WHERE status_agen<>'tidak_aktif' OR direkrut_oleh_jamaah_id IS NOT NULL OR upline_jamaah_id IS NOT NULL) jamaah_berubah
+komisi	jamaah_berubah
+0	0
+===== JM-AGEN seed sementara 2026-10-01T05:31:35 =====
+[J1-seed] SQL UPDATE jamaah SET status_agen='aktif', kode_referral=CASE id WHEN 1 THEN 'UJIAHMAD' ELSE 'UJISITI' END, disetujui_agen_at=NOW() WHERE id IN (1,2); UPDATE jamaah SET kaitan_status='terikat_agen', direkrut_oleh_jamaah_id=2 WHERE id=3; UPDATE jamaah SET kaitan_status='belum_ditentukan' WHERE id=6; SELECT id, nama_lengkap, kaitan_status, direkrut_oleh_jamaah_id, status_agen FROM jamaah WHERE id IN (1,2,3,6)
+id	nama_lengkap	kaitan_status	direkrut_oleh_jamaah_id	status_agen
+1	Ahmad Fauzi Uji	tanpa_agen	NULL	aktif
+2	Siti Aminah Uji	tanpa_agen	NULL	aktif
+3	Budi Santoso Uji	terikat_agen	2	tidak_aktif
+6	Dewi Lestari Uji	belum_ditentukan	NULL	tidak_aktif
+[J2-restore] SQL UPDATE jamaah SET status_agen='tidak_aktif', kode_referral=NULL, disetujui_agen_at=NULL WHERE id IN (1,2); UPDATE jamaah SET kaitan_status='tanpa_agen', direkrut_oleh_jamaah_id=NULL WHERE id IN (3,6); SELECT kaitan_status, status_agen, COUNT(*) n, SUM(direkrut_oleh_jamaah_id IS NOT NULL) terikat FROM jamaah GROUP BY kaitan_status, status_agen
+kaitan_status	status_agen	n	terikat
+tanpa_agen	tidak_aktif	38	0

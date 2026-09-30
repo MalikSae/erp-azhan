@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/payment"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -31,6 +33,9 @@ var validRoomTypes = map[string]bool{
 	"Triple": true,
 	"Double": true,
 }
+
+// maxNominal adalah batas kolom nominal DECIMAL(12,0) pada booking_addons/booking_discounts.
+const maxNominal = 999_999_999_999
 
 // validStatuses berisi enum status booking yang valid.
 var validStatuses = map[string]bool{
@@ -177,6 +182,19 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+
+	// Gate 6: PIC wajib ikut berangkat sebagai pax reguler (sama dengan finalisasi draft, JB-08)
+	picIsRegular := false
+	for _, p := range req.Pax {
+		if p.JamaahID == picID && p.PaxType == "reguler" {
+			picIsRegular = true
+			break
+		}
+	}
+	if !picIsRegular {
+		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) harus ikut sebagai pax reguler dalam booking ini")
+		return
 	}
 
 	createdBy := identity.GetAdminUserID(r.Context())
@@ -639,6 +657,10 @@ func (h *Handler) AddBookingAddon(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "nominal harus lebih besar dari 0")
 		return
 	}
+	if req.Nominal > maxNominal {
+		writeError(w, http.StatusBadRequest, "nominal terlalu besar")
+		return
+	}
 
 	brandID := identity.GetBrandID(r.Context())
 
@@ -722,6 +744,10 @@ func (h *Handler) AddBookingDiscount(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Nominal <= 0 {
 		writeError(w, http.StatusBadRequest, "nominal diskon harus lebih dari 0")
+		return
+	}
+	if req.Nominal > maxNominal {
+		writeError(w, http.StatusBadRequest, "nominal diskon terlalu besar")
 		return
 	}
 
@@ -928,7 +954,14 @@ func (h *Handler) BatalkanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 func handleRepoError(w http.ResponseWriter, err error) {
 	var errStok *ErrStokKurang
 	var errSeatNotEnough *ErrSeatNotEnough
+	var errBisnis *BusinessError
 	switch {
+	case errors.As(err, &errBisnis):
+		writeError(w, http.StatusBadRequest, errBisnis.Message)
+	case errors.Is(err, ErrBookingBatal):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, payment.ErrSeatUnavailable), errors.Is(err, payment.ErrOverpayment):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrSeatHabis):
@@ -962,7 +995,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.As(err, &errStok):
 		writeError(w, http.StatusConflict, errStok.Message)
 	default:
-		writeError(w, http.StatusBadRequest, err.Error())
+		log.Printf("[ERROR] booking: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
 	}
 }
 

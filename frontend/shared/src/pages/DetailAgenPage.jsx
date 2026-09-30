@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getDetailAgen, ubahStatusAgen } from 'shared';
+import { getDetailAgen, ubahStatusAgen } from '../api/agen';
 import { Banknote, History, IdCard, Network, TrendingUp, UserCheck, Wallet } from 'lucide-react';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
@@ -35,8 +35,8 @@ const pencairanMeta = {
 };
 
 // Screen B2a — detail satu agen, 8 kelompok data (screen-agen.md). Satu-satunya
-// aksi: toggle aktif <-> nonaktif.
-export default function DetailAgenPage() {
+// aksi: toggle aktif <-> nonaktif. showBrandColumn: Admin Master (tampilkan brand).
+export default function DetailAgenPage({ showBrandColumn = false }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [agen, setAgen] = useState(null);
@@ -85,7 +85,11 @@ export default function DetailAgenPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title={agen.nama_lengkap} subtitle="Detail agen Syiar" onBack={() => navigate('/agen')}>
+      <PageHeader
+        title={agen.nama_lengkap}
+        subtitle={showBrandColumn ? `Detail agen Syiar · ${agen.brand_name}` : 'Detail agen Syiar'}
+        onBack={() => navigate('/agen')}
+      >
         <Button variant={agen.status_agen === 'aktif' ? 'danger-light' : 'primary'} onClick={() => setConfirmOpen(true)}>
           {agen.status_agen === 'aktif' ? 'Nonaktifkan Agen' : 'Aktifkan Kembali'}
         </Button>

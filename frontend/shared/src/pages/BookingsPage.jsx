@@ -228,7 +228,12 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
         key: "status", 
         accessor: (row) => {
           const [statusVariant, statusLabel] = getStatusBadgeConfig(row.status);
-          return <Badge variant={statusVariant} hideIcon={true}>{statusLabel}</Badge>;
+          return (
+            <div className="flex flex-wrap items-center gap-1">
+              <Badge variant={statusVariant} hideIcon={true}>{statusLabel}</Badge>
+              {row.perlu_refund && <Badge variant="pending" hideIcon={true}>Perlu refund</Badge>}
+            </div>
+          );
         }
       },
       { 

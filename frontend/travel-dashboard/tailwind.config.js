@@ -14,12 +14,14 @@ export default {
           200: '#FDEE9F',
           300: '#FCE366',
           400: '#FBD836',
+          // 50–500: latar & isi (tombol, menu aktif) — selalu dengan teks gelap di atasnya.
+          // 700–950: emas tua untuk teks/ikon/garis di latar terang (kontras ≥ 4.5:1 vs putih).
           500: '#FED853',
-          600: '#F5CD3E',
-          700: '#E5BD2C',
-          800: '#D4AA1E',
-          900: '#B89014',
-          950: '#8A6A0B',
+          600: '#D9A514', // hover isi tombol kuning
+          700: '#946C08', // teks & ikon (4.8:1)
+          800: '#7A5906', // teks penting (6.4:1)
+          900: '#5E4405', // teks di atas tint kuning (9.1:1)
+          950: '#3F2E03',
           DEFAULT: '#FED853',
         },
         neutral: {
@@ -87,7 +89,7 @@ export default {
         },
         accent: {
           gold: '#FED853',
-          'gold-hover': '#F5CD3E',
+          'gold-hover': '#D9A514',
           'gold-light': '#FEF7D6',
         }
       },

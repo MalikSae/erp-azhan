@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
@@ -98,6 +101,16 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	if req.Jumlah <= 0 {
 		writeError(w, http.StatusBadRequest, "jumlah pembayaran harus lebih dari 0")
 		return
+	}
+	// Pembayaran admin langsung terkonfirmasi; tanggal masa depan merusak laporan (JB-10).
+	// Aturan sama dengan konfirmasi transfer portal (JM-22).
+	if req.Tanggal != nil && strings.TrimSpace(*req.Tanggal) != "" {
+		tgl, err := time.Parse("2006-01-02", strings.TrimSpace(*req.Tanggal))
+		today := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
+		if err != nil || tgl.Format("2006-01-02") > today {
+			writeError(w, http.StatusBadRequest, "tanggal pembayaran tidak valid atau berada di masa depan")
+			return
+		}
 	}
 
 	brandID := identity.GetBrandID(r.Context())
@@ -231,7 +244,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrSeatUnavailable), errors.Is(err, ErrOverpayment), errors.Is(err, ErrBookingClosed):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("terjadi kesalahan internal: %v", err))
+		log.Printf("[ERROR] payment: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
 	}
 }
 

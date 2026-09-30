@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
 )
@@ -109,7 +111,8 @@ func (h *Handler) GetSchedulePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.Status != "published" {
+	// Paket yang sudah berangkat tidak ditampilkan lagi (MP-04); daftar publik sudah memfilter.
+	if s.Status != "published" || s.BerangkatTanggal < todayWIB() {
 		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan atau belum dipublikasikan")
 		return
 	}
@@ -136,6 +139,10 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	if inp.Status == "" {
 		inp.Status = "draft"
+	}
+	if inp.Status == "published" && inp.BerangkatTanggal < todayWIB() {
+		writeError(w, http.StatusBadRequest, errPublishLampau)
+		return
 	}
 	s, err := h.repo.Create(r.Context(), *inp)
 	if err != nil {
@@ -187,10 +194,28 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	// Override req.BrandID agar validateScheduleInput tidak error saat Super Admin tidak kirim brand_id
 	req.BrandID = &finalBrandID
+	// Sisa kursi saat edit dihitung repository dari data terkunci; nilai form diabaikan
+	// agar kapasitas di bawah alokasi mendapat pesan yang tepat (MP-07).
+	req.SeatSisa = nil
 
 	inp, ok := h.validateScheduleInput(r.Context(), w, &req)
 	if !ok {
 		return
+	}
+
+	finalStatus := inp.Status
+	if finalStatus == "" {
+		finalStatus = existing.Status
+	}
+	tanggalBerubah := inp.BerangkatTanggal != existing.BerangkatTanggal
+	if finalStatus == "published" && inp.BerangkatTanggal < todayWIB() && (tanggalBerubah || existing.Status != "published") {
+		writeError(w, http.StatusBadRequest, errPublishLampau)
+		return
+	}
+	if finalStatus == "archived" && existing.Status != "archived" {
+		if !h.bolehArsip(r.Context(), w, id, inp.BerangkatTanggal) {
+			return
+		}
 	}
 
 	// 3. Panggil repository Update dengan finalBrandID sebagai parameter
@@ -227,6 +252,22 @@ func (h *Handler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	brandID := identity.GetBrandID(r.Context())
+	if req.Status == "published" || req.Status == "archived" {
+		s, err := h.repo.GetByID(r.Context(), id, brandID)
+		if err != nil {
+			handleRepoError(w, err)
+			return
+		}
+		if req.Status == "published" && s.BerangkatTanggal < todayWIB() {
+			writeError(w, http.StatusBadRequest, errPublishLampau)
+			return
+		}
+		if req.Status == "archived" && s.Status != "archived" {
+			if !h.bolehArsip(r.Context(), w, id, s.BerangkatTanggal) {
+				return
+			}
+		}
+	}
 	resID, resStatus, err := h.repo.UpdateStatus(r.Context(), id, req.Status, brandID)
 	if err != nil {
 		handleRepoError(w, err)
@@ -317,6 +358,10 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		writeError(w, http.StatusBadRequest, "jadwal_nama wajib diisi")
 		return nil, false
 	}
+	if len([]rune(strings.TrimSpace(req.JadwalNama))) > 255 {
+		writeError(w, http.StatusBadRequest, "jadwal_nama maksimal 255 karakter")
+		return nil, false
+	}
 
 	// Gate 1.5: status (enum: draft, published, archived)
 	reqStatus := strings.TrimSpace(req.Status)
@@ -392,12 +437,8 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
-	// Gate 11: hotel_mekkah exist di DB
-	if exists, err := h.repo.HotelExists(ctx, req.HotelMekkahID); err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
-		return nil, false
-	} else if !exists {
-		writeError(w, http.StatusBadRequest, "hotel_mekkah_id tidak valid")
+	// Gate 11: hotel_mekkah exist di DB dan berada di Makkah (MP-03)
+	if ok := h.checkHotelCity(ctx, w, req.HotelMekkahID, "Makkah", "hotel_mekkah_id"); !ok {
 		return nil, false
 	}
 
@@ -407,12 +448,8 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
-	// Gate 13: hotel_madinah exist di DB
-	if exists, err := h.repo.HotelExists(ctx, req.HotelMadinahID); err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
-		return nil, false
-	} else if !exists {
-		writeError(w, http.StatusBadRequest, "hotel_madinah_id tidak valid")
+	// Gate 13: hotel_madinah exist di DB dan berada di Madinah (MP-03)
+	if ok := h.checkHotelCity(ctx, w, req.HotelMadinahID, "Madinah", "hotel_madinah_id"); !ok {
 		return nil, false
 	}
 
@@ -458,6 +495,15 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		writeError(w, http.StatusBadRequest, "harga_double harus lebih dari 0")
 		return nil, false
 	}
+	// Gate 14.1: makin sedikit orang per kamar, harga per orang tidak boleh lebih murah (MP-09).
+	if req.HargaTriple < req.HargaQuad {
+		writeError(w, http.StatusBadRequest, "harga_triple tidak boleh lebih murah dari harga_quad")
+		return nil, false
+	}
+	if req.HargaDouble < req.HargaTriple {
+		writeError(w, http.StatusBadRequest, "harga_double tidak boleh lebih murah dari harga_triple")
+		return nil, false
+	}
 
 	effectiveDP := req.MinimalDP
 	if effectiveDP == nil {
@@ -478,6 +524,10 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	if req.HargaInfant != nil {
 		if *req.HargaInfant < 0 {
 			writeError(w, http.StatusBadRequest, "harga_infant tidak boleh kurang dari 0")
+			return nil, false
+		}
+		if *req.HargaInfant > req.HargaQuad {
+			writeError(w, http.StatusBadRequest, "harga_infant tidak boleh lebih mahal dari harga_quad")
 			return nil, false
 		}
 		finalHargaInfant = req.HargaInfant
@@ -564,7 +614,39 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		}
 	}
 
-	// Gate 17: brosur_url dan brosur_thumb_url — tidak ada validasi format, terima apa adanya
+	// Gate 16.5: kode bandara (jika diisi) wajib terdaftar di master bandara (MP-06).
+	// Rute transit memakai format tersendiri dan tidak divalidasi di sini.
+	for _, ap := range []struct {
+		nama  string
+		nilai *string
+	}{
+		{"bandara asal keberangkatan", &req.BerangkatBandaraAsal},
+		{"bandara tujuan keberangkatan", &req.BerangkatBandaraTujuan},
+		{"bandara asal kepulangan", &req.PulangBandaraAsal},
+		{"bandara tujuan kepulangan", &req.PulangBandaraTujuan},
+	} {
+		code := strings.ToUpper(strings.TrimSpace(*ap.nilai))
+		*ap.nilai = code
+		if code == "" {
+			continue
+		}
+		exists, err := h.repo.AirportCodeExists(ctx, code)
+		if err != nil {
+			log.Printf("[ERROR] schedule: cek bandara: %v", err)
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return nil, false
+		}
+		if !exists {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("%s %q tidak terdaftar, pilih kode dari daftar bandara", ap.nama, code))
+			return nil, false
+		}
+	}
+
+	// Gate 17: brosur_url dan brosur_thumb_url harus path unggahan atau URL http(s) (MP-08)
+	if !shared.ValidMediaURL(req.BrosurURL) || !shared.ValidMediaURL(req.BrosurThumbURL) {
+		writeError(w, http.StatusBadRequest, "brosur harus berupa berkas unggahan atau URL http(s)")
+		return nil, false
+	}
 
 	var promoUntil *time.Time
 	if req.IsPromo && req.PromoUntil != nil && req.PromoUntil.Valid {
@@ -630,9 +712,56 @@ func handleRepoError(w http.ResponseWriter, err error) {
 			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih ada jamaah yang booking paket ini")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("terjadi kesalahan internal: %v", err))
+		log.Printf("[ERROR] schedule: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
 	}
 }
+
+// checkHotelCity memastikan hotel ada dan kotanya sesuai slot (Makkah/Madinah).
+func (h *Handler) checkHotelCity(ctx context.Context, w http.ResponseWriter, id int64, kota, field string) bool {
+	city, err := h.repo.HotelCity(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusBadRequest, field+" tidak valid")
+		return false
+	}
+	if err != nil {
+		log.Printf("[ERROR] schedule: cek hotel: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSpace(city), kota) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("%s harus hotel di %s (hotel terpilih berada di %s)", field, kota, city))
+		return false
+	}
+	return true
+}
+
+// todayWIB mengembalikan tanggal hari ini (YYYY-MM-DD) zona bisnis.
+func todayWIB() string {
+	return time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
+}
+
+// bolehArsip: sebelum tanggal berangkat lewat, paket dengan booking aktif tidak boleh
+// diarsipkan; untuk menghentikan penjualan gunakan status draft (MP-09).
+func (h *Handler) bolehArsip(ctx context.Context, w http.ResponseWriter, id int64, berangkat string) bool {
+	if berangkat < todayWIB() {
+		return true
+	}
+	aktif, err := h.repo.CountActiveBookings(ctx, id)
+	if err != nil {
+		log.Printf("[ERROR] schedule: hitung booking aktif: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		return false
+	}
+	if aktif > 0 {
+		writeError(w, http.StatusConflict, fmt.Sprintf("paket belum berangkat dan masih punya %d booking aktif; untuk menghentikan penjualan, ubah status ke Draft", aktif))
+		return false
+	}
+	return true
+}
+
+// errPublishLampau: paket tidak boleh terbit bila keberangkatan sudah lewat (MP-04).
+const errPublishLampau = "paket dengan tanggal berangkat yang sudah lewat tidak dapat diterbitkan"
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 

@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/media"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -105,6 +107,18 @@ func (h *Handler) UpsertDokumen(w http.ResponseWriter, r *http.Request) {
 	}
 	if !exists {
 		writeError(w, http.StatusNotFound, "jamaah_id tidak valid atau bukan milik brand Anda")
+		return
+	}
+
+	// Berkas wajib unggahan resmi, bukan URL bebas (JB-11).
+	if err := media.ValidateAdminUpload(r.Context(), h.repo.db, req.FileURL, jamaahID); err != nil {
+		var uploadErr *media.UploadError
+		if errors.As(err, &uploadErr) {
+			writeError(w, http.StatusBadRequest, uploadErr.Message)
+			return
+		}
+		log.Printf("[ERROR] dokumen: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
 		return
 	}
 

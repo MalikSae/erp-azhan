@@ -293,9 +293,9 @@ func main() {
 		// Categories
 		r.Get("/categories", categoryHandler.ListCategories)
 		r.Get("/categories/{id}", categoryHandler.GetCategory)
-		r.Post("/categories", categoryHandler.CreateCategory)
-		r.Put("/categories/{id}", categoryHandler.UpdateCategory)
-		r.Delete("/categories/{id}", categoryHandler.DeleteCategory)
+		superAdmin.Post("/categories", categoryHandler.CreateCategory)
+		superAdmin.Put("/categories/{id}", categoryHandler.UpdateCategory)
+		superAdmin.Delete("/categories/{id}", categoryHandler.DeleteCategory)
 
 		// Add-Ons
 		r.Get("/addons", addonHandler.ListAddOns)
@@ -387,6 +387,8 @@ func main() {
 		r.Delete("/bookings/{id}/discounts/{discountID}", bookingHandler.RemoveBookingDiscount)
 		r.With(identity.RequireAdminRole).Get("/bookings/{id}/cashback", bookingHandler.GetKreditCashback)
 		r.With(identity.RequireAdminRole).Post("/bookings/{id}/cashback", bookingHandler.PakaiKreditCashback)
+		r.With(identity.RequireAdminRole).Get("/bookings/{id}/refunds", bookingHandler.ListRefunds)
+		r.With(identity.RequireAdminRole).Post("/bookings/{id}/refunds", bookingHandler.CreateRefund)
 		r.Put("/bookings/{id}/progress", bookingHandler.UpdateBookingProgress)
 		r.Put("/bookings/{id}/pax/{pax_id}/progress", bookingHandler.UpdatePaxProgress)
 		r.Put("/bookings/{id}/pax/{pax_id}/cancel", bookingHandler.CancelPax)
@@ -426,6 +428,7 @@ func main() {
 			r.Get("/aktif", agenHandler.ListAgenAktif)
 			r.Get("/", agenHandler.ListAgen)
 			r.Get("/komisi", agenHandler.RiwayatKomisiAdmin)
+			r.Get("/peringkat", agenHandler.PeringkatAgen)
 			r.Get("/{jamaahID}", agenHandler.DetailAgen)
 			r.Post("/{jamaahID}/setujui", agenHandler.Setujui)
 			r.Post("/{jamaahID}/tolak", agenHandler.Tolak)

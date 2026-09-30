@@ -8,7 +8,6 @@ import { listAirlines } from '../api/airlines';
 import { listPax30Days } from '../api/analytics';
 import {
   Plane,
-  Building2,
   Hotel,
   Calendar,
   ArrowRight,
@@ -20,7 +19,6 @@ import {
   Plus,
   ArrowUpRight
 } from 'lucide-react';
-import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
 const formatDate = (value) => new Intl.DateTimeFormat('id-ID', {
   day: 'numeric', month: 'short', year: 'numeric',
@@ -340,19 +338,9 @@ const DashboardHome = () => {
 
   return (
     <main className="space-y-6 pb-12">
-      {/* Header Banner with Altezza Segmented Badges */}
+      {/* Header Banner */}
       <section className="bg-white border border-neutral-200/80 rounded-2xl p-6 md:p-8 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="inline-flex items-center gap-1.5 bg-neutral-900 text-primary-500 px-3 py-1 rounded-full text-xs font-heading font-bold shadow-xs">
-              <KaabaIcon className="w-3.5 h-3.5" />
-              Azhan ERP System
-            </span>
-            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-0.5 rounded-full text-xs font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {data.brands.length} Brand Terhubung
-            </span>
-          </div>
           <h1 className="text-2xl md:text-3xl font-heading font-extrabold text-neutral-900 tracking-tight">
             Dashboard Utama
           </h1>
@@ -363,15 +351,8 @@ const DashboardHome = () => {
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
           <Link
-            to="/brands/new"
-            className="inline-flex items-center gap-2 bg-white hover:bg-neutral-50 text-neutral-800 border border-neutral-200/90 px-4 py-2.5 rounded-xl text-xs font-bold font-heading shadow-xs hover:border-neutral-300 transition-all"
-          >
-            <Building2 className="w-4 h-4 text-neutral-500" />
-            <span>Tambah Brand</span>
-          </Link>
-          <Link
             to="/schedules/new"
-            className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-brand-dark px-4 py-2.5 rounded-xl text-xs font-bold font-heading shadow-xs transition-all hover:shadow"
+            className="inline-flex items-center gap-2 bg-brand-dark hover:bg-sidebar-hover text-brand-ivory px-4 py-2.5 rounded-xl text-xs font-bold font-heading shadow-xs transition-all hover:shadow"
           >
             <Plus className="w-4 h-4" />
             <span>Buat Paket Baru</span>
@@ -533,8 +514,8 @@ const DashboardHome = () => {
           </section>
 
           {/* Quick Capacity Alert Card */}
-          <section className="rounded-2xl border border-primary-500/60 bg-gradient-to-br from-primary-100 to-white p-6 shadow-card">
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-900 bg-primary-500/30 px-2.5 py-1 rounded-full">
+          <section className="rounded-2xl border border-primary-200 bg-primary-50 p-6 shadow-card">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-primary-800 bg-primary-100 px-2.5 py-1 rounded-full">
               Kapasitas Aktif Grup
             </span>
             <p className="mt-3 text-4xl font-heading font-extrabold tracking-tight text-neutral-900">
