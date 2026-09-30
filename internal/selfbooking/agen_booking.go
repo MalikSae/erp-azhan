@@ -181,6 +181,7 @@ func (h *Handler) ListJamaahSaya(w http.ResponseWriter, r *http.Request) {
 
 // CreateBookingAgen POST /api/portal/agen/bookings
 func (h *Handler) CreateBookingAgen(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	agenID := identity.GetPortalJamaahID(r.Context())
 	limitKey := "agen:" + strconv.FormatInt(agenID, 10)
 	if !h.bookingByAgen.allow(limitKey) {
@@ -201,6 +202,10 @@ func (h *Handler) CreateBookingAgen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg := validateAgenBooking(&req); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if msg := validateCheckout(&req, true); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -260,12 +265,14 @@ func validateAgenBooking(req *BookingRequest) string {
 
 func (h *Handler) writeAgenBookingError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrQuoteChanged), errors.Is(err, ErrRequestConflict):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrBukanAgenAktif):
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrNomorMilikLain), errors.Is(err, ErrJamaahBukanMilik),
 		errors.Is(err, ErrSeatHabis), errors.Is(err, ErrDuplicate),
 		errors.Is(err, ErrDuplicatePaxInBooking), errors.Is(err, ErrCutoffBooking),
-		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant):
+		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant), errors.Is(err, ErrInfantUnavailable), errors.Is(err, ErrInvalidDP):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan")

@@ -25,9 +25,12 @@ func tanggalLahirOrNil(s *string) any {
 func validasiTanggalLahirAnggota(anggota []AnggotaInput, berangkat, hariIni time.Time) error {
 	for _, a := range anggota {
 		if a.TanggalLahir == nil || strings.TrimSpace(*a.TanggalLahir) == "" {
+			if a.PaxType == "infant" {
+				return ErrTanggalLahirTidakValid
+			}
 			continue
 		}
-		lahir, err := time.Parse("2006-01-02", strings.TrimSpace(*a.TanggalLahir))
+		lahir, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(*a.TanggalLahir), hariIni.Location())
 		if err != nil || lahir.After(hariIni) {
 			return ErrTanggalLahirTidakValid
 		}

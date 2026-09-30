@@ -18,19 +18,21 @@ const turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/sitev
 // Verifikasi aktif hanya jika TURNSTILE_SECRET_KEY diisi; jika kosong, token
 // hanya dicek tidak kosong (mode pengembangan) dan peringatan dicetak saat start.
 type turnstileVerifier struct {
-	secret    string
-	verifyURL string
-	client    *http.Client
+	secret           string
+	verifyURL        string
+	client           *http.Client
+	allowDevelopment bool
 }
 
 func newTurnstileVerifier() *turnstileVerifier {
 	v := &turnstileVerifier{
-		secret:    strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY")),
-		verifyURL: turnstileVerifyURL,
-		client:    &http.Client{Timeout: 5 * time.Second},
+		secret:           strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY")),
+		verifyURL:        turnstileVerifyURL,
+		client:           &http.Client{Timeout: 5 * time.Second},
+		allowDevelopment: os.Getenv("APP_ENV") == "development" && os.Getenv("ALLOW_DEV_CAPTCHA") == "true",
 	}
 	if v.secret == "" {
-		log.Println("[WARN] TURNSTILE_SECRET_KEY kosong: verifikasi captcha self-booking NONAKTIF")
+		log.Println("[WARN] TURNSTILE_SECRET_KEY kosong: self-booking ditolak kecuali bypass development eksplisit")
 	}
 	return v
 }
@@ -43,7 +45,10 @@ func (v *turnstileVerifier) enabled() bool {
 // bisa dihubungi; pemanggil harus menolak request (fail closed).
 func (v *turnstileVerifier) verify(ctx context.Context, token, remoteIP string) (bool, error) {
 	if !v.enabled() {
-		return true, nil
+		if v.allowDevelopment {
+			return true, nil
+		}
+		return false, fmt.Errorf("captcha belum dikonfigurasi")
 	}
 
 	form := url.Values{}

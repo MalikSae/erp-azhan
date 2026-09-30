@@ -18,9 +18,9 @@ type AnggotaInput struct {
 	PaxType      string  `json:"pax_type"` // "reguler" | "infant"
 	NamaLengkap  string  `json:"nama_lengkap"`
 	NoHP         *string `json:"no_hp,omitempty"`
-	JenisKelamin string  `json:"jenis_kelamin"` // "L" atau "P"
-	RoomType     *string `json:"room_type"`     // Quad/Triple/Double (null jika infant)
-	TanggalLahir *string `json:"tanggal_lahir"` // Wajib jika pax_type = infant (YYYY-MM-DD)
+	JenisKelamin string  `json:"jenis_kelamin"`       // "L" atau "P"
+	RoomType     *string `json:"room_type"`           // Quad/Triple/Double (null jika infant)
+	TanggalLahir *string `json:"tanggal_lahir"`       // Wajib jika pax_type = infant (YYYY-MM-DD)
 	JamaahID     *int64  `json:"jamaah_id,omitempty"` // lihat PICInput.JamaahID
 }
 
@@ -37,9 +37,14 @@ type CheckPhoneResponse struct {
 
 // BookingRequest adalah payload untuk POST /api/public/book.
 type BookingRequest struct {
-	BrandID      int64  `json:"brand_id"`
-	ScheduleID   int64  `json:"schedule_id"`
-	CaptchaToken string `json:"captcha_token"`
+	RequestKey    string   `json:"request_key"`
+	TermsVersion  string   `json:"terms_version"`
+	TermsAccepted bool     `json:"terms_accepted"`
+	ExpectedTotal *float64 `json:"expected_total"`
+	ExpectedDP    *float64 `json:"expected_dp"`
+	BrandID       int64    `json:"brand_id"`
+	ScheduleID    int64    `json:"schedule_id"`
+	CaptchaToken  string   `json:"captcha_token"`
 	// KodeReferral diisi route handler microsite dari cookie referral
 	// (last-click 90 hari), bukan dari input pengguna.
 	KodeReferral string         `json:"kode_referral"`
@@ -67,6 +72,7 @@ type BankAccountInfo struct {
 
 // BookingSummary adalah ringkasan booking di response.
 type BookingSummary struct {
+	InvoiceToken      string       `json:"invoice_token"`
 	BookingCode       string       `json:"booking_code"`
 	TotalHarga        float64      `json:"total_harga"`
 	MinimalDP         float64      `json:"minimal_dp"`
@@ -82,6 +88,7 @@ type JamaahInfo struct {
 
 // BookingResponse adalah response untuk POST /api/public/book.
 type BookingResponse struct {
+	Replayed     bool              `json:"-"`
 	Status       string            `json:"status"`
 	Booking      BookingSummary    `json:"booking"`
 	Jamaah       JamaahInfo        `json:"jamaah"`
@@ -131,6 +138,7 @@ type InvoicePICInfo struct {
 
 // InvoicePaxItem berisi rincian tiap jamaah dalam invoice.
 type InvoicePaxItem struct {
+	Status      string  `json:"status"`
 	NamaLengkap string  `json:"nama_lengkap"`
 	PaxType     string  `json:"pax_type"`
 	RoomType    string  `json:"room_type"`
@@ -139,6 +147,8 @@ type InvoicePaxItem struct {
 
 // InvoiceFinancial berisi ringkasan finansial dan status tagihan.
 type InvoiceFinancial struct {
+	PendingPayment      float64 `json:"pending_payment"`
+	Adjustments         float64 `json:"adjustments"`
 	TotalHarga          float64 `json:"total_harga"`
 	MinimalDP           float64 `json:"minimal_dp"`
 	TotalDibayar        float64 `json:"total_dibayar"`
@@ -148,15 +158,17 @@ type InvoiceFinancial struct {
 
 // InvoiceResponse adalah response lengkap untuk GET /api/public/invoice/{code}.
 type InvoiceResponse struct {
-	BookingCode       string              `json:"booking_code"`
-	Status            string              `json:"status"`
-	StatusLabel       string              `json:"status_label"`
-	CreatedAt         string              `json:"created_at"`
-	SeatHoldExpiresAt string              `json:"seat_hold_expires_at"`
-	Brand             InvoiceBrandInfo    `json:"brand"`
-	Schedule          InvoiceScheduleInfo `json:"schedule"`
-	PIC               InvoicePICInfo      `json:"pic"`
-	PaxItems          []InvoicePaxItem    `json:"pax_items"`
-	Financial         InvoiceFinancial    `json:"financial"`
-	BankAccounts      []BankAccountInfo   `json:"bank_accounts"`
+	ReservationStatus        string              `json:"reservation_status"`
+	PortalActivationRequired bool                `json:"portal_activation_required"`
+	BookingCode              string              `json:"booking_code"`
+	Status                   string              `json:"status"`
+	StatusLabel              string              `json:"status_label"`
+	CreatedAt                string              `json:"created_at"`
+	SeatHoldExpiresAt        string              `json:"seat_hold_expires_at"`
+	Brand                    InvoiceBrandInfo    `json:"brand"`
+	Schedule                 InvoiceScheduleInfo `json:"schedule"`
+	PIC                      InvoicePICInfo      `json:"pic"`
+	PaxItems                 []InvoicePaxItem    `json:"pax_items"`
+	Financial                InvoiceFinancial    `json:"financial"`
+	BankAccounts             []BankAccountInfo   `json:"bank_accounts"`
 }

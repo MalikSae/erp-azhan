@@ -27,9 +27,7 @@ const (
 	bookingIPAttemptLimit    = 20 // percobaan POST /api/public/book per IP per jam
 	bookingPhoneSuccessLimit = 3  // booking berhasil per nomor HP PIC per 24 jam
 	phoneCheckIPLimit        = 10 // pengecekan POST /api/public/jamaah/check per IP per 15 menit
-	// Kode invoice hanya 4 karakter acak (~1 juta kombinasi per brand), jadi
-	// kode yang salah dibatasi agar tidak bisa ditebak massal. Kode yang benar
-	// tidak dihitung, sehingga jamaah bisa membuka invoice-nya berulang kali.
+	// Token invoice acak 256-bit; miss tetap dibatasi untuk menahan scanning.
 	invoiceMissIPLimit = 20 // kode invoice tidak ditemukan per IP per 15 menit
 )
 
@@ -50,7 +48,7 @@ func NewHandler(repo *Repository) *Handler {
 		captcha:        newTurnstileVerifier(),
 		phoneCheckByIP: newWindowLimiter(phoneCheckIPLimit, 15*time.Minute),
 		invoiceMissIP:  newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
-		bookingByIP:   newWindowLimiter(bookingIPAttemptLimit, time.Hour),
+		bookingByIP:    newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
 		daftarByIP:     newWindowLimiter(daftarAgenIPLimit, time.Hour),
 		bookingByAgen:  newWindowLimiter(agenBookingLimit, time.Hour),
@@ -82,8 +80,8 @@ func (h *Handler) CheckPhone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.NoHP = strings.TrimSpace(req.NoHP)
-	if req.NoHP == "" {
-		writeError(w, http.StatusBadRequest, "no_hp wajib diisi")
+	if !validPhone(req.NoHP) {
+		writeError(w, http.StatusBadRequest, "nomor WhatsApp harus 10–15 digit")
 		return
 	}
 
@@ -112,14 +110,32 @@ func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invoice, err := h.repo.GetInvoiceByCode(r.Context(), code)
+	brandID, parseErr := strconv.ParseInt(r.URL.Query().Get("brand"), 10, 64)
+	if parseErr != nil || brandID <= 0 || len(code) != 64 {
+		writeError(w, http.StatusNotFound, "invoice tidak ditemukan")
+		return
+	}
+	bookingCode, err := resolveInvoiceToken(r.Context(), h.repo.db, code, brandID)
+	if err != nil {
+		if !errors.Is(err, ErrNotFound) {
+			writeError(w, http.StatusServiceUnavailable, "invoice sementara tidak tersedia")
+			return
+		}
+		h.invoiceMissIP.record(clientIP)
+		writeError(w, http.StatusNotFound, "invoice tidak ditemukan")
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	invoice, err := h.repo.GetInvoiceByCode(r.Context(), bookingCode)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			h.invoiceMissIP.record(clientIP)
 			writeError(w, http.StatusNotFound, "invoice pendaftaran tidak ditemukan")
 			return
 		}
-		log.Printf("[ERROR] GetPublicInvoice (%s): %v", code, err)
+		log.Printf("[ERROR] GetPublicInvoice: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal memuat data invoice")
 		return
 	}
@@ -130,6 +146,7 @@ func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	clientIP := getClientIP(r)
 	if !h.bookingByIP.allow(clientIP) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan booking, coba lagi dalam 1 jam")
@@ -142,8 +159,11 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 	if len(authHeader) > 7 && strings.EqualFold(authHeader[:7], "Bearer ") {
 		tokenStr := strings.TrimSpace(authHeader[7:])
-		if jID, err := identity.ValidatePortalToken(tokenStr); err == nil && jID > 0 {
+		if jID, err := identity.ValidateAccountPortalToken(r.Context(), h.repo.db, tokenStr); err == nil && jID > 0 {
 			authenticatedJamaahID = jID
+		} else {
+			writeError(w, 401, "sesi telah berakhir, silakan masuk kembali")
+			return
 		}
 	}
 	var req BookingRequest
@@ -191,7 +211,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "data pendaftar utama tidak lengkap")
 		return
 	}
-	
+
 	if authenticatedJamaahID == 0 && req.PIC.PortalPIN != "" && len(req.PIC.PortalPIN) != 6 {
 		writeError(w, http.StatusBadRequest, "PIN portal harus 6 digit")
 		return
@@ -208,7 +228,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		req.Anggota[i].NamaLengkap = strings.TrimSpace(a.NamaLengkap)
 		req.Anggota[i].JenisKelamin = strings.TrimSpace(a.JenisKelamin)
 		req.Anggota[i].PaxType = strings.TrimSpace(a.PaxType)
-		
+
 		if req.Anggota[i].NamaLengkap == "" || req.Anggota[i].JenisKelamin == "" || req.Anggota[i].PaxType == "" {
 			writeError(w, http.StatusBadRequest, "data anggota tidak lengkap")
 			return
@@ -224,7 +244,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "tanggal lahir wajib untuk infant")
 				return
 			}
-			// validasi umur < 2 tahun belum dilakukan secara strict (bisa ditambahkan di repo)
+			// Umur divalidasi repository menggunakan identitas yang tersimpan.
 		} else {
 			writeError(w, http.StatusBadRequest, "pax_type anggota tidak valid")
 			return
@@ -249,16 +269,24 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Process
+	if msg := validateCheckout(&req, false); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	resp, err := h.repo.ProcessBooking(r.Context(), req.BrandID, req, authenticatedJamaahID)
 	if err != nil {
+		if errors.Is(err, ErrQuoteChanged) || errors.Is(err, ErrRequestConflict) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
 		if errors.Is(err, ErrInvalidPin) {
 			writeError(w, http.StatusUnauthorized, err.Error())
 			return
 		}
-		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) || 
-		   errors.Is(err, ErrAnggotaNameMismatch) || errors.Is(err, ErrDuplicatePaxInBooking) ||
-		   errors.Is(err, ErrPinRequired) || errors.Is(err, ErrCutoffBooking) ||
-		   errors.Is(err, ErrTanggalLahirTidakValid) || errors.Is(err, ErrUsiaInfant) {
+		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) ||
+			errors.Is(err, ErrAnggotaNameMismatch) || errors.Is(err, ErrDuplicatePaxInBooking) ||
+			errors.Is(err, ErrPinRequired) || errors.Is(err, ErrCutoffBooking) ||
+			errors.Is(err, ErrTanggalLahirTidakValid) || errors.Is(err, ErrUsiaInfant) || errors.Is(err, ErrInfantUnavailable) || errors.Is(err, ErrInvalidDP) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -270,7 +298,9 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
-	h.bookingByPhone.record(phoneKey)
+	if !resp.Replayed {
+		h.bookingByPhone.record(phoneKey)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

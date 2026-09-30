@@ -53,14 +53,14 @@ func TestRecalculateTotalTransitions(t *testing.T) {
 		t.Fatalf("diskon dihapus: hook terpanggil %d kali, want 1", calls[b.ID])
 	}
 
-	// Booking 'baru' tidak disentuh rekalkulasi status.
+	// Recalculation and payment confirmation share one status machine.
 	b2 := testdb.NewBooking(t, tx, testdb.BookingOpts{Status: "baru", TotalHarga: 500, MinimalDP: 300})
 	testdb.AddPayment(t, tx, b2.ID, 500, "confirmed")
 	recalc(b2.ID)
-	if got := testdb.Status(t, tx, b2.ID); got != "baru" {
-		t.Fatalf("booking baru: status=%s, want baru", got)
+	if got := testdb.Status(t, tx, b2.ID); got != "lunas" {
+		t.Fatalf("booking baru paid in full: status=%s, want lunas", got)
 	}
-	if calls[b2.ID] != 0 {
+	if calls[b2.ID] != 1 {
 		t.Fatalf("booking baru: hook terpanggil %d kali", calls[b2.ID])
 	}
 }

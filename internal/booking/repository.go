@@ -12,6 +12,7 @@ import (
 
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/komisi"
+	"erp-azhan/api/internal/payment"
 )
 
 const idBookingCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -1012,7 +1013,7 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 		if err != nil {
 			return nil, fmt.Errorf("booking.CancelPax get logs: %w", err)
 		}
-		
+
 		type logRow struct {
 			ItemID uint64
 			Qty    int
@@ -1106,7 +1107,7 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 				tx.ExecContext(ctx, "DELETE FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ?", ipid)
 			}
 		}
-		
+
 		if bookingStatus == "baru" || bookingStatus == "draft" {
 			tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID)
 		} else {
@@ -1445,37 +1446,7 @@ func (r *Repository) recalculateTotalTx(ctx context.Context, tx *sql.Tx, booking
 		return err
 	}
 
-	// Cek status saat ini dan total_paid untuk auto-update status lunas/dp
-	var totalHarga sql.NullFloat64
-	var currentStatus string
-	if err := tx.QueryRowContext(ctx, `SELECT total_harga, status FROM bookings WHERE id=?`, bookingID).Scan(&totalHarga, &currentStatus); err != nil {
-		return err
-	}
-	if currentStatus == "batal" || currentStatus == "baru" {
-		return nil
-	}
-
-	var totalPaid float64
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id=? AND status='confirmed'`, bookingID).Scan(&totalPaid); err != nil {
-		return err
-	}
-
-	targetHarga := 0.0
-	if totalHarga.Valid {
-		targetHarga = totalHarga.Float64
-	}
-
-	if targetHarga > 0 && totalPaid >= targetHarga && currentStatus != "lunas" {
-		if _, err := tx.ExecContext(ctx, `UPDATE bookings SET status='lunas' WHERE id=?`, bookingID); err != nil {
-			return err
-		}
-		return komisi.OnBookingLunas(ctx, tx, bookingID)
-	} else if totalPaid < targetHarga && currentStatus == "lunas" {
-		_, err := tx.ExecContext(ctx, `UPDATE bookings SET status='dp' WHERE id=?`, bookingID)
-		return err
-	}
-
-	return nil
+	return payment.SyncBookingStatusTx(ctx, tx, bookingID)
 }
 
 // ListAddons mengambil daftar add-on untuk sebuah booking.
@@ -2033,7 +2004,7 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 	if err != nil {
 		return nil, fmt.Errorf("booking.BatalkanPerlengkapan find pax: %w", err)
 	}
-	
+
 	if perlengkapanStatus != "sudah_diberikan" {
 		return nil, ErrPerlengkapanBelumDiberikan
 	}

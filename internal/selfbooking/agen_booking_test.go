@@ -168,7 +168,7 @@ func TestBookingPublikInfantTanggalLahir(t *testing.T) {
 	hariIni := time.Now()
 	berangkat := hariIni.AddDate(0, 2, 0).Format("2006-01-02")
 	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: berangkat})
-	testdb.Exec(t, tx, `UPDATE schedules SET status='published' WHERE id=?`, sched)
+	testdb.Exec(t, tx, `UPDATE schedules SET status='published', harga_infant=0 WHERE id=?`, sched)
 
 	booking := func(tanggalLahir string, n int) (*BookingResponse, error) {
 		tl := tanggalLahir

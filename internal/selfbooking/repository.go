@@ -3,6 +3,7 @@ package selfbooking
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -26,9 +27,9 @@ var (
 	ErrCutoffBooking         = errors.New("pendaftaran untuk jadwal ini telah ditutup (batas cut-off H-14 keberangkatan)")
 	// Booking agen (Jalur 1). Pesan sengaja umum: tidak membocorkan data
 	// pemilik nomor yang sudah terdaftar (D8).
-	ErrBukanAgenAktif    = errors.New("akun agen tidak aktif")
-	ErrNomorMilikLain    = errors.New("nomor sudah terdaftar, minta jamaah booking sendiri atau hubungi admin")
-	ErrJamaahBukanMilik  = errors.New("jamaah tidak ada di daftar Jamaah Saya")
+	ErrBukanAgenAktif   = errors.New("akun agen tidak aktif")
+	ErrNomorMilikLain   = errors.New("nomor sudah terdaftar, minta jamaah booking sendiri atau hubungi admin")
+	ErrJamaahBukanMilik = errors.New("jamaah tidak ada di daftar Jamaah Saya")
 )
 
 type Repository struct {
@@ -132,12 +133,23 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		}
 		return nil, fmt.Errorf("lock schedule: %w", err)
 	}
-	if scheduleStatus != "published" || scheduleBrandID != brandID {
+	if scheduleBrandID != brandID {
+		return nil, ErrNotFound
+	}
+	if replay, replayErr := replayCheckout(ctx, tx, req, ini); replayErr != nil || replay != nil {
+		return replay, replayErr
+	}
+	if scheduleStatus != "published" {
 		return nil, ErrNotFound
 	}
 
+	for _, pax := range req.Anggota {
+		if pax.PaxType == "infant" && !hargaInfant.Valid {
+			return nil, ErrInfantUnavailable
+		}
+	}
 	// Cutoff H-14: online booking ditutup H-14 sebelum tanggal keberangkatan
-	now := time.Now()
+	now := time.Now().In(shared.LoadConfig().Location())
 	cutoffDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 14)
 	depDate := time.Date(berangkatTanggal.Year(), berangkatTanggal.Month(), berangkatTanggal.Day(), 0, 0, 0, 0, now.Location())
 	if depDate.Before(cutoffDate) {
@@ -184,7 +196,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	} else if errors.Is(err, sql.ErrNoRows) {
 		// CABANG A — jamaah BARU dibuat (nomor belum terdaftar):
 		// portal_pin dari payload wajib ada dan 6 digit angka
-		if len(req.PIC.PortalPIN) != 6 {
+		if !numericPIN.MatchString(req.PIC.PortalPIN) {
 			return nil, ErrPinRequired
 		}
 		picJamaahID, err = shared.ResolveJamaah(ctx, tx, brandID, shared.JamaahInput{
@@ -239,7 +251,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	err = tx.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM bookings b
 		JOIN booking_pax bp ON bp.booking_id = b.id
-		WHERE b.schedule_id = ? AND bp.jamaah_id = ? AND b.status NOT IN ('batal', 'draft')
+		WHERE b.schedule_id = ? AND bp.jamaah_id = ? AND bp.pax_status='aktif' AND b.status NOT IN ('batal', 'draft')
 	`, req.ScheduleID, picJamaahID).Scan(&dupCount)
 	if err != nil {
 		return nil, fmt.Errorf("check duplicate: %w", err)
@@ -375,6 +387,32 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 			return nil, ErrDuplicatePaxInBooking
 		}
 		allJamaahMap[aid] = true
+	}
+	// The schedule lock serializes booking admission; check every resolved member.
+	for i, aid := range anggotaJamaahIDs {
+		var duplicate int
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM booking_pax bp JOIN bookings b ON b.id=bp.booking_id WHERE b.schedule_id=? AND bp.jamaah_id=? AND bp.pax_status='aktif' AND b.status NOT IN ('batal','draft')`, req.ScheduleID, aid).Scan(&duplicate); err != nil {
+			return nil, err
+		}
+		if duplicate > 0 {
+			return nil, ErrDuplicate
+		}
+		if req.Anggota[i].PaxType == "infant" {
+			var dob sql.NullTime
+			if err = tx.QueryRowContext(ctx, `SELECT tanggal_lahir FROM jamaah WHERE id=?`, aid).Scan(&dob); err != nil {
+				return nil, err
+			}
+			if !dob.Valid {
+				return nil, ErrTanggalLahirTidakValid
+			}
+			stored := dob.Time.Format("2006-01-02")
+			if req.Anggota[i].TanggalLahir == nil || stored != strings.TrimSpace(*req.Anggota[i].TanggalLahir) {
+				return nil, ErrUsiaInfant
+			}
+			if err = validasiTanggalLahirAnggota([]AnggotaInput{{PaxType: "infant", TanggalLahir: &stored}}, depDate, now); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	if modeAgen {
@@ -512,7 +550,19 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	if scheduleMinDP.Valid {
 		dpPerReguler = scheduleMinDP.Float64
 	}
+	if dpPerReguler < 0 || dpPerReguler > hargaQuad || dpPerReguler > hargaTriple || dpPerReguler > hargaDouble {
+		return nil, ErrInvalidDP
+	}
 	totalMinDP := dpPerReguler * float64(regulerPaxCount)
+	fullPayment := !depDate.After(now.AddDate(0, 0, 45))
+	dueAt := depDate.AddDate(0, 0, -45)
+	if fullPayment {
+		totalMinDP = totalHarga
+		dueAt = seatHoldExpiresAt
+	}
+	if req.ExpectedTotal != nil && (*req.ExpectedTotal != totalHarga || req.ExpectedDP == nil || *req.ExpectedDP != totalMinDP) {
+		return nil, ErrQuoteChanged
+	}
 
 	// 12. Bank Accounts
 	var bankAccounts []BankAccountInfo
@@ -538,13 +588,13 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	var portalToken string
 	if issuePortalToken {
 		var err error
-		portalToken, err = identity.GeneratePortalToken(picJamaahID)
+		portalToken, err = identity.GenerateAccountPortalToken(ctx, tx, picJamaahID)
 		if err != nil {
 			return nil, fmt.Errorf("generate portal token: %w", err)
 		}
 	}
 
-	return &BookingResponse{
+	response := &BookingResponse{
 		Status: "success",
 		Booking: BookingSummary{
 			BookingCode:       bookingCode,
@@ -559,11 +609,43 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		},
 		PortalToken:  portalToken,
 		BankAccounts: bankAccounts,
-	}, nil
+	}
+	invoiceToken, err := newInvoiceToken()
+	if err != nil {
+		return nil, err
+	}
+	response.Booking.InvoiceToken = invoiceToken
+	stored := *response
+	stored.PortalToken = ""
+	raw, err := json.Marshal(struct {
+		Response   BookingResponse
+		IssueToken bool
+	}{stored, issuePortalToken})
+	if err != nil {
+		return nil, err
+	}
+	var keyHash, fingerprint any
+	if req.RequestKey != "" {
+		keyHash = hashText(req.RequestKey)
+		fingerprint = requestFingerprint(req, ini)
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO booking_checkout(booking_id,dp_per_pax,full_payment,due_at,original_expires_at,invoice_token,terms_version,accepted_at,request_key_hash,request_hash,response_json) VALUES(?,?,?,?,?,?,?,NOW(),?,?,?)`, bookingID, dpPerReguler, fullPayment, dueAt, seatHoldExpiresAt, invoiceToken, req.TermsVersion, keyHash, fingerprint, raw)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 // GetInvoiceByCode mengambil data lengkap invoice digital berdasarkan kode booking.
+type invoiceReader interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
 func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (*InvoiceResponse, error) {
+	return getInvoiceByCode(ctx, r.db, bookingCode)
+}
+func getInvoiceByCode(ctx context.Context, q invoiceReader, bookingCode string) (*InvoiceResponse, error) {
 	bookingCode = strings.TrimSpace(strings.ToUpper(bookingCode))
 	if bookingCode == "" {
 		return nil, ErrNotFound
@@ -574,13 +656,14 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 	var status string
 	var totalHarga float64
 	var createdAt, seatHoldExpiresAt time.Time
+	var blocked bool
 
-	err := r.db.QueryRowContext(ctx, `
-		SELECT b.id, s.brand_id, b.schedule_id, b.status, b.total_harga, b.created_at, COALESCE(b.seat_hold_expires_at, b.created_at)
+	err := q.QueryRowContext(ctx, `
+		SELECT b.id, s.brand_id, b.schedule_id, b.status, b.total_harga, b.created_at, COALESCE(b.seat_hold_expires_at, b.created_at),b.is_seat_blocked
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id_booking = ?
-	`, bookingCode).Scan(&bookingID, &brandID, &scheduleID, &status, &totalHarga, &createdAt, &seatHoldExpiresAt)
+	`, bookingCode).Scan(&bookingID, &brandID, &scheduleID, &status, &totalHarga, &createdAt, &seatHoldExpiresAt, &blocked)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -591,7 +674,7 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 	// 2. Get Brand info
 	var brand InvoiceBrandInfo
 	var logo, phone, wa, address, city, prov, ppiu, pihk, akreditasi sql.NullString
-	err = r.db.QueryRowContext(ctx, `
+	err = q.QueryRowContext(ctx, `
 		SELECT id, name, COALESCE(legalitas, name), logo_url, primary_color, phone, whatsapp_number, address, city, province, ppiu_number, pihk_number, akreditasi
 		FROM brands WHERE id = ?
 	`, brandID).Scan(&brand.ID, &brand.Name, &brand.PTName, &logo, &brand.PrimaryColor, &phone, &wa, &address, &city, &prov, &ppiu, &pihk, &akreditasi)
@@ -633,7 +716,7 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 	var berangkatTanggal, pulangTanggal time.Time
 	var scheduleMinDP sql.NullFloat64
 
-	err = r.db.QueryRowContext(ctx, `
+	err = q.QueryRowContext(ctx, `
 		SELECT s.jadwal_nama, s.berangkat_tanggal, s.pulang_tanggal, s.minimal_dp,
 		       a.name, a.logo_url,
 		       hm.name, hm.star_rating,
@@ -680,37 +763,38 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 
 	// 4. Get Pax items + PIC
 	var pic InvoicePICInfo
+	var picPhone string
+	if err = q.QueryRowContext(ctx, `SELECT j.nama_lengkap,COALESCE(j.no_hp,'') FROM bookings b JOIN jamaah j ON j.id=b.pic_jamaah_id WHERE b.id=?`, bookingID).Scan(&pic.NamaLengkap, &picPhone); err != nil {
+		return nil, fmt.Errorf("get invoice PIC: %w", err)
+	}
+	pic.NoHPMasked = maskPhone(picPhone)
 	var paxItems []InvoicePaxItem
 	var regulerPaxCount int
 
-	paxRows, err := r.db.QueryContext(ctx, `
-		SELECT j.nama_lengkap, COALESCE(j.no_hp, ''), bp.pax_type, bp.room_type, bp.harga_pax
+	paxRows, err := q.QueryContext(ctx, `
+		SELECT j.nama_lengkap, COALESCE(j.no_hp, ''), bp.pax_type, bp.room_type, bp.harga_pax,bp.pax_status
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
 		WHERE bp.booking_id = ?
-		ORDER BY bp.id ASC
+		ORDER BY (bp.jamaah_id=(SELECT pic_jamaah_id FROM bookings WHERE id=bp.booking_id)) DESC,bp.id ASC
 	`, bookingID)
 	if err != nil {
 		return nil, fmt.Errorf("get pax items: %w", err)
 	}
 	defer paxRows.Close()
 
-	idx := 0
 	for paxRows.Next() {
 		var pName, pPhone, pType string
+		var paxStatus string
 		var rType sql.NullString
 		var pHarga float64
 
-		if err := paxRows.Scan(&pName, &pPhone, &pType, &rType, &pHarga); err == nil {
-			if idx == 0 {
-				pic.NamaLengkap = pName
-				pic.NoHPMasked = maskPhone(pPhone)
-			}
-			idx++
-
+		if err := paxRows.Scan(&pName, &pPhone, &pType, &rType, &pHarga, &paxStatus); err == nil {
 			roomLabel := "INFANT"
 			if pType == "reguler" {
-				regulerPaxCount++
+				if paxStatus == "aktif" {
+					regulerPaxCount++
+				}
 				if rType.Valid && rType.String != "" {
 					switch strings.ToLower(rType.String) {
 					case "quad":
@@ -728,6 +812,7 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 			}
 
 			paxItems = append(paxItems, InvoicePaxItem{
+				Status:      paxStatus,
 				NamaLengkap: pName,
 				PaxType:     pType,
 				RoomType:    roomLabel,
@@ -737,16 +822,42 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 	}
 
 	// 5. Financial details
-	var dpPerPax float64 = 5000000
-	if scheduleMinDP.Valid && scheduleMinDP.Float64 > 0 {
-		dpPerPax = scheduleMinDP.Float64
+	if err := paxRows.Err(); err != nil {
+		return nil, err
+	}
+	var dpPerPax float64
+	var fullPayment bool
+	var dueAt time.Time
+	if err = q.QueryRowContext(ctx, `SELECT dp_per_pax,full_payment,due_at FROM booking_checkout WHERE booking_id=?`, bookingID).Scan(&dpPerPax, &fullPayment, &dueAt); err != nil {
+		return nil, err
 	}
 	totalMinDP := dpPerPax * float64(regulerPaxCount)
+	if fullPayment || totalMinDP > totalHarga {
+		totalMinDP = totalHarga
+	}
 
 	var totalDibayar float64
-	_ = r.db.QueryRowContext(ctx, `
+	if err = q.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id = ? AND status = 'confirmed'
-	`, bookingID).Scan(&totalDibayar)
+	`, bookingID).Scan(&totalDibayar); err != nil {
+		return nil, err
+	}
+	var pendingPayment float64
+	if err = q.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status='pending'`, bookingID).Scan(&pendingPayment); err != nil {
+		return nil, err
+	}
+	var activationRequired bool
+	if err = q.QueryRowContext(ctx, `SELECT COALESCE(j.portal_pin_hash,'')='' FROM bookings b JOIN jamaah j ON j.id=b.pic_jamaah_id WHERE b.id=?`, bookingID).Scan(&activationRequired); err != nil {
+		return nil, err
+	}
+	reservationStatus := "held"
+	if status == "batal" {
+		reservationStatus = "cancelled"
+	} else if !blocked || (status == "baru" && time.Now().After(seatHoldExpiresAt)) {
+		reservationStatus = "expired"
+	} else if status == "dp" || status == "lunas" {
+		reservationStatus = "confirmed"
+	}
 
 	sisaTagihan := totalHarga - totalDibayar
 	if sisaTagihan < 0 {
@@ -755,19 +866,28 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 
 	// Status label
 	statusLabel := "Menunggu Pembayaran DP"
+	if fullPayment {
+		statusLabel = "Menunggu Pelunasan"
+	} else if totalMinDP == 0 {
+		statusLabel = "Menunggu Pembayaran"
+	}
 	if status == "dp" {
 		statusLabel = "DP Terverifikasi"
 	} else if status == "lunas" {
 		statusLabel = "Lunas"
 	} else if status == "batal" {
 		statusLabel = "Dibatalkan"
-	} else if time.Now().After(seatHoldExpiresAt) && status == "draft" {
+	} else if reservationStatus == "expired" {
 		statusLabel = "Batas Pembayaran Berakhir"
+	} else if pendingPayment > 0 {
+		statusLabel = "Menunggu Verifikasi Pembayaran"
+	} else if totalDibayar > 0 {
+		statusLabel = "Pembayaran Sebagian — Minimum Belum Terpenuhi"
 	}
 
 	// 6. Bank accounts
 	var bankAccounts []BankAccountInfo
-	bRows, err := r.db.QueryContext(ctx, `
+	bRows, err := q.QueryContext(ctx, `
 		SELECT id, bank_name, logo_url, account_number, account_holder, instructions
 		FROM bank_accounts
 		WHERE brand_id = ? AND is_active = TRUE
@@ -791,20 +911,27 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 	}
 
 	// Pelunasan H-45
-	hMin45 := berangkatTanggal.AddDate(0, 0, -45)
-	jatuhTempoStr := fmt.Sprintf("H-45 Keberangkatan (%s)", hMin45.Format("02 Jan 2006"))
+	jatuhTempoStr := dueAt.Format("02 Jan 2006 15:04 MST")
+	var paxTotal float64
+	for _, p := range paxItems {
+		paxTotal += p.Harga
+	}
 
 	return &InvoiceResponse{
-		BookingCode:       bookingCode,
-		Status:            status,
-		StatusLabel:       statusLabel,
-		CreatedAt:         createdAt.Format(time.RFC3339),
-		SeatHoldExpiresAt: seatHoldExpiresAt.Format(time.RFC3339),
-		Brand:             brand,
-		Schedule:          schedule,
-		PIC:               pic,
-		PaxItems:          paxItems,
+		ReservationStatus:        reservationStatus,
+		PortalActivationRequired: activationRequired,
+		BookingCode:              bookingCode,
+		Status:                   status,
+		StatusLabel:              statusLabel,
+		CreatedAt:                createdAt.Format(time.RFC3339),
+		SeatHoldExpiresAt:        seatHoldExpiresAt.Format(time.RFC3339),
+		Brand:                    brand,
+		Schedule:                 schedule,
+		PIC:                      pic,
+		PaxItems:                 paxItems,
 		Financial: InvoiceFinancial{
+			PendingPayment:      pendingPayment,
+			Adjustments:         totalHarga - paxTotal,
 			TotalHarga:          totalHarga,
 			MinimalDP:           totalMinDP,
 			TotalDibayar:        totalDibayar,
@@ -817,8 +944,8 @@ func (r *Repository) GetInvoiceByCode(ctx context.Context, bookingCode string) (
 
 func maskPhone(phone string) string {
 	phone = strings.TrimSpace(phone)
-	if len(phone) <= 6 {
-		return phone
+	if len(phone) <= 8 {
+		return "••••"
 	}
 	prefix := phone[:4]
 	suffix := phone[len(phone)-4:]
