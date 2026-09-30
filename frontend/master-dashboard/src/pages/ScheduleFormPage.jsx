@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../components/ui/PageHeader';
 import FormField from '../components/ui/FormField';
@@ -33,6 +33,12 @@ const ScheduleFormPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingBrosur, setIsUploadingBrosur] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (formError) { errorRef.current?.focus(); errorRef.current?.scrollIntoView({ block: 'center' }); }
+  }, [formError]);
+
   const [notFound, setNotFound] = useState(false);
 
   // Lookups
@@ -223,6 +229,7 @@ const ScheduleFormPage = () => {
             is_ticket_confirmed: scheduleData.is_ticket_confirmed || false,
             is_direct_flight: scheduleData.is_direct_flight || false,
             seat_total: scheduleData.seat_total || '',
+            expected_seat_total: scheduleData.seat_total,
             kuota_terisi: (scheduleData.seat_total !== undefined && scheduleData.seat_sisa !== undefined) ? (scheduleData.seat_total - scheduleData.seat_sisa) : '',
             maskapai_id: scheduleData.maskapai?.id || scheduleData.maskapai_id || '',
             berangkat_tanggal: scheduleData.berangkat_tanggal ? scheduleData.berangkat_tanggal.split('T')[0] : '',
@@ -244,8 +251,8 @@ const ScheduleFormPage = () => {
             harga_quad: scheduleData.harga_quad || '',
             harga_triple: scheduleData.harga_triple || '',
             harga_double: scheduleData.harga_double || '',
-            harga_infant: scheduleData.harga_infant || '',
-            minimal_dp: scheduleData.minimal_dp || '',
+            harga_infant: scheduleData.harga_infant ?? '',
+            minimal_dp: scheduleData.minimal_dp ?? '',
             nominal_komisi_langsung: scheduleData.nominal_komisi_langsung ?? '',
             nominal_bonus_pembinaan: scheduleData.nominal_bonus_pembinaan ?? '',
             harga_coret: scheduleData.harga_coret || '',
@@ -441,6 +448,7 @@ const ScheduleFormPage = () => {
 
     setIsUploadingBrosur(true);
     setFormError(null);
+    setFieldErrors({});
 
     try {
       const response = await uploadMediaWithOptions(file, 'schedule-brosur', {
@@ -537,8 +545,8 @@ const ScheduleFormPage = () => {
       const hargaQuad = parseCurrency(formData.harga_quad);
       const hargaTriple = parseCurrency(formData.harga_triple);
       const hargaDouble = parseCurrency(formData.harga_double);
-      const hargaInfant = formData.harga_infant ? parseCurrency(formData.harga_infant) : null;
-      const minimalDP = formData.minimal_dp ? parseCurrency(formData.minimal_dp) : null;
+      const hargaInfant = formData.harga_infant !== '' ? parseCurrency(formData.harga_infant) : null;
+      const minimalDP = formData.minimal_dp !== '' ? parseCurrency(formData.minimal_dp) : null;
       // Kosong = jadwal tidak ikut program Syiar (NULL), 0 tetap disimpan sebagai 0.
       const komisiLangsung = formData.nominal_komisi_langsung !== '' ? parseCurrency(formData.nominal_komisi_langsung) : null;
       const bonusPembinaan = formData.nominal_bonus_pembinaan !== '' ? parseCurrency(formData.nominal_bonus_pembinaan) : null;
@@ -546,9 +554,13 @@ const ScheduleFormPage = () => {
         ? parseCurrency(formData.harga_coret)
         : null;
 
-      if (hargaCoret !== null && hargaCoret <= hargaQuad) {
-        setFormError('Harga coret harus lebih besar dari Harga Quad karena merupakan harga sebelum promo.');
-        return;
+      const errors = {};
+      if (hargaCoret !== null && hargaCoret <= hargaQuad) errors.harga_coret = 'Harga coret harus lebih besar dari harga Quad.';
+      if (minimalDP !== null && (minimalDP < 0 || minimalDP > Math.min(hargaQuad, hargaTriple, hargaDouble))) errors.minimal_dp = 'DP harus antara 0 dan harga kamar termurah.';
+      if (!isEditMode && Number(formData.kuota_terisi || 0) > Number(formData.seat_total)) errors.kuota_terisi = 'Kuota terisi tidak boleh melebihi total kuota.';
+      if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal = 'Tanggal pulang harus setelah tanggal berangkat.';
+      if (Object.keys(errors).length) {
+        setFieldErrors(errors); setFormError('Periksa kembali isian paket berikut.'); return;
       }
 
       const validBerangkat = (formData.transit_items_berangkat || [])
@@ -597,7 +609,7 @@ const ScheduleFormPage = () => {
         is_ticket_confirmed: !!formData.is_ticket_confirmed,
         is_direct_flight: !!formData.is_direct_flight,
         seat_total: seatTotalNum,
-        seat_sisa: seatSisaNum,
+        ...(isEditMode ? { expected_seat_total: formData.expected_seat_total } : { seat_sisa: seatSisaNum }),
         maskapai_id: parseInt(formData.maskapai_id, 10),
         berangkat_tanggal: formData.berangkat_tanggal,
         berangkat_jam: formData.berangkat_jam || '',
@@ -683,6 +695,10 @@ const ScheduleFormPage = () => {
       />
 
       <form onSubmit={handleSubmit}>
+        {formError && <div ref={errorRef} tabIndex={-1} role="alert" aria-labelledby="package-errors" className="mb-5 rounded-xl border border-danger-200 bg-danger-50 p-4">
+          <h2 id="package-errors" className="font-bold">{formError}</h2>
+          <ul>{Object.entries(fieldErrors).map(([field, message]) => <li key={field}><a className="underline" href={`#${field}`} onClick={e => { e.preventDefault(); document.getElementById(field)?.focus(); }}>{message}</a></li>)}</ul>
+        </div>}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
           {/* Kolom KIRI (Konten Utama) */}
@@ -700,6 +716,7 @@ const ScheduleFormPage = () => {
                   label="Nama Paket"
                   type="text"
                   name="jadwal_nama"
+                    error={fieldErrors.jadwal_nama}
                   value={formData.jadwal_nama}
                   onChange={handleChange}
                   required
@@ -720,6 +737,7 @@ const ScheduleFormPage = () => {
                       className="!mb-0"
                       type="number"
                       name="seat_total"
+                    error={fieldErrors.seat_total}
                       value={formData.seat_total}
                       onChange={handleChange}
                       required
@@ -740,6 +758,9 @@ const ScheduleFormPage = () => {
                       className="!mb-0"
                       type="number"
                       name="kuota_terisi"
+                    error={fieldErrors.kuota_terisi}
+                      readOnly={isEditMode}
+                      helpText={isEditMode ? "Dihitung dari alokasi kursi terkini; edit konten tidak mengubah alokasi." : undefined}
                       value={formData.kuota_terisi}
                       onChange={handleChange}
                       min="0"
@@ -789,6 +810,7 @@ const ScheduleFormPage = () => {
                       label="Maskapai"
                       className="!mb-0"
                       name="maskapai_id"
+                    error={fieldErrors.maskapai_id}
                       value={formData.maskapai_id}
                       onChange={(e) => handleMaskapaiChange(e.target.value)}
                       onSelect={(opt) => handleMaskapaiChange(opt ? opt.value : '')}
@@ -849,6 +871,7 @@ const ScheduleFormPage = () => {
                       className="!mb-0"
                       type="date"
                       name="berangkat_tanggal"
+                    error={fieldErrors.berangkat_tanggal}
                       value={formData.berangkat_tanggal}
                       onChange={handleChange}
                       required
@@ -858,6 +881,7 @@ const ScheduleFormPage = () => {
                       className="!mb-0"
                       type="text"
                       name="berangkat_jam"
+                    error={fieldErrors.berangkat_jam}
                       value={formData.berangkat_jam}
                       onChange={handleTimeChange}
                       placeholder="mis. 09:00"
@@ -894,6 +918,7 @@ const ScheduleFormPage = () => {
                         label="Kode Penerbangan"
                         className="!mb-0"
                         name="berangkat_kode_penerbangan"
+                    error={fieldErrors.berangkat_kode_penerbangan}
                         value={formData.berangkat_kode_penerbangan}
                         onChange={handleChange}
                         placeholder="mis. SV 822"
@@ -1043,6 +1068,7 @@ const ScheduleFormPage = () => {
                       className="!mb-0"
                       type="date"
                       name="pulang_tanggal"
+                    error={fieldErrors.pulang_tanggal}
                       value={formData.pulang_tanggal}
                       onChange={handleChange}
                       required
@@ -1052,6 +1078,7 @@ const ScheduleFormPage = () => {
                       className="!mb-0"
                       type="text"
                       name="pulang_jam"
+                    error={fieldErrors.pulang_jam}
                       value={formData.pulang_jam}
                       onChange={handleTimeChange}
                       placeholder="mis. 15:30"
@@ -1088,6 +1115,7 @@ const ScheduleFormPage = () => {
                         label="Kode Penerbangan"
                         className="!mb-0"
                         name="pulang_kode_penerbangan"
+                    error={fieldErrors.pulang_kode_penerbangan}
                         value={formData.pulang_kode_penerbangan}
                         onChange={handleChange}
                         placeholder="mis. SV 823"
@@ -1234,6 +1262,7 @@ const ScheduleFormPage = () => {
                       label="Hotel Mekkah"
                       className="!mb-0"
                       name="hotel_mekkah_id"
+                    error={fieldErrors.hotel_mekkah_id}
                       value={formData.hotel_mekkah_id}
                       onChange={(e) => handleChange({ target: { name: 'hotel_mekkah_id', value: e.target.value } })}
                       onSelect={(opt) => handleChange({ target: { name: 'hotel_mekkah_id', value: opt ? opt.value : '' } })}
@@ -1366,6 +1395,7 @@ const ScheduleFormPage = () => {
                     className="!mb-0"
                     type="text"
                     name="harga_quad"
+                    error={fieldErrors.harga_quad}
                     value={formatCurrency(formData.harga_quad)}
                     onChange={handleCurrencyChange}
                     required
@@ -1377,6 +1407,7 @@ const ScheduleFormPage = () => {
                     className="!mb-0"
                     type="text"
                     name="harga_triple"
+                    error={fieldErrors.harga_triple}
                     value={formatCurrency(formData.harga_triple)}
                     onChange={handleCurrencyChange}
                     required
@@ -1388,6 +1419,7 @@ const ScheduleFormPage = () => {
                     className="!mb-0"
                     type="text"
                     name="harga_double"
+                    error={fieldErrors.harga_double}
                     value={formatCurrency(formData.harga_double)}
                     onChange={handleCurrencyChange}
                     required
@@ -1403,9 +1435,11 @@ const ScheduleFormPage = () => {
                     className="!mb-0"
                     type="text"
                     name="harga_infant"
+                    error={fieldErrors.harga_infant}
                     value={formatCurrency(formData.harga_infant)}
                     onChange={handleCurrencyChange}
                     placeholder="mis. 5.000.000"
+                    helpText="Kosong berarti infant belum dapat dipesan; isi 0 hanya jika gratis."
                     prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
                   />
                   <Input
@@ -1413,11 +1447,12 @@ const ScheduleFormPage = () => {
                     className="!mb-0"
                     type="text"
                     name="minimal_dp"
+                    error={fieldErrors.minimal_dp}
                     value={formatCurrency(formData.minimal_dp)}
                     onChange={handleCurrencyChange}
                     placeholder="mis. 5.000.000"
                     prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
-                    helpText="Biarkan kosong jika tidak ada batas minimal DP khusus"
+                    helpText="Kosong mengikuti DP brand; isi 0 untuk tanpa DP. Tidak boleh melebihi harga kamar termurah."
                   />
                 </div>
 
@@ -1429,6 +1464,7 @@ const ScheduleFormPage = () => {
                       className="!mb-0"
                       type="text"
                       name="nominal_komisi_langsung"
+                    error={fieldErrors.nominal_komisi_langsung}
                       value={formatCurrency(formData.nominal_komisi_langsung)}
                       onChange={handleCurrencyChange}
                       placeholder="mis. 1.000.000"
@@ -1439,6 +1475,7 @@ const ScheduleFormPage = () => {
                       className="!mb-0"
                       type="text"
                       name="nominal_bonus_pembinaan"
+                    error={fieldErrors.nominal_bonus_pembinaan}
                       value={formatCurrency(formData.nominal_bonus_pembinaan)}
                       onChange={handleCurrencyChange}
                       placeholder="mis. 300.000"
@@ -1473,6 +1510,7 @@ const ScheduleFormPage = () => {
                             className="!mb-0"
                             type="text"
                             name="harga_coret"
+                    error={fieldErrors.harga_coret}
                             value={formatCurrency(formData.harga_coret)}
                             onChange={handleCurrencyChange}
                             placeholder="mis. 27.500.000"
@@ -1485,6 +1523,7 @@ const ScheduleFormPage = () => {
                             className="!mb-0"
                             type="date"
                             name="promo_until"
+                    error={fieldErrors.promo_until}
                             value={formData.promo_until}
                             onChange={handleChange}
                             min={new Date().toLocaleDateString('en-CA')}
@@ -1595,9 +1634,7 @@ const ScheduleFormPage = () => {
               </div>
             </MetaBox>
 
-            {formError && (
-              <Alert variant="error">{formError}</Alert>
-            )}
+
 
           </div>
 

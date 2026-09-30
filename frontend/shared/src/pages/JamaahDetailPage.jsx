@@ -16,6 +16,7 @@ import Modal from "../components/ui/Modal";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import Textarea from "../components/ui/Textarea";
 import BrandCell from "../components/BrandCell";
+import DocumentReview from "../components/DocumentReview";
 import { Edit2, Eye, Upload, ExternalLink, RefreshCw, Users, Plus, Save, ArrowRight, Building2, Copy, Check } from "lucide-react";
 
 const DOKUMEN_TYPES = [
@@ -25,6 +26,7 @@ const DOKUMEN_TYPES = [
   { key: "kk", label: "Kartu Keluarga" },
   { key: "buku_nikah", label: "Buku Nikah" },
   { key: "akte_lahir", label: "Akte Lahir" },
+  { key: "vaksin_meningitis", label: "Vaksin Meningitis" },
 ];
 
 const HUBUNGAN_OPTIONS = [
@@ -625,11 +627,12 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
                         {docType.label}
                       </span>
                       <span className="text-xs font-body text-neutral-500 block">
-                        {hasFile ? "Sudah Diunggah" : "Belum Diunggah"}
+                        {hasFile ? existing.status : "Belum Diunggah"}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {hasFile && <DocumentReview document={existing} onChanged={updated => setDokumenList(previous => previous.map(doc => doc.id === updated.id ? updated : doc))} />}
                       {hasFile && (
                         <button
                           type="button"

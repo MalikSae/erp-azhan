@@ -10,7 +10,7 @@ export async function upsertDokumen(jamaahId, { jenis, file_url }) {
   return response.data;
 }
 
-export async function updateDokumenStatus(id, status) {
-  const response = await client.put(`/api/admin/dokumen/${id}/status`, { status });
+export async function updateDokumenStatus(id, status, version, rejectionReason = '') {
+  const response = await client.put(`/api/admin/dokumen/${id}/status`, { status, version, rejection_reason: rejectionReason });
   return response.data;
 }
