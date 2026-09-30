@@ -235,7 +235,7 @@ Static server aman dari traversal (`[R] GET /uploads/../../.env -> 404`, juga va
 
 - `go test ./...`: 13 paket lulus, exit 0. Uji integrasi database (`ERP_TEST_DB=1`) belum dijalankan dalam sesi ini karena pemeriksa izin otomatis tidak memberi keputusan.
 - Uji tambahan: pembuatan data, pembayaran, diskon, pembatalan, worker, dan paralel memakai API nyata di database lokal. Satu-satunya manipulasi langsung database: `brands.kode_brand='TP'` untuk brand bawaan migrasi, `seat_hold_expires_at` dimundurkan 1 menit (simulasi 24 jam), dan `seat_sisa` disetel 2 untuk uji paralel.
-- Belum dilakukan: walkthrough UI Master/Travel Dashboard di browser (viewport 375 dan 1440), distribusi perlengkapan dengan stok (butuh template set), ubah tipe kamar, batal pax pada status `dp`, CRM deal.
+- Uji UI Master Dashboard (375 dan 1440) dilakukan setelah perbaikan; lihat bagian Uji UI. Belum dilakukan: uji UI Travel Dashboard (admin brand), distribusi perlengkapan dengan stok (butuh template set), CRM deal.
 - Data uji tertinggal di database lokal: brand 2 "Brand Uji Dua", dua admin brand, 20 jamaah uji, jadwal "Uji Audit Desember", booking #1–#13.
 
 ## Status perbaikan (30 September 2026)
@@ -246,7 +246,16 @@ Static server aman dari traversal (`[R] GET /uploads/../../.env -> 404`, juga va
 | JB-02 | Diperbaiki | `CreateBooking` dan `FinalizeBooking` mengisi `seat_count` = pax reguler; `CancelPax` menyelaraskannya; backfill `migrations/068_backfill_booking_seat_count.sql` |
 | JB-03 | Diperbaiki (jalur penyebab) | `SyncBookingStatusTx` tidak memberi hold 24 jam bila ada pembayaran terkonfirmasi |
 | JB-04 | Diperbaiki | `ensureJamaahFreeOnSchedule` di `CreateBooking` dan `FinalizeBooking`, setelah baris jadwal terkunci |
-| JB-05 s.d. JB-13 | Terbuka | — |
+| JB-05 | Diperbaiki | `BusinessError` untuk pesan bisnis (400); error lain di booking/payment/jamaah dicatat di log dan dijawab 500 generik; batas nominal add-on/diskon; validasi format tanggal jamaah |
+| JB-06 | Diperbaiki (gate) | `lockNotBatalTx` pada add-on/diskon (tambah & hapus); gate `batal` pada progress header dan ubah tipe kamar. Penanda refund untuk booking batal berbayar belum dibuat (butuh keputusan kebijakan) |
+| JB-07 | Diperbaiki | Keputusan: total tagihan tidak boleh di bawah pembayaran terkonfirmasi. `ensureTotalCoversPaidTx` setelah hitung ulang pada tambah diskon, hapus add-on, dan ubah tipe kamar (satu transaksi, termasuk efek komisi). Batal pax tidak dibatasi agar pembatalan tetap bisa dilakukan |
+| JB-08 | Diperbaiki | Keputusan: PIC wajib pax reguler; jamaah usia infant wajib didaftarkan sebagai infant. Berlaku pada booking langsung dan finalisasi draft. Form dashboard sudah mengikuti aturan ini |
+| JB-12 | Ditetapkan | Keputusan: harga pax batal pada booking DP/Lunas tetap ditagih; refund manual oleh admin. Dialog "Batalkan Pax" menampilkan keterangan ini untuk booking DP/Lunas |
+| JB-09 | Diperbaiki | `validateJamaahInput`: NIK dan NIK darurat 16 digit, tanggal lahir/keluar paspor tidak di masa depan (WIB), masa berlaku tidak sebelum tanggal keluar, format email, HP 10–15 digit (aturan self-booking). Paspor kedaluwarsa tetap diterima. Data lama yang tidak valid harus diperbaiki saat diedit berikutnya |
+| JB-10 | Diperbaiki | Tanggal pembayaran admin wajib `YYYY-MM-DD` dan tidak di masa depan (WIB), sama dengan JM-22 |
+| JB-11 | Diperbaiki | `media.ValidateAdminUpload`: berkas wajib kategori `dokumen-jamaah`, tercatat di `media_uploads` sebagai unggahan brand jamaah/super admin/jamaah itu sendiri, dan ada di disk |
+| JB-13 | Diperbaiki | Keputusan: hapus rujukan. Dokumen acuan tidak pernah di-commit (`git log --all` kosong untuk keenamnya); `design-system.md` di root sengaja dihapus di `24d88c2`. `AGENTS.md` kini merujuk `migrations/`, `README.md`, handler, dan file `AUDIT-*`/`PERBAIKAN-*`. Komentar kode yang menyebut `agen-azhan.md` tidak diubah |
+| Refund | Dibuat | Keputusan: catatan refund sederhana. Migrasi `069_booking_refunds.sql`; `GET/POST /api/admin/bookings/{id}/refunds` (role admin); field `total_dibayar`, `total_refund`, `perlu_refund`; panel "Pengembalian Dana" dan badge "Perlu refund". Refund hanya untuk booking batal, total tidak melebihi pembayaran terkonfirmasi, tanpa ubah/hapus |
 
 Bukti verifikasi (`audit/jamaah-booking-evidence-2026-09-30.log`, bagian RUN5 dan RUN6):
 
@@ -261,6 +270,100 @@ Bukti verifikasi (`audit/jamaah-booking-evidence-2026-09-30.log`, bagian RUN5 da
 [V6c] booking #36 paid 6000000, diskon dihapus -> status baru, is_seat_blocked 1, seat_hold_expires_at NULL
 [V9]  rekonsiliasi: seat_total 16, seat_sisa 3, terpakai 13 (cocok)
 ```
+
+Bukti JB-05/JB-06 (bagian RUN7):
+
+```text
+[X1] POST addons nominal 1e15   -> 400 {"error":"nominal terlalu besar"}                          (dulu 400 berisi Error 1264)
+[X3] POST jamaah "31-12-1990"   -> 400 {"error":"tanggal_lahir harus berformat YYYY-MM-DD"}      (dulu 500 berisi Error 1292)
+[X4] duplikat dalam payload     -> 400 {"error":"Jamaah Budi Santoso Uji didaftarkan lebih dari satu kali dalam booking ini"}
+[X6] addon booking aktif        -> 201
+[Y1][Y2][Y4][Y5][Y6][Y7] booking #1 batal: tambah/hapus addon, tambah/hapus diskon, progress, tipe kamar
+                                -> 409 {"error":"booking sudah dibatalkan, data tagihan dan progress tidak dapat diubah"}
+[Y0]/[Y8] total 40000000, addons 2, diskon 1, progress_hotel 1 — tidak berubah
+```
+
+Bukti JB-07/JB-08 (bagian RUN8):
+
+```text
+[Z1]  booking #36 total 61500000, paid 6000000; diskon 55500001 -> 400 {"error":"total tagihan tidak boleh lebih kecil dari pembayaran terkonfirmasi (Rp 6000000)"} ; data tidak berubah
+[Z2]  diskon 55500000 (total = dibayar) -> 200, status lunas
+[Z7]  booking #70 Double lunas 36000000; ubah ke Quad -> 400 (Rp 36000000) ; tetap 36000000 lunas
+[Z9]  PIC tidak ikut sebagai pax -> 400 {"error":"Kontak Utama (PIC) harus ikut sebagai pax reguler dalam booking ini"}
+[Z12] bayi (lahir 2026-07-01) sebagai reguler -> 400 {"error":"Jamaah Bayi Uji Reguler berusia di bawah 2 tahun pada tanggal keberangkatan, harus didaftarkan sebagai infant"}
+[Z14] finalisasi draft dengan bayi reguler -> 400 (pesan sama)
+[Z15] bayi sebagai infant -> 201
+```
+
+Tes baru JB-07: `TestEnsureTotalCoversPaidTx`.
+
+Bukti JB-09/JB-10/JB-11 (bagian RUN9):
+
+```text
+[Q1] nik "123"                              -> 400 {"error":"NIK harus 16 digit angka"}
+[Q2] tanggal_lahir 2030-01-01               -> 400 {"error":"tanggal_lahir tidak boleh di masa depan"}
+[Q3] email "bukan-email"                    -> 400 {"error":"format email tidak valid"}
+[Q4] no_hp "abc"                            -> 400 {"error":"no_hp harus berisi 10–15 digit angka"}
+[Q5] berlaku 2023 < keluar 2024             -> 400 {"error":"paspor_berlaku_sampai tidak boleh sebelum tanggal_paspor_keluar"}
+[Q6] paspor kedaluwarsa 2020                -> 201 (diterima)
+[Q7] data valid, HP "+62 812-3456-0881"     -> 201
+[Q8b] simpan ulang jamaah #1 tanpa perubahan -> 200
+[R1] pembayaran tanggal 2030-01-01          -> 400 {"error":"tanggal pembayaran tidak valid atau berada di masa depan"}
+[R2] tanggal "01-10-2026"                   -> 400 (pesan sama) ; [R3] hari ini -> 201
+[S1] URL eksternal / [S2] "/uploads/../../.env" -> 400 {"error":"berkas harus diunggah melalui formulir dokumen jamaah"}
+[S3] berkas tidak tercatat                  -> 400 {"error":"berkas bukan unggahan brand jamaah ini"}
+[S4] unggah PDF lewat /api/admin/media/upload -> 201 ; [S5] simpan dokumen dari unggahan itu -> 200
+```
+
+Tes baru: `TestValidateJamaahInput` (tanpa database), `TestValidateAdminUpload` (berkas brand lain, URL luar, traversal, berkas hilang ditolak; unggahan brand sendiri dan super admin diterima).
+
+Bukti catatan refund (bagian RUN10/RUN11):
+
+```text
+[T0]  booking #1 batal: total_dibayar=6000000 total_refund=0 perlu_refund=True
+[T2]  refund booking aktif           -> 400 {"error":"pengembalian dana hanya dapat dicatat untuk booking yang sudah dibatalkan"}
+[T5]  refund 8 jt dari 7 jt diterima -> 400 {"error":"jumlah pengembalian melebihi dana yang belum dikembalikan (Rp 7000000)"}   (format kini "Rp 7.000.000")
+[T6]  tanggal 2999-01-01             -> 400 {"error":"tanggal pengembalian tidak valid atau berada di masa depan"}
+[T7]  4 jt -> 201 ; [T8] 3,5 jt dari sisa 3 jt -> 400 ; [T9] 3 jt -> 201
+[T10] total_refund=7000000 perlu_refund=False ; [T11] refund lagi -> 400 {"error":"tidak ada dana yang perlu dikembalikan untuk booking ini"}
+[T13] token brand 2 ke booking brand 1 -> 404
+[V1]  pesan JB-07 kini: "total tagihan tidak boleh lebih kecil dari pembayaran terkonfirmasi (Rp 36.000.000)"
+```
+
+Tes baru: `TestCreateRefundValidasiInput`, `TestTrimOptional`, `TestFormatRupiah` (`internal/booking/refund_test.go`).
+
+### Uji UI (Master Dashboard, super admin)
+
+1440 px:
+
+- Daftar booking: badge "Perlu refund" di samping status Batal pada TPMG49.
+- Detail booking #1: panel "Pengembalian Dana" (diterima Rp 6.000.000, sudah Rp 0, belum Rp 6.000.000). Modal menolak Rp 7.000.000 di sisi klien; Rp 6.000.000 tersimpan, panel menjadi "Selesai Rp 0", riwayat menampilkan metode dan catatan, badge daftar hilang.
+- Modal diskon booking #70 (lunas Rp 36 jt) menampilkan pesan JB-07.
+- Dialog "Batalkan Pax" booking #10 (DP) menampilkan keterangan JB-12. Pembatalan tidak dikonfirmasi.
+- Form jamaah: NIK "123" menampilkan "NIK harus 16 digit angka", data tidak tersimpan.
+
+375 px: panel refund 1 kolom, `scrollWidth` 375 = `clientWidth` 375; daftar booking tanpa overflow halaman, tabel bergeser di dalam wrapper.
+
+### Temuan baru dari uji UI
+
+| ID | Tingkat | Temuan | Status |
+|---|---|---|---|
+| UI-01 | Sedang | Halaman di `frontend/shared` memakai `shared/src/components/ui/Button.jsx` dengan inline style `var(--brand-primary, #FED853)`. Di Master Dashboard variabel itu tidak ada, jadi tombol utama tetap kuning lama. `design-system.md` juga masih mendokumentasikan palet kuning | Diperbaiki: `master-dashboard/src/index.css` mengisi `--brand-primary` (onyx) dan `--brand-primary-text` (gading); tombol "Buat Booking Baru" terukur `rgb(22,24,27)` / `rgb(247,245,240)`. Bagian warna `.agents/rules/design-system.md` diperbarui ke palet holding |
+| UI-02 | Sedang | "Cancel Block Seat" tersedia pada booking berbayar; kursi yang dilepas tidak bisa dikunci ulang karena `BlockSeat` hanya menerima status `baru` | Keputusan: tetap boleh dengan konfirmasi. Dialog menampilkan peringatan bila `total_dibayar > 0`. `BlockSeat` kini menerima `dp`/`lunas` dengan kunci permanen (`expires_at` diabaikan) |
+| UI-03 | Rendah | Error simpan form jamaah tampil di atas form, tombol simpan di bawah. `window.scrollTo` yang ada tidak berefek karena konten menggulir di container dalam | Diperbaiki: gulir ke elemen pesan lewat `ref`; pesan terukur terlihat (top 193 dari tinggi layar 914) setelah simpan dari bawah |
+| UI-04 | Catatan | Analitik transaksi 30 hari tidak mengurangi refund | Diperbaiki: nilai bersih pembayaran − refund per tanggal; `count` tetap jumlah pembayaran. Endpoint belum dipakai UI saat ini |
+
+Bukti UI-02/UI-04 (bagian RUN12):
+
+```text
+[A0] hitung manual brand 1 hari ini: bayar 64000000, refund 13000000, jumlah_bayar 6
+[A1] GET /api/admin/analytics/transactions-30-days -> 200 [{"date":"2026-09-30","brand_id":1,"total_amount":51000000,"count":6}]
+[B1] DELETE /bookings/10/seat-block (status dp) -> 200 ; seat_sisa 3 -> 5
+[B2] PUT /bookings/10/seat-block + expires_at 2 hari -> 200 ; seat_sisa 5 -> 3, seat_hold_expires_at NULL
+[B3] PUT /bookings/1/seat-block (batal) -> 400 {"error":"status tidak valid"}
+```
+
+Tes baru JB-05/JB-06: `TestHandleRepoErrorTidakMembocorkanSQL` (tanpa database) dan `TestLockNotBatalTx` (`internal/booking/error_handling_test.go`).
 
 Tes baru: `TestEnsureJamaahFreeOnSchedule`, `TestBackfillSeatCountMigration` (`internal/booking/seat_integrity_test.go`), `TestSyncPaidDowngradeKeepsSeatWithoutExpiry` (`internal/payment/audit_selfbooking_test.go`). Tes JB-03 gagal pada kode lama (`expiry={2026-10-01 20:53:49 +0700 WIB true}`) dan lulus pada kode baru. `go test ./...` dan `ERP_TEST_DB=1 go test -p 1 ./internal/booking ./internal/payment` lulus; jumlah bookings/payments/jamaah/seat_sisa di database sama sebelum dan sesudah tes.
 

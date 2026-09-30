@@ -14,8 +14,8 @@ Lihat juga `.agents/rules/design-system.md` untuk aturan khusus frontend UI (pel
 
 - **Nama**: ERP Azhan — dimulai sebagai microsite umroh single-travel, dirancang untuk tumbuh jadi ERP multi-brand Azhan Grup
 - **Tipe**: Web app — backend API + beberapa frontend dashboard + microsite publik (menyusul)
-- **Tahap**: MVP / Fase 1 (lihat `fase-development-microsite-travel.md` untuk roadmap lengkap)
-- **Dokumen acuan**: `spesifikasi-teknis-sistem-umroh.md` (skema DB & kontrak API), `form-input-paket-umroh.md` (field form), `arsitektur-modular-erp-azhan-grup.md` (arah jangka panjang)
+- **Tahap**: MVP / Fase 1
+- **Dokumen acuan**: skema DB ada di `migrations/`, kontrak API di `README.md` dan handler `internal/*/handler.go`. Keputusan & temuan per modul tercatat di file `AUDIT-*.md` / `PERBAIKAN-*.md` di root repo.
 
 ---
 
@@ -70,7 +70,7 @@ Ada project TERPISAH yang konsumsi API ini: **`azhan-microsite`** (`C:\laragon\w
 
 ## Modul Booking & Jamaah — Catatan Skema Kritis
 
-Detail lengkap field & formula ada di `analisis-modul-booking-jamaah.md` — WAJIB baca sebelum sentuh modul ini. Poin paling penting:
+Catatan di bawah ini adalah acuan modul booking & jamaah. Keputusan kebijakan terbaru (kursi, PIC, infant, diskon, booking batal) ada di `AUDIT-JAMAAH-BOOKING-2026-09-30.md` — WAJIB baca sebelum sentuh modul ini. Poin paling penting:
 
 - **2 konsep "Add-On" BEDA, jangan tertukar**: `add_ons`+`schedule_add_ons` (master paket, TANPA harga) vs `booking_addons` (per transaksi booking, ADA `nominal`). Kalau prompt sebut "add-on" tanpa konteks jelas, TANYA dulu.
 - `bookings.harga_dasar` = snapshot harga kamar saat dibuat (bukan referensi live ke `schedules`)
@@ -120,7 +120,7 @@ Repo: github.com/MalikSae/erp-azhan
 
 ## Frontend — Design System
 
-**WAJIB baca `.agents/rules/design-system.md` dan `design-system.md` sebelum menyentuh kode UI apapun.** Ringkasan aturan paling penting: dilarang keras nilai Tailwind arbitrary/hardcode warna, selalu pakai token semantik (`primary-*`, `neutral-*`, dst) dan komponen dari `src/components/ui/`.
+**WAJIB baca `.agents/rules/design-system.md` sebelum menyentuh kode UI apapun.** Ringkasan aturan paling penting: dilarang keras nilai Tailwind arbitrary/hardcode warna, selalu pakai token semantik (`primary-*`, `neutral-*`, dst) dan komponen dari `src/components/ui/`.
 
 ---
 
