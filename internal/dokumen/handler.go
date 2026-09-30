@@ -136,6 +136,18 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "status tidak valid, harus approved/rejected")
 		return
 	}
+	req.RejectionReason = strings.TrimSpace(req.RejectionReason)
+	if req.Version <= 0 {
+		writeError(w, 400, "versi dokumen wajib diisi")
+		return
+	}
+	if req.Status == "rejected" && (req.RejectionReason == "" || len(req.RejectionReason) > 500) {
+		writeError(w, 400, "alasan penolakan wajib diisi, maksimal 500 karakter")
+		return
+	}
+	if req.Status == "approved" {
+		req.RejectionReason = ""
+	}
 
 	brandID := identity.GetBrandID(r.Context())
 
@@ -146,7 +158,7 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.repo.UpdateStatus(r.Context(), id, req.Status)
+	updated, err := h.repo.UpdateStatus(r.Context(), id, req.Status, req.Version, req.RejectionReason)
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -158,6 +170,8 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrVersionConflict):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	default:

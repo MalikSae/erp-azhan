@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +43,21 @@ func Tx(t *testing.T) (*sql.DB, *sql.Tx) {
 		_ = tx.Rollback()
 		_ = db.Close()
 	})
+	// Exercise the new checkout schema without applying a persistent migration
+	// or backfilling existing bookings. A connection-local temporary table shadows
+	// any real table and disappears when this fixture closes its connection.
+	migration, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "migrations", "065_booking_checkout.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(migration)
+	start := strings.Index(source, "CREATE TABLE")
+	end := strings.Index(source[start:], ";") + start
+	ddl := strings.Replace(source[start:end], "CREATE TABLE IF NOT EXISTS", "CREATE TEMPORARY TABLE", 1)
+	ddl = strings.Replace(ddl, ",\n FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE", "", 1)
+	if _, err = tx.ExecContext(context.Background(), ddl); err != nil {
+		t.Fatalf("temporary checkout fixture: %v", err)
+	}
 	return db, tx
 }
 
@@ -100,8 +116,8 @@ func uniq() string {
 
 // ScheduleOpts mengatur jadwal fixture. Nominal nil = tidak ikut program Syiar.
 type ScheduleOpts struct {
-	KomisiLangsung  *float64
-	BonusPembinaan  *float64
+	KomisiLangsung   *float64
+	BonusPembinaan   *float64
 	BerangkatTanggal string // YYYY-MM-DD
 }
 

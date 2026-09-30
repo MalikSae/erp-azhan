@@ -203,3 +203,9 @@ func (r *Repository) Delete(ctx context.Context, id uint64) error {
 	}
 	return nil
 }
+
+func (r *Repository) ValidateMinimalDP(ctx context.Context, id uint64, dp float64) (bool, error) {
+	var invalid int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schedules WHERE brand_id=? AND minimal_dp IS NULL AND LEAST(harga_quad,harga_triple,harga_double) < ?`, id, dp).Scan(&invalid)
+	return invalid == 0, err
+}

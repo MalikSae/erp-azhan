@@ -72,6 +72,10 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.MinimalDP < 0 {
+		writeError(w, http.StatusBadRequest, "minimal_dp tidak boleh negatif")
+		return
+	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "name wajib diisi")
@@ -180,6 +184,10 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.MinimalDP < 0 {
+		writeError(w, http.StatusBadRequest, "minimal_dp tidak boleh negatif")
+		return
+	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "name wajib diisi")
@@ -266,6 +274,15 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	validDP, dpErr := h.repo.ValidateMinimalDP(r.Context(), id, req.MinimalDP)
+	if dpErr != nil {
+		writeError(w, http.StatusInternalServerError, "gagal memeriksa DP paket")
+		return
+	}
+	if !validDP {
+		writeError(w, http.StatusBadRequest, "DP brand melebihi harga paket yang mengikuti DP brand")
+		return
+	}
 	b, err := h.repo.Update(r.Context(), id, req)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {

@@ -22,10 +22,10 @@ func TestClientIP(t *testing.T) {
 			want:    "198.51.100.8",
 		},
 		{
-			name:    "proxy loopback: CF-Connecting-IP dipakai",
+			name:    "proxy loopback: CF-Connecting-IP palsu diabaikan",
 			remote:  "127.0.0.1:4321",
 			headers: map[string]string{"CF-Connecting-IP": "203.0.113.10", "X-Forwarded-For": "198.51.100.20"},
-			want:    "203.0.113.10",
+			want:    "198.51.100.20",
 		},
 		{
 			name:    "proxy tepercaya: XFF dibaca dari kanan, entri kiri palsu diabaikan",

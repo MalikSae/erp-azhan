@@ -48,6 +48,7 @@ type AddOnRef struct {
 
 // Schedule merepresentasikan baris lengkap tabel schedules di database.
 type Schedule struct {
+	EffectiveMinimalDP       float64        `json:"effective_minimal_dp"`
 	ID                       int64          `json:"id"`
 	BrandID                  int64          `json:"brand_id"`
 	CategoryID               *int64         `json:"category_id"`
@@ -100,6 +101,7 @@ type Schedule struct {
 
 // PublicSchedule adalah response publik — field status TIDAK ditampilkan.
 type PublicSchedule struct {
+	EffectiveMinimalDP       float64        `json:"effective_minimal_dp"`
 	ID                       int64          `json:"id"`
 	BrandID                  int64          `json:"brand_id"`
 	CategoryID               *int64         `json:"category_id"`
@@ -160,6 +162,7 @@ func (s *Schedule) ToPublic() *PublicSchedule {
 	}
 
 	return &PublicSchedule{
+		EffectiveMinimalDP:       s.EffectiveMinimalDP,
 		ID:                       s.ID,
 		BrandID:                  s.BrandID,
 		CategoryID:               s.CategoryID,
@@ -234,6 +237,7 @@ type ScheduleListItem struct {
 
 // ScheduleInput adalah parameter yang sudah divalidasi, diteruskan ke repository.
 type ScheduleInput struct {
+	ExpectedSeatTotal        *int
 	BrandID                  int64
 	CategoryID               *int64
 	JadwalNama               string
@@ -310,45 +314,46 @@ func (ft *FlexibleTime) UnmarshalJSON(b []byte) error {
 // CreateScheduleRequest adalah payload untuk POST /api/admin/schedules.
 // SeatSisa pakai pointer untuk membedakan "tidak dikirim" (nil) vs "dikirim sebagai 0".
 type CreateScheduleRequest struct {
+	ExpectedSeatTotal        *int          `json:"expected_seat_total"`
 	BrandID                  *int64        `json:"brand_id"` // Opsional bagi admin biasa, Wajib bagi Super Admin
 	CategoryID               *int64        `json:"category_id"`
 	JadwalNama               string        `json:"jadwal_nama"`
 	Status                   string        `json:"status"`
 	IsPromo                  bool          `json:"is_promo"`
 	PromoUntil               *FlexibleTime `json:"promo_until"`
-	IsTicketConfirmed        bool       `json:"is_ticket_confirmed"`
-	IsDirectFlight           bool       `json:"is_direct_flight"`
-	SeatTotal                int        `json:"seat_total"`
-	SeatSisa                 *int       `json:"seat_sisa"`
-	MaskapaiID               int64      `json:"maskapai_id"`
-	BerangkatTanggal         string     `json:"berangkat_tanggal"`
-	BerangkatJam             string     `json:"berangkat_jam"`
-	BerangkatKodePenerbangan string     `json:"berangkat_kode_penerbangan"`
-	BerangkatBandaraAsal     string     `json:"berangkat_bandara_asal"`
-	BerangkatBandaraTujuan   string     `json:"berangkat_bandara_tujuan"`
-	PulangTanggal            string     `json:"pulang_tanggal"`
-	PulangJam                string     `json:"pulang_jam"`
-	PulangKodePenerbangan    string     `json:"pulang_kode_penerbangan"`
-	PulangBandaraAsal        string     `json:"pulang_bandara_asal"`
-	PulangBandaraTujuan      string     `json:"pulang_bandara_tujuan"`
-	TransitBandara           string     `json:"transit_bandara"`
-	HotelMekkahID            int64      `json:"hotel_mekkah_id"`
-	HotelMadinahID           int64      `json:"hotel_madinah_id"`
-	TransitHotelIDs          []int64    `json:"transit_hotel_ids"`
-	HargaQuad                float64    `json:"harga_quad"`
-	HargaTriple              float64    `json:"harga_triple"`
-	HargaDouble              float64    `json:"harga_double"`
-	HargaInfant              *float64   `json:"harga_infant"`
-	HargaCoret               *float64   `json:"harga_coret"`
-	MinimalDP                *float64   `json:"minimal_dp"`
-	NominalKomisiLangsung    *float64   `json:"nominal_komisi_langsung"`
-	NominalBonusPembinaan    *float64   `json:"nominal_bonus_pembinaan"`
-	ItineraryID              *int64     `json:"itinerary_id"`
-	IncludeItems             []string   `json:"include_items"`
-	ExcludeItems             []string   `json:"exclude_items"`
-	AddOnIDs                 []int64    `json:"add_on_ids"`
-	BrosurURL                string     `json:"brosur_url"`
-	BrosurThumbURL           string     `json:"brosur_thumb_url"`
+	IsTicketConfirmed        bool          `json:"is_ticket_confirmed"`
+	IsDirectFlight           bool          `json:"is_direct_flight"`
+	SeatTotal                int           `json:"seat_total"`
+	SeatSisa                 *int          `json:"seat_sisa"`
+	MaskapaiID               int64         `json:"maskapai_id"`
+	BerangkatTanggal         string        `json:"berangkat_tanggal"`
+	BerangkatJam             string        `json:"berangkat_jam"`
+	BerangkatKodePenerbangan string        `json:"berangkat_kode_penerbangan"`
+	BerangkatBandaraAsal     string        `json:"berangkat_bandara_asal"`
+	BerangkatBandaraTujuan   string        `json:"berangkat_bandara_tujuan"`
+	PulangTanggal            string        `json:"pulang_tanggal"`
+	PulangJam                string        `json:"pulang_jam"`
+	PulangKodePenerbangan    string        `json:"pulang_kode_penerbangan"`
+	PulangBandaraAsal        string        `json:"pulang_bandara_asal"`
+	PulangBandaraTujuan      string        `json:"pulang_bandara_tujuan"`
+	TransitBandara           string        `json:"transit_bandara"`
+	HotelMekkahID            int64         `json:"hotel_mekkah_id"`
+	HotelMadinahID           int64         `json:"hotel_madinah_id"`
+	TransitHotelIDs          []int64       `json:"transit_hotel_ids"`
+	HargaQuad                float64       `json:"harga_quad"`
+	HargaTriple              float64       `json:"harga_triple"`
+	HargaDouble              float64       `json:"harga_double"`
+	HargaInfant              *float64      `json:"harga_infant"`
+	HargaCoret               *float64      `json:"harga_coret"`
+	MinimalDP                *float64      `json:"minimal_dp"`
+	NominalKomisiLangsung    *float64      `json:"nominal_komisi_langsung"`
+	NominalBonusPembinaan    *float64      `json:"nominal_bonus_pembinaan"`
+	ItineraryID              *int64        `json:"itinerary_id"`
+	IncludeItems             []string      `json:"include_items"`
+	ExcludeItems             []string      `json:"exclude_items"`
+	AddOnIDs                 []int64       `json:"add_on_ids"`
+	BrosurURL                string        `json:"brosur_url"`
+	BrosurThumbURL           string        `json:"brosur_thumb_url"`
 }
 
 // UpdateScheduleRequest memiliki struktur yang sama persis dengan Create.
@@ -361,5 +366,7 @@ type UpdateStatusRequest struct {
 
 // UpdateSeatRequest adalah payload untuk PUT /api/admin/schedules/{id}/seat.
 type UpdateSeatRequest struct {
-	SeatSisa int `json:"seat_sisa"`
+	ExpectedSeatSisa *int   `json:"expected_seat_sisa"`
+	Reason           string `json:"reason"`
+	SeatSisa         int    `json:"seat_sisa"`
 }

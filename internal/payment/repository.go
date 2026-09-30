@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/komisi"
+	"erp-azhan/api/internal/shared"
 )
 
 // Sentinel errors
@@ -16,6 +17,8 @@ var (
 	ErrCannotDelete    = errors.New("tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
 	ErrInvalidStatus   = errors.New("status tidak valid")
 	ErrSeatUnavailable = errors.New("kursi tidak mencukupi untuk mengonfirmasi pembayaran")
+	ErrOverpayment     = errors.New("pembayaran melebihi sisa tagihan; periksa kemungkinan transfer ganda atau proses pengembalian dana")
+	ErrBookingClosed   = errors.New("reservasi tidak aktif; hubungi admin untuk memastikan kursi sebelum pembayaran")
 )
 
 // Repository mengelola semua query ke tabel payments.
@@ -173,9 +176,18 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 	// Validasi nilai pembayaran tidak boleh lebih besar dari sisa tagihan
 	var totalHarga sql.NullFloat64
 	var totalPaid float64
-	err = tx.QueryRowContext(ctx, `SELECT total_harga FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&totalHarga)
+	var bookingStatus string
+	var blocked bool
+	var expires sql.NullTime
+	err = tx.QueryRowContext(ctx, `SELECT total_harga,status,is_seat_blocked,seat_hold_expires_at FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&totalHarga, &bookingStatus, &blocked, &expires)
 	if err != nil {
 		return nil, fmt.Errorf("payment.Create check booking: %w", err)
+	}
+	if bookingStatus == "batal" || bookingStatus == "draft" {
+		return nil, ErrBookingClosed
+	}
+	if req.Source == "portal" && (!blocked || (expires.Valid && expires.Time.Before(time.Now()))) {
+		return nil, ErrBookingClosed
 	}
 	err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id=? AND status='confirmed'`, bookingID).Scan(&totalPaid)
 	if err != nil {
@@ -187,7 +199,7 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 			sisaTagihan = 0
 		}
 		if req.Jumlah > sisaTagihan {
-			return nil, fmt.Errorf("jumlah pembayaran (Rp %.0f) melebihi sisa tagihan (Rp %.0f)", req.Jumlah, sisaTagihan)
+			return nil, ErrOverpayment
 		}
 	}
 
@@ -232,6 +244,11 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 	if status == "confirmed" {
 		if err := r.syncBookingStatusTx(ctx, tx, bookingID); err != nil {
 			return nil, fmt.Errorf("payment.Create sync booking: %w", err)
+		}
+	}
+	if status == "pending" && expires.Valid && expires.Time.After(time.Now()) {
+		if err := extendPendingReviewTx(ctx, tx, bookingID); err != nil {
+			return nil, err
 		}
 	}
 
@@ -284,6 +301,32 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 	if err != nil {
 		return nil, fmt.Errorf("payment.UpdateStatus get booking_id: %w", err)
 	}
+	// Lock the booking before the payment: every payment writer follows this order.
+	var bookingStatus string
+	var total float64
+	if err = tx.QueryRowContext(ctx, `SELECT status,COALESCE(total_harga,0) FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&bookingStatus, &total); err != nil {
+		return nil, err
+	}
+	if bookingStatus == "batal" || bookingStatus == "draft" {
+		return nil, ErrBookingClosed
+	}
+	var amount float64
+	var oldStatus string
+	if err = tx.QueryRowContext(ctx, `SELECT jumlah,status FROM payments WHERE id=? FOR UPDATE`, id).Scan(&amount, &oldStatus); err != nil {
+		return nil, err
+	}
+	// A concurrent verifier may have finished after the HTTP handler read pending.
+	if oldStatus != "pending" {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return r.GetByID(ctx, id, nil)
+	}
+	if newStatus == "confirmed" {
+		if err := checkConfirmationBalanceTx(ctx, tx, bookingID, id, amount, total); err != nil {
+			return nil, err
+		}
+	}
 
 	_, err = tx.ExecContext(ctx, `UPDATE payments SET status=?,rejection_reason=?,verified_by=?,verified_at=NOW() WHERE id=?`, newStatus, rejectionReason, verifiedBy, id)
 	if err != nil {
@@ -301,7 +344,39 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 	return r.GetByID(ctx, id, nil)
 }
 
+// Caller holds the booking lock, so concurrent confirmations cannot share a balance.
+func checkConfirmationBalanceTx(ctx context.Context, tx *sql.Tx, bookingID, paymentID int64, amount, total float64) error {
+	var otherPaid float64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status='confirmed' AND id<>?`, bookingID, paymentID).Scan(&otherPaid); err != nil {
+		return err
+	}
+	if amount+otherPaid > total {
+		return ErrOverpayment
+	}
+	return nil
+}
+
+func extendPendingReviewTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	result, err := tx.ExecContext(ctx, `UPDATE booking_checkout SET review_extended=TRUE WHERE booking_id=? AND review_extended=FALSE AND original_expires_at>=NOW()`, bookingID)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed > 0 {
+		_, err = tx.ExecContext(ctx, `UPDATE bookings b JOIN booking_checkout c ON c.booking_id=b.id SET b.seat_hold_expires_at=DATE_ADD(c.original_expires_at,INTERVAL 24 HOUR) WHERE b.id=?`, bookingID)
+	}
+	return err
+}
+
 func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	return SyncBookingStatusTx(ctx, tx, bookingID)
+}
+
+// Shared with price recalculation so payment and booking edits use one state machine.
+func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	var totalHarga sql.NullFloat64
 	var currentStatus string
 	var scheduleID int64
@@ -314,7 +389,7 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 	}
 
 	// Jangan ubah jika booking sudah dibatalkan
-	if currentStatus == "batal" {
+	if currentStatus == "batal" || currentStatus == "draft" {
 		return nil
 	}
 
@@ -325,68 +400,21 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 		return err
 	}
 
-	// Ambil konfigurasi minimal DP dari paket (schedule) atau fallback ke brand
-	var schedMinDP sql.NullFloat64
-	var brandMinDP float64
-	err = tx.QueryRowContext(ctx, `
-		SELECT s.minimal_dp, b.minimal_dp
-		FROM schedules s
-		JOIN brands b ON b.id = s.brand_id
-		WHERE s.id = ?`, scheduleID).Scan(&schedMinDP, &brandMinDP)
-	if err != nil {
-		return err
-	}
-
-	dpPerPax := brandMinDP
-	if schedMinDP.Valid && schedMinDP.Float64 > 0 {
-		dpPerPax = schedMinDP.Float64
-	}
-
-	var activeRegularPax int
-	_ = tx.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM booking_pax
-		WHERE booking_id=? AND counts_for_seat=TRUE AND pax_status='aktif'`, bookingID,
-	).Scan(&activeRegularPax)
-	if activeRegularPax <= 0 {
-		if seatCount > 0 {
-			activeRegularPax = seatCount
-		} else {
-			activeRegularPax = 1
-		}
-	}
-
-	requiredDP := dpPerPax * float64(activeRegularPax)
-
-	targetStatus := currentStatus
+	// Snapshot terms remain stable when the package or brand changes.
 	targetHarga := 0.0
 	if totalHarga.Valid {
 		targetHarga = totalHarga.Float64
 	}
-
+	requiredDP, err := shared.RequiredBookingDP(ctx, tx, bookingID, targetHarga)
+	if err != nil {
+		return err
+	}
+	targetStatus := "baru"
 	if targetHarga > 0 && totalPaid >= targetHarga {
 		targetStatus = "lunas"
-	} else if requiredDP > 0 {
-		if totalPaid >= requiredDP {
-			if currentStatus == "baru" || currentStatus == "lunas" {
-				targetStatus = "dp"
-			}
-		} else {
-			// Pembayaran belum mencapai ambang batas akumulasi minimal DP:
-			// status booking tetap 'baru' dan seat belum terkunci permanen
-			if currentStatus == "lunas" {
-				targetStatus = "dp"
-			} else if currentStatus == "dp" && !isSeatBlocked {
-				targetStatus = "baru"
-			}
-		}
-	} else if totalPaid > 0 {
-		if currentStatus == "baru" || currentStatus == "lunas" {
-			targetStatus = "dp"
-		}
-	} else if totalPaid == 0 && currentStatus == "lunas" {
+	} else if totalPaid > 0 && totalPaid >= requiredDP {
 		targetStatus = "dp"
 	}
-
 	if targetStatus != currentStatus {
 		if currentStatus == "baru" && (targetStatus == "dp" || targetStatus == "lunas") && !isSeatBlocked {
 			var activeRegularPax int
@@ -413,7 +441,7 @@ func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookin
 		}
 		_, err = tx.ExecContext(ctx,
 			`UPDATE bookings SET status=?,is_seat_blocked=IF(? IN ('dp','lunas'),TRUE,is_seat_blocked),
-			 seat_hold_expires_at=IF(? IN ('dp','lunas'),NULL,seat_hold_expires_at),
+			 seat_hold_expires_at=IF(? IN ('dp','lunas'),NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
 			 seat_hold_key=IF(? IN ('dp','lunas'),NULL,seat_hold_key) WHERE id=?`,
 			targetStatus, targetStatus, targetStatus, targetStatus, bookingID)
 		if err != nil {

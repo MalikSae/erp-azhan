@@ -18,8 +18,8 @@ import (
 	"github.com/joho/godotenv"
 
 	"erp-azhan/api/internal/addon"
-	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/adminuser"
+	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/airline"
 	"erp-azhan/api/internal/airport"
 	"erp-azhan/api/internal/bankaccount"
@@ -139,7 +139,7 @@ func main() {
 	bankAccountRepo := bankaccount.NewRepository(db)
 	bankAccountHandler := bankaccount.NewHandler(bankAccountRepo)
 
-	mediaHandler := media.NewHandler()
+	mediaHandler := media.NewHandler(db)
 
 	jamaahRepo := jamaah.NewRepository(db)
 	jamaahHandler := jamaah.NewHandler(jamaahRepo)
@@ -217,13 +217,18 @@ func main() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(identity.RequirePortalAuth)
+			r.Use(identity.RequirePortalSession(db))
+			r.Post("/logout", identity.PortalLogout(db))
 			r.Get("/me", portalHandler.GetMe)
+			r.Get("/cashback", portalHandler.GetCashback)
 			r.Get("/bookings", portalHandler.ListBookings)
 			r.Get("/bookings/{id}", portalHandler.GetBookingByID)
 			r.Get("/bookings/{id}/payments", portalHandler.ListPayments)
+			r.Get("/bookings/{id}/invoice-link", selfBookingHandler.InvoiceLink)
 			r.Get("/bank-accounts", portalHandler.ListBankAccounts)
 			r.Post("/bookings/{id}/payments", portalHandler.CreatePayment)
 			r.Get("/dokumen", portalHandler.ListDokumen)
+			r.Get("/dokumen/{id}/file", mediaHandler.ServeDocument)
 			r.Post("/dokumen", portalHandler.UploadDokumen)
 			r.Post("/media/upload", mediaHandler.UploadPortalMedia)
 

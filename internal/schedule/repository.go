@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -62,6 +63,7 @@ const selectFull = `
 		s.harga_infant,
 		s.harga_coret,
 		s.minimal_dp,
+		COALESCE(s.minimal_dp, br.minimal_dp, 0),
 		s.nominal_komisi_langsung,
 		s.nominal_bonus_pembinaan,
 		s.itinerary_id,
@@ -78,6 +80,7 @@ const selectFull = `
 		s.created_at,
 		s.updated_at
 	FROM schedules s
+	JOIN brands br ON br.id = s.brand_id
 	LEFT JOIN package_categories cat ON cat.id = s.category_id
 	LEFT JOIN airlines a ON a.id = s.maskapai_id
 	LEFT JOIN hotels hm ON hm.id = s.hotel_mekkah_id
@@ -319,6 +322,10 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 	}
 	defer tx.Rollback()
 
+	if err := prepareScheduleUpdate(ctx, tx, id, &inp, brandID, finalBrandID); err != nil {
+		return nil, err
+	}
+
 	includeJSON, _ := json.Marshal(inp.IncludeItems)
 	excludeJSON, _ := json.Marshal(inp.ExcludeItems)
 
@@ -413,15 +420,42 @@ func (r *Repository) GetSeatTotal(ctx context.Context, id int64, brandID *int64)
 }
 
 // UpdateSeat mengupdate kolom seat_sisa saja (tanpa validasi, sudah dilakukan handler).
-func (r *Repository) UpdateSeat(ctx context.Context, id int64, seatSisa int) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, seatSisa, id)
-	if err != nil {
-		return fmt.Errorf("schedule.UpdateSeat: %w", err)
+func (r *Repository) UpdateSeat(ctx context.Context, id int64, seatSisa int, expected *int, brandID *int64, reason string) error {
+	if expected == nil || strings.TrimSpace(reason) == "" {
+		return fmt.Errorf("%w: sisa kursi sebelumnya dan alasan penyesuaian wajib diisi", ErrConflict)
 	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var total, current int
+	var owner int64
+	if err := tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &current, &owner); err != nil {
+		return err
+	}
+	if brandID != nil && owner != *brandID {
+		return ErrNotFound
+	}
+	if current != *expected {
+		return fmt.Errorf("%w: kursi berubah, muat ulang paket", ErrConflict)
+	}
+	var allocated int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(seat_count),0) FROM bookings WHERE schedule_id=? AND is_seat_blocked=1 AND status <> 'batal'`, id).Scan(&allocated); err != nil {
+		return err
+	}
+	if seatSisa < 0 || seatSisa > total-allocated {
+		return fmt.Errorf("%w: sisa kursi melampaui kapasitas setelah alokasi booking", ErrConflict)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, seatSisa, id); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	log.Printf("[AUDIT] schedule_seat_adjustment id=%d brand=%d before=%d after=%d reason=%q", id, owner, current, seatSisa, reason)
 	return nil
 }
-
-// ─── Delete ───────────────────────────────────────────────────────────────────
 
 // Delete menghapus schedule berdasarkan id.
 func (r *Repository) Delete(ctx context.Context, id int64, brandID *int64) error {
@@ -463,9 +497,9 @@ func (r *Repository) AddOnExists(ctx context.Context, id int64) (bool, error) {
 }
 
 // CategoryExists memeriksa apakah category dengan id tersebut ada.
-func (r *Repository) CategoryExists(ctx context.Context, id int64) (bool, error) {
+func (r *Repository) CategoryAvailable(ctx context.Context, id int64, brandID int64) (bool, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories WHERE id=?`, id).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories c WHERE c.id=? AND (NOT EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id) OR EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id AND cb.brand_id=?))`, id, brandID).Scan(&count)
 	return count > 0, err
 }
 
@@ -620,7 +654,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		&s.PulangBandaraAsal, &s.PulangBandaraTujuan, &s.TransitBandara,
 		&hotelMekkahID, &hmName, &hmStar, &hmDist, &hmPhoto, &hmVideo,
 		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist, &hmdPhoto, &hmdVideo,
-		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret, &minimalDP,
+		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret, &minimalDP, &s.EffectiveMinimalDP,
 		&komisiLangsung, &bonusPembinaan,
 		&itineraryID, &addOnsJSON, &includeJSON, &excludeJSON,
 		&s.BrosurURL, &s.BrosurThumbURL,
@@ -750,4 +784,40 @@ func (r *Repository) IncrementViews(ctx context.Context, id int64) error {
 	query := "UPDATE schedules SET views = views + 1 WHERE id = ?"
 	_, err := r.db.ExecContext(ctx, query, id)
 	return err
+}
+
+func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *ScheduleInput, brandID *int64, finalBrandID int64) error {
+	var oldTotal, oldRemaining int
+	var oldBrand int64
+	if err := tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&oldTotal, &oldRemaining, &oldBrand); err != nil {
+		return err
+	}
+	if brandID != nil && oldBrand != *brandID {
+		return ErrNotFound
+	}
+	if inp.ExpectedSeatTotal != nil && *inp.ExpectedSeatTotal != oldTotal {
+		return fmt.Errorf("%w: kapasitas berubah, muat ulang paket", ErrConflict)
+	}
+	if finalBrandID != oldBrand {
+		var count int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id=?`, id).Scan(&count); err != nil {
+			return err
+		}
+		if count > 0 {
+			return fmt.Errorf("%w: brand paket yang memiliki booking tidak dapat diubah", ErrConflict)
+		}
+	}
+	var err error
+	inp.SeatSisa, err = remainingAfterCapacityChange(oldTotal, oldRemaining, inp.SeatTotal)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) BrandMinimalDP(ctx context.Context, id int64) (float64, error) {
+	var dp float64
+	err := r.db.QueryRowContext(ctx, `SELECT minimal_dp FROM brands WHERE id=?`, id).Scan(&dp)
+	return dp, err
 }

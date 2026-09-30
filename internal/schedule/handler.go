@@ -98,7 +98,12 @@ func (h *Handler) GetSchedulePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s, err := h.repo.GetByID(r.Context(), id, nil)
+	brandID, err := strconv.ParseInt(r.URL.Query().Get("brand"), 10, 64)
+	if err != nil || brandID <= 0 {
+		writeError(w, http.StatusBadRequest, "parameter brand wajib diisi dan harus valid")
+		return
+	}
+	s, err := h.repo.GetByID(r.Context(), id, &brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -129,6 +134,9 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if inp.Status == "" {
+		inp.Status = "draft"
+	}
 	s, err := h.repo.Create(r.Context(), *inp)
 	if err != nil {
 		handleRepoError(w, err)
@@ -258,7 +266,7 @@ func (h *Handler) UpdateScheduleSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.repo.UpdateSeat(r.Context(), id, req.SeatSisa); err != nil {
+	if err := h.repo.UpdateSeat(r.Context(), id, req.SeatSisa, req.ExpectedSeatSisa, brandID, req.Reason); err != nil {
 		handleRepoError(w, err)
 		return
 	}
@@ -451,6 +459,20 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
+	effectiveDP := req.MinimalDP
+	if effectiveDP == nil {
+		value, err := h.repo.BrandMinimalDP(ctx, finalBrandID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "brand_id tidak valid")
+			return nil, false
+		}
+		effectiveDP = &value
+	}
+	if err := validateDP(effectiveDP, req.HargaQuad, req.HargaTriple, req.HargaDouble); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return nil, false
+	}
+
 	// Gate 14.2: Validasi harga_infant (opsional, jika diisi harus >= 0)
 	var finalHargaInfant *float64
 	if req.HargaInfant != nil {
@@ -458,9 +480,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 			writeError(w, http.StatusBadRequest, "harga_infant tidak boleh kurang dari 0")
 			return nil, false
 		}
-		if *req.HargaInfant > 0 {
-			finalHargaInfant = req.HargaInfant
-		}
+		finalHargaInfant = req.HargaInfant
 	}
 
 	// Gate 14.3: Nominal komisi Syiar (opsional; kosong = jadwal tidak ikut program)
@@ -498,7 +518,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 15.2: category_id opsional, jika dikirim harus ada di DB
 	if req.CategoryID != nil && *req.CategoryID > 0 {
-		if exists, err := h.repo.CategoryExists(ctx, *req.CategoryID); err != nil {
+		if exists, err := h.repo.CategoryAvailable(ctx, *req.CategoryID, finalBrandID); err != nil {
 			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 			return nil, false
 		} else if !exists {
@@ -552,6 +572,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	}
 
 	return &ScheduleInput{
+		ExpectedSeatTotal:        req.ExpectedSeatTotal,
 		BrandID:                  finalBrandID,
 		CategoryID:               req.CategoryID,
 		JadwalNama:               strings.TrimSpace(req.JadwalNama),
@@ -598,6 +619,8 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrConflict):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	default:

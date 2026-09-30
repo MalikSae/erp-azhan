@@ -81,10 +81,8 @@ func clientIP(r *http.Request, trusted []*net.IPNet) string {
 		return remoteIP.String()
 	}
 
-	// Cloudflare menimpa CF-Connecting-IP dengan IP pengunjung sebenarnya.
-	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))); ip != nil {
-		return ip.String()
-	}
+	// Only the canonical proxy chain is trusted. CF headers arriving through
+	// a general reverse proxy can originate from an arbitrary client.
 
 	// X-Forwarded-For dibaca dari kanan: entri paling kanan ditambahkan oleh
 	// proxy terdekat. Lewati proxy tepercaya; entri pertama yang tidak tepercaya

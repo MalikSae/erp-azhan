@@ -228,7 +228,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrCannotDelete):
 		writeError(w, http.StatusConflict, "tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
-	case errors.Is(err, ErrSeatUnavailable):
+	case errors.Is(err, ErrSeatUnavailable), errors.Is(err, ErrOverpayment), errors.Is(err, ErrBookingClosed):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("terjadi kesalahan internal: %v", err))

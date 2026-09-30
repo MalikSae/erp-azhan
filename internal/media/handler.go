@@ -1,7 +1,9 @@
 package media
 
 import (
+	"database/sql"
 	"encoding/json"
+	"erp-azhan/api/internal/identity"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,7 +19,7 @@ import (
 var validCategoryRegex = regexp.MustCompile(`^[a-zA-Z0-9\-]+$`)
 
 // Handler struct
-type Handler struct{}
+type Handler struct{ db *sql.DB }
 
 var publicCategories = map[string]struct{}{
 	"brand-logos":     {},
@@ -35,8 +37,8 @@ var protectedCategories = map[string]struct{}{
 }
 
 // NewHandler creates a new media handler
-func NewHandler() *Handler {
-	return &Handler{}
+func NewHandler(db *sql.DB) *Handler {
+	return &Handler{db: db}
 }
 
 // ServePublic serves only non-sensitive branding media. It deliberately
@@ -61,6 +63,12 @@ func (h *Handler) ServeProtected(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !h.canReadAdminFile(r, category, filename) {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	path := filepath.Join(".", "uploads", category, filename)
 	if info, err := os.Stat(path); err != nil || info.IsDir() {
 		http.NotFound(w, r)
@@ -172,6 +180,25 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	publicURL := fmt.Sprintf("/uploads/%s/%s", category, newFileName)
 	if _, ok := protectedCategories[category]; ok {
 		publicURL = fmt.Sprintf("/api/admin/media/%s/%s", category, newFileName)
+		var brandID any = identity.GetBrandID(r.Context())
+		var jamaahID, adminID any
+		if id := identity.GetPortalJamaahID(r.Context()); id > 0 {
+			jamaahID = id
+			var brand int64
+			if err := h.db.QueryRowContext(r.Context(), `SELECT brand_id FROM jamaah WHERE id=?`, id).Scan(&brand); err != nil {
+				_ = os.Remove(finalPath)
+				writeError(w, 500, "gagal memeriksa pemilik berkas")
+				return
+			}
+			brandID = brand
+		} else {
+			adminID = identity.GetAdminUserID(r.Context())
+		}
+		if _, err := h.db.ExecContext(r.Context(), `INSERT INTO media_uploads(path,brand_id,jamaah_id,admin_user_id) VALUES(?,?,?,?)`, publicURL, brandID, jamaahID, adminID); err != nil {
+			_ = os.Remove(finalPath)
+			writeError(w, 500, "gagal mencatat pemilik berkas")
+			return
+		}
 	}
 	response := map[string]string{"url": publicURL}
 
