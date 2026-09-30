@@ -1,0 +1,68 @@
+
+> azhan-microsite@0.1.0 build
+> next build
+
+▲ Next.js 16.3.1 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.mjs took 234ms
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 6.5s
+  Running TypeScript ...
+  Finished TypeScript in 52ms ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/32) ...
+  Generating static pages using 7 workers (8/32) 
+  Generating static pages using 7 workers (16/32) 
+  Generating static pages using 7 workers (24/32) 
+✓ Generating static pages using 7 workers (32/32) in 1648ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /api/public/agen/daftar
+├ ƒ /api/public/aktivasi
+├ ƒ /api/public/aktivasi/check
+├ ƒ /api/public/aktivasi/verify-dob
+├ ƒ /api/public/book
+├ ƒ /api/public/jamaah/check
+├ ƒ /brand-icon
+├ ƒ /brand-not-found
+├ ƒ /compare
+├ ƒ /daftar-agen
+├ ƒ /design-system
+├ ƒ /invoice/[code]
+├ ƒ /ketentuan-booking
+├ ƒ /manifest.webmanifest
+├ ƒ /paket
+├ ƒ /paket/[id]
+├ ƒ /paket/[id]/book
+├ ƒ /portal
+├ ƒ /portal/aktivasi
+├ ƒ /portal/daftar-agen
+├ ƒ /portal/login
+├ ƒ /portal/pembayaran
+├ ƒ /portal/perjalanan
+├ ƒ /portal/profil
+├ ƒ /portal/syiar
+├ ƒ /portal/syiar/booking-baru
+├ ƒ /portal/syiar/kelengkapan-agen
+├ ƒ /portal/syiar/pembayaran-agen
+├ ƒ /portal/syiar/pencairan
+├ ƒ /portal/syiar/riwayat-komisi
+├ ƒ /portal/syiar/syarat-ketentuan
+├ ƒ /robots.txt
+└ ƒ /sitemap.xml
+
+
+ƒ Proxy (Middleware)
+
+ƒ  (Dynamic)  server-rendered on demand
+
