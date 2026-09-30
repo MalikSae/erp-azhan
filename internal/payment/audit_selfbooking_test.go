@@ -98,3 +98,25 @@ func TestAuditSelfBookingDPRemainsAfterPaymentRemoved(t *testing.T) {
 		t.Fatalf("missing renewed hold: %v", err)
 	}
 }
+
+// JB-03: booking yang sudah punya pembayaran terkonfirmasi lalu turun ke 'baru'
+// tidak boleh mendapat hold 24 jam, agar worker tidak melepas kursinya.
+func TestSyncPaidDowngradeKeepsSeatWithoutExpiry(t *testing.T) {
+	db, tx := testdb.Tx(t)
+	b := testdb.NewBooking(t, tx, testdb.BookingOpts{Status: "dp", TotalHarga: 20000000, MinimalDP: 5000000, Blocked: true})
+	testdb.AddPayment(t, tx, b.ID, 6000000, "confirmed")
+	// Minimal DP naik di atas jumlah yang dibayar -> status turun ke baru.
+	testdb.Exec(t, tx, `UPDATE schedules SET minimal_dp=8000000 WHERE id=?`, b.ScheduleID)
+	if err := NewRepository(db).syncBookingStatusTx(context.Background(), tx, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	var blocked bool
+	var expiry sql.NullTime
+	if err := tx.QueryRow(`SELECT status,is_seat_blocked,seat_hold_expires_at FROM bookings WHERE id=?`, b.ID).Scan(&status, &blocked, &expiry); err != nil {
+		t.Fatal(err)
+	}
+	if status != "baru" || !blocked || expiry.Valid {
+		t.Fatalf("status=%s blocked=%v expiry=%v, want baru/true/NULL", status, blocked, expiry)
+	}
+}

@@ -311,6 +311,32 @@ func isInfantEligible(tanggalLahir *string, berangkatTanggal *string) (bool, err
 	return true, nil // Berusia di bawah 2 tahun
 }
 
+// ensureJamaahFreeOnSchedule menolak jamaah yang masih aktif di booking lain
+// (bukan batal/draft) pada jadwal yang sama. excludeBookingID dipakai saat
+// finalisasi agar draft itu sendiri tidak terhitung. Kondisi sama dengan
+// pemeriksaan duplikasi self-booking.
+func ensureJamaahFreeOnSchedule(ctx context.Context, tx *sql.Tx, scheduleID, excludeBookingID int64, jamaahIDs []int64) error {
+	for _, jamaahID := range jamaahIDs {
+		var namaLengkap, idBooking string
+		err := tx.QueryRowContext(ctx, `
+			SELECT j.nama_lengkap, COALESCE(b.id_booking, '')
+			FROM booking_pax bp
+			JOIN bookings b ON b.id = bp.booking_id
+			JOIN jamaah j ON j.id = bp.jamaah_id
+			WHERE b.schedule_id = ? AND bp.jamaah_id = ? AND bp.pax_status = 'aktif'
+			  AND b.status NOT IN ('batal', 'draft') AND b.id <> ?
+			LIMIT 1`, scheduleID, jamaahID, excludeBookingID).Scan(&namaLengkap, &idBooking)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("booking.ensureJamaahFreeOnSchedule: %w", err)
+		}
+		return fmt.Errorf("Jamaah %s sudah terdaftar pada booking %s di jadwal ini", namaLengkap, idBooking)
+	}
+	return nil
+}
+
 // GenerateIDBooking generates a 6-character unique booking ID: {kode_brand (2 chars)}{4 random chars from charset}.
 func (r *Repository) GenerateIDBooking(ctx context.Context, tx *sql.Tx, brandID int64) (string, error) {
 	var kodeBrand sql.NullString
@@ -409,6 +435,16 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 		return nil, fmt.Errorf("booking.Create find schedule: %w", err)
 	}
 
+	// Jamaah tidak boleh aktif di booking lain pada jadwal yang sama (JB-04).
+	// Dicek setelah baris schedule terkunci agar booking paralel ikut berurutan.
+	paxJamaahIDs := make([]int64, 0, len(req.Pax))
+	for _, p := range req.Pax {
+		paxJamaahIDs = append(paxJamaahIDs, p.JamaahID)
+	}
+	if err := ensureJamaahFreeOnSchedule(ctx, tx, req.ScheduleID, 0, paxJamaahIDs); err != nil {
+		return nil, err
+	}
+
 	// Validasi PIC bukan infant
 	picID := req.PicJamaahID
 	if picID == 0 && len(req.Pax) > 0 {
@@ -457,10 +493,12 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 	// 6. Insert header ke bookings
 	isSeatBlocked := regularCount > 0
 
-	const qBooking = `INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, status, is_seat_blocked, created_by)
-		VALUES (?, ?, ?, 'baru', ?, ?)`
+	// seat_count = jumlah pax reguler (invariant yang sama dengan self-booking & CRM);
+	// dipakai blokir ulang, worker hold, dan penyesuaian kuota.
+	const qBooking = `INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, created_by)
+		VALUES (?, ?, ?, ?, 'baru', ?, ?)`
 
-	res, err := tx.ExecContext(ctx, qBooking, idBooking, req.ScheduleID, picID, isSeatBlocked, createdBy)
+	res, err := tx.ExecContext(ctx, qBooking, idBooking, req.ScheduleID, picID, regularCount, isSeatBlocked, createdBy)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Create insert header: %w", err)
 	}
@@ -912,6 +950,14 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 		return nil, fmt.Errorf("booking.Finalize lock schedule: %w", err)
 	}
 
+	finalizeJamaahIDs := make([]int64, 0, len(seenFinalizeJamaah))
+	for id := range seenFinalizeJamaah {
+		finalizeJamaahIDs = append(finalizeJamaahIDs, id)
+	}
+	if err := ensureJamaahFreeOnSchedule(ctx, tx, scheduleID, bookingID, finalizeJamaahIDs); err != nil {
+		return nil, err
+	}
+
 	// 2. Cek kuota kursi
 	if seatSisa < activeRegularPax {
 		return nil, &ErrSeatNotEnough{
@@ -933,8 +979,8 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 
 	// 5. Update status ke 'baru' dan is_seat_blocked = true
 	_, err = tx.ExecContext(ctx, `
-		UPDATE bookings SET id_booking = ?, status = 'baru', is_seat_blocked = TRUE WHERE id = ?`,
-		idBooking, bookingID)
+		UPDATE bookings SET id_booking = ?, status = 'baru', is_seat_blocked = TRUE, seat_count = ? WHERE id = ?`,
+		idBooking, activeRegularPax, bookingID)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Finalize update booking: %w", err)
 	}
@@ -1118,6 +1164,16 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 		if err != nil {
 			return nil, fmt.Errorf("booking.CancelPax cancel booking: %w", err)
 		}
+	}
+
+	// 5.5 Jaga invariant seat_count = pax reguler aktif, agar blokir ulang dan
+	// worker hold memakai jumlah kursi yang benar setelah pax dibatalkan.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE bookings SET seat_count = (
+			SELECT COUNT(*) FROM booking_pax
+			WHERE booking_id = ? AND counts_for_seat = TRUE AND pax_status = 'aktif'
+		) WHERE id = ?`, bookingID, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.CancelPax sync seat_count: %w", err)
 	}
 
 	// 6. Recalculate total harga (karena sudah mengubah status/harga_pax)

@@ -50,7 +50,8 @@ func Tx(t *testing.T) (*sql.DB, *sql.Tx) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := string(migration)
+	// Checkout Windows (core.autocrlf) memakai CRLF; samakan agar penghapusan FK di bawah cocok.
+	source := strings.ReplaceAll(string(migration), "\r\n", "\n")
 	start := strings.Index(source, "CREATE TABLE")
 	end := strings.Index(source[start:], ";") + start
 	ddl := strings.Replace(source[start:end], "CREATE TABLE IF NOT EXISTS", "CREATE TEMPORARY TABLE", 1)
