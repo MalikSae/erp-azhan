@@ -140,13 +140,18 @@ func ValidateToken(tokenString string, expectedType string) (int64, *int64, stri
 
 // GeneratePortalToken membuat token autentikasi khusus Portal Jamaah (24 jam).
 func GeneratePortalToken(jamaahID int64) (string, error) {
+	return generateBoundPortalToken(jamaahID, "")
+}
+
+func generateBoundPortalToken(jamaahID int64, binding string) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"sub":  jamaahID,
-		"type": "portal",
-		"jti":  uuid.New().String(),
-		"exp":  now.Add(24 * time.Hour).Unix(),
-		"iat":  now.Unix(),
+		"sub":         jamaahID,
+		"type":        "portal",
+		"jti":         uuid.New().String(),
+		"exp":         now.Add(24 * time.Hour).Unix(),
+		"iat":         now.Unix(),
+		"pin_binding": binding,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(getJWTSecret())

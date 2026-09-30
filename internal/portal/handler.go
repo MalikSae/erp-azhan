@@ -15,6 +15,7 @@ import (
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/jamaah"
+	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/payment"
 	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
@@ -277,7 +278,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	h.resetFailedLogin(clientIP)
 	h.resetFailedLogin(accountKey)
 
-	token, err := identity.GeneratePortalToken(j.ID)
+	token, err := identity.GenerateVerifiedPortalToken(j.ID, pinHash.String)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal membuat token portal")
 		return
@@ -308,7 +309,7 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, j)
+	writeJSON(w, http.StatusOK, profileView(j))
 }
 
 // ─── GET /api/portal/bookings ─────────────────────────────────────────────────
@@ -326,11 +327,21 @@ func (h *Handler) ListBookings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if bookings == nil {
-		bookings = make([]booking.Booking, 0)
+	views := make([]*portalBooking, 0, len(bookings))
+	for _, item := range bookings {
+		full, err := h.bookingRepo.GetByID(r.Context(), item.ID, nil)
+		if err != nil {
+			writeError(w, 500, "gagal mengambil detail booking")
+			return
+		}
+		view, err := h.bookingView(r, full, jamaahID)
+		if err != nil {
+			writeError(w, 500, "gagal mengambil ketentuan booking")
+			return
+		}
+		views = append(views, view)
 	}
-
-	writeJSON(w, http.StatusOK, bookings)
+	writeJSON(w, http.StatusOK, views)
 }
 
 // canAccessBooking memeriksa apakah seorang jamaah berhak atas booking (sebagai PIC atau anggota pax).
@@ -384,7 +395,12 @@ func (h *Handler) GetBookingByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, b)
+	view, err := h.bookingView(r, b, jamaahID)
+	if err != nil {
+		writeError(w, 500, "gagal mengambil ketentuan booking")
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 // ─── GET /api/portal/bookings/{id}/payments ───────────────────────────────────
@@ -482,11 +498,25 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Source = "portal"
+	if req.Tanggal == nil {
+		writeError(w, 400, "tanggal transfer wajib diisi")
+		return
+	}
+	transferDate, dateErr := time.Parse("2006-01-02", *req.Tanggal)
+	today := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
+	if dateErr != nil || transferDate.Format("2006-01-02") > today {
+		writeError(w, 400, "tanggal transfer tidak valid atau berada di masa depan")
+		return
+	}
 	if req.Jumlah <= 0 || req.BankAccountID == nil || req.SenderName == nil || strings.TrimSpace(*req.SenderName) == "" || req.BuktiURL == nil || strings.TrimSpace(*req.BuktiURL) == "" {
 		writeError(w, 400, "rekening tujuan, nominal, nama pengirim, dan bukti transfer wajib diisi")
 		return
 	}
 	var accountBrand, bookingBrand int64
+	if err := media.ValidatePortalUpload(r.Context(), h.db, *req.BuktiURL, jamaahID); err != nil {
+		writeError(w, 400, "bukti transfer harus berupa unggahan akun Anda yang masih tersedia")
+		return
+	}
 	err = h.db.QueryRowContext(r.Context(), `SELECT brand_id FROM bank_accounts WHERE id=? AND is_active=TRUE`, *req.BankAccountID).Scan(&accountBrand)
 	if err == nil {
 		err = h.db.QueryRowContext(r.Context(), `SELECT s.brand_id FROM bookings b JOIN schedules s ON s.id=b.schedule_id WHERE b.id=?`, bookingID).Scan(&bookingBrand)
@@ -519,6 +549,10 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.paymentRepo.Create(r.Context(), bookingID, &req, nil)
 	if err != nil {
+		if errors.Is(err, payment.ErrBookingClosed) || errors.Is(err, payment.ErrOverpayment) {
+			writeError(w, 409, err.Error())
+			return
+		}
 		writeError(w, 500, "gagal menyimpan konfirmasi pembayaran")
 		return
 	}
@@ -584,6 +618,10 @@ func (h *Handler) UploadDokumen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := media.ValidatePortalUpload(r.Context(), h.db, req.FileURL, jamaahID); err != nil {
+		writeError(w, 400, "dokumen harus berupa unggahan akun Anda yang masih tersedia")
+		return
+	}
 	doc, err := h.dokumenRepo.Upsert(r.Context(), jamaahID, &req)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal menyimpan dokumen")

@@ -76,9 +76,20 @@ func (h *Handler) GenerateActivationLink(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeError(w, 500, "gagal memulai penerbitan link")
+		return
+	}
+	defer tx.Rollback()
+	var lockedID int64
+	if err = tx.QueryRowContext(r.Context(), `SELECT id FROM jamaah WHERE id=? FOR UPDATE`, jamaahID).Scan(&lockedID); err != nil {
+		writeError(w, 500, "gagal memeriksa akun")
+		return
+	}
 	// 3. Batalkan token lama yang masih aktif untuk jamaah itu:
 	// set expires_at = NOW() pada baris yang used_at IS NULL AND expires_at > NOW().
-	_, err = h.db.ExecContext(r.Context(), `
+	_, err = tx.ExecContext(r.Context(), `
 		UPDATE jamaah_activation_tokens 
 		SET expires_at = NOW() 
 		WHERE jamaah_id = ? AND used_at IS NULL AND expires_at > NOW()
@@ -104,7 +115,7 @@ func (h *Handler) GenerateActivationLink(w http.ResponseWriter, r *http.Request)
 	expiresAt := time.Now().Add(24 * time.Hour)
 
 	// Simpan ke database
-	_, err = h.db.ExecContext(r.Context(), `
+	_, err = tx.ExecContext(r.Context(), `
 		INSERT INTO jamaah_activation_tokens (jamaah_id, token_hash, expires_at, created_by)
 		VALUES (?, ?, ?, ?)
 	`, jamaahID, tokenHash, expiresAt, adminUserID)
@@ -113,6 +124,10 @@ func (h *Handler) GenerateActivationLink(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if err = tx.Commit(); err != nil {
+		writeError(w, 500, "gagal menyimpan link aktivasi")
+		return
+	}
 	// Ambil domain brand dari tabel brands
 	var brandDomain sql.NullString
 	_ = h.db.QueryRowContext(r.Context(), `SELECT domain FROM brands WHERE id = ?`, j.BrandID).Scan(&brandDomain)
@@ -123,7 +138,11 @@ func (h *Handler) GenerateActivationLink(w http.ResponseWriter, r *http.Request)
 		if strings.HasPrefix(domain, "http://") || strings.HasPrefix(domain, "https://") {
 			activationURL = fmt.Sprintf("%s/portal/aktivasi?token=%s", strings.TrimRight(domain, "/"), rawToken)
 		} else {
-			activationURL = fmt.Sprintf("http://%s/portal/aktivasi?token=%s", domain, rawToken)
+			scheme := "https"
+			if strings.HasSuffix(domain, ".test") || domain == "localhost" {
+				scheme = "http"
+			}
+			activationURL = fmt.Sprintf("%s://%s/portal/aktivasi?token=%s", scheme, domain, rawToken)
 		}
 	} else {
 		activationURL = fmt.Sprintf("/portal/aktivasi?token=%s", rawToken)
@@ -442,7 +461,7 @@ func (h *Handler) ActivateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5. Set used_at = NOW() pada baris token.
-	_, err = tx.ExecContext(r.Context(), `UPDATE jamaah_activation_tokens SET used_at = NOW() WHERE id = ?`, tokenID)
+	_, err = tx.ExecContext(r.Context(), `UPDATE jamaah_activation_tokens SET used_at = NOW() WHERE jamaah_id = ? AND used_at IS NULL`, jamaahID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal menandai token sudah digunakan")
 		return

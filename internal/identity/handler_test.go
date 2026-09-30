@@ -15,8 +15,8 @@ func TestGetClientIPUsesForwardedClientBehindLoopbackProxy(t *testing.T) {
 	req.Header.Set("CF-Connecting-IP", "203.0.113.10")
 	req.Header.Set("X-Forwarded-For", "198.51.100.20, 172.68.1.1")
 
-	if got := getClientIP(req); got != "203.0.113.10" {
-		t.Fatalf("getClientIP() = %q, want %q", got, "203.0.113.10")
+	if got := getClientIP(req); got != "172.68.1.1" {
+		t.Fatalf("getClientIP() = %q, want last untrusted forwarded hop", got)
 	}
 }
 
@@ -32,7 +32,7 @@ func TestGetClientIPIgnoresSpoofedHeadersFromDirectClient(t *testing.T) {
 
 func TestLoginRateLimitReturnsServerCountdown(t *testing.T) {
 	handler := NewHandler(nil)
-	key := "203.0.113.10|admin@hana.id"
+	key := "127.0.0.1|admin@hana.id"
 	handler.failedLogins[key] = &loginAttempt{
 		Count:     loginAttemptLimit,
 		FirstFail: time.Now().Add(-time.Minute),
