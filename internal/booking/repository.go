@@ -33,7 +33,23 @@ var (
 	ErrCannotChangeInfantRoom          = errors.New("tidak bisa mengubah tipe kamar untuk infant")
 	ErrCannotChangeCancelledPaxRoom    = errors.New("tidak bisa mengubah tipe kamar untuk pax yang sudah batal")
 	ErrOnlyDraftCanBeDeleted           = errors.New("Hanya booking berstatus draft yang dapat dihapus. Booking yang sudah final harus dibatalkan, bukan dihapus.")
+	ErrBookingBatal                    = errors.New("booking sudah dibatalkan, data tagihan dan progress tidak dapat diubah")
 )
+
+// BusinessError adalah pelanggaran aturan bisnis yang pesannya aman ditampilkan
+// ke pengguna (HTTP 400). Error lain dianggap internal: dicatat di log dan
+// dijawab pesan generik agar detail SQL tidak bocor (JB-05).
+type BusinessError struct {
+	Message string
+}
+
+func (e *BusinessError) Error() string {
+	return e.Message
+}
+
+func bizErr(format string, args ...any) error {
+	return &BusinessError{Message: fmt.Sprintf(format, args...)}
+}
 
 type ErrStokKurang struct {
 	Message string
@@ -95,7 +111,9 @@ const selectBookingFull = `
 		b.pic_jamaah_id AS primary_jamaah_id,
 		(SELECT COUNT(*) FROM booking_pax WHERE booking_id = b.id AND pax_status = 'aktif') AS pax_count,
 		(SELECT COUNT(*) FROM booking_pax WHERE booking_id = b.id AND pax_status = 'aktif' AND pax_type = 'reguler') AS regular_pax_count,
-		(SELECT COUNT(*) FROM booking_pax WHERE booking_id = b.id AND pax_status = 'aktif' AND pax_type = 'infant') AS infant_pax_count
+		(SELECT COUNT(*) FROM booking_pax WHERE booking_id = b.id AND pax_status = 'aktif' AND pax_type = 'infant') AS infant_pax_count,
+		(SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id = b.id AND status = 'confirmed') AS total_dibayar,
+		(SELECT COALESCE(SUM(jumlah), 0) FROM booking_refunds WHERE booking_id = b.id) AS total_refund
 	FROM bookings b
 	LEFT JOIN jamaah j ON j.id = b.pic_jamaah_id
 	JOIN schedules s ON s.id = b.schedule_id
@@ -332,7 +350,7 @@ func ensureJamaahFreeOnSchedule(ctx context.Context, tx *sql.Tx, scheduleID, exc
 		if err != nil {
 			return fmt.Errorf("booking.ensureJamaahFreeOnSchedule: %w", err)
 		}
-		return fmt.Errorf("Jamaah %s sudah terdaftar pada booking %s di jadwal ini", namaLengkap, idBooking)
+		return bizErr("Jamaah %s sudah terdaftar pada booking %s di jadwal ini", namaLengkap, idBooking)
 	}
 	return nil
 }
@@ -411,7 +429,7 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 			if namaLengkap == "" {
 				namaLengkap = fmt.Sprintf("ID %d", p.JamaahID)
 			}
-			return nil, fmt.Errorf("Jamaah %s didaftarkan lebih dari satu kali dalam booking ini", namaLengkap)
+			return nil, bizErr("Jamaah %s didaftarkan lebih dari satu kali dalam booking ini", namaLengkap)
 		}
 		seenJamaah[p.JamaahID] = true
 	}
@@ -456,7 +474,7 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 		if err == nil && picTanggalLahir.Valid {
 			eligible, _ := isInfantEligible(&picTanggalLahir.String, &berangkatTanggal.String)
 			if eligible {
-				return nil, fmt.Errorf("PIC (Kontak Utama) tidak boleh berstatus infant")
+				return nil, bizErr("PIC (Kontak Utama) tidak boleh berstatus infant")
 			}
 		}
 	}
@@ -525,33 +543,39 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 		err := tx.QueryRowContext(ctx, `SELECT nama_lengkap, DATE_FORMAT(tanggal_lahir, '%Y-%m-%d') FROM jamaah WHERE id = ?`, p.JamaahID).Scan(&namaLengkap, &tanggalLahir)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil, fmt.Errorf("jamaah tidak ditemukan: ID %d", p.JamaahID)
+				return nil, bizErr("jamaah tidak ditemukan: ID %d", p.JamaahID)
 			}
 			return nil, fmt.Errorf("booking.Create find jamaah: %w", err)
 		}
 
 		if !tanggalLahir.Valid || strings.TrimSpace(tanggalLahir.String) == "" {
-			return nil, fmt.Errorf("Jamaah %s belum memiliki tanggal lahir. Lengkapi data jamaah terlebih dahulu sebelum booking dapat diproses.", namaLengkap)
+			return nil, bizErr("Jamaah %s belum memiliki tanggal lahir. Lengkapi data jamaah terlebih dahulu sebelum booking dapat diproses.", namaLengkap)
 		}
 
 		if p.PaxType == "infant" {
 			if berangkatTanggal.Valid {
 				eligible, _ := isInfantEligible(&tanggalLahir.String, &berangkatTanggal.String)
 				if !eligible {
-					return nil, fmt.Errorf("Jamaah %s berusia 2 tahun atau lebih pada tanggal keberangkatan, harus didaftarkan sebagai pax reguler", namaLengkap)
+					return nil, bizErr("Jamaah %s berusia 2 tahun atau lebih pada tanggal keberangkatan, harus didaftarkan sebagai pax reguler", namaLengkap)
 				}
 			}
 
 			if !hargaInfant.Valid {
-				return nil, fmt.Errorf("paket ini tidak memiliki harga infant")
+				return nil, bizErr("paket ini tidak memiliki harga infant")
 			}
 			hargaPax = hargaInfant.Float64
 			countsForSeat = false
 			roomTypeVal = nil
 		} else {
+			// Jamaah usia infant wajib didaftarkan sebagai infant (JB-08).
+			if berangkatTanggal.Valid {
+				if infant, _ := isInfantEligible(&tanggalLahir.String, &berangkatTanggal.String); infant {
+					return nil, bizErr("Jamaah %s berusia di bawah 2 tahun pada tanggal keberangkatan, harus didaftarkan sebagai infant", namaLengkap)
+				}
+			}
 			countsForSeat = true
 			if p.RoomType == nil {
-				return nil, fmt.Errorf("room_type untuk pax reguler wajib diisi")
+				return nil, bizErr("room_type untuk pax reguler wajib diisi")
 			}
 			rt := *p.RoomType
 			roomTypeVal = &rt
@@ -563,7 +587,7 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 			case "Double":
 				hargaPax = hargaDouble
 			default:
-				return nil, fmt.Errorf("room_type tidak valid: %s", rt)
+				return nil, bizErr("room_type tidak valid: %s", rt)
 			}
 		}
 
@@ -611,7 +635,7 @@ func (r *Repository) CreateDraftBooking(ctx context.Context, req *CreateDraftBoo
 			if namaLengkap == "" {
 				namaLengkap = fmt.Sprintf("ID %d", p.JamaahID)
 			}
-			return nil, fmt.Errorf("Jamaah %s didaftarkan lebih dari satu kali dalam booking ini", namaLengkap)
+			return nil, bizErr("Jamaah %s didaftarkan lebih dari satu kali dalam booking ini", namaLengkap)
 		}
 		seenJamaah[p.JamaahID] = true
 	}
@@ -638,7 +662,7 @@ func (r *Repository) CreateDraftBooking(ctx context.Context, req *CreateDraftBoo
 		if picTanggalLahir.Valid {
 			eligible, _ := isInfantEligible(&picTanggalLahir.String, &berangkatTanggal.String)
 			if eligible {
-				return nil, fmt.Errorf("PIC (Kontak Utama) tidak boleh berstatus infant")
+				return nil, bizErr("PIC (Kontak Utama) tidak boleh berstatus infant")
 			}
 		}
 	}
@@ -729,7 +753,7 @@ func (r *Repository) UpdateDraftBooking(ctx context.Context, bookingID int64, re
 		return nil, fmt.Errorf("booking.UpdateDraft get status: %w", err)
 	}
 	if status != "draft" {
-		return nil, fmt.Errorf("hanya booking berstatus draft yang dapat diubah")
+		return nil, bizErr("hanya booking berstatus draft yang dapat diubah")
 	}
 
 	// Validasi duplikasi jamaah dalam draft payload
@@ -744,7 +768,7 @@ func (r *Repository) UpdateDraftBooking(ctx context.Context, bookingID int64, re
 			if namaLengkap == "" {
 				namaLengkap = fmt.Sprintf("ID %d", p.JamaahID)
 			}
-			return nil, fmt.Errorf("Jamaah %s didaftarkan lebih dari satu kali dalam booking ini", namaLengkap)
+			return nil, bizErr("Jamaah %s didaftarkan lebih dari satu kali dalam booking ini", namaLengkap)
 		}
 		seenJamaah[p.JamaahID] = true
 	}
@@ -767,7 +791,7 @@ func (r *Repository) UpdateDraftBooking(ctx context.Context, bookingID int64, re
 		if picTanggalLahir.Valid {
 			eligible, _ := isInfantEligible(&picTanggalLahir.String, &berangkatTanggal.String)
 			if eligible {
-				return nil, fmt.Errorf("PIC (Kontak Utama) tidak boleh berstatus infant")
+				return nil, bizErr("PIC (Kontak Utama) tidak boleh berstatus infant")
 			}
 		}
 	}
@@ -861,11 +885,11 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 	}
 
 	if status != "draft" {
-		return nil, fmt.Errorf("booking bukan berstatus draft (status saat ini: %s)", status)
+		return nil, bizErr("booking bukan berstatus draft (status saat ini: %s)", status)
 	}
 
 	if !picJamaahID.Valid || picJamaahID.Int64 == 0 {
-		return nil, fmt.Errorf("Kontak Utama (PIC) wajib dipilih sebelum finalisasi booking")
+		return nil, bizErr("Kontak Utama (PIC) wajib dipilih sebelum finalisasi booking")
 	}
 
 	var activeRegularPax int
@@ -880,9 +904,9 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 		var totalPax int
 		_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM booking_pax WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID).Scan(&totalPax)
 		if totalPax == 0 {
-			return nil, fmt.Errorf("Minimal 1 jamaah reguler wajib didaftarkan dalam booking")
+			return nil, bizErr("Minimal 1 jamaah reguler wajib didaftarkan dalam booking")
 		}
-		return nil, fmt.Errorf("Booking harus memiliki minimal 1 pax reguler (tidak boleh hanya infant)")
+		return nil, bizErr("Booking harus memiliki minimal 1 pax reguler (tidak boleh hanya infant)")
 	}
 
 	// Validasi PIC bukan infant
@@ -895,7 +919,7 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 		if err == nil && picTanggalLahir.Valid && picBerangkatTanggal.Valid {
 			eligible, _ := isInfantEligible(&picTanggalLahir.String, &picBerangkatTanggal.String)
 			if eligible {
-				return nil, fmt.Errorf("PIC (Kontak Utama) tidak boleh berstatus infant")
+				return nil, bizErr("PIC (Kontak Utama) tidak boleh berstatus infant")
 			}
 		}
 	}
@@ -922,17 +946,22 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 			return nil, fmt.Errorf("booking.Finalize scan pax data: %w", err)
 		}
 		if seenFinalizeJamaah[jamaahID] {
-			return nil, fmt.Errorf("Jamaah %s didaftarkan lebih dari satu kali dalam booking ini", namaLengkap)
+			return nil, bizErr("Jamaah %s didaftarkan lebih dari satu kali dalam booking ini", namaLengkap)
 		}
 		seenFinalizeJamaah[jamaahID] = true
 
 		if !tanggalLahir.Valid || strings.TrimSpace(tanggalLahir.String) == "" {
-			return nil, fmt.Errorf("Jamaah %s belum memiliki tanggal lahir. Lengkapi data jamaah terlebih dahulu sebelum booking dapat diproses.", namaLengkap)
+			return nil, bizErr("Jamaah %s belum memiliki tanggal lahir. Lengkapi data jamaah terlebih dahulu sebelum booking dapat diproses.", namaLengkap)
 		}
 		if paxType == "infant" && berangkatTanggal.Valid {
 			eligible, _ := isInfantEligible(&tanggalLahir.String, &berangkatTanggal.String)
 			if !eligible {
-				return nil, fmt.Errorf("Jamaah %s berusia 2 tahun atau lebih pada tanggal keberangkatan, harus didaftarkan sebagai pax reguler", namaLengkap)
+				return nil, bizErr("Jamaah %s berusia 2 tahun atau lebih pada tanggal keberangkatan, harus didaftarkan sebagai pax reguler", namaLengkap)
+			}
+		}
+		if paxType == "reguler" && berangkatTanggal.Valid {
+			if infant, _ := isInfantEligible(&tanggalLahir.String, &berangkatTanggal.String); infant {
+				return nil, bizErr("Jamaah %s berusia di bawah 2 tahun pada tanggal keberangkatan, harus didaftarkan sebagai infant", namaLengkap)
 			}
 		}
 	}
@@ -1202,11 +1231,12 @@ func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, pax
 	// 1. Verify booking & brand
 	var scheduleID int64
 	var scheduleBrandID int64
+	var bookingStatus string
 	err = tx.QueryRowContext(ctx, `
-		SELECT b.schedule_id, s.brand_id
+		SELECT b.schedule_id, s.brand_id, b.status
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
-		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&scheduleID, &scheduleBrandID)
+		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&scheduleID, &scheduleBrandID, &bookingStatus)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -1215,6 +1245,9 @@ func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, pax
 	}
 	if brandID != nil && *brandID != scheduleBrandID {
 		return nil, ErrNotFound
+	}
+	if bookingStatus == "batal" {
+		return nil, ErrBookingBatal
 	}
 
 	// 2. Lock and verify pax
@@ -1246,7 +1279,7 @@ func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, pax
 	case "Double":
 		col = "harga_double"
 	default:
-		return nil, fmt.Errorf("room_type tidak valid: %s", newRoomType)
+		return nil, bizErr("room_type tidak valid: %s", newRoomType)
 	}
 
 	var newHarga float64
@@ -1264,6 +1297,9 @@ func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, pax
 	// 5. Recalculate total_harga
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.UpdatePaxRoomType recalc: %w", err)
+	}
+	if err := ensureTotalCoversPaidTx(ctx, tx, bookingID); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -1446,8 +1482,13 @@ func (r *Repository) BlockSeat(ctx context.Context, bookingID int64, expiresAt *
 	if err != nil {
 		return nil, fmt.Errorf("booking.BlockSeat find: %w", err)
 	}
-	if status != "baru" {
+	// Booking berbayar yang kursinya pernah dilepas manual boleh dikunci ulang;
+	// kuncinya permanen karena reservasi sudah dibayar (UI-02).
+	if status != "baru" && status != "dp" && status != "lunas" {
 		return nil, ErrInvalidStatus
+	}
+	if status != "baru" {
+		expiresAt = nil
 	}
 	if isBlocked {
 		if !existingKey.Valid || existingKey.String != idempotencyKey {
@@ -1486,6 +1527,59 @@ func (r *Repository) BlockSeat(ctx context.Context, bookingID int64, expiresAt *
 }
 
 // ─── Addons & Diskon ──────────────────────────────────────────────────────────
+
+// lockNotBatalTx mengunci baris booking dan menolak perubahan tagihan/progress
+// pada booking yang sudah dibatalkan (JB-06).
+func lockNotBatalTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	var status string
+	err := tx.QueryRowContext(ctx, `SELECT status FROM bookings WHERE id = ? FOR UPDATE`, bookingID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("booking.lockNotBatal: %w", err)
+	}
+	if status == "batal" {
+		return ErrBookingBatal
+	}
+	return nil
+}
+
+// ensureTotalCoversPaidTx menolak perubahan yang membuat total tagihan lebih
+// kecil dari pembayaran terkonfirmasi (JB-07). Dipanggil setelah recalculate
+// di transaksi yang sama, sehingga penolakan membatalkan seluruh perubahan.
+func ensureTotalCoversPaidTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	var total, paid float64
+	err := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(b.total_harga, 0),
+		       (SELECT COALESCE(SUM(p.jumlah), 0) FROM payments p WHERE p.booking_id = b.id AND p.status = 'confirmed')
+		FROM bookings b WHERE b.id = ?`, bookingID).Scan(&total, &paid)
+	if err != nil {
+		return fmt.Errorf("booking.ensureTotalCoversPaid: %w", err)
+	}
+	if total < paid {
+		return bizErr("total tagihan tidak boleh lebih kecil dari pembayaran terkonfirmasi (%s)", formatRupiah(paid))
+	}
+	return nil
+}
+
+// formatRupiah menulis nominal untuk pesan pengguna, mis. 36000000 -> "Rp 36.000.000".
+func formatRupiah(v float64) string {
+	s := fmt.Sprintf("%.0f", v)
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	var b strings.Builder
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(c)
+	}
+	if neg {
+		return "Rp -" + b.String()
+	}
+	return "Rp " + b.String()
+}
 
 func (r *Repository) recalculateTotalTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	const q = `
@@ -1533,6 +1627,10 @@ func (r *Repository) AddAddon(ctx context.Context, bookingID int64, nama string,
 	}
 	defer tx.Rollback()
 
+	if err := lockNotBatalTx(ctx, tx, bookingID); err != nil {
+		return err
+	}
+
 	_, err = tx.ExecContext(ctx, `INSERT INTO booking_addons (booking_id, nama, nominal) VALUES (?, ?, ?)`, bookingID, nama, nominal)
 	if err != nil {
 		return fmt.Errorf("booking.AddAddon insert: %w", err)
@@ -1553,6 +1651,10 @@ func (r *Repository) DeleteAddon(ctx context.Context, bookingID int64, addonID i
 	}
 	defer tx.Rollback()
 
+	if err := lockNotBatalTx(ctx, tx, bookingID); err != nil {
+		return err
+	}
+
 	res, err := tx.ExecContext(ctx, `DELETE FROM booking_addons WHERE id=? AND booking_id=?`, addonID, bookingID)
 	if err != nil {
 		return fmt.Errorf("booking.DeleteAddon delete: %w", err)
@@ -1564,6 +1666,9 @@ func (r *Repository) DeleteAddon(ctx context.Context, bookingID int64, addonID i
 
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
 		return fmt.Errorf("booking.DeleteAddon recalc: %w", err)
+	}
+	if err := ensureTotalCoversPaidTx(ctx, tx, bookingID); err != nil {
+		return err
 	}
 
 	return tx.Commit()
@@ -1597,6 +1702,10 @@ func (r *Repository) AddDiscount(ctx context.Context, bookingID int64, nama stri
 	}
 	defer tx.Rollback()
 
+	if err := lockNotBatalTx(ctx, tx, bookingID); err != nil {
+		return err
+	}
+
 	_, err = tx.ExecContext(ctx, `INSERT INTO booking_discounts (booking_id, nama, nominal) VALUES (?, ?, ?)`, bookingID, nama, nominal)
 	if err != nil {
 		return fmt.Errorf("booking.AddDiscount insert: %w", err)
@@ -1604,6 +1713,9 @@ func (r *Repository) AddDiscount(ctx context.Context, bookingID int64, nama stri
 
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
 		return fmt.Errorf("booking.AddDiscount recalc: %w", err)
+	}
+	if err := ensureTotalCoversPaidTx(ctx, tx, bookingID); err != nil {
+		return err
 	}
 
 	return tx.Commit()
@@ -1616,6 +1728,10 @@ func (r *Repository) DeleteDiscount(ctx context.Context, bookingID int64, discou
 		return err
 	}
 	defer tx.Rollback()
+
+	if err := lockNotBatalTx(ctx, tx, bookingID); err != nil {
+		return err
+	}
 
 	res, err := tx.ExecContext(ctx, `DELETE FROM booking_discounts WHERE id=? AND booking_id=?`, discountID, bookingID)
 	if err != nil {
@@ -1674,7 +1790,7 @@ func (r *Repository) GetScheduleHarga(ctx context.Context, scheduleID int64, roo
 	case "Double":
 		col = "harga_double"
 	default:
-		return nil, fmt.Errorf("room_type tidak valid: %s", roomType)
+		return nil, bizErr("room_type tidak valid: %s", roomType)
 	}
 	q := fmt.Sprintf("SELECT %s FROM schedules WHERE id=?", col)
 	var harga float64
@@ -1695,8 +1811,12 @@ func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandI
 	}
 
 	// Verify existence and brand
-	if _, err := r.GetByID(ctx, bookingID, brandID); err != nil {
+	existing, err := r.GetByID(ctx, bookingID, brandID)
+	if err != nil {
 		return nil, err
+	}
+	if existing.Status == "batal" {
+		return nil, ErrBookingBatal
 	}
 
 	var headerSetClauses []string
@@ -1705,7 +1825,7 @@ func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandI
 	for key, val := range updates {
 		colName, ok := AllowedHeaderProgressFields[key]
 		if !ok {
-			return nil, fmt.Errorf("item progress '%s' tidak valid atau gunakan endpoint progress per-pax untuk item ini", key)
+			return nil, bizErr("item progress '%s' tidak valid atau gunakan endpoint progress per-pax untuk item ini", key)
 		}
 		headerSetClauses = append(headerSetClauses, fmt.Sprintf("%s = ?", colName))
 		headerArgs = append(headerArgs, val)
@@ -1713,7 +1833,7 @@ func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandI
 
 	if len(headerSetClauses) > 0 {
 		headerArgs = append(headerArgs, bookingID)
-		qHeader := fmt.Sprintf("UPDATE bookings SET %s WHERE id = ?", strings.Join(headerSetClauses, ", "))
+		qHeader := fmt.Sprintf("UPDATE bookings SET %s WHERE id = ? AND status <> 'batal'", strings.Join(headerSetClauses, ", "))
 		if _, err := r.db.ExecContext(ctx, qHeader, headerArgs...); err != nil {
 			return nil, fmt.Errorf("booking.UpdateProgress: %w", err)
 		}
@@ -1753,7 +1873,7 @@ func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, pax
 	for key, val := range updates {
 		colName, ok := AllowedPaxProgressFields[key]
 		if !ok {
-			return nil, fmt.Errorf("item progress pax '%s' tidak valid", key)
+			return nil, bizErr("item progress pax '%s' tidak valid", key)
 		}
 		if key == "manasik" && paxType == "infant" {
 			return nil, ErrManasikInfant
@@ -1841,10 +1961,13 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 		&b.PaxCount,
 		&b.RegularPaxCount,
 		&b.InfantPaxCount,
+		&b.TotalDibayar,
+		&b.TotalRefund,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("booking.scanRow: %w", err)
 	}
+	b.PerluRefund = b.Status == "batal" && b.TotalDibayar > b.TotalRefund
 	b.ProgressTiket = isTicketConfirmed
 	if roomType.Valid && strings.TrimSpace(roomType.String) != "" {
 		b.RoomType = &roomType.String
@@ -1930,10 +2053,10 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 	}
 
 	if paxStatus != "aktif" {
-		return nil, errors.New("jamaah tidak aktif")
+		return nil, bizErr("jamaah tidak aktif")
 	}
 	if paxType == "infant" {
-		return nil, errors.New("infant tidak dapat jatah perlengkapan")
+		return nil, bizErr("infant tidak dapat jatah perlengkapan")
 	}
 	if perlengkapanStatus == "sudah_diberikan" {
 		return nil, ErrPerlengkapanSudahDiberikan

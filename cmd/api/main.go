@@ -387,6 +387,8 @@ func main() {
 		r.Delete("/bookings/{id}/discounts/{discountID}", bookingHandler.RemoveBookingDiscount)
 		r.With(identity.RequireAdminRole).Get("/bookings/{id}/cashback", bookingHandler.GetKreditCashback)
 		r.With(identity.RequireAdminRole).Post("/bookings/{id}/cashback", bookingHandler.PakaiKreditCashback)
+		r.With(identity.RequireAdminRole).Get("/bookings/{id}/refunds", bookingHandler.ListRefunds)
+		r.With(identity.RequireAdminRole).Post("/bookings/{id}/refunds", bookingHandler.CreateRefund)
 		r.Put("/bookings/{id}/progress", bookingHandler.UpdateBookingProgress)
 		r.Put("/bookings/{id}/pax/{pax_id}/progress", bookingHandler.UpdatePaxProgress)
 		r.Put("/bookings/{id}/pax/{pax_id}/cancel", bookingHandler.CancelPax)

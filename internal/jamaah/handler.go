@@ -3,10 +3,13 @@ package jamaah
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log"
 	"net/http"
+	"net/mail"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
@@ -74,6 +77,10 @@ func (h *Handler) CreateJamaah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
+	if msg := validateJamaahInput(&req); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 
 	// Validasi status opsional: hanya 'aktif' atau 'draft'
 	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
@@ -137,6 +144,10 @@ func (h *Handler) UpdateJamaah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
+	if msg := validateJamaahInput(&req); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 
 	// Validasi status opsional: hanya 'aktif' atau 'draft'
 	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
@@ -363,11 +374,83 @@ func handleRepoError(w http.ResponseWriter, err error) {
 			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh data booking")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("terjadi kesalahan internal: %v", err))
+		log.Printf("[ERROR] jamaah: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
 	}
 }
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
+
+var (
+	nikPattern     = regexp.MustCompile(`^[0-9]{16}$`)
+	phonePattern   = regexp.MustCompile(`^\+?[0-9 () .-]+$`) // sama dengan self-booking
+	phoneNonDigits = regexp.MustCompile(`\D`)
+)
+
+func isiDari(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
+}
+
+// validateJamaahInput memvalidasi format data jamaah sebelum disimpan
+// (JB-05: tanggal tidak jadi error SQL; JB-09: NIK, tanggal, email, HP).
+// Field kosong dilewati; paspor kedaluwarsa tetap diterima.
+func validateJamaahInput(req *CreateJamaahRequest) string {
+	tanggal := map[string]time.Time{}
+	fields := []struct {
+		nama  string
+		nilai *string
+	}{
+		{"tanggal_lahir", req.TanggalLahir},
+		{"tanggal_paspor_keluar", req.TanggalPasporKeluar},
+		{"paspor_berlaku_sampai", req.PasporBerlakuSampai},
+	}
+	for _, f := range fields {
+		if isiDari(f.nilai) == "" {
+			continue
+		}
+		t, err := time.Parse("2006-01-02", isiDari(f.nilai))
+		if err != nil {
+			return f.nama + " harus berformat YYYY-MM-DD"
+		}
+		tanggal[f.nama] = t
+	}
+	hariIni, _ := time.Parse("2006-01-02", time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02"))
+	if t, ok := tanggal["tanggal_lahir"]; ok && t.After(hariIni) {
+		return "tanggal_lahir tidak boleh di masa depan"
+	}
+	if t, ok := tanggal["tanggal_paspor_keluar"]; ok && t.After(hariIni) {
+		return "tanggal_paspor_keluar tidak boleh di masa depan"
+	}
+	keluar, adaKeluar := tanggal["tanggal_paspor_keluar"]
+	if berlaku, ok := tanggal["paspor_berlaku_sampai"]; ok && adaKeluar && berlaku.Before(keluar) {
+		return "paspor_berlaku_sampai tidak boleh sebelum tanggal_paspor_keluar"
+	}
+
+	if v := isiDari(req.NIK); v != "" && !nikPattern.MatchString(v) {
+		return "NIK harus 16 digit angka"
+	}
+	if v := isiDari(req.EmergencyNIK); v != "" && !nikPattern.MatchString(v) {
+		return "NIK kontak darurat harus 16 digit angka"
+	}
+	if v := isiDari(req.Email); v != "" {
+		if addr, err := mail.ParseAddress(v); err != nil || addr.Address != v {
+			return "format email tidak valid"
+		}
+	}
+	for _, hp := range []struct{ nama, nilai string }{{"no_hp", isiDari(req.NoHP)}, {"no HP kontak darurat", isiDari(req.EmergencyHP)}} {
+		if hp.nilai == "" {
+			continue
+		}
+		digits := phoneNonDigits.ReplaceAllString(hp.nilai, "")
+		if !phonePattern.MatchString(hp.nilai) || len(digits) < 10 || len(digits) > 15 {
+			return hp.nama + " harus berisi 10–15 digit angka"
+		}
+	}
+	return ""
+}
 
 func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")

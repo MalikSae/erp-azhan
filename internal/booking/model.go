@@ -66,6 +66,11 @@ type Booking struct {
 	IsSeatBlocked     bool     `json:"is_seat_blocked"`
 	SeatHoldExpiresAt *string  `json:"seat_hold_expires_at,omitempty"`
 	TotalHarga        *float64 `json:"total_harga"`
+	// TotalDibayar = pembayaran terkonfirmasi; TotalRefund = dana yang sudah
+	// dikembalikan. PerluRefund: booking batal dengan dana belum dikembalikan penuh.
+	TotalDibayar float64 `json:"total_dibayar"`
+	TotalRefund  float64 `json:"total_refund"`
+	PerluRefund  bool    `json:"perlu_refund"`
 	// ProgressPaspor dihitung dinamis dari dokumen_jamaah
 	ProgressPaspor bool `json:"progress_paspor"`
 	ProgressVisa   bool `json:"progress_visa"`
