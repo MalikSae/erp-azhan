@@ -9,7 +9,7 @@ import {
   EMPTY_KAITAN,
   validateKaitan,
 } from 'shared';
-import { Lock, History } from 'lucide-react';
+import { Lock, History, Search, Users, Link2 } from 'lucide-react';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -131,17 +131,21 @@ export default function GantiKaitanAgenPage() {
         subtitle="Koreksi kaitan agen yang salah input (Jalur 3). Hanya bisa selama jamaah belum pernah menghasilkan komisi."
       />
 
+      {error && !selected && <Alert variant="error" message={error} />}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
-        <div className="lg:col-span-2 space-y-3">
+        <div className="lg:col-span-2 min-w-0">
+          <MetaBox title="Cari Jamaah" subtitle="Pilih jamaah yang ingin diperbarui kaitannya." icon={<Search size={18} />} contentClassName="p-4 sm:p-5 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
             <Input
               label="Cari jamaah"
               name="cari_jamaah"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Nama, no HP, atau ID jamaah (min. 3 huruf)"
+              placeholder="Nama, nomor HP, atau ID jamaah"
+              className="!mb-0"
             />
             <CustomDropdown
+              className="!mb-0"
               label="Brand"
               name="brand_id"
               options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
@@ -151,7 +155,9 @@ export default function GantiKaitanAgenPage() {
             />
           </div>
 
-          <div className="rounded-xl border border-neutral-200 bg-white divide-y divide-neutral-100 max-h-96 overflow-y-auto">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-neutral-500"><span className="font-semibold text-neutral-700">Hasil pencarian</span><span>{mencari ? 'Mencari...' : `${hasil.length} jamaah`}</span></div>
+          <div className="rounded-xl border border-neutral-200 bg-white divide-y divide-neutral-100 max-h-[28rem] overflow-y-auto" aria-live="polite">
             {mencari && <p className="p-3 text-sm text-neutral-500">Mencari...</p>}
             {!mencari && q.trim().length >= 3 && hasil.length === 0 && <p className="p-3 text-sm text-neutral-500">Jamaah tidak ditemukan.</p>}
             {!mencari && q.trim().length < 3 && <p className="p-3 text-sm text-neutral-500">Ketik minimal 3 huruf untuk mencari.</p>}
@@ -160,9 +166,10 @@ export default function GantiKaitanAgenPage() {
                 key={j.jamaah_id}
                 type="button"
                 onClick={() => pilih(j)}
-                className={`w-full text-left p-3 hover:bg-neutral-50 transition-colors cursor-pointer ${selected?.jamaah_id === j.jamaah_id ? 'bg-neutral-50' : ''}`}
+                aria-pressed={selected?.jamaah_id === j.jamaah_id}
+                className={`w-full text-left p-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 ${selected?.jamaah_id === j.jamaah_id ? 'bg-primary-50 border-l-2 border-l-primary-500' : 'hover:bg-neutral-50'}`}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col sm:flex-row lg:flex-col xl:flex-row items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-neutral-900 truncate">{j.nama_lengkap}</p>
                     <p className="text-xs text-neutral-500 truncate">{j.brand_name} • {j.id_jamaah || '-'}{j.no_hp ? ` • ${j.no_hp}` : ''}</p>
@@ -175,17 +182,21 @@ export default function GantiKaitanAgenPage() {
               </button>
             ))}
           </div>
+          </div>
+          </MetaBox>
         </div>
 
-        <div className="lg:col-span-3 space-y-5">
+        <div className="lg:col-span-3 min-w-0 space-y-5">
           {!selected ? (
-            <div className="rounded-xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500">
-              Pilih jamaah dari hasil pencarian.
+            <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-card px-6 py-16 sm:py-24 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-50 text-neutral-400"><Users size={26} /></div>
+              <h2 className="text-sm font-bold text-neutral-900">Pilih jamaah terlebih dahulu</h2>
+              <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-neutral-500">Cari nama, nomor HP, atau ID jamaah dengan minimal 3 karakter. Detail kaitan dan riwayat akan tampil di sini.</p>
             </div>
           ) : (
             <>
-              <MetaBox title={selected.nama_lengkap} subtitle={`${selected.brand_name} • ${selected.id_jamaah || '-'}`}>
-                <div className="space-y-2 text-sm">
+              <MetaBox icon={<Link2 size={18} />} title={selected.nama_lengkap} subtitle={`${selected.brand_name} • ${selected.id_jamaah || '-'}`}>
+                <div className="space-y-3 rounded-xl border border-neutral-200/80 bg-neutral-50/70 p-4 text-sm">
                   <div className="flex justify-between gap-3"><span className="text-neutral-500">Kaitan saat ini</span><span className="font-medium text-neutral-900 text-right">{kaitanLabel(selected)}</span></div>
                   <div className="flex justify-between gap-3"><span className="text-neutral-500">Asal kaitan</span><span className="font-medium text-neutral-900 text-right">{SUMBER[selected.kaitan_sumber] || 'Tidak diketahui'}</span></div>
                   <div className="flex justify-between gap-3"><span className="text-neutral-500">Sudah menghasilkan komisi</span><span className="font-medium text-neutral-900">{selected.punya_komisi ? 'Ya' : 'Belum'}</span></div>
@@ -196,7 +207,8 @@ export default function GantiKaitanAgenPage() {
                 {error && <Alert variant="error" message={error} />}
 
                 {selected.bisa_diganti ? (
-                  <div className="space-y-4 border-t border-neutral-100 pt-4">
+                  <div className="space-y-4 border-t border-neutral-100 pt-5">
+                    <div><h3 className="text-sm font-bold text-neutral-900">Kaitan baru</h3><p className="mt-1 text-xs text-neutral-500">Tentukan kaitan pengganti dan tulis alasan perubahan.</p></div>
                     {selected.booking_belum_lunas > 0 && (
                       <Alert
                         variant="warning"
@@ -219,8 +231,8 @@ export default function GantiKaitanAgenPage() {
                       rows={3}
                       placeholder="Contoh: salah pilih agen saat input, seharusnya tanpa agen"
                     />
-                    <div className="flex justify-end">
-                      <Button variant="primary" onClick={submit} isLoading={saving}>Simpan Perubahan</Button>
+                    <div className="flex justify-end border-t border-neutral-100 pt-4">
+                      <Button variant="primary" onClick={submit} isLoading={saving} className="h-11 w-full sm:w-auto">Simpan Perubahan</Button>
                     </div>
                   </div>
                 ) : (
