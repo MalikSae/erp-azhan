@@ -134,35 +134,43 @@ export default function PeringkatAgenPage() {
     </div>
   );
 
+  const toolbarActions = (
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+      <CustomDropdown
+        name="preset"
+        value={preset}
+        onChange={pickPreset}
+        placeholder="Pilih periode"
+        options={[
+          ...Object.entries(PRESETS).map(([value, p]) => ({ value, label: p.label })),
+          { value: 'kustom', label: 'Kustom' },
+        ]}
+        className="!mb-0 w-full sm:w-44"
+      />
+      <CustomDropdown
+        name="brand_id"
+        value={brandId}
+        onChange={(val) => update({ brand_id: val?.target ? val.target.value : val })}
+        placeholder="Semua brand"
+        options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
+        className="!mb-0 w-full sm:w-44"
+      />
+    </div>
+  );
+  const toolbarPanel = preset === 'kustom' && (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Input label="Dari tanggal" type="date" name="dari" value={dari}
+        onChange={(e) => update({ preset: 'kustom', dari: e.target.value, sampai })} className="!mb-0" />
+      <Input label="Sampai tanggal" type="date" name="sampai" value={sampai} min={dari || undefined}
+        onChange={(e) => update({ preset: 'kustom', dari, sampai: e.target.value })} className="!mb-0" />
+    </div>
+  );
   return (
     <div className="space-y-5">
       <PageHeader
         title="Peringkat Agen"
         subtitle="Kinerja agen Syiar per periode, diurutkan dari total komisi. Tanggal mengacu saat booking lunas dan komisi tercatat; cashback tidak dihitung."
       />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <CustomDropdown
-          label="Periode"
-          name="preset"
-          value={preset}
-          onChange={pickPreset}
-          options={[
-            ...Object.entries(PRESETS).map(([value, p]) => ({ value, label: p.label })),
-            { value: 'kustom', label: 'Kustom' },
-          ]}
-        />
-        <Input label="Dari tanggal" type="date" name="dari" value={dari} onChange={(e) => update({ preset: 'kustom', dari: e.target.value, sampai })} />
-        <Input label="Sampai tanggal" type="date" name="sampai" value={sampai} onChange={(e) => update({ preset: 'kustom', dari, sampai: e.target.value })} />
-        <CustomDropdown
-          label="Brand"
-          name="brand_id"
-          value={brandId}
-          onChange={(val) => update({ brand_id: val?.target ? val.target.value : val })}
-          placeholder="Semua brand"
-          options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
-        />
-      </div>
 
       {error && <Alert variant="error" message={error} />}
 
@@ -178,6 +186,8 @@ export default function PeringkatAgenPage() {
         renderCell={renderCell}
         onRowClick={(row) => navigate(`/agen/${row.jamaah_id}`)}
         itemsPerPage={20}
+        toolbarActions={toolbarActions}
+        toolbarPanel={toolbarPanel}
         searchPlaceholder="Cari nama agen atau kode referral..."
         emptyMessage={loading ? 'Memuat peringkat...' : 'Belum ada komisi tercatat di periode ini'}
       />

@@ -1,22 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { listAgen, listRiwayatKomisi } from '../api/agen';
 import { listBrands } from '../api/brands';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
 import CustomDropdown from '../components/ui/CustomDropdown';
-import DataTable from '../components/ui/DataTable';
 import Input from '../components/ui/Input';
+
+import DataTable from '../components/ui/DataTable';
+
 import PageHeader from '../components/ui/PageHeader';
 import { dateLabel, JENIS_KOMISI, KETERSEDIAAN, money } from '../utils/agen';
 
 const LIMIT = 200;
+const valueOf = (v) => (v?.target ? v.target.value : v);
 
 // Screen B3 — ledger transaksi_komisi lintas agen. Read-only, tanpa aksi
 // reversal (agen-azhan.md §5.8). showBrandColumn: Admin Master, lintas brand
 // dengan filter brand (dikirim ke server sebagai brand_id).
 export default function RiwayatKomisiPage({ showBrandColumn = false }) {
   const [params, setParams] = useSearchParams();
+  const [panelOpen, setPanelOpen] = useState(false);
   const filter = {
     brand_id: showBrandColumn ? params.get('brand_id') || '' : '',
     agen_id: params.get('agen_id') || '',
@@ -87,6 +93,59 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
     return row[key] ?? '-';
   };
 
+  const panelActive = ['brand_id', 'agen_id', 'dari', 'sampai'].filter((key) => filter[key]).length;
+  const toolbarActions = (
+    <div className="flex w-full items-center gap-2 sm:w-auto">
+      <CustomDropdown
+        value={filter.jenis}
+        onChange={(v) => setFilter('jenis', valueOf(v))}
+        options={[{ value: '', label: 'Semua jenis' }, ...Object.entries(JENIS_KOMISI).map(([value, label]) => ({ value, label }))]}
+        placeholder="Semua jenis"
+        className="!mb-0 flex-1 sm:w-44 sm:flex-none"
+      />
+      <Button type="button" variant={panelOpen || panelActive ? 'dark' : 'secondary'}
+        onClick={() => setPanelOpen((open) => !open)} className="h-11 shrink-0 whitespace-nowrap" aria-expanded={panelOpen}>
+        <SlidersHorizontal className="w-4 h-4" />
+        <span>Filter{panelActive ? ` (${panelActive})` : ''}</span>
+      </Button>
+    </div>
+  );
+  const toolbarPanel = panelOpen && (
+    <div className="space-y-3">
+      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${showBrandColumn ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+        {showBrandColumn && (
+          <CustomDropdown label="Brand" name="brand_id" value={filter.brand_id}
+            onChange={(v) => {
+              const next = new URLSearchParams(params);
+              const value = valueOf(v);
+              if (value) next.set('brand_id', value);
+              else next.delete('brand_id');
+              next.delete('agen_id');
+              setParams(next, { replace: true });
+            }}
+            options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
+            placeholder="Semua brand" />
+        )}
+        <CustomDropdown label="Agen" name="agen_id" value={filter.agen_id}
+          onChange={(v) => setFilter('agen_id', valueOf(v))}
+          options={[{ value: '', label: 'Semua agen' }, ...agenOptions.map((a) => ({
+            value: String(a.jamaah_id),
+            label: showBrandColumn && !filter.brand_id ? `${a.nama_lengkap} (${a.brand_name})` : a.nama_lengkap,
+          }))]} placeholder="Semua agen" />
+        <Input label="Dari tanggal" type="date" name="dari" value={filter.dari} onChange={(e) => setFilter('dari', e.target.value)} />
+        <Input label="Sampai tanggal" type="date" name="sampai" value={filter.sampai} min={filter.dari || undefined} onChange={(e) => setFilter('sampai', e.target.value)} />
+      </div>
+      {Object.values(filter).some(Boolean) && (
+        <div className="flex justify-end">
+          <button type="button" onClick={() => {
+            const next = new URLSearchParams(params);
+            Object.keys(filter).forEach((key) => next.delete(key));
+            setParams(next, { replace: true });
+          }} className="text-sm font-semibold text-neutral-900 underline underline-offset-2">Reset semua filter</button>
+        </div>
+      )}
+    </div>
+  );
   return (
     <div className="space-y-5">
       <PageHeader
@@ -94,50 +153,6 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
         subtitle={`Seluruh transaksi komisi agen ${showBrandColumn ? 'lintas brand' : 'di brand ini'}. Hanya baca, tanpa pembatalan.`}
       />
       {error && <Alert variant="error" message={error} />}
-
-      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${showBrandColumn ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
-        {showBrandColumn && (
-          <CustomDropdown
-            label="Brand"
-            name="brand_id"
-            options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
-            value={filter.brand_id}
-            onChange={(e) => {
-              const next = new URLSearchParams(params);
-              const value = e?.target ? e.target.value : e;
-              if (value) next.set('brand_id', value);
-              else next.delete('brand_id');
-              next.delete('agen_id');
-              setParams(next, { replace: true });
-            }}
-            placeholder="Semua brand"
-          />
-        )}
-        <CustomDropdown
-          label="Agen"
-          name="agen_id"
-          options={[
-            { value: '', label: 'Semua agen' },
-            ...agenOptions.map((a) => ({
-              value: String(a.jamaah_id),
-              label: showBrandColumn && !filter.brand_id ? `${a.nama_lengkap} (${a.brand_name})` : a.nama_lengkap,
-            })),
-          ]}
-          value={filter.agen_id}
-          onChange={(e) => setFilter('agen_id', e?.target ? e.target.value : e)}
-          placeholder="Semua agen"
-        />
-        <CustomDropdown
-          label="Jenis"
-          name="jenis"
-          options={[{ value: '', label: 'Semua jenis' }, ...Object.entries(JENIS_KOMISI).map(([value, label]) => ({ value, label }))]}
-          value={filter.jenis}
-          onChange={(e) => setFilter('jenis', e?.target ? e.target.value : e)}
-          placeholder="Semua jenis"
-        />
-        <Input label="Dari tanggal" type="date" name="dari" value={filter.dari} onChange={(e) => setFilter('dari', e.target.value)} />
-        <Input label="Sampai tanggal" type="date" name="sampai" value={filter.sampai} onChange={(e) => setFilter('sampai', e.target.value)} />
-      </div>
 
       <p className="text-sm text-neutral-600">
         Total {items.length} transaksi: <span className="font-bold text-neutral-900">{money(total)}</span>
@@ -149,6 +164,8 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
         data={items}
         renderCell={renderCell}
         itemsPerPage={20}
+        toolbarActions={toolbarActions}
+        toolbarPanel={toolbarPanel}
         searchPlaceholder="Cari agen, jamaah, atau kode booking..."
         emptyMessage={loading ? 'Memuat riwayat komisi...' : 'Belum ada transaksi komisi'}
       />

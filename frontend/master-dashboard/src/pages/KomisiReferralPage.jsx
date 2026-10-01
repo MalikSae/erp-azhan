@@ -168,34 +168,37 @@ export default function KomisiReferralPage() {
 
   const saldoKurang = selected?.status === 'pending' && Number(selected.saldo_tersedia) < 0;
 
+  const toolbarActions = (
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+      <CustomDropdown
+        name="status"
+        options={STATUS_OPTIONS}
+        value={status}
+        onChange={(v) => setStatus(v?.target ? v.target.value : v)}
+        placeholder="Semua status"
+        className="!mb-0 w-full sm:w-44"
+      />
+      <CustomDropdown
+        name="brand_id"
+        options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
+        value={brandId}
+        onChange={(v) => setBrandId(v?.target ? v.target.value : v)}
+        placeholder="Semua brand"
+        className="!mb-0 w-full sm:w-44"
+      />
+    </div>
+  );
   return (
     <div className="space-y-5">
       <PageHeader title="Persetujuan Pencairan" subtitle="Pengajuan tarik saldo agen Syiar dari seluruh brand." />
       {error && <Alert variant="error" message={error} />}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <CustomDropdown
-          label="Status"
-          name="status"
-          options={STATUS_OPTIONS}
-          value={status}
-          onChange={(e) => setStatus(e?.target ? e.target.value : e)}
-        />
-        <CustomDropdown
-          label="Brand"
-          name="brand_id"
-          options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
-          value={brandId}
-          onChange={(e) => setBrandId(e?.target ? e.target.value : e)}
-          placeholder="Semua brand"
-        />
-      </div>
 
       <DataTable
         columns={columns}
         data={items}
         renderCell={renderCell}
         itemsPerPage={15}
+        toolbarActions={toolbarActions}
         searchPlaceholder="Cari agen, brand, atau rekening..."
         emptyMessage={loading ? 'Memuat pengajuan...' : 'Tidak ada pengajuan pencairan'}
       />
