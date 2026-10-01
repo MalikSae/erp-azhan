@@ -1,3 +1,6 @@
+@import '../../shared/src/field-interactions.css';
+@import '../../shared/src/corner-radius.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

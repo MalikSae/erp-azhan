@@ -1,0 +1,13 @@
+/* Keep dashboard corners consistent in development and production. */
+body .rounded-lg,
+body .rounded-xl {
+  border-radius: 6px;
+}
+
+body .rounded-2xl {
+  border-radius: 8px;
+}
+
+body .rounded-3xl {
+  border-radius: 12px;
+}
