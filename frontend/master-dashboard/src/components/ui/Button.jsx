@@ -9,7 +9,8 @@ const Button = ({
   type = 'button',
   children,
   className = '',
-  icon
+  icon,
+  ...props
 }) => {
   const baseClasses = 'inline-flex items-center justify-center font-heading font-semibold focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-150 ease-in-out select-none';
   
@@ -33,6 +34,7 @@ const Button = ({
 
   return (
     <button
+      {...props}
       type={type}
       onClick={isDisabled ? undefined : onClick}
       disabled={isDisabled}

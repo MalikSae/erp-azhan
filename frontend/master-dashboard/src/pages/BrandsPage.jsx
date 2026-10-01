@@ -7,27 +7,7 @@ import Modal from '../components/ui/Modal';
 import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { listBrands, deleteBrand } from '../api/brands';
-
-const LogoCell = ({ url, name }) => {
-  const [error, setError] = React.useState(false);
-  
-  const placeholder = (
-    <div className="w-8 h-8 bg-neutral-100 rounded border border-neutral-200 flex items-center justify-center text-neutral-400 text-xs font-medium">
-      —
-    </div>
-  );
-  
-  if (!url || error) return placeholder;
-  
-  return (
-    <img 
-      src={url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL}${url}` : url} 
-      alt={`${name} logo`}
-      className="w-8 h-8 object-contain rounded bg-white"
-      onError={() => setError(true)}
-    />
-  );
-};
+import { BrandCell } from 'shared';
 
 const ColorCell = ({ color }) => {
   if (!color) return <span>-</span>;
@@ -111,7 +91,7 @@ const BrandsPage = () => {
       ) : (
         <DataTable
           columns={[
-            { header: 'Logo', key: 'logo_url' },
+            { header: 'Ikon', key: 'icon_url' },
             { header: 'Kode', key: 'kode_brand' },
             { header: 'Nama Brand', key: 'name' },
             { header: 'Domain', key: 'domain' },
@@ -123,8 +103,8 @@ const BrandsPage = () => {
           emptyMessage='Belum ada brand. Klik "+ Tambah Brand" untuk menambahkan.'
           searchPlaceholder="Cari nama brand, kode, atau domain..."
           renderCell={(row, key) => {
-            if (key === 'logo_url') {
-              return <LogoCell url={row.logo_url} name={row.name} />;
+            if (key === 'icon_url') {
+              return <BrandCell key={row.icon_url || row.id} brand={row} />;
             }
             if (key === 'kode_brand') {
               return row.kode_brand ? (
