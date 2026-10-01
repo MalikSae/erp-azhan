@@ -49,21 +49,23 @@ func (h *Handler) DaftarAgen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gate 1: captcha
-	token := strings.TrimSpace(req.CaptchaToken)
-	if token == "" {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
-		return
-	}
-	valid, err := h.captcha.verify(r.Context(), token, clientIP)
-	if err != nil {
-		log.Printf("[ERROR] daftar agen captcha: %v", err)
-		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
-		return
-	}
-	if !valid {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
-		return
+	// Gate 1: captcha (hanya bila Turnstile aktif, lihat turnstile.go)
+	if h.captcha.enabled() {
+		token := strings.TrimSpace(req.CaptchaToken)
+		if token == "" {
+			writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+			return
+		}
+		valid, err := h.captcha.verify(r.Context(), token, clientIP)
+		if err != nil {
+			log.Printf("[ERROR] daftar agen captcha: %v", err)
+			writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
+			return
+		}
+		if !valid {
+			writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+			return
+		}
 	}
 
 	// Gate 2–5: data akun
