@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Table from './Table';
 import Input from './Input';
 import Button from './Button';
@@ -13,6 +13,7 @@ const DataTable = ({
   emptyMessage = "Tidak ada data",
   renderCell,
   toolbarActions,
+  toolbarPanel,
   onRowClick
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,6 +105,12 @@ const DataTable = ({
               {toolbarActions}
             </div>
           )}
+        </div>
+      )}
+
+      {toolbarPanel && (
+        <div className="p-4 border-b border-neutral-200/80 bg-neutral-50/60">
+          {toolbarPanel}
         </div>
       )}
 
