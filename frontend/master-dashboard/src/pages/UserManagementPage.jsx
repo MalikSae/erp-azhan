@@ -329,21 +329,16 @@ const UserManagementPage = () => {
             if (key === 'role') {
               const label = getUserRoleLabel(row);
               const isSuperAdmin = row.brand_id === null || row.brand_id === undefined;
-              if (isSuperAdmin) {
-                return <Badge variant="promo">{label}</Badge>;
-              }
-              const brandColor = row.brand_color || brands.find(b => String(b.id) === String(row.brand_id))?.primary_color;
-              if (brandColor) {
-                return (
-                  <span
-                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium font-body text-white shadow-sm"
-                    style={{ backgroundColor: brandColor }}
-                  >
-                    {label}
-                  </span>
-                );
-              }
-              return <Badge variant="draft">{label}</Badge>;
+              const dotColor = isSuperAdmin
+                ? '#F26522'
+                : (row.brand_color || brands.find(b => String(b.id) === String(row.brand_id))?.primary_color || '#9CA3AF');
+              // Chip lembut ala referensi: dot berwarna + teks gelap, bukan pill solid.
+              return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+                  {isSuperAdmin ? 'Semua Brand' : label}
+                </span>
+              );
             }
             if (key === 'rbac_roles') {
               const userRoles = row.roles || [];
@@ -367,25 +362,27 @@ const UserManagementPage = () => {
             if (key === 'aksi') {
               const isSelf = currentUserId && Number(row.id) === Number(currentUserId);
 
+              // Tombol aksi kotak berbingkai 30px ala referensi.
+              const actionBtn = "w-[30px] h-[30px] flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors";
               return (
-                <div className="flex gap-3 items-center">
+                <div className="flex gap-1.5 items-center">
                   {/* Kelola Role */}
                   <button
                     onClick={() => handleOpenRoles(row)}
                     title="Kelola Role"
-                    className="text-neutral-400 hover:text-primary-600 transition-colors p-1 rounded hover:bg-primary-50"
+                    className={`${actionBtn} hover:text-primary-600 hover:bg-primary-50 hover:border-primary-200`}
                   >
-                    <ShieldCheck className="w-5 h-5" strokeWidth={1.5} />
+                    <ShieldCheck className="w-4 h-4" strokeWidth={1.75} />
                   </button>
 
                   {/* Edit */}
                   <button
                     onClick={() => handleOpenEdit(row)}
                     title="Edit User"
-                    className="text-neutral-400 hover:text-neutral-700 transition-colors p-1 rounded hover:bg-neutral-100"
+                    className={`${actionBtn} hover:text-neutral-800 hover:bg-neutral-50`}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                   </button>
 
@@ -393,10 +390,10 @@ const UserManagementPage = () => {
                   <button
                     onClick={() => handleOpenReset(row)}
                     title="Reset Password"
-                    className="text-neutral-400 hover:text-primary-600 transition-colors p-1 rounded hover:bg-primary-50"
+                    className={`${actionBtn} hover:text-primary-600 hover:bg-primary-50 hover:border-primary-200`}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                     </svg>
                   </button>
 
@@ -405,10 +402,10 @@ const UserManagementPage = () => {
                     <button
                       disabled
                       title="Tidak bisa hapus akun sendiri"
-                      className="opacity-30 cursor-not-allowed text-neutral-400 p-1"
+                      className={`${actionBtn} opacity-40 cursor-not-allowed`}
                     >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
                   ) : (
@@ -418,10 +415,10 @@ const UserManagementPage = () => {
                         setDeleteError(null);
                       }}
                       title="Hapus User"
-                      className="text-neutral-400 hover:text-danger-600 transition-colors p-1 rounded hover:bg-danger-50"
+                      className={`${actionBtn} hover:text-danger-600 hover:bg-danger-50 hover:border-danger-200`}
                     >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
                   )}

@@ -33,8 +33,8 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
 
   return (
     <div className="overflow-x-auto w-full">
-      <table className="w-full text-left text-xs md:text-sm font-body text-neutral-900 border-collapse min-w-full">
-        <thead className="bg-neutral-50/80 text-neutral-500 font-heading text-[11px] font-bold uppercase tracking-wider border-b border-neutral-200/80">
+      <table className="w-full text-left text-[13px] font-body text-neutral-700 border-collapse min-w-full">
+        <thead className="bg-neutral-50 text-neutral-800 font-heading text-[13px] font-semibold border-b border-neutral-200">
           <tr>
             {columns.map((col, idx) => {
               const sortKey = col.key || col.accessor;
@@ -42,7 +42,7 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
               return (
                 <th 
                   key={idx} 
-                  className={`px-3 py-3 ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''} ${isSortable ? 'cursor-pointer select-none hover:bg-neutral-100/70' : ''}`}
+                  className={`px-4 py-3 ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''} ${isSortable ? 'cursor-pointer select-none hover:bg-neutral-100/70' : ''}`}
                   onClick={() => isSortable && onSort && onSort(sortKey)}
                 >
                   <div className={`flex items-center gap-1.5 ${col.align === 'center' ? 'justify-center' : col.align === 'right' ? 'justify-end' : ''}`}>
@@ -74,7 +74,7 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
               className={`hover:bg-neutral-50/70 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
             >
               {columns.map((col, colIndex) => (
-                <td key={colIndex} className={`px-3 py-3 ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''}`}>
+                <td key={colIndex} className={`px-4 py-3 ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''}`}>
                   {getCellContent(row, col, rowIndex)}
                 </td>
               ))}
