@@ -34,11 +34,12 @@ const roleOptions = [
   { value: 'travel_admin', label: 'Per Brand' }
 ];
 
-const getUserRoleLabel = (user) => {
+// Kolom "Akses Brand" cukup menampilkan nama brand (tanpa awalan "Admin").
+const getBrandAccessLabel = (user) => {
   if (user.brand_id === null || user.brand_id === undefined) {
-    return 'Admin Azhan';
+    return 'Semua Brand';
   }
-  return `Admin ${user.brand_name || `Brand #${user.brand_id}`}`;
+  return user.brand_name || `Brand #${user.brand_id}`;
 };
 
 const UserManagementPage = () => {
@@ -308,7 +309,7 @@ const UserManagementPage = () => {
           columns={columns}
           data={users}
           itemsPerPage={10}
-          emptyMessage="Belum ada akun admin user yang terdaftar."
+          emptyMessage="Belum ada user terdaftar."
           searchPlaceholder="Cari user..."
           renderCell={(row, key) => {
             if (key === 'email') {
@@ -319,7 +320,7 @@ const UserManagementPage = () => {
                     {row.email}
                   </span>
                   {isSelf && (
-                    <span className="text-xs uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-primary-100 text-primary-800 border border-primary-200">
+                    <span className="text-[11px] font-medium font-body px-1.5 py-0.5 rounded-md bg-primary-50 text-primary-600 border border-primary-100">
                       Anda
                     </span>
                   )}
@@ -327,7 +328,6 @@ const UserManagementPage = () => {
               );
             }
             if (key === 'role') {
-              const label = getUserRoleLabel(row);
               const isSuperAdmin = row.brand_id === null || row.brand_id === undefined;
               const dotColor = isSuperAdmin
                 ? '#F26522'
@@ -336,7 +336,7 @@ const UserManagementPage = () => {
               return (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700">
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
-                  {isSuperAdmin ? 'Semua Brand' : label}
+                  {getBrandAccessLabel(row)}
                 </span>
               );
             }
@@ -434,7 +434,7 @@ const UserManagementPage = () => {
       <Modal
         isOpen={isEditOpen}
         onClose={handleCloseEdit}
-        title="Edit Admin User"
+        title="Edit User"
         size="md"
       >
         <form onSubmit={handleSubmitEdit} className="space-y-4">
@@ -624,7 +624,7 @@ const UserManagementPage = () => {
           )}
 
           <p className="text-sm font-body text-neutral-700">
-            Apakah Anda yakin ingin menghapus akun user <strong className="text-neutral-900 font-heading">{userToDelete?.email}</strong>?
+            Apakah Anda yakin ingin menghapus user <strong className="text-neutral-900 font-heading">{userToDelete?.email}</strong>?
           </p>
           <p className="text-xs font-body text-neutral-500">
             Tindakan ini tidak dapat dibatalkan. User yang dihapus tidak akan bisa login lagi ke sistem.
