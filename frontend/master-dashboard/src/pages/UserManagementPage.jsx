@@ -38,7 +38,7 @@ const initialEditForm = {
 
 // Akses brand menentukan scope data (brand_id), terpisah dari role RBAC.
 const roleOptions = [
-  { value: 'super_admin', label: 'Holding (tanpa brand)' },
+  { value: 'super_admin', label: 'Holding (semua brand)' },
   { value: 'travel_admin', label: 'Per Brand' }
 ];
 
