@@ -23,13 +23,24 @@ type TokenRevoker interface {
 	RevokeAllRefreshTokens(ctx context.Context, adminUserID int64) error
 }
 
-type Handler struct {
-	repo    *Repository
-	revoker TokenRevoker
+// RoleAssigner menambahkan role RBAC ke seorang user (diimplementasi oleh
+// rbac.Repository). Akun CS baru otomatis mendapat role 'cs'.
+type RoleAssigner interface {
+	AssignRole(ctx context.Context, adminUserID int64, roleSlug string) error
 }
 
-func NewHandler(repo *Repository, revoker TokenRevoker) *Handler {
-	return &Handler{repo: repo, revoker: revoker}
+type Handler struct {
+	repo     *Repository
+	revoker  TokenRevoker
+	assigner RoleAssigner
+}
+
+func NewHandler(repo *Repository, revoker TokenRevoker, assigners ...RoleAssigner) *Handler {
+	h := &Handler{repo: repo, revoker: revoker}
+	if len(assigners) > 0 {
+		h.assigner = assigners[0]
+	}
+	return h
 }
 
 func (h *Handler) brandID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
@@ -103,6 +114,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.error(w, 500, "gagal membuat akun CS")
 		return
+	}
+	// RBAC Fase 1: akun CS baru otomatis memegang role 'cs'.
+	if h.assigner != nil {
+		if err := h.assigner.AssignRole(r.Context(), int64(user.ID), "cs"); err != nil {
+			log.Printf("[ERROR] crmuser.Create AssignRole cs user_id=%d: %v", user.ID, err)
+		}
 	}
 	h.json(w, 201, user)
 }

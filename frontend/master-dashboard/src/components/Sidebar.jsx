@@ -13,9 +13,6 @@ import {
   CreditCard,
   Boxes,
   Percent,
-  BarChart3,
-  FileBarChart,
-  ShieldCheck,
   Building2,
   Landmark,
   UserCog,
@@ -86,8 +83,6 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'LAPORAN & ANALYTICS',
       items: [
         { name: 'Peringkat Agen', path: '/analytics/peringkat-agen', icon: Trophy, status: 'active' },
-        { name: 'Analytics Lintas Brand', path: '/analytics/lintas-brand', icon: BarChart3, status: 'inactive' },
-        { name: 'Laporan Keuangan', path: '/analytics/keuangan', icon: FileBarChart, status: 'inactive' },
       ],
     },
     {
@@ -96,7 +91,6 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         { name: 'Kelola Brand', path: '/brands', icon: Building2, status: 'active' },
         { name: 'Rekening Bank', path: '/bank-accounts', icon: Landmark, status: 'active' },
         { name: 'User Management', path: '/users', icon: UserCog, status: 'active' },
-        { name: 'Legalitas & Perizinan', path: '/compliance', icon: ShieldCheck, status: 'inactive' },
       ],
     },
   ];

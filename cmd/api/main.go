@@ -31,6 +31,7 @@ import (
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/rbac"
 	"erp-azhan/api/internal/itinerary"
 	"erp-azhan/api/internal/jamaah"
 	"erp-azhan/api/internal/media"
@@ -132,7 +133,21 @@ func main() {
 	scheduleHandler := schedule.NewHandler(scheduleRepo)
 
 	identityRepo := identity.NewRepository(db)
-	identityHandler := identity.NewHandler(identityRepo)
+	rbacRepo := rbac.NewRepository(db)
+	rbacHandler := rbac.NewHandler(rbacRepo, identityRepo)
+	// Loader RBAC untuk klaim JWT saat login/refresh (RBAC Fase 1).
+	accessLoader := func(ctx context.Context, adminUserID int64) (*identity.UserAccess, error) {
+		access, err := rbacRepo.GetUserAccess(ctx, adminUserID)
+		if err != nil {
+			return nil, err
+		}
+		return &identity.UserAccess{
+			Roles:       access.Roles,
+			Permissions: access.Permissions,
+			PermVersion: access.PermVersion,
+		}, nil
+	}
+	identityHandler := identity.NewHandler(identityRepo, accessLoader)
 
 	brandRepo := brand.NewRepository(db)
 	brandHandler := brand.NewHandler(brandRepo)
@@ -152,7 +167,7 @@ func main() {
 	crmDealRepo := crmdeal.NewRepository(db)
 	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
 	crmUserRepo := crmuser.NewRepository(db)
-	crmUserHandler := crmuser.NewHandler(crmUserRepo, identityRepo)
+	crmUserHandler := crmuser.NewHandler(crmUserRepo, identityRepo, rbacRepo)
 
 	selfBookingRepo := selfbooking.NewRepository(db)
 	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo)
@@ -265,6 +280,18 @@ func main() {
 			r.Post("/", crmUserHandler.Create)
 			r.Put("/{id}", crmUserHandler.Update)
 			r.Put("/{id}/password", crmUserHandler.ResetPassword)
+		})
+
+		// RBAC Fase 1: manajemen role & permission (SPEK-RBAC-2026-10-02.md).
+		r.Route("/roles", func(r chi.Router) {
+			r.Use(identity.RequirePermission("user.admin"))
+			r.Get("/", rbacHandler.ListRoles)
+		})
+		r.With(identity.RequirePermission("user.admin")).Get("/permissions", rbacHandler.ListPermissions)
+		r.Route("/users/{id}/roles", func(r chi.Router) {
+			r.Use(identity.RequirePermission("user.admin"))
+			r.Get("/", rbacHandler.GetUserRoles)
+			r.Put("/", rbacHandler.SetUserRoles)
 		})
 
 		// Master data global milik holding: semua admin boleh baca,

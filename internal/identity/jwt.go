@@ -42,9 +42,30 @@ func getRefreshTTL() time.Duration {
 	return time.Duration(days) * 24 * time.Hour
 }
 
+// AccessClaims klaim access token hasil parse. Roles/Perms/PermVersion diisi
+// sejak RBAC Fase 1; token lama tanpa klaim tersebut tetap valid (slice kosong).
+type AccessClaims struct {
+	AdminUserID int64
+	BrandID     *int64
+	Role        string
+	Roles       []string
+	Perms       []string
+	PermVersion int
+}
+
 // GenerateAccessToken membuat token access baru.
 // Email dibuat variadic agar pemanggil internal lama tetap kompatibel.
 func GenerateAccessToken(adminUserID int64, brandID *int64, role string, emails ...string) (string, error) {
+	email := ""
+	if len(emails) > 0 {
+		email = emails[0]
+	}
+	return GenerateAccessTokenWithAccess(adminUserID, brandID, role, email, nil, nil, 0)
+}
+
+// GenerateAccessTokenWithAccess membuat access token lengkap dengan klaim RBAC
+// (roles, perms, pver). Dipakai login/refresh setelah resolusi rbac.GetUserAccess.
+func GenerateAccessTokenWithAccess(adminUserID int64, brandID *int64, role, email string, roles, perms []string, permVersion int) (string, error) {
 	now := time.Now()
 	ttl := getAccessTTL()
 	claims := jwt.MapClaims{
@@ -56,8 +77,17 @@ func GenerateAccessToken(adminUserID int64, brandID *int64, role string, emails 
 		"exp":      now.Add(ttl).Unix(),
 		"iat":      now.Unix(),
 	}
-	if len(emails) > 0 && emails[0] != "" {
-		claims["email"] = emails[0]
+	if email != "" {
+		claims["email"] = email
+	}
+	if len(roles) > 0 {
+		claims["roles"] = roles
+	}
+	if len(perms) > 0 {
+		claims["perms"] = perms
+	}
+	if permVersion > 0 {
+		claims["pver"] = permVersion
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(getJWTSecret())
@@ -136,6 +166,61 @@ func ValidateToken(tokenString string, expectedType string) (int64, *int64, stri
 
 	role, _ := claims["role"].(string)
 	return int64(subFloat), parsedBrandID, role, nil
+}
+
+// ValidateAccessClaims memvalidasi access token dan mengembalikan seluruh
+// klaimnya, termasuk klaim RBAC. Token lama tanpa roles/perms tetap valid.
+func ValidateAccessClaims(tokenString string) (*AccessClaims, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("metode signing tidak valid: %v", token.Header["alg"])
+		}
+		return getJWTSecret(), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("token tidak valid atau kedaluwarsa: %w", err)
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, errors.New("token tidak valid")
+	}
+	if tokenType, ok := claims["type"].(string); !ok || tokenType != "access" {
+		return nil, errors.New("tipe token salah")
+	}
+	subFloat, ok := claims["sub"].(float64)
+	if !ok {
+		return nil, errors.New("sub claim tidak valid")
+	}
+
+	out := &AccessClaims{AdminUserID: int64(subFloat)}
+	if brandIDClaim, ok := claims["brand_id"]; ok && brandIDClaim != nil {
+		if brandIDFloat, ok := brandIDClaim.(float64); ok {
+			bid := int64(brandIDFloat)
+			out.BrandID = &bid
+		}
+	}
+	out.Role, _ = claims["role"].(string)
+	out.Roles = claimStringSlice(claims["roles"])
+	out.Perms = claimStringSlice(claims["perms"])
+	if pver, ok := claims["pver"].(float64); ok {
+		out.PermVersion = int(pver)
+	}
+	return out, nil
+}
+
+func claimStringSlice(v any) []string {
+	raw, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // GeneratePortalToken membuat token autentikasi khusus Portal Jamaah (24 jam).

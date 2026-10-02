@@ -21,10 +21,7 @@ import InventoryStokPerlengkapanPage from './pages/InventoryStokPerlengkapanPage
 import StokBrandCabangPage from './pages/StokBrandCabangPage';
 import KomisiReferralPage from './pages/KomisiReferralPage';
 import GantiKaitanAgenPage from './pages/GantiKaitanAgenPage';
-import AnalyticsLintasBrandPage from './pages/AnalyticsLintasBrandPage';
 import PeringkatAgenPage from './pages/PeringkatAgenPage';
-import LaporanKeuanganPage from './pages/LaporanKeuanganPage';
-import CompliancePage from './pages/CompliancePage';
 import UserManagementPage from './pages/UserManagementPage';
 import BrandsPage from './pages/BrandsPage';
 import BrandFormPage from './pages/BrandFormPage';
@@ -89,12 +86,9 @@ function App() {
               <Route path="/agen/:id" element={<DetailAgenPage showBrandColumn={true} />} />
               
               {/* Analytics & Laporan */}
-              <Route path="/analytics/lintas-brand" element={<AnalyticsLintasBrandPage />} />
               <Route path="/analytics/peringkat-agen" element={<PeringkatAgenPage />} />
-              <Route path="/analytics/keuangan" element={<LaporanKeuanganPage />} />
               
               {/* Compliance */}
-              <Route path="/compliance" element={<CompliancePage />} />
               
               {/* Administrasi */}
               <Route path="/brands" element={<BrandsPage />} />
