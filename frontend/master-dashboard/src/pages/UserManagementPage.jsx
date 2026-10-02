@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Users, ShieldCheck, Building2, KeyRound } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import DataTable from '../components/ui/DataTable';
@@ -14,21 +15,12 @@ import StatTile from '../components/ui/StatTile';
 import { AuthContext } from '../context/AuthContext';
 import {
   listAdminUsers,
-  createAdminUser,
   updateAdminUser,
   resetAdminUserPassword,
   deleteAdminUser
 } from '../api/adminUsers';
 import { listBrands } from '../api/brands';
 import { listRoles, setUserRoles } from '../api/roles';
-
-const initialAddForm = {
-  email: '',
-  password: '',
-  role: 'super_admin', // akses brand: 'super_admin' (holding) atau 'travel_admin' (per brand)
-  brand_id: '',
-  roles: ['super_admin_grup'] // role RBAC yang akan di-assign setelah user dibuat
-};
 
 const initialEditForm = {
   email: '',
@@ -42,10 +34,6 @@ const roleOptions = [
   { value: 'travel_admin', label: 'Per Brand' }
 ];
 
-// Role RBAC default mengikuti pilihan akses brand.
-const defaultRolesForAccess = (access) =>
-  access === 'super_admin' ? ['super_admin_grup'] : ['admin_travel'];
-
 const getUserRoleLabel = (user) => {
   if (user.brand_id === null || user.brand_id === undefined) {
     return 'Admin Azhan';
@@ -55,6 +43,8 @@ const getUserRoleLabel = (user) => {
 
 const UserManagementPage = () => {
   const { currentUserId } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [users, setUsers] = useState([]);
   const [brands, setBrands] = useState([]);
@@ -69,11 +59,6 @@ const UserManagementPage = () => {
   const [roleError, setRoleError] = useState(null);
   const [isSubmittingRoles, setIsSubmittingRoles] = useState(false);
 
-  // Modal Create
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [createData, setCreateData] = useState(initialAddForm);
-  const [createError, setCreateError] = useState(null);
-  const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
 
   // Modal Edit
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -119,75 +104,13 @@ const UserManagementPage = () => {
     fetchData();
   }, []);
 
-  // ─── Create Handlers ────────────────────────────────────────────────────────
-  const handleOpenCreate = () => {
-    setCreateData(initialAddForm);
-    setCreateError(null);
-    setIsCreateOpen(true);
-  };
+  // Pesan hasil dari halaman Tambah User (/users/new).
+  useEffect(() => {
+    if (location.state?.successMessage) setSuccessMessage(location.state.successMessage);
+    if (location.state?.errorMessage) setErrorMessage(location.state.errorMessage);
+    if (location.state) window.history.replaceState({}, '');
+  }, [location.state]);
 
-  const handleCloseCreate = () => {
-    if (!isSubmittingCreate) {
-      setIsCreateOpen(false);
-      setCreateData(initialAddForm);
-      setCreateError(null);
-    }
-  };
-
-  const handleSubmitCreate = async (e) => {
-    e.preventDefault();
-    setCreateError(null);
-
-    const email = createData.email.trim();
-    if (!email) {
-      setCreateError("Email wajib diisi.");
-      return;
-    }
-
-    const password = createData.password.trim();
-    if (password.length < 8) {
-      setCreateError("Password minimal 8 karakter.");
-      return;
-    }
-
-    if (createData.role === 'travel_admin' && !createData.brand_id) {
-      setCreateError("Brand wajib dipilih untuk akses per brand.");
-      return;
-    }
-
-    if (!createData.roles || createData.roles.length === 0) {
-      setCreateError("Minimal satu role RBAC wajib dipilih.");
-      return;
-    }
-
-    setIsSubmittingCreate(true);
-    try {
-      const payload = {
-        email,
-        password,
-        brand_id: createData.role === 'super_admin' ? null : Number(createData.brand_id)
-      };
-
-      const created = await createAdminUser(payload);
-      // Backend memberi role default; set ulang sesuai pilihan di form agar
-      // user baru langsung memegang role yang benar.
-      if (created?.id) {
-        try {
-          await setUserRoles(created.id, createData.roles);
-        } catch (roleErr) {
-          setErrorMessage(`User dibuat, tetapi gagal mengatur role: ${roleErr.response?.data?.error || 'coba lewat tombol Kelola Role.'}`);
-        }
-      }
-      setSuccessMessage(`User "${email}" berhasil ditambahkan.`);
-      setIsCreateOpen(false);
-      fetchData();
-    } catch (error) {
-      const msg = error.response?.data?.error || "Gagal menambahkan user baru.";
-      setCreateError(msg);
-    } finally {
-      setIsSubmittingCreate(false);
-    }
-  };
 
   // ─── Edit Handlers ──────────────────────────────────────────────────────────
   const handleOpenEdit = (user) => {
@@ -357,7 +280,7 @@ const UserManagementPage = () => {
       <PageHeader
         title="User Management"
         actionLabel="+ Tambah User"
-        onAction={handleOpenCreate}
+        onAction={() => navigate('/users/new')}
       />
 
       {errorMessage && (
@@ -509,115 +432,6 @@ const UserManagementPage = () => {
           }}
         />
       )}
-
-      {/* Modal Tambah User */}
-      <Modal
-        isOpen={isCreateOpen}
-        onClose={handleCloseCreate}
-        title="Tambah Admin User"
-        size="md"
-      >
-        <form onSubmit={handleSubmitCreate} className="space-y-4">
-          {createError && (
-            <Alert variant="error">{createError}</Alert>
-          )}
-
-          <FormField label="Email Akun" required>
-            <Input
-              type="email"
-              name="email"
-              value={createData.email}
-              onChange={(e) => setCreateData(prev => ({ ...prev, email: e.target.value }))}
-              placeholder="admin@azhan.id"
-              autoFocus
-              required
-            />
-          </FormField>
-
-          <FormField label="Password" hint="Minimal 8 karakter." required>
-            <Input
-              type="password"
-              name="password"
-              value={createData.password}
-              onChange={(e) => setCreateData(prev => ({ ...prev, password: e.target.value }))}
-              placeholder="••••••••"
-              required
-            />
-          </FormField>
-
-          <CustomDropdown
-            label="Akses Brand"
-            required
-            value={createData.role}
-            onChange={(val) => setCreateData(prev => ({ ...prev, role: val, brand_id: '', roles: defaultRolesForAccess(val) }))}
-            options={roleOptions}
-          />
-
-          {createData.role === 'travel_admin' && (
-            <CustomDropdown
-              label="Pilih Brand"
-              required
-              value={createData.brand_id}
-              onChange={(val) => setCreateData(prev => ({ ...prev, brand_id: val }))}
-              placeholder="Pilih Brand..."
-              options={[
-                { value: '', label: 'Pilih Brand...' },
-                ...brands.map(b => ({ value: String(b.id), label: b.name }))
-              ]}
-            />
-          )}
-
-          <div>
-            <div className="mb-1.5 text-[13px] font-medium leading-5 text-neutral-800 font-body">
-              Role (RBAC) <span className="text-danger-500 font-bold">*</span>
-            </div>
-            <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1 border border-neutral-200 rounded-lg p-2">
-              {roles.map(role => (
-                <label
-                  key={role.slug}
-                  className={`flex items-start gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
-                    createData.roles.includes(role.slug) ? 'bg-primary-50' : 'hover:bg-neutral-50'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 h-4 w-4 rounded border-neutral-300 accent-[#F26522]"
-                    checked={createData.roles.includes(role.slug)}
-                    onChange={() => setCreateData(prev => ({
-                      ...prev,
-                      roles: prev.roles.includes(role.slug)
-                        ? prev.roles.filter(s => s !== role.slug)
-                        : [...prev.roles, role.slug]
-                    }))}
-                  />
-                  <span className="min-w-0">
-                    <span className={`block text-[13px] font-body ${createData.roles.includes(role.slug) ? 'text-primary-600 font-medium' : 'text-neutral-800'}`}>{role.name}</span>
-                    <span className="block text-[11px] font-body text-neutral-400">{role.slug} · {(role.permissions || []).length} permission</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleCloseCreate}
-              disabled={isSubmittingCreate}
-            >
-              Batal
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={isSubmittingCreate}
-            >
-              {isSubmittingCreate ? "Menyimpan..." : "Simpan User"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
 
       {/* Modal Edit User */}
       <Modal

@@ -23,6 +23,7 @@ import KomisiReferralPage from './pages/KomisiReferralPage';
 import GantiKaitanAgenPage from './pages/GantiKaitanAgenPage';
 import PeringkatAgenPage from './pages/PeringkatAgenPage';
 import UserManagementPage from './pages/UserManagementPage';
+import UserFormPage from './pages/UserFormPage';
 import BrandsPage from './pages/BrandsPage';
 import BrandFormPage from './pages/BrandFormPage';
 import BankAccountsPage from './pages/BankAccountsPage';
@@ -95,6 +96,7 @@ function App() {
               <Route path="/brands/new" element={<BrandFormPage />} />
               <Route path="/brands/:id/edit" element={<BrandFormPage />} />
               <Route path="/users" element={<UserManagementPage />} />
+              <Route path="/users/new" element={<UserFormPage />} />
               <Route path="/bank-accounts" element={<BankAccountsPage />} />
               <Route path="/payments" element={<PaymentConfirmationsPage showBrandColumn={true} />} />
             </Route>
