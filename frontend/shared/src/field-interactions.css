@@ -32,13 +32,13 @@ body :is(
   textarea, select, button[aria-haspopup='listbox']
 ):not(:disabled):not([readonly]):not([aria-invalid='true']):not([class*='border-danger-']):not([class*='border-red-']):is(:focus, [aria-expanded='true']) {
   border-color: #f26522 !important;
-  box-shadow: 0 0 0 3px rgba(242, 101, 34, 0.14) !important;
+  box-shadow: none !important;
 }
 
 /* Field error: ring merah lembut saat focus. */
 body :is(input, textarea, select)[aria-invalid='true']:focus,
 body :is(input, textarea, select)[class*='border-danger-']:focus {
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14) !important;
+  box-shadow: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
