@@ -294,7 +294,7 @@ const UserManagementPage = () => {
       {!isLoading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatTile icon={Users} variant="primary" value={users.length} label="Total User Internal" />
-          <StatTile icon={ShieldCheck} variant="violet" value={totalSuperAdmin} label="Super Admin Holding" />
+          <StatTile icon={ShieldCheck} variant="violet" value={totalSuperAdmin} label="Akses Holding" />
           <StatTile icon={Building2} variant="info" value={users.length - totalSuperAdmin} label="Admin Brand" />
           <StatTile icon={KeyRound} variant="success" value={roles.length} label="Role Tersedia" />
         </div>
