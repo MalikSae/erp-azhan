@@ -33,8 +33,13 @@ func displayNameFromEmail(email string) string {
 }
 
 func (r *Repository) List(ctx context.Context) ([]AdminUser, error) {
+	// Roles RBAC diikutkan (GROUP_CONCAT slug) supaya halaman User Management
+	// bisa menampilkan role tanpa N+1 request.
 	query := `
-		SELECT u.id, u.email, u.brand_id, b.name AS brand_name, b.primary_color AS brand_color, u.created_at
+		SELECT u.id, u.email, u.brand_id, b.name AS brand_name, b.primary_color AS brand_color, u.created_at,
+			(SELECT GROUP_CONCAT(ro.slug ORDER BY ro.slug SEPARATOR ',')
+			 FROM user_roles ur JOIN roles ro ON ro.id = ur.role_id
+			 WHERE ur.admin_user_id = u.id) AS role_slugs
 		FROM admin_users u
 		LEFT JOIN brands b ON u.brand_id = b.id
 		ORDER BY u.id ASC
@@ -51,7 +56,8 @@ func (r *Repository) List(ctx context.Context) ([]AdminUser, error) {
 		var brandID sql.NullInt64
 		var brandName sql.NullString
 		var brandColor sql.NullString
-		if err := rows.Scan(&u.ID, &u.Email, &brandID, &brandName, &brandColor, &u.CreatedAt); err != nil {
+		var roleSlugs sql.NullString
+		if err := rows.Scan(&u.ID, &u.Email, &brandID, &brandName, &brandColor, &u.CreatedAt, &roleSlugs); err != nil {
 			return nil, fmt.Errorf("adminuser.List scan: %w", err)
 		}
 		if brandID.Valid {
@@ -63,6 +69,10 @@ func (r *Repository) List(ctx context.Context) ([]AdminUser, error) {
 		}
 		if brandColor.Valid {
 			u.BrandColor = &brandColor.String
+		}
+		u.Roles = []string{}
+		if roleSlugs.Valid && roleSlugs.String != "" {
+			u.Roles = strings.Split(roleSlugs.String, ",")
 		}
 		users = append(users, u)
 	}

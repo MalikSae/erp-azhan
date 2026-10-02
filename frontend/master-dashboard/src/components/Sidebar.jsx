@@ -104,7 +104,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         />
       )}
 
-      <aside className={`w-64 bg-sidebar-bg text-neutral-300 h-screen flex flex-col fixed left-0 top-0 border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out select-none ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <aside className={`w-64 bg-sidebar-bg text-neutral-600 h-screen flex flex-col fixed left-0 top-0 border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out select-none ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Brand Header */}
         <div className="px-5 h-16 border-b border-sidebar-border shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
               <KaabaIcon className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-base font-heading font-bold text-white tracking-tight leading-none">
+              <h1 className="text-base font-heading font-bold text-neutral-900 tracking-tight leading-none">
                 Azhan Grup
               </h1>
               <p className="text-[11px] font-body text-sidebar-muted mt-1 font-medium">Master ERP</p>
@@ -132,7 +132,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                 `flex items-center gap-3 px-3.5 py-2.5 text-sm transition-all rounded-xl ${
                   isActive
                     ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
-                    :'text-sidebar-muted hover:text-white hover:bg-sidebar-surface font-medium'
+                    :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
                 }`
               }
             >
@@ -177,7 +177,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                             return `flex items-center justify-between px-3.5 py-2.5 text-sm transition-all rounded-xl ${
                               isActive
                                 ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
-                                :'text-sidebar-muted hover:text-white hover:bg-sidebar-surface font-medium'
+                                :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
                             }`;
                           }}
                         >

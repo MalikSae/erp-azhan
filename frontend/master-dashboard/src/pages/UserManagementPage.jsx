@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { Users, ShieldCheck, Building2, KeyRound } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import DataTable from '../components/ui/DataTable';
 import Button from '../components/ui/Button';
@@ -9,6 +10,7 @@ import CustomDropdown from '../components/ui/CustomDropdown';
 import Badge from '../components/ui/Badge';
 import Alert from '../components/ui/Alert';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import StatTile from '../components/ui/StatTile';
 import { AuthContext } from '../context/AuthContext';
 import {
   listAdminUsers,
@@ -18,6 +20,7 @@ import {
   deleteAdminUser
 } from '../api/adminUsers';
 import { listBrands } from '../api/brands';
+import { listRoles, setUserRoles } from '../api/roles';
 
 const initialAddForm = {
   email: '',
@@ -49,9 +52,16 @@ const UserManagementPage = () => {
 
   const [users, setUsers] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+
+  // Modal Kelola Role (RBAC)
+  const [roleTargetUser, setRoleTargetUser] = useState(null);
+  const [selectedRoles, setSelectedRoles] = useState([]);
+  const [roleError, setRoleError] = useState(null);
+  const [isSubmittingRoles, setIsSubmittingRoles] = useState(false);
 
   // Modal Create
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -83,12 +93,14 @@ const UserManagementPage = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [usersData, brandsData] = await Promise.all([
+      const [usersData, brandsData, rolesData] = await Promise.all([
         listAdminUsers(),
-        listBrands()
+        listBrands(),
+        listRoles()
       ]);
       setUsers(usersData || []);
       setBrands(brandsData || []);
+      setRoles(rolesData || []);
     } catch (error) {
       const msg = error.response?.data?.error || "Gagal memuat data pengguna.";
       setErrorMessage(msg);
@@ -274,11 +286,49 @@ const UserManagementPage = () => {
     }
   };
 
+  // ─── Kelola Role (RBAC) ─────────────────────────────────────────────────────
+  const roleNameOf = (slug) => roles.find(r => r.slug === slug)?.name || slug;
+
+  const handleOpenRoles = (user) => {
+    setRoleTargetUser(user);
+    setSelectedRoles(user.roles || []);
+    setRoleError(null);
+  };
+
+  const handleToggleRole = (slug) => {
+    setSelectedRoles(prev =>
+      prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]
+    );
+  };
+
+  const handleSubmitRoles = async (e) => {
+    e.preventDefault();
+    if (selectedRoles.length === 0) {
+      setRoleError('Minimal satu role wajib dipilih.');
+      return;
+    }
+    setIsSubmittingRoles(true);
+    setRoleError(null);
+    try {
+      await setUserRoles(roleTargetUser.id, selectedRoles);
+      setSuccessMessage(`Role untuk "${roleTargetUser.email}" berhasil diperbarui. Sesi aktif user tersebut dicabut — ia perlu login ulang.`);
+      setRoleTargetUser(null);
+      fetchData();
+    } catch (error) {
+      setRoleError(error.response?.data?.error || 'Gagal mengubah role user.');
+    } finally {
+      setIsSubmittingRoles(false);
+    }
+  };
+
   const userToDelete = users.find(u => u.id === deleteConfirmId);
+
+  const totalSuperAdmin = users.filter(u => u.brand_id === null || u.brand_id === undefined).length;
 
   const columns = [
     { header: 'Email', key: 'email' },
-    { header: 'Role & Akses', key: 'role' },
+    { header: 'Akses Brand', key: 'role' },
+    { header: 'Role (RBAC)', key: 'rbac_roles' },
     { header: 'Aksi', key: 'aksi' }
   ];
 
@@ -295,6 +345,15 @@ const UserManagementPage = () => {
       )}
       {successMessage && (
         <Alert variant="success">{successMessage}</Alert>
+      )}
+
+      {!isLoading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatTile icon={Users} variant="primary" value={users.length} label="Total User Internal" />
+          <StatTile icon={ShieldCheck} variant="violet" value={totalSuperAdmin} label="Super Admin Grup" />
+          <StatTile icon={Building2} variant="info" value={users.length - totalSuperAdmin} label="Admin Brand" />
+          <StatTile icon={KeyRound} variant="success" value={roles.length} label="Role Tersedia" />
+        </div>
       )}
 
       {isLoading ? (
@@ -343,11 +402,39 @@ const UserManagementPage = () => {
               }
               return <Badge variant="draft">{label}</Badge>;
             }
+            if (key === 'rbac_roles') {
+              const userRoles = row.roles || [];
+              if (userRoles.length === 0) {
+                return <span className="text-xs text-neutral-400 font-body italic">Belum ada role</span>;
+              }
+              return (
+                <div className="flex flex-wrap gap-1.5 max-w-xs">
+                  {userRoles.map(slug => (
+                    <span
+                      key={slug}
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium font-body bg-primary-50 text-primary-700 border border-primary-200"
+                      title={roleNameOf(slug)}
+                    >
+                      {roleNameOf(slug)}
+                    </span>
+                  ))}
+                </div>
+              );
+            }
             if (key === 'aksi') {
               const isSelf = currentUserId && Number(row.id) === Number(currentUserId);
 
               return (
                 <div className="flex gap-3 items-center">
+                  {/* Kelola Role */}
+                  <button
+                    onClick={() => handleOpenRoles(row)}
+                    title="Kelola Role"
+                    className="text-neutral-400 hover:text-primary-600 transition-colors p-1 rounded hover:bg-primary-50"
+                  >
+                    <ShieldCheck className="w-5 h-5" strokeWidth={1.5} />
+                  </button>
+
                   {/* Edit */}
                   <button
                     onClick={() => handleOpenEdit(row)}
@@ -596,6 +683,62 @@ const UserManagementPage = () => {
               disabled={isSubmittingReset}
             >
               {isSubmittingReset ? "Menyimpan..." : "Ubah Password"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Kelola Role (RBAC) */}
+      <Modal
+        isOpen={!!roleTargetUser}
+        onClose={() => { if (!isSubmittingRoles) { setRoleTargetUser(null); setRoleError(null); } }}
+        title={`Kelola Role — ${roleTargetUser?.email || ''}`}
+        size="md"
+      >
+        <form onSubmit={handleSubmitRoles} className="space-y-4">
+          {roleError && <Alert variant="error">{roleError}</Alert>}
+
+          <p className="text-xs text-neutral-500 font-body">
+            Satu user boleh memegang lebih dari satu role. Mengubah role akan mencabut sesi aktif user tersebut (wajib login ulang).
+          </p>
+
+          <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+            {roles.map(role => (
+              <label
+                key={role.slug}
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                  selectedRoles.includes(role.slug)
+                    ? 'border-primary-300 bg-primary-50'
+                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500 accent-[#F26522]"
+                  checked={selectedRoles.includes(role.slug)}
+                  onChange={() => handleToggleRole(role.slug)}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-heading font-semibold text-neutral-900">{role.name}</span>
+                  <span className="block text-[11px] font-body text-neutral-500">
+                    {role.slug} · {(role.permissions || []).length} permission
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => { setRoleTargetUser(null); setRoleError(null); }}
+              disabled={isSubmittingRoles}
+            >
+              Batal
+            </Button>
+            <Button type="submit" variant="primary" disabled={isSubmittingRoles}>
+              {isSubmittingRoles ? 'Menyimpan...' : 'Simpan Role'}
             </Button>
           </div>
         </form>

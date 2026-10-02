@@ -1,113 +1,17 @@
 /** @type {import('tailwindcss').Config} */
+import sharedPreset from '../shared/tailwind-preset.js';
+
+// Tema UI terpusat di frontend/shared/tailwind-preset.js (identitas SmartHR).
+// Jangan menambah palet di sini — ubah preset-nya supaya kedua dashboard seragam.
 export default {
+  presets: [sharedPreset],
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
     "../shared/src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: '#FEFDF0',
-          100: '#FEF7D6',
-          200: '#FDEE9F',
-          300: '#FCE366',
-          400: '#FBD836',
-          // 50–500: latar & isi (tombol, menu aktif) — selalu dengan teks gelap di atasnya.
-          // 700–950: emas tua untuk teks/ikon/garis di latar terang (kontras ≥ 4.5:1 vs putih).
-          500: '#FED853',
-          600: '#D9A514', // hover isi tombol kuning
-          700: '#946C08', // teks & ikon (4.8:1)
-          800: '#7A5906', // teks penting (6.4:1)
-          900: '#5E4405', // teks di atas tint kuning (9.1:1)
-          950: '#3F2E03',
-          DEFAULT: '#FED853',
-        },
-        neutral: {
-          50: '#FAFAFA',
-          100: '#F4F4F5',
-          200: '#E4E4E7',
-          300: '#D4D4D8',
-          400: '#A1A1AA',
-          500: '#71717A',
-          600: '#52525B',
-          700: '#3F3F46',
-          800: '#27272A',
-          900: '#18181B',
-        },
-        success: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          400: '#4ade80',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
-          900: '#14532d',
-        },
-        warning: {
-          50: '#fffbeb',
-          100: '#fef3c7',
-          200: '#fde68a',
-          300: '#fcd34d',
-          400: '#fbbf24',
-          500: '#f59e0b',
-          600: '#d97706',
-          700: '#b45309',
-          800: '#92400e',
-          900: '#78350f',
-        },
-        danger: {
-          50: '#fef2f2',
-          100: '#fee2e2',
-          200: '#fecaca',
-          300: '#fca5a5',
-          400: '#f87171',
-          500: '#ef4444',
-          600: '#dc2626',
-          700: '#b91c1c',
-          800: '#991b1b',
-          900: '#7f1d1d',
-        },
-        sidebar: {
-          bg: '#181C1F',
-          surface: '#22272B',
-          hover: '#292F34',
-          active: '#FED853',
-          activeText: '#14171A',
-          muted: '#8C95A0',
-          border: '#2A3036'
-        },
-        brand: {
-          dark: '#14171A'
-        },
-        page: {
-          bg: '#F6F8FA'
-        },
-        accent: {
-          gold: '#FED853',
-          'gold-hover': '#D9A514',
-          'gold-light': '#FEF7D6',
-        }
-      },
-      borderRadius: {
-        'lg': '0.375rem', // 6px: compact controls
-        'xl': '0.375rem', // 6px: buttons and fields
-        '2xl': '0.5rem',  // 8px: cards and containers
-        '3xl': '0.75rem', // 12px: large panels
-      },
-      boxShadow: {
-        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
-        'card-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05)',
-      },
-      fontFamily: {
-        heading: ["DM Sans", "sans-serif"],
-        body: ["DM Sans", "sans-serif"],
-      }
-    },
+    extend: {},
   },
   plugins: [],
 }

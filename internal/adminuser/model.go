@@ -9,6 +9,7 @@ type AdminUser struct {
 	BrandID    *uint64   `json:"brand_id"`
 	BrandName  *string   `json:"brand_name"`
 	BrandColor *string   `json:"brand_color"`
+	Roles      []string  `json:"roles"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
