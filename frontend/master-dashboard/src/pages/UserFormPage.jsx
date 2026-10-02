@@ -143,6 +143,10 @@ const UserFormPage = () => {
                 />
               )}
 
+              <p className="text-[11px] font-body text-neutral-400 -mt-2">
+                Akses Brand menentukan <span className="font-medium text-neutral-500">cakupan data</span>; kemampuan user diatur oleh Role (RBAC) di kanan.
+              </p>
+
               <div className="rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3 text-xs font-body text-neutral-600">
                 {selectedRoles.length} role dipilih · gabungan <span className="font-semibold text-neutral-900">{totalPermissions} permission</span>
               </div>
