@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
       
       const payload = decodeJwtPayload(access_token);
       if (payload && payload.brand_id !== null) {
-        throw new Error("Master Dashboard khusus untuk Super Admin Grup. Akun ini terikat ke brand tertentu — gunakan Travel Dashboard (belum tersedia di fase ini).");
+        throw new Error("Master Dashboard khusus untuk Super Admin Holding. Akun ini terikat ke brand tertentu — gunakan Travel Dashboard (belum tersedia di fase ini).");
       }
 
       localStorage.setItem('erp_access_token', access_token);
@@ -56,7 +56,7 @@ export const AuthProvider = ({ children }) => {
       
       return true;
     } catch (error) {
-      if (error.message === "Master Dashboard khusus untuk Super Admin Grup. Akun ini terikat ke brand tertentu — gunakan Travel Dashboard (belum tersedia di fase ini).") {
+      if (error.message === "Master Dashboard khusus untuk Super Admin Holding. Akun ini terikat ke brand tertentu — gunakan Travel Dashboard (belum tersedia di fase ini).") {
         throw error;
       }
       if (error.response && error.response.data && error.response.data.error) {
