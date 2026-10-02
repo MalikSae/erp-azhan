@@ -8,6 +8,7 @@ type Role struct {
 	Slug        string    `json:"slug"`
 	Name        string    `json:"name"`
 	IsSystem    bool      `json:"is_system"`
+	Scope       string    `json:"scope"` // 'holding' | 'brand' | 'semua'
 	Permissions []string  `json:"permissions"`
 	CreatedAt   time.Time `json:"created_at"`
 }

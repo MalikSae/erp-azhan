@@ -566,7 +566,12 @@ const UserManagementPage = () => {
           </p>
 
           <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
-            {roles.map(role => (
+            {roles.filter(role => {
+              // Saring sesuai akses user: scope 'holding' hanya untuk user
+              // akses holding, 'brand' untuk user terikat brand.
+              const isHoldingUser = roleTargetUser?.brand_id === null || roleTargetUser?.brand_id === undefined;
+              return role.scope === 'semua' || role.scope === (isHoldingUser ? 'holding' : 'brand');
+            }).map(role => (
               <label
                 key={role.slug}
                 className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${

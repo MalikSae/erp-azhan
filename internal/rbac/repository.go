@@ -10,7 +10,8 @@ import (
 
 var (
 	ErrUserNotFound = errors.New("user tidak ditemukan")
-	ErrUnknownRole  = errors.New("role tidak dikenal")
+	ErrUnknownRole   = errors.New("role tidak dikenal")
+	ErrScopeMismatch = errors.New("kombinasi role dan akses brand tidak sah")
 )
 
 type Repository struct{ db *sql.DB }
@@ -91,7 +92,7 @@ func (r *Repository) ListPermissions(ctx context.Context) ([]Permission, error) 
 
 func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, slug, name, is_system, created_at FROM roles ORDER BY id`)
+		`SELECT id, slug, name, is_system, scope, created_at FROM roles ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("rbac.ListRoles: %w", err)
 	}
@@ -100,7 +101,7 @@ func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 	index := make(map[int64]int)
 	for rows.Next() {
 		var role Role
-		if err := rows.Scan(&role.ID, &role.Slug, &role.Name, &role.IsSystem, &role.CreatedAt); err != nil {
+		if err := rows.Scan(&role.ID, &role.Slug, &role.Name, &role.IsSystem, &role.Scope, &role.CreatedAt); err != nil {
 			return nil, fmt.Errorf("rbac.ListRoles scan: %w", err)
 		}
 		role.Permissions = []string{}
@@ -154,10 +155,41 @@ func (r *Repository) SetUserRoles(ctx context.Context, adminUserID int64, roleSl
 	for i, s := range roleSlugs {
 		args[i] = s
 	}
-	var count int
-	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM roles WHERE slug IN (`+placeholders+`)`, args...).Scan(&count); err != nil {
+
+	// Validasi scope: role 'holding' hanya untuk user akses holding
+	// (brand_id NULL), role 'brand' hanya untuk user terikat brand.
+	var brandID sql.NullInt64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT brand_id FROM admin_users WHERE id = ?`, adminUserID).Scan(&brandID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("rbac.SetUserRoles user: %w", err)
+	}
+
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT slug, name, scope FROM roles WHERE slug IN (`+placeholders+`)`, args...)
+	if err != nil {
 		return fmt.Errorf("rbac.SetUserRoles validate: %w", err)
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var slug, name, scope string
+		if err := rows.Scan(&slug, &name, &scope); err != nil {
+			return fmt.Errorf("rbac.SetUserRoles validate scan: %w", err)
+		}
+		count++
+		if scope == "holding" && brandID.Valid {
+			return fmt.Errorf("%w: role %q hanya untuk akses Holding", ErrScopeMismatch, name)
+		}
+		if scope == "brand" && !brandID.Valid {
+			return fmt.Errorf("%w: role %q hanya untuk user yang terikat brand", ErrScopeMismatch, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
 	}
 	if count != len(roleSlugs) {
 		return ErrUnknownRole

@@ -99,7 +99,7 @@ func (h *Handler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrUserNotFound):
 			writeError(w, http.StatusNotFound, err.Error())
-		case errors.Is(err, ErrUnknownRole):
+		case errors.Is(err, ErrUnknownRole), errors.Is(err, ErrScopeMismatch):
 			writeError(w, http.StatusBadRequest, err.Error())
 		default:
 			log.Printf("[ERROR] rbac.SetUserRoles: %v", err)

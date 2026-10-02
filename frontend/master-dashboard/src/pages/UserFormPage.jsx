@@ -51,6 +51,13 @@ const UserFormPage = () => {
     setSelectedRoles((prev) => prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]);
   };
 
+  // Role disaring sesuai akses: scope 'holding' hanya tampil untuk akses
+  // holding, 'brand' untuk akses per brand, 'semua' selalu tampil.
+  const visibleRoles = useMemo(() => {
+    const wanted = form.access === 'holding' ? 'holding' : 'brand';
+    return roles.filter((r) => r.scope === 'semua' || r.scope === wanted);
+  }, [roles, form.access]);
+
   const totalPermissions = useMemo(() => {
     const set = new Set();
     roles.filter((r) => selectedRoles.includes(r.slug)).forEach((r) => (r.permissions || []).forEach((p) => set.add(p)));
@@ -164,7 +171,7 @@ const UserFormPage = () => {
               <span className="text-xs font-body text-neutral-400">klik baris untuk melihat permission</span>
             </div>
             <ul className="divide-y divide-neutral-100">
-              {roles.map((role) => {
+              {visibleRoles.map((role) => {
                 const checked = selectedRoles.includes(role.slug);
                 const expanded = expandedRole === role.slug;
                 return (
