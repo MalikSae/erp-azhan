@@ -129,7 +129,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
               end
               onClick={closeDrawer}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3.5 py-2.5 text-[13px] transition-all rounded-lg ${
+                `flex items-center gap-3 px-3 py-2 text-[13px] transition-all rounded-lg ${
                   isActive
                     ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
                     :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
@@ -141,24 +141,16 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
             </NavLink>
           </div>
 
-          {/* Menu Groups */}
+          {/* Menu Groups — label seksi statis ala SmartHR; semua item terlihat */}
           {menuGroups.map((group) => {
-            const isExpanded = openGroup === group.name;
             return (
-              <div key={group.name} className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(group.name)}
-                  className="w-full flex items-center justify-between px-3.5 py-1.5 text-[11px] font-bold text-sidebar-muted hover:text-neutral-700 transition-colors uppercase tracking-wider"
-                >
-                  <span>{group.name}</span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-neutral-500' : 'text-neutral-300'}`}
-                  />
-                </button>
+              <div key={group.name} className="space-y-0.5">
+                <div className="px-3.5 pt-2 pb-1 text-[10.5px] font-semibold text-neutral-400 uppercase tracking-[0.08em]">
+                  {group.name}
+                </div>
 
-                {isExpanded && (
-                  <div className="space-y-1 pt-0.5">
+                {(
+                  <div className="space-y-0.5">
                     {group.items.map((item) => {
                       const Icon = item.icon;
                       const isInactive = item.status === 'inactive';
@@ -171,10 +163,10 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                           onClick={closeDrawer}
                           className={({ isActive }) => {
                             if (isInactive) {
-                              return 'flex items-center justify-between px-3.5 py-2 text-[13px] transition-all rounded-lg text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
+                              return 'flex items-center justify-between px-3 py-1.5 text-[13px] transition-all rounded-lg text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
                             }
                             
-                            return `flex items-center justify-between px-3.5 py-2.5 text-[13px] transition-all rounded-lg ${
+                            return `flex items-center justify-between px-3 py-2 text-[13px] transition-all rounded-lg ${
                               isActive
                                 ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
                                 :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
