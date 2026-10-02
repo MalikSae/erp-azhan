@@ -108,7 +108,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         {/* Brand Header */}
         <div className="px-5 h-16 border-b border-sidebar-border shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sidebar-surface border border-primary-500/50 flex items-center justify-center text-primary-500">
+            <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-sm">
               <KaabaIcon className="w-5 h-5" />
             </div>
             <div>
@@ -129,7 +129,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
               end
               onClick={closeDrawer}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3.5 py-2.5 text-sm transition-all rounded-xl ${
+                `flex items-center gap-3 px-3.5 py-2.5 text-[13px] transition-all rounded-lg ${
                   isActive
                     ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
                     :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
@@ -149,11 +149,11 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.name)}
-                  className="w-full flex items-center justify-between px-3.5 py-1.5 text-[11px] font-bold text-sidebar-muted hover:text-neutral-200 transition-colors uppercase tracking-wider"
+                  className="w-full flex items-center justify-between px-3.5 py-1.5 text-[11px] font-bold text-sidebar-muted hover:text-neutral-700 transition-colors uppercase tracking-wider"
                 >
                   <span>{group.name}</span>
                   <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-neutral-400' : 'text-neutral-600'}`}
+                    className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-neutral-500' : 'text-neutral-300'}`}
                   />
                 </button>
 
@@ -171,10 +171,10 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                           onClick={closeDrawer}
                           className={({ isActive }) => {
                             if (isInactive) {
-                              return 'flex items-center justify-between px-3.5 py-2 text-sm transition-all rounded-xl text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
+                              return 'flex items-center justify-between px-3.5 py-2 text-[13px] transition-all rounded-lg text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
                             }
                             
-                            return `flex items-center justify-between px-3.5 py-2.5 text-sm transition-all rounded-xl ${
+                            return `flex items-center justify-between px-3.5 py-2.5 text-[13px] transition-all rounded-lg ${
                               isActive
                                 ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
                                 :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
@@ -186,7 +186,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                             <span className="truncate">{item.name}</span>
                           </div>
                           {isInactive && (
-                            <span className="text-[10px] bg-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-[10px] bg-neutral-100 text-neutral-400 px-1.5 py-0.5 rounded font-mono">
                               Soon
                             </span>
                           )}

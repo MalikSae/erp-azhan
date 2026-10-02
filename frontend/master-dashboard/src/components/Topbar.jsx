@@ -41,23 +41,23 @@ const Topbar = ({ toggleSidebar }) => {
 
       {/* Right Side - Actions & User Profile */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Help Button */}
+        {/* Help Button — ikon kotak berbingkai ala SmartHR */}
         <button
           type="button"
-          className="p-2 text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100/80 rounded-xl transition-colors"
+          className="w-9 h-9 flex items-center justify-center text-neutral-500 hover:text-neutral-800 bg-white hover:bg-neutral-50 border border-neutral-200 rounded-lg transition-colors"
           title="Pusat Bantuan & Panduan"
         >
-          <HelpCircle className="w-4.5 h-4.5" />
+          <HelpCircle className="w-[18px] h-[18px]" />
         </button>
 
         {/* Notification Bell with Badge */}
         <button
           type="button"
-          className="p-2 text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100/80 rounded-xl transition-colors relative"
+          className="w-9 h-9 flex items-center justify-center text-neutral-500 hover:text-neutral-800 bg-white hover:bg-neutral-50 border border-neutral-200 rounded-lg transition-colors relative"
           title="Notifikasi & Peringatan"
         >
-          <Bell className="w-4.5 h-4.5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-danger-500 rounded-full ring-2 ring-white" />
+          <Bell className="w-[18px] h-[18px]" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-danger-500 rounded-full ring-2 ring-white" />
         </button>
 
         <div className="h-6 w-[1px] bg-neutral-200 mx-1 hidden sm:block" />
@@ -68,7 +68,7 @@ const Topbar = ({ toggleSidebar }) => {
             onClick={() => setDropdownOpen(!dropdownOpen)}
             className="flex items-center gap-3 p-1.5 pl-2 pr-2.5 rounded-xl hover:bg-neutral-50 transition-all border border-transparent hover:border-neutral-200/80"
           >
-            <div className="w-8 h-8 rounded-full bg-brand-dark text-primary-400 flex items-center justify-center font-bold text-xs shadow-xs ring-2 ring-primary-200">
+            <div className="w-8 h-8 rounded-full bg-primary-500 text-white flex items-center justify-center font-bold text-xs shadow-xs ring-2 ring-primary-100">
               {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
             </div>
             <div className="hidden sm:flex flex-col text-left leading-tight">
