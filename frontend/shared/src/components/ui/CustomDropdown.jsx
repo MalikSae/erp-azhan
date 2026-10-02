@@ -94,10 +94,10 @@ const CustomDropdown = ({
               ? 'border-danger-500 focus:border-danger-500' 
               : isDark ? 'border-neutral-700' : 'border-neutral-200/90'
             }
-            ${isOpen ? 'border-neutral-400 ring-2 ring-primary-500/40' : ''}
+            
             ${!selectedOption 
               ? (isDark ? 'text-neutral-400' : 'text-neutral-400') 
-              : (isDark ? 'text-white' : 'text-neutral-900 font-medium')
+              : (isDark ? 'text-white' : 'text-neutral-900')
             }
           `}
         >
@@ -112,7 +112,7 @@ const CustomDropdown = ({
             )}
           </div>
           <svg 
-            className={`w-4 h-4 transition-transform duration-200 shrink-0 ${isDark ? 'text-neutral-500' : 'text-neutral-400'} ${isOpen ? 'transform rotate-180 text-neutral-800' : ''}`} 
+            className={`w-4 h-4 transition-transform duration-200 shrink-0 ${isDark ? 'text-neutral-500' : 'text-neutral-400'} ${isOpen ? 'transform rotate-180 text-primary-500' : ''}`} 
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24"
@@ -123,10 +123,10 @@ const CustomDropdown = ({
 
         {/* Dropdown Menu */}
         {isOpen && !disabled && (
-          <div className={`absolute z-50 w-full min-w-[200px] mt-1.5 border rounded-xl shadow-card overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150
+          <div className={`absolute z-50 w-full min-w-[200px] mt-1.5 border rounded-lg shadow-card overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150
             ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200/80'}
           `}>
-            <ul className="max-h-60 overflow-y-auto py-1 text-xs md:text-sm font-body">
+            <ul className="max-h-60 overflow-y-auto py-1 text-[13px] font-body">
               {normalizedOptions.length === 0 ? (
                 <li className={`px-3.5 py-2.5 text-center text-xs whitespace-nowrap ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Tidak ada pilihan</li>
               ) : (
@@ -139,7 +139,7 @@ const CustomDropdown = ({
                       title={typeof opt.label === 'string' ? opt.label : undefined}
                       className={`px-3.5 py-2.5 cursor-pointer transition-colors
                         ${isSelected 
-                          ? (isDark ? 'bg-neutral-700 text-primary-500 font-bold' : 'bg-primary-100 text-neutral-900 font-bold')
+                          ? (isDark ? 'bg-neutral-700 text-primary-500 font-medium' : 'bg-primary-50 text-primary-600 font-medium')
                           : (isDark ? 'text-neutral-300 hover:bg-neutral-700' : 'text-neutral-700 hover:bg-neutral-50')
                         }
                       `}
