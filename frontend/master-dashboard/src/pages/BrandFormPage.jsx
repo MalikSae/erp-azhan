@@ -347,20 +347,22 @@ const BrandFormPage = () => {
                 </div>
 
                 <FormField label="Warna Utama Brand" helperText="Kode Hex warna untuk tombol & highlight (mis. #1B3A6B)">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <input 
                       type="color" 
                       name="primary_color"
                       value={formData.primary_color || '#FED853'}
                       onChange={handleChange}
-                      className="w-10 h-10 p-1 rounded-xl border border-neutral-200 cursor-pointer bg-white"
+                      aria-label="Pilih warna utama brand"
+                      className="brand-color-picker w-11 h-11 shrink-0 p-2 rounded-xl border border-neutral-200 cursor-pointer bg-white"
                     />
                     <Input 
                       name="primary_color"
                       value={formData.primary_color}
                       onChange={handleChange}
                       placeholder="#FED853"
-                      className="font-mono uppercase"
+                      className="!mb-0 min-w-0 flex-1"
+                      aria-label="Kode hex warna utama brand"
                     />
                   </div>
                 </FormField>

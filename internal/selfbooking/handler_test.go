@@ -64,6 +64,20 @@ func TestCreateBookingFailsClosedWhenSiteverifyDown(t *testing.T) {
 	}
 }
 
+func TestCreateBookingSkipsCaptchaWhenDisabled(t *testing.T) {
+	// Tanpa TURNSTILE_SECRET_KEY, captcha_token tidak diwajibkan: request lolos
+	// gate captcha dan berhenti di batas nomor HP (repo nil tidak tersentuh).
+	h := newTestHandler(t, "", 0)
+	h.bookingByPhone.record("brand:2|6281234567890")
+	h.bookingByPhone.record("brand:2|6281234567890")
+	h.bookingByPhone.record("brand:2|6281234567890")
+	body := strings.Replace(validBookingBody, `"captcha_token": "token-uji",`, "", 1)
+	rec := postBook(h, body)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("got %d %s, want 429 (lolos gate captcha)", rec.Code, rec.Body.String())
+	}
+}
+
 func TestCreateBookingIPLimit(t *testing.T) {
 	h := newTestHandler(t, "", 0)
 	for i := 1; i <= bookingIPAttemptLimit; i++ {

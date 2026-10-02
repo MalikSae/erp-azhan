@@ -123,9 +123,15 @@ func TestCheckoutRequiresConsentAndQuote(t *testing.T) {
 	}
 }
 
-func TestCaptchaMissingSecretFailsClosed(t *testing.T) {
+// Keputusan produk: tanpa TURNSTILE_SECRET_KEY, Turnstile nonaktif (bukan
+// menolak semua booking). Dengan secret, verifikasi tetap fail closed
+// (lihat TestCreateBookingRejectsInvalidCaptcha di handler_test.go).
+func TestCaptchaDisabledWithoutSecret(t *testing.T) {
 	verifier := &turnstileVerifier{}
-	if ok, err := verifier.verify(context.Background(), "arbitrary", "127.0.0.1"); ok || err == nil {
-		t.Fatal("missing secret accepted")
+	if verifier.enabled() {
+		t.Fatal("verifier tanpa secret dianggap aktif")
+	}
+	if ok, err := verifier.verify(context.Background(), "", "127.0.0.1"); !ok || err != nil {
+		t.Fatalf("Turnstile nonaktif harus meloloskan request: ok=%v err=%v", ok, err)
 	}
 }

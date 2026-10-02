@@ -172,20 +172,22 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gate 1: Captcha
-	if strings.TrimSpace(req.CaptchaToken) == "" {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
-		return
-	}
-	valid, err := h.captcha.verify(r.Context(), strings.TrimSpace(req.CaptchaToken), clientIP)
-	if err != nil {
-		log.Printf("[ERROR] selfbooking captcha: %v", err)
-		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
-		return
-	}
-	if !valid {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
-		return
+	// Gate 1: Captcha (hanya bila Turnstile aktif, lihat turnstile.go)
+	if h.captcha.enabled() {
+		if strings.TrimSpace(req.CaptchaToken) == "" {
+			writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+			return
+		}
+		valid, err := h.captcha.verify(r.Context(), strings.TrimSpace(req.CaptchaToken), clientIP)
+		if err != nil {
+			log.Printf("[ERROR] selfbooking captcha: %v", err)
+			writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
+			return
+		}
+		if !valid {
+			writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+			return
+		}
 	}
 
 	// Gate 2: Brand ID

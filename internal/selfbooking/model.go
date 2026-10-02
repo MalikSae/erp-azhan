@@ -154,6 +154,10 @@ type InvoiceFinancial struct {
 	TotalDibayar        float64 `json:"total_dibayar"`
 	SisaTagihan         float64 `json:"sisa_tagihan"`
 	JatuhTempoPelunasan string  `json:"jatuh_tempo_pelunasan"`
+	// JatuhTempoAt (RFC3339) dan FullPayment dipakai microsite untuk format
+	// tanggal Indonesia dan memilih kalimat DP atau bayar penuh.
+	JatuhTempoAt string `json:"jatuh_tempo_at"`
+	FullPayment  bool   `json:"full_payment"`
 }
 
 // InvoiceResponse adalah response lengkap untuk GET /api/public/invoice/{code}.

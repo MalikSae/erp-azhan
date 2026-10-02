@@ -15,24 +15,23 @@ import (
 const turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 // turnstileVerifier memverifikasi token Cloudflare Turnstile di server.
-// Verifikasi aktif hanya jika TURNSTILE_SECRET_KEY diisi; jika kosong, token
-// hanya dicek tidak kosong (mode pengembangan) dan peringatan dicetak saat start.
+// Keputusan produk: Turnstile opsional. Aktif hanya jika TURNSTILE_SECRET_KEY
+// diisi (dipasang bila terbukti ada banyak bot). Jika kosong, verifikasi
+// dilewati; booking publik tetap dibatasi rate limit per IP dan per nomor HP.
 type turnstileVerifier struct {
-	secret           string
-	verifyURL        string
-	client           *http.Client
-	allowDevelopment bool
+	secret    string
+	verifyURL string
+	client    *http.Client
 }
 
 func newTurnstileVerifier() *turnstileVerifier {
 	v := &turnstileVerifier{
-		secret:           strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY")),
-		verifyURL:        turnstileVerifyURL,
-		client:           &http.Client{Timeout: 5 * time.Second},
-		allowDevelopment: os.Getenv("APP_ENV") == "development" && os.Getenv("ALLOW_DEV_CAPTCHA") == "true",
+		secret:    strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY")),
+		verifyURL: turnstileVerifyURL,
+		client:    &http.Client{Timeout: 5 * time.Second},
 	}
 	if v.secret == "" {
-		log.Println("[WARN] TURNSTILE_SECRET_KEY kosong: self-booking ditolak kecuali bypass development eksplisit")
+		log.Println("[INFO] TURNSTILE_SECRET_KEY kosong: verifikasi Turnstile nonaktif (rate limit per IP dan nomor HP tetap berlaku)")
 	}
 	return v
 }
@@ -41,14 +40,12 @@ func (v *turnstileVerifier) enabled() bool {
 	return v.secret != ""
 }
 
-// verify mengembalikan true jika token valid. Error berarti Cloudflare tidak
-// bisa dihubungi; pemanggil harus menolak request (fail closed).
+// verify mengembalikan true jika token valid, atau jika Turnstile nonaktif.
+// Error berarti Cloudflare tidak bisa dihubungi saat Turnstile aktif;
+// pemanggil harus menolak request (fail closed).
 func (v *turnstileVerifier) verify(ctx context.Context, token, remoteIP string) (bool, error) {
 	if !v.enabled() {
-		if v.allowDevelopment {
-			return true, nil
-		}
-		return false, fmt.Errorf("captcha belum dikonfigurasi")
+		return true, nil
 	}
 
 	form := url.Values{}

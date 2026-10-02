@@ -96,9 +96,10 @@ export default {
         }
       },
       borderRadius: {
-        'xl': '0.75rem', // 12px
-        '2xl': '1rem',   // 16px
-        '3xl': '1.5rem', // 24px
+        'lg': '0.375rem', // 6px: compact controls
+        'xl': '0.375rem', // 6px: buttons and fields
+        '2xl': '0.5rem',  // 8px: cards and containers
+        '3xl': '0.75rem', // 12px: large panels
       },
       boxShadow: {
         'card': '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',

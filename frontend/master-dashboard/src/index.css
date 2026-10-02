@@ -1,6 +1,33 @@
+@import '../../shared/src/field-interactions.css';
+@import '../../shared/src/corner-radius.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.brand-color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.brand-color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.brand-color-picker::-moz-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.brand-color-picker:hover {
+  border-color: #a3a3a3;
+}
+
+.brand-color-picker:focus {
+  border: 2px solid #000;
+  outline: none;
+  box-shadow: none;
+}
 
 /* Komponen bersama (shared/ui/Button) membaca warna tombol utama dari variabel ini.
    Travel Dashboard mengisinya per brand; Master Dashboard memakai palet holding

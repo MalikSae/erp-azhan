@@ -1,7 +1,7 @@
 -- Local UI test fixtures only. Source: https://hanahajiumroh.com/ (2026-10-01).
 -- Source values: names, departure dates, starting prices, hotels, benefits.
 -- Synthetic: return dates, room upgrades, seats, promo, and two duration variants.
--- Idempotent: only inserts missing [TEST] schedules for Hana; no updates/deletes.
+-- Idempotent: only inserts missing fixture schedules (by name) for Hana; no updates/deletes.
 SET NAMES utf8mb4;
 START TRANSACTION;
 SET @hana = (SELECT id FROM brands WHERE domain='hana.azhan.test' AND id=2);
@@ -24,18 +24,18 @@ SELECT @hana,n.name,'published',n.promo,1,45,n.remaining,
  JSON_ARRAY('Manasik','Albaik','City Tour Thaif','Sertifikat Umroh'),
  JSON_ARRAY('DATA TESTING: tanggal pulang, harga kamar, kuota, dan promo merupakan simulasi.'),0,0
 FROM (
- SELECT '[TEST] Umroh Milenial Combine Bintang 5' name,DATE('2026-10-20') depart,8 nights,30999000 price,0 promo,45 remaining,'Azka Shafa' mekkah,'Royal Andalus' madinah
- UNION ALL SELECT '[TEST] Umroh Milenial - Disc Rp1jt','2026-10-29',8,29999000,1,8,'Olayan Golden','Andalus As-Salam'
- UNION ALL SELECT '[TEST] Umroh Milenial Combine November','2026-11-11',8,32999000,0,32,'Azka Shafa','Royal Andalus'
- UNION ALL SELECT '[TEST] Umroh Milenial November','2026-11-18',8,29999000,0,40,'Olayan Golden','Andalus As-Salam'
- UNION ALL SELECT '[TEST] Umroh Milenial Desember','2026-12-02',8,29199000,0,20,'Winner Inn','Andalus As-Salam'
- UNION ALL SELECT '[TEST] Umroh Super Milenial','2026-12-26',8,44999000,0,12,'Sofwah Tower','Shaza Regency'
- UNION ALL SELECT '[TEST] Simulasi Milenial 12 Hari','2026-11-23',11,34999000,0,45,'Azka Shafa','Royal Andalus'
- UNION ALL SELECT '[TEST] Simulasi Super Milenial 15 Hari','2026-12-21',14,46999000,0,35,'Sofwah Tower','Shaza Regency'
+ SELECT 'Umroh Milenial Combine Bintang 5' name,DATE('2026-10-20') depart,8 nights,30999000 price,0 promo,45 remaining,'Azka Shafa' mekkah,'Royal Andalus' madinah
+ UNION ALL SELECT 'Umroh Milenial Oktober','2026-10-29',8,29999000,1,8,'Olayan Golden','Andalus As-Salam'
+ UNION ALL SELECT 'Umroh Milenial Combine November','2026-11-11',8,32999000,0,32,'Azka Shafa','Royal Andalus'
+ UNION ALL SELECT 'Umroh Milenial November','2026-11-18',8,29999000,0,40,'Olayan Golden','Andalus As-Salam'
+ UNION ALL SELECT 'Umroh Milenial Desember','2026-12-02',8,29199000,0,20,'Winner Inn','Andalus As-Salam'
+ UNION ALL SELECT 'Umroh Super Milenial','2026-12-26',8,44999000,0,12,'Sofwah Tower','Shaza Regency'
+ UNION ALL SELECT 'Simulasi Milenial 12 Hari','2026-11-23',11,34999000,0,45,'Azka Shafa','Royal Andalus'
+ UNION ALL SELECT 'Simulasi Super Milenial 15 Hari','2026-12-21',14,46999000,0,35,'Sofwah Tower','Shaza Regency'
 ) n WHERE @hana IS NOT NULL AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.brand_id=@hana AND s.jadwal_nama=n.name);
 SELECT ROW_COUNT() AS inserted_schedules;
 COMMIT;
 SELECT id,jadwal_nama,berangkat_tanggal,pulang_tanggal,harga_quad,seat_total,seat_sisa,status
-FROM schedules WHERE brand_id=@hana AND jadwal_nama LIKE '[TEST]%' ORDER BY berangkat_tanggal;
+FROM schedules WHERE brand_id=@hana AND JSON_SEARCH(exclude_items, 'one', 'DATA TESTING%') IS NOT NULL ORDER BY berangkat_tanggal;
 
 

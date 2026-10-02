@@ -1,0 +1,42 @@
+/* Shared field states for both ERP dashboards, including inline form controls. */
+body :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']),
+  textarea,
+  select,
+  button[aria-haspopup='listbox']
+) {
+  transition-property: border-color, background-color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+@media (hover: hover) {
+  body :is(
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']),
+    textarea, select, button[aria-haspopup='listbox']
+  ):not(:disabled):not([readonly]):not([aria-invalid='true']):not([class*='border-danger-']):not([class*='border-red-']):hover:not(:focus):not([aria-expanded='true']) {
+    border-color: #a3a3a3 !important;
+  }
+}
+
+body :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']),
+  textarea, select, button[aria-haspopup='listbox']
+):is(:focus, [aria-expanded='true']) {
+  outline: none;
+  box-shadow: none !important;
+  border-width: 2px;
+}
+
+body :is(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']),
+  textarea, select, button[aria-haspopup='listbox']
+):not(:disabled):not([readonly]):not([aria-invalid='true']):not([class*='border-danger-']):not([class*='border-red-']):is(:focus, [aria-expanded='true']) {
+  border-color: #000 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body :is(input, textarea, select, button[aria-haspopup='listbox']) {
+    transition-duration: 0ms;
+  }
+}

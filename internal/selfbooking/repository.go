@@ -866,9 +866,9 @@ func getInvoiceByCode(ctx context.Context, q invoiceReader, bookingCode string) 
 
 	// Status label
 	statusLabel := "Menunggu Pembayaran DP"
-	if fullPayment {
-		statusLabel = "Menunggu Pelunasan"
-	} else if totalMinDP == 0 {
+	// Belum ada pembayaran sama sekali: "Pelunasan" menyesatkan, jadi keberangkatan
+	// dekat (bayar penuh) memakai label umum.
+	if fullPayment || totalMinDP == 0 {
 		statusLabel = "Menunggu Pembayaran"
 	}
 	if status == "dp" {
@@ -911,7 +911,8 @@ func getInvoiceByCode(ctx context.Context, q invoiceReader, bookingCode string) 
 	}
 
 	// Pelunasan H-45
-	jatuhTempoStr := dueAt.Format("02 Jan 2006 15:04 MST")
+	bulan := [...]string{"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"}
+	jatuhTempoStr := fmt.Sprintf("%02d %s %d %s", dueAt.Day(), bulan[dueAt.Month()-1], dueAt.Year(), dueAt.Format("15:04 MST"))
 	var paxTotal float64
 	for _, p := range paxItems {
 		paxTotal += p.Harga
@@ -937,6 +938,8 @@ func getInvoiceByCode(ctx context.Context, q invoiceReader, bookingCode string) 
 			TotalDibayar:        totalDibayar,
 			SisaTagihan:         sisaTagihan,
 			JatuhTempoPelunasan: jatuhTempoStr,
+			JatuhTempoAt:        dueAt.Format(time.RFC3339),
+			FullPayment:         fullPayment,
 		},
 		BankAccounts: bankAccounts,
 	}, nil
