@@ -88,7 +88,7 @@ const CustomDropdown = ({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           onClick={() => !disabled && setIsOpen(!isOpen)}
-          className={`h-11 w-full min-w-0 flex items-center justify-between rounded-xl border px-3.5 text-xs md:text-sm font-body text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs
+          className={`h-10 w-full min-w-0 flex items-center justify-between rounded-lg border px-3.5 text-[13px] font-body text-left transition-all focus:outline-none
             ${disabled ? 'bg-neutral-50 text-neutral-400 border-neutral-200 cursor-not-allowed' : isDark ? 'bg-neutral-800' : 'bg-white cursor-pointer'}
             ${error 
               ? 'border-danger-500 focus:border-danger-500' 

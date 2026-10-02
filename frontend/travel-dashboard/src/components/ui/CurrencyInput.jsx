@@ -37,7 +37,7 @@ const CurrencyInput = ({
     }
   };
 
-  const inputBaseClasses = 'h-11 w-full min-w-0 rounded-xl border border-neutral-200/90 text-xs md:text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs font-body transition-all';
+  const inputBaseClasses = 'h-10 w-full min-w-0 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body transition-all';
   const disabledClasses = disabled ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : 'bg-white';
   const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20' : '';
   const paddingClass = prefix ? 'pl-14 pr-3.5' : 'px-3.5';

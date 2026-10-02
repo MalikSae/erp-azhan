@@ -1,4 +1,5 @@
-/* Shared field states for both ERP dashboards, including inline form controls. */
+/* Shared field states for both ERP dashboards, including inline form controls.
+   Identitas SmartHR (2 Okt 2026): hover abu, focus oranye 1px + ring lembut. */
 body :is(
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']),
   textarea,
@@ -15,7 +16,7 @@ body :is(
     input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']),
     textarea, select, button[aria-haspopup='listbox']
   ):not(:disabled):not([readonly]):not([aria-invalid='true']):not([class*='border-danger-']):not([class*='border-red-']):hover:not(:focus):not([aria-expanded='true']) {
-    border-color: #a3a3a3 !important;
+    border-color: #d1d5db !important;
   }
 }
 
@@ -24,15 +25,20 @@ body :is(
   textarea, select, button[aria-haspopup='listbox']
 ):is(:focus, [aria-expanded='true']) {
   outline: none;
-  box-shadow: none !important;
-  border-width: 2px;
 }
 
 body :is(
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']),
   textarea, select, button[aria-haspopup='listbox']
 ):not(:disabled):not([readonly]):not([aria-invalid='true']):not([class*='border-danger-']):not([class*='border-red-']):is(:focus, [aria-expanded='true']) {
-  border-color: #000 !important;
+  border-color: #f26522 !important;
+  box-shadow: 0 0 0 3px rgba(242, 101, 34, 0.14) !important;
+}
+
+/* Field error: ring merah lembut saat focus. */
+body :is(input, textarea, select)[aria-invalid='true']:focus,
+body :is(input, textarea, select)[class*='border-danger-']:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
