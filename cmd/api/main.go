@@ -183,7 +183,7 @@ func main() {
 	perlengkapanHandler := perlengkapan.NewHandler(perlengkapanRepo)
 
 	adminuserRepo := adminuser.NewRepository(db)
-	adminuserHandler := adminuser.NewHandler(adminuserRepo, identityRepo)
+	adminuserHandler := adminuser.NewHandler(adminuserRepo, identityRepo, rbacRepo)
 
 	portalHandler := portal.NewHandler(db, jamaahRepo, bookingRepo, paymentRepo, dokumenRepo)
 

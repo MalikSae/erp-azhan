@@ -25,8 +25,9 @@ import { listRoles, setUserRoles } from '../api/roles';
 const initialAddForm = {
   email: '',
   password: '',
-  role: 'super_admin', // 'super_admin' or 'travel_admin'
-  brand_id: ''
+  role: 'super_admin', // akses brand: 'super_admin' (holding) atau 'travel_admin' (per brand)
+  brand_id: '',
+  roles: ['super_admin_grup'] // role RBAC yang akan di-assign setelah user dibuat
 };
 
 const initialEditForm = {
@@ -35,10 +36,15 @@ const initialEditForm = {
   brand_id: ''
 };
 
+// Akses brand menentukan scope data (brand_id), terpisah dari role RBAC.
 const roleOptions = [
-  { value: 'super_admin', label: 'Super Admin' },
-  { value: 'travel_admin', label: 'Admin Travel' }
+  { value: 'super_admin', label: 'Holding (tanpa brand)' },
+  { value: 'travel_admin', label: 'Per Brand' }
 ];
+
+// Role RBAC default mengikuti pilihan akses brand.
+const defaultRolesForAccess = (access) =>
+  access === 'super_admin' ? ['super_admin_grup'] : ['admin_travel'];
 
 const getUserRoleLabel = (user) => {
   if (user.brand_id === null || user.brand_id === undefined) {
@@ -145,7 +151,12 @@ const UserManagementPage = () => {
     }
 
     if (createData.role === 'travel_admin' && !createData.brand_id) {
-      setCreateError("Brand wajib dipilih untuk role Admin Travel.");
+      setCreateError("Brand wajib dipilih untuk akses per brand.");
+      return;
+    }
+
+    if (!createData.roles || createData.roles.length === 0) {
+      setCreateError("Minimal satu role RBAC wajib dipilih.");
       return;
     }
 
@@ -157,7 +168,16 @@ const UserManagementPage = () => {
         brand_id: createData.role === 'super_admin' ? null : Number(createData.brand_id)
       };
 
-      await createAdminUser(payload);
+      const created = await createAdminUser(payload);
+      // Backend memberi role default; set ulang sesuai pilihan di form agar
+      // user baru langsung memegang role yang benar.
+      if (created?.id) {
+        try {
+          await setUserRoles(created.id, createData.roles);
+        } catch (roleErr) {
+          setErrorMessage(`User dibuat, tetapi gagal mengatur role: ${roleErr.response?.data?.error || 'coba lewat tombol Kelola Role.'}`);
+        }
+      }
       setSuccessMessage(`User "${email}" berhasil ditambahkan.`);
       setIsCreateOpen(false);
       fetchData();
@@ -526,10 +546,10 @@ const UserManagementPage = () => {
           </FormField>
 
           <CustomDropdown
-            label="Role User"
+            label="Akses Brand"
             required
             value={createData.role}
-            onChange={(val) => setCreateData(prev => ({ ...prev, role: val, brand_id: '' }))}
+            onChange={(val) => setCreateData(prev => ({ ...prev, role: val, brand_id: '', roles: defaultRolesForAccess(val) }))}
             options={roleOptions}
           />
 
@@ -546,6 +566,38 @@ const UserManagementPage = () => {
               ]}
             />
           )}
+
+          <div>
+            <div className="mb-1.5 text-[13px] font-medium leading-5 text-neutral-800 font-body">
+              Role (RBAC) <span className="text-danger-500 font-bold">*</span>
+            </div>
+            <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1 border border-neutral-200 rounded-lg p-2">
+              {roles.map(role => (
+                <label
+                  key={role.slug}
+                  className={`flex items-start gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
+                    createData.roles.includes(role.slug) ? 'bg-primary-50' : 'hover:bg-neutral-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-neutral-300 accent-[#F26522]"
+                    checked={createData.roles.includes(role.slug)}
+                    onChange={() => setCreateData(prev => ({
+                      ...prev,
+                      roles: prev.roles.includes(role.slug)
+                        ? prev.roles.filter(s => s !== role.slug)
+                        : [...prev.roles, role.slug]
+                    }))}
+                  />
+                  <span className="min-w-0">
+                    <span className={`block text-[13px] font-body ${createData.roles.includes(role.slug) ? 'text-primary-600 font-medium' : 'text-neutral-800'}`}>{role.name}</span>
+                    <span className="block text-[11px] font-body text-neutral-400">{role.slug} · {(role.permissions || []).length} permission</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
             <Button
@@ -590,7 +642,7 @@ const UserManagementPage = () => {
           </FormField>
 
           <CustomDropdown
-            label="Role User"
+            label="Akses Brand"
             required
             value={editData.role}
             onChange={(val) => setEditData(prev => ({ ...prev, role: val, brand_id: '' }))}

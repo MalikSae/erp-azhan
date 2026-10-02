@@ -24,13 +24,25 @@ type TokenRevoker interface {
 	RevokeAllRefreshTokens(ctx context.Context, adminUserID int64) error
 }
 
-type Handler struct {
-	repo    *Repository
-	revoker TokenRevoker
+// RoleAssigner menambahkan role RBAC ke seorang user (diimplementasi oleh
+// rbac.Repository). User baru wajib langsung memegang role default agar tidak
+// lahir tanpa permission (semua route dijaga RequirePermission sejak Fase 2).
+type RoleAssigner interface {
+	AssignRole(ctx context.Context, adminUserID int64, roleSlug string) error
 }
 
-func NewHandler(repo *Repository, revoker TokenRevoker) *Handler {
-	return &Handler{repo: repo, revoker: revoker}
+type Handler struct {
+	repo     *Repository
+	revoker  TokenRevoker
+	assigner RoleAssigner
+}
+
+func NewHandler(repo *Repository, revoker TokenRevoker, assigners ...RoleAssigner) *Handler {
+	h := &Handler{repo: repo, revoker: revoker}
+	if len(assigners) > 0 {
+		h.assigner = assigners[0]
+	}
+	return h
 }
 
 func (h *Handler) sendJSON(w http.ResponseWriter, status int, data any) {
@@ -93,6 +105,21 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		h.sendError(w, http.StatusInternalServerError, "Gagal menambahkan user baru")
 		return
+	}
+
+	// RBAC: role default mengikuti pemetaan migrasi 071 — tanpa brand =
+	// super_admin_grup, dengan brand = admin_travel. Role lain diatur lewat
+	// PUT /users/{id}/roles (UI Kelola Role / modal tambah user).
+	if h.assigner != nil {
+		defaultRole := "admin_travel"
+		if user.BrandID == nil {
+			defaultRole = "super_admin_grup"
+		}
+		if err := h.assigner.AssignRole(r.Context(), int64(user.ID), defaultRole); err != nil {
+			log.Printf("[ERROR] adminuser.CreateUser AssignRole %s user_id=%d: %v", defaultRole, user.ID, err)
+		} else {
+			user.Roles = []string{defaultRole}
+		}
 	}
 
 	h.sendJSON(w, http.StatusCreated, user)
