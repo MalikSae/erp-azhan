@@ -8,7 +8,9 @@ type Role struct {
 	Slug        string    `json:"slug"`
 	Name        string    `json:"name"`
 	IsSystem    bool      `json:"is_system"`
-	Scope       string    `json:"scope"` // 'holding' | 'brand' | 'semua'
+	Scope       string    `json:"scope"`       // 'holding' | 'brand' | 'semua'
+	DivisiID    *int64    `json:"divisi_id"`   // divisi asal (R10); nil = tanpa divisi Holding
+	DivisiNama  *string   `json:"divisi_nama"` // nama divisi asal untuk tampilan
 	Permissions []string  `json:"permissions"`
 	CreatedAt   time.Time `json:"created_at"`
 }

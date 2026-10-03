@@ -2,28 +2,62 @@ package adminuser
 
 import "time"
 
-// AdminUser merepresentasikan data admin_users yang aman untuk dikembalikan ke client (tanpa password_hash).
+// Keanggotaan unit organisasi milik seorang pengguna (penugasan; bukan izin).
+type Keanggotaan struct {
+	OrgUnitID int64  `json:"org_unit_id"`
+	UnitNama  string `json:"unit_nama"`
+	Jenis     string `json:"jenis"`  // 'divisi' | 'tim'
+	Posisi    string `json:"posisi"` // 'pemimpin' | 'anggota'
+}
+
+// AdminUser = Pengguna (SPEK-PENGGUNA-ORGANISASI §2). Data aman untuk client
+// (tanpa password_hash). Jabatan hanya label tampilan, tidak dipakai logika.
 type AdminUser struct {
-	ID         uint64    `json:"id"`
-	Email      string    `json:"email"`
-	BrandID    *uint64   `json:"brand_id"`
-	BrandName  *string   `json:"brand_name"`
-	BrandColor *string   `json:"brand_color"`
-	Roles      []string  `json:"roles"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID          uint64        `json:"id"`
+	DisplayName string        `json:"display_name"`
+	Email       string        `json:"email"`
+	NoHP        *string       `json:"no_hp"`
+	Jabatan     *string       `json:"jabatan"`
+	BrandID     *uint64       `json:"brand_id"`
+	BrandName   *string       `json:"brand_name"`
+	BrandColor  *string       `json:"brand_color"`
+	IsActive    bool          `json:"is_active"`
+	Roles       []string      `json:"roles"`
+	Keanggotaan []Keanggotaan `json:"keanggotaan"`
+	CreatedAt   time.Time     `json:"created_at"`
 }
 
-// CreateAdminUserRequest payload untuk POST /api/admin/users.
+// KeanggotaanInput satu baris penugasan di form pengguna.
+type KeanggotaanInput struct {
+	OrgUnitID int64  `json:"org_unit_id"`
+	Posisi    string `json:"posisi"`
+}
+
+// UpsertInput field yang sama untuk create & update (tanpa password).
+type UpsertInput struct {
+	DisplayName string             `json:"display_name"`
+	Email       string             `json:"email"`
+	NoHP        *string            `json:"no_hp"`
+	Jabatan     *string            `json:"jabatan"`
+	BrandID     *uint64            `json:"brand_id"` // nil = akses Holding
+	Roles       []string           `json:"roles"`
+	Keanggotaan []KeanggotaanInput `json:"keanggotaan"`
+}
+
+// CreateAdminUserRequest payload POST /api/admin/users.
 type CreateAdminUserRequest struct {
-	Email    string  `json:"email"`
-	Password string  `json:"password"`
-	BrandID  *uint64 `json:"brand_id"`
+	UpsertInput
+	Password string `json:"password"`
 }
 
-// UpdateAdminUserRequest payload untuk PUT /api/admin/users/{id}.
+// UpdateAdminUserRequest payload PUT /api/admin/users/{id}.
 type UpdateAdminUserRequest struct {
-	Email   string  `json:"email"`
-	BrandID *uint64 `json:"brand_id"`
+	UpsertInput
+}
+
+// SetStatusRequest payload PUT /api/admin/users/{id}/status.
+type SetStatusRequest struct {
+	IsActive *bool `json:"is_active"`
 }
 
 // ResetPasswordRequest payload untuk PUT /api/admin/users/{id}/password.

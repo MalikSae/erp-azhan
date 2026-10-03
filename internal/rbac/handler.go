@@ -1,7 +1,6 @@
 package rbac
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -12,19 +11,12 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// refreshRevoker dipenuhi identity.Repository: pencabutan refresh token tetap
-// lewat interface, bukan query langsung ke tabel milik modul identity.
-type refreshRevoker interface {
-	RevokeAllRefreshTokens(ctx context.Context, adminUserID int64) error
-}
-
 type Handler struct {
-	repo    *Repository
-	revoker refreshRevoker
+	repo *Repository
 }
 
-func NewHandler(repo *Repository, revoker refreshRevoker) *Handler {
-	return &Handler{repo: repo, revoker: revoker}
+func NewHandler(repo *Repository) *Handler {
+	return &Handler{repo: repo}
 }
 
 // ListRoles GET /api/admin/roles
@@ -84,33 +76,25 @@ func (h *Handler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
-	slugs := make([]string, 0, len(req.Roles))
-	for _, s := range req.Roles {
-		if s = strings.TrimSpace(s); s != "" {
-			slugs = append(slugs, s)
-		}
-	}
-	if len(slugs) == 0 {
-		writeError(w, http.StatusBadRequest, "minimal satu role wajib dipilih")
-		return
-	}
+	slugs := NormalizeSlugs(req.Roles)
 
+	// Atomik: validasi scope, penjaga Super Admin terakhir, ganti role, dan
+	// pencabutan sesi dalam satu transaksi (lihat Repository.SetUserRoles).
 	if err := h.repo.SetUserRoles(r.Context(), userID, slugs); err != nil {
 		switch {
 		case errors.Is(err, ErrUserNotFound):
 			writeError(w, http.StatusNotFound, err.Error())
-		case errors.Is(err, ErrUnknownRole), errors.Is(err, ErrScopeMismatch):
+		case errors.Is(err, ErrNoRole), errors.Is(err, ErrUnknownRole), errors.Is(err, ErrScopeMismatch):
 			writeError(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, ErrLastSuperAdmin), errors.Is(err, ErrUnitMismatch):
+			writeError(w, http.StatusConflict, err.Error())
+		case IsConcurrencyErr(err):
+			writeError(w, http.StatusConflict, ErrConcurrentMsg)
 		default:
 			log.Printf("[ERROR] rbac.SetUserRoles: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal mengubah role user")
+			writeError(w, http.StatusInternalServerError, "gagal mengubah role pengguna")
 		}
 		return
-	}
-
-	if err := h.revoker.RevokeAllRefreshTokens(r.Context(), userID); err != nil {
-		// Role sudah berubah; kegagalan revoke tidak membatalkan, hanya dicatat.
-		log.Printf("[ERROR] rbac.SetUserRoles revoke tokens: %v", err)
 	}
 	log.Printf("[AUDIT] user_roles_changed user_id=%d roles=%s", userID, strings.Join(slugs, ","))
 

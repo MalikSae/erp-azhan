@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
+
+	"erp-azhan/api/internal/identity"
 )
 
 var (
-	ErrUserNotFound = errors.New("user tidak ditemukan")
+	ErrUserNotFound  = errors.New("pengguna tidak ditemukan")
 	ErrUnknownRole   = errors.New("role tidak dikenal")
+	ErrNoRole        = errors.New("minimal satu role wajib dipilih")
 	ErrScopeMismatch = errors.New("kombinasi role dan akses brand tidak sah")
 )
 
@@ -92,7 +94,8 @@ func (r *Repository) ListPermissions(ctx context.Context) ([]Permission, error) 
 
 func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, slug, name, is_system, scope, created_at FROM roles ORDER BY id`)
+		`SELECT r.id, r.slug, r.name, r.is_system, r.scope, r.divisi_id, u.nama, r.created_at
+		 FROM roles r LEFT JOIN org_unit u ON u.id = r.divisi_id ORDER BY r.id`)
 	if err != nil {
 		return nil, fmt.Errorf("rbac.ListRoles: %w", err)
 	}
@@ -101,8 +104,14 @@ func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 	index := make(map[int64]int)
 	for rows.Next() {
 		var role Role
-		if err := rows.Scan(&role.ID, &role.Slug, &role.Name, &role.IsSystem, &role.Scope, &role.CreatedAt); err != nil {
+		var divisiID sql.NullInt64
+		var divisiNama sql.NullString
+		if err := rows.Scan(&role.ID, &role.Slug, &role.Name, &role.IsSystem, &role.Scope, &divisiID, &divisiNama, &role.CreatedAt); err != nil {
 			return nil, fmt.Errorf("rbac.ListRoles scan: %w", err)
+		}
+		if divisiID.Valid {
+			role.DivisiID = &divisiID.Int64
+			role.DivisiNama = &divisiNama.String
 		}
 		role.Permissions = []string{}
 		index[role.ID] = len(roles)
@@ -141,58 +150,13 @@ func (r *Repository) GetUserRoles(ctx context.Context, adminUserID int64) ([]str
 	return access.Roles, nil
 }
 
-// SetUserRoles mengganti seluruh role user (replace set) dalam satu transaksi,
-// lalu menaikkan perm_version supaya klaim lama tidak dipakai menerus.
-// Pencabutan refresh token dilakukan pemanggil (handler) lewat identity repo.
+// SetUserRoles mengganti seluruh role user dalam SATU transaksi: validasi
+// scope (R3), penjaga Super Admin terakhir (R4), ganti role + sinkron kolom
+// lama + perm_version, dan cabut semua refresh token.
 func (r *Repository) SetUserRoles(ctx context.Context, adminUserID int64, roleSlugs []string) error {
+	roleSlugs = NormalizeSlugs(roleSlugs)
 	if len(roleSlugs) == 0 {
-		return errors.New("minimal satu role wajib dipilih")
-	}
-
-	placeholders := strings.Repeat("?,", len(roleSlugs))
-	placeholders = placeholders[:len(placeholders)-1]
-	args := make([]any, len(roleSlugs))
-	for i, s := range roleSlugs {
-		args[i] = s
-	}
-
-	// Validasi scope: role 'holding' hanya untuk user akses holding
-	// (brand_id NULL), role 'brand' hanya untuk user terikat brand.
-	var brandID sql.NullInt64
-	err := r.db.QueryRowContext(ctx,
-		`SELECT brand_id FROM admin_users WHERE id = ?`, adminUserID).Scan(&brandID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrUserNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("rbac.SetUserRoles user: %w", err)
-	}
-
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT slug, name, scope FROM roles WHERE slug IN (`+placeholders+`)`, args...)
-	if err != nil {
-		return fmt.Errorf("rbac.SetUserRoles validate: %w", err)
-	}
-	defer rows.Close()
-	count := 0
-	for rows.Next() {
-		var slug, name, scope string
-		if err := rows.Scan(&slug, &name, &scope); err != nil {
-			return fmt.Errorf("rbac.SetUserRoles validate scan: %w", err)
-		}
-		count++
-		if scope == "holding" && brandID.Valid {
-			return fmt.Errorf("%w: role %q hanya untuk akses Holding", ErrScopeMismatch, name)
-		}
-		if scope == "brand" && !brandID.Valid {
-			return fmt.Errorf("%w: role %q hanya untuk user yang terikat brand", ErrScopeMismatch, name)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if count != len(roleSlugs) {
-		return ErrUnknownRole
+		return ErrNoRole
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -201,37 +165,49 @@ func (r *Repository) SetUserRoles(ctx context.Context, adminUserID int64, roleSl
 	}
 	defer tx.Rollback()
 
-	result, err := tx.ExecContext(ctx,
-		`UPDATE admin_users SET perm_version = perm_version + 1 WHERE id = ?`, adminUserID)
-	if err != nil {
-		return fmt.Errorf("rbac.SetUserRoles bump: %w", err)
-	}
-	if rows, _ := result.RowsAffected(); rows == 0 {
+	var brandID sql.NullInt64
+	var isActive bool
+	err = tx.QueryRowContext(ctx,
+		`SELECT brand_id, is_active FROM admin_users WHERE id = ? FOR UPDATE`, adminUserID).
+		Scan(&brandID, &isActive)
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrUserNotFound
 	}
-
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM user_roles WHERE admin_user_id = ?`, adminUserID); err != nil {
-		return fmt.Errorf("rbac.SetUserRoles clear: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO user_roles (admin_user_id, role_id)
-		 SELECT ?, id FROM roles WHERE slug IN (`+placeholders+`)`,
-		append([]any{adminUserID}, args...)...); err != nil {
-		return fmt.Errorf("rbac.SetUserRoles insert: %w", err)
-	}
-
-	return tx.Commit()
-}
-
-// AssignRole menambahkan satu role ke user tanpa menghapus role lain.
-// Dipakai crmuser.Create untuk meng-assign role 'cs'.
-func (r *Repository) AssignRole(ctx context.Context, adminUserID int64, roleSlug string) error {
-	_, err := r.db.ExecContext(ctx,
-		`INSERT IGNORE INTO user_roles (admin_user_id, role_id)
-		 SELECT ?, id FROM roles WHERE slug = ?`, adminUserID, roleSlug)
 	if err != nil {
-		return fmt.Errorf("rbac.AssignRole: %w", err)
+		return fmt.Errorf("rbac.SetUserRoles user: %w", err)
 	}
-	return nil
+	var bid *int64
+	if brandID.Valid {
+		bid = &brandID.Int64
+	}
+
+	if err := ValidateRolesScope(ctx, tx, roleSlugs, bid); err != nil {
+		return err
+	}
+	// R10: penugasan yang sudah ada harus tetap sesuai role baru.
+	units, err := UserUnitIDs(ctx, tx, adminUserID)
+	if err != nil {
+		return err
+	}
+	if err := ValidateUnitsForRoles(ctx, tx, roleSlugs, bid, units); err != nil {
+		return err
+	}
+
+	current, err := UserRoleSlugs(ctx, tx, adminUserID)
+	if err != nil {
+		return err
+	}
+	if isActive && HasSlug(current, SuperAdminSlug) && !HasSlug(roleSlugs, SuperAdminSlug) {
+		if err := EnsureOtherActiveSuperAdmin(ctx, tx, adminUserID); err != nil {
+			return err
+		}
+	}
+
+	if err := ReplaceUserRoles(ctx, tx, adminUserID, roleSlugs); err != nil {
+		return err
+	}
+	if err := identity.RevokeAllRefreshTokensTx(ctx, tx, adminUserID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

@@ -16,6 +16,7 @@ const CustomDropdown = ({
   children
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const dropdownRef = useRef(null);
 
   // Parse options from children if provided
@@ -39,9 +40,15 @@ const CustomDropdown = ({
       }
     };
     
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
     };
   }, []);
 
@@ -51,6 +58,34 @@ const CustomDropdown = ({
 
   const selectedOption = normalizedOptions.find(opt => String(opt.value) === String(actualValue));
   const isDark = variant === 'dark';
+
+  // Buka ke atas bila ruang di bawah (dalam area scroll terdekat) tidak cukup,
+  // agar menu tidak memanjangkan halaman atau tertutup bar sticky di bawah.
+  const toggleOpen = () => {
+    if (disabled) return;
+    if (!isOpen && dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect();
+      let el = dropdownRef.current.parentElement;
+      let bottomEdge = window.innerHeight;
+      let topEdge = 0;
+      while (el && el !== document.body) {
+        const oy = getComputedStyle(el).overflowY;
+        if (oy === 'auto' || oy === 'scroll') {
+          const r = el.getBoundingClientRect();
+          bottomEdge = Math.min(bottomEdge, r.bottom);
+          topEdge = Math.max(topEdge, r.top);
+          break;
+        }
+        el = el.parentElement;
+      }
+      const reserve = 80; // ruang untuk bar aksi sticky
+      const menuHeight = Math.min(248, Math.max(1, normalizedOptions.length) * 40 + 10);
+      const spaceBelow = bottomEdge - rect.bottom - reserve;
+      const spaceAbove = rect.top - topEdge;
+      setOpenUp(spaceBelow < menuHeight && spaceAbove > spaceBelow);
+    }
+    setIsOpen(!isOpen);
+  };
 
   const handleSelect = (optValue) => {
     if (disabled) return;
@@ -87,7 +122,7 @@ const CustomDropdown = ({
           disabled={disabled}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
-          onClick={() => !disabled && setIsOpen(!isOpen)}
+          onClick={toggleOpen}
           className={`h-10 w-full min-w-0 flex items-center justify-between rounded-lg border px-3.5 text-[13px] font-body text-left transition-all focus:outline-none
             ${disabled ? 'bg-neutral-50 text-neutral-400 border-neutral-200 cursor-not-allowed' : isDark ? 'bg-neutral-800' : 'bg-white cursor-pointer'}
             ${error 
@@ -123,10 +158,11 @@ const CustomDropdown = ({
 
         {/* Dropdown Menu */}
         {isOpen && !disabled && (
-          <div className={`absolute z-50 w-full min-w-[200px] mt-1.5 border rounded-lg shadow-card overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150
+          <div className={`absolute z-50 w-max min-w-full max-w-[360px] border rounded-lg shadow-card overflow-hidden animate-in fade-in duration-150
+            ${openUp ? 'bottom-full mb-1.5 slide-in-from-bottom-1' : 'top-full mt-1.5 slide-in-from-top-1'}
             ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200/80'}
           `}>
-            <ul className="max-h-60 overflow-y-auto py-1 text-[13px] font-body">
+            <ul className="max-h-60 overflow-y-auto py-1 text-[13px] font-body [scrollbar-width:thin]">
               {normalizedOptions.length === 0 ? (
                 <li className={`px-3.5 py-2.5 text-center text-xs whitespace-nowrap ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Tidak ada pilihan</li>
               ) : (

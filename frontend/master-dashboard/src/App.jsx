@@ -22,8 +22,9 @@ import StokBrandCabangPage from './pages/StokBrandCabangPage';
 import KomisiReferralPage from './pages/KomisiReferralPage';
 import GantiKaitanAgenPage from './pages/GantiKaitanAgenPage';
 import PeringkatAgenPage from './pages/PeringkatAgenPage';
-import UserManagementPage from './pages/UserManagementPage';
-import UserFormPage from './pages/UserFormPage';
+import PenggunaPage from './pages/PenggunaPage';
+import PenggunaFormPage from './pages/PenggunaFormPage';
+import StrukturOrganisasiPage from './pages/StrukturOrganisasiPage';
 import BrandsPage from './pages/BrandsPage';
 import BrandFormPage from './pages/BrandFormPage';
 import BankAccountsPage from './pages/BankAccountsPage';
@@ -95,8 +96,10 @@ function App() {
               <Route path="/brands" element={<BrandsPage />} />
               <Route path="/brands/new" element={<BrandFormPage />} />
               <Route path="/brands/:id/edit" element={<BrandFormPage />} />
-              <Route path="/users" element={<UserManagementPage />} />
-              <Route path="/users/new" element={<UserFormPage />} />
+              <Route path="/users" element={<PenggunaPage />} />
+              <Route path="/users/new" element={<PenggunaFormPage />} />
+              <Route path="/users/:id" element={<PenggunaFormPage />} />
+              <Route path="/organisasi" element={<StrukturOrganisasiPage />} />
               <Route path="/bank-accounts" element={<BankAccountsPage />} />
               <Route path="/payments" element={<PaymentConfirmationsPage showBrandColumn={true} />} />
             </Route>

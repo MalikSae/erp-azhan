@@ -27,10 +27,10 @@ import (
 	"erp-azhan/api/internal/brand"
 	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/crmdeal"
-	"erp-azhan/api/internal/crmuser"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/rbac"
 	"erp-azhan/api/internal/itinerary"
 	"erp-azhan/api/internal/jamaah"
@@ -134,7 +134,7 @@ func main() {
 
 	identityRepo := identity.NewRepository(db)
 	rbacRepo := rbac.NewRepository(db)
-	rbacHandler := rbac.NewHandler(rbacRepo, identityRepo)
+	rbacHandler := rbac.NewHandler(rbacRepo)
 	// Loader RBAC untuk klaim JWT saat login/refresh (RBAC Fase 1).
 	accessLoader := func(ctx context.Context, adminUserID int64) (*identity.UserAccess, error) {
 		access, err := rbacRepo.GetUserAccess(ctx, adminUserID)
@@ -166,8 +166,6 @@ func main() {
 	paymentHandler := payment.NewHandler(paymentRepo)
 	crmDealRepo := crmdeal.NewRepository(db)
 	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
-	crmUserRepo := crmuser.NewRepository(db)
-	crmUserHandler := crmuser.NewHandler(crmUserRepo, identityRepo, rbacRepo)
 
 	selfBookingRepo := selfbooking.NewRepository(db)
 	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo)
@@ -183,7 +181,8 @@ func main() {
 	perlengkapanHandler := perlengkapan.NewHandler(perlengkapanRepo)
 
 	adminuserRepo := adminuser.NewRepository(db)
-	adminuserHandler := adminuser.NewHandler(adminuserRepo, identityRepo, rbacRepo)
+	adminuserHandler := adminuser.NewHandler(adminuserRepo, identityRepo)
+	orgUnitHandler := orgunit.NewHandler(orgunit.NewRepository(db))
 
 	portalHandler := portal.NewHandler(db, jamaahRepo, bookingRepo, paymentRepo, dokumenRepo)
 
@@ -274,13 +273,6 @@ func main() {
 		r.Get("/my-brand", brandHandler.GetMyBrand)
 		r.With(identity.RequireAdminRole).Put("/account/password", adminuserHandler.ChangeOwnPassword)
 
-		r.Route("/crm/users", func(r chi.Router) {
-			r.Use(identity.RequirePermission("crmuser.admin"))
-			r.Get("/", crmUserHandler.List)
-			r.Post("/", crmUserHandler.Create)
-			r.Put("/{id}", crmUserHandler.Update)
-			r.Put("/{id}/password", crmUserHandler.ResetPassword)
-		})
 
 		// RBAC Fase 1: manajemen role & permission (SPEK-RBAC-2026-10-02.md).
 		r.Route("/roles", func(r chi.Router) {
@@ -352,9 +344,21 @@ func main() {
 			r.Use(identity.RequirePermission("user.admin"))
 			r.Get("/", adminuserHandler.ListUsers)
 			r.Post("/", adminuserHandler.CreateUser)
+			r.Get("/{id}", adminuserHandler.GetUser)
 			r.Put("/{id}", adminuserHandler.UpdateUser)
+			r.Put("/{id}/status", adminuserHandler.SetStatus)
 			r.Put("/{id}/password", adminuserHandler.ResetPassword)
 			r.Delete("/{id}", adminuserHandler.DeleteUser)
+		})
+
+		// Struktur Organisasi (SPEK-PENGGUNA-ORGANISASI §5): divisi -> tim.
+		r.Route("/org-units", func(r chi.Router) {
+			r.Use(identity.RequirePermission("user.admin"))
+			r.Get("/", orgUnitHandler.List)
+			r.Post("/", orgUnitHandler.Create)
+			r.Put("/{id}", orgUnitHandler.Update)
+			r.Put("/{id}/status", orgUnitHandler.SetStatus)
+			r.Delete("/{id}", orgUnitHandler.Delete)
 		})
 
 		// Media

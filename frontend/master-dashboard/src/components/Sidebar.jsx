@@ -90,7 +90,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       items: [
         { name: 'Kelola Brand', path: '/brands', icon: Building2, status: 'active' },
         { name: 'Rekening Bank', path: '/bank-accounts', icon: Landmark, status: 'active' },
-        { name: 'User Management', path: '/users', icon: UserCog, status: 'active' },
+        { name: 'Pengguna', path: '/users', icon: UserCog, status: 'active' },
+        { name: 'Struktur Organisasi', path: '/organisasi', icon: Network, status: 'active' },
       ],
     },
   ];

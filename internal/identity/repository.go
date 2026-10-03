@@ -78,6 +78,23 @@ func (r *Repository) RevokeAllRefreshTokens(ctx context.Context, adminUserID int
 	return nil
 }
 
+// execer dipenuhi *sql.DB maupun *sql.Tx.
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+// RevokeAllRefreshTokensTx sama dengan RevokeAllRefreshTokens tetapi berjalan
+// di dalam transaksi pemanggil, supaya pencabutan sesi atomik dengan
+// perubahan akses (nonaktif, ubah role, ubah akses brand).
+func RevokeAllRefreshTokensTx(ctx context.Context, q execer, adminUserID int64) error {
+	_, err := q.ExecContext(ctx,
+		`UPDATE admin_refresh_tokens SET revoked_at = NOW() WHERE admin_user_id = ? AND revoked_at IS NULL`, adminUserID)
+	if err != nil {
+		return fmt.Errorf("identity.RevokeAllRefreshTokensTx: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) GetByID(ctx context.Context, id int64) (*AdminUser, error) {
 	const q = `SELECT id, brand_id, email, COALESCE(display_name, ''), role, is_active, password_hash, created_at FROM admin_users WHERE id = ?`
 	var user AdminUser
