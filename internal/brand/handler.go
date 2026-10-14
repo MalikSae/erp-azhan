@@ -76,6 +76,22 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "minimal_dp tidak boleh negatif")
 		return
 	}
+	if req.CashbackAlumni < 0 {
+		writeError(w, http.StatusBadRequest, "cashback_alumni tidak boleh negatif")
+		return
+	}
+	if req.UjrohClosing < 0 || req.UjrohPembinaan < 0 || req.UjrohRepeatBooking < 0 {
+		writeError(w, http.StatusBadRequest, "nominal ujroh tidak boleh negatif")
+		return
+	}
+	req.SyaratKetentuanAgen = sanitizeString(req.SyaratKetentuanAgen)
+	if req.BatasPelunasanHari == 0 {
+		req.BatasPelunasanHari = 45
+	}
+	if req.BatasPelunasanHari < 1 || req.BatasPelunasanHari > 365 {
+		writeError(w, http.StatusBadRequest, "batas_pelunasan_hari harus antara 1 dan 365")
+		return
+	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "name wajib diisi")
@@ -186,6 +202,22 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 
 	if req.MinimalDP < 0 {
 		writeError(w, http.StatusBadRequest, "minimal_dp tidak boleh negatif")
+		return
+	}
+	if req.CashbackAlumni < 0 {
+		writeError(w, http.StatusBadRequest, "cashback_alumni tidak boleh negatif")
+		return
+	}
+	if req.UjrohClosing < 0 || req.UjrohPembinaan < 0 || req.UjrohRepeatBooking < 0 {
+		writeError(w, http.StatusBadRequest, "nominal ujroh tidak boleh negatif")
+		return
+	}
+	req.SyaratKetentuanAgen = sanitizeString(req.SyaratKetentuanAgen)
+	if req.BatasPelunasanHari == 0 {
+		req.BatasPelunasanHari = 45
+	}
+	if req.BatasPelunasanHari < 1 || req.BatasPelunasanHari > 365 {
+		writeError(w, http.StatusBadRequest, "batas_pelunasan_hari harus antara 1 dan 365")
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)

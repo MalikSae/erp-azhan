@@ -1,17 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import PageHeader from '../components/ui/PageHeader';
-import MetaBox from '../components/ui/MetaBox';
-import FormField from '../components/ui/FormField';
-import Input from '../components/ui/Input';
-import FileInput from '../components/ui/FileInput';
-import Textarea from '../components/ui/Textarea';
-import Button from '../components/ui/Button';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import PageHeader from 'shared/ui/PageHeader';
+import { FormTabs, FormSection } from 'shared/ui/FormLayout';
+import BrandBankAccounts from '../components/BrandBankAccounts';
+import FormField from 'shared/ui/FormField';
+import Input from 'shared/ui/Input';
+import FileInput from 'shared/ui/FileInput';
+import Textarea from 'shared/ui/Textarea';
+import AutocompleteInput from 'shared/ui/AutocompleteInput';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import { INDONESIAN_REGIONS, INDONESIAN_PROVINCES } from 'shared/data/indonesianRegions';
+import Button from 'shared/ui/Button';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { getBrand, createBrand, updateBrand } from '../api/brands';
 import { uploadMedia } from '../api/media';
-import { Building2, Upload, Phone, CreditCard, Globe, Save, CheckCircle2, Search, X, Users } from 'lucide-react';
+
+const SECTION_LINKS = [
+  { id: 'sec-identitas', label: 'Identitas Brand' },
+  { id: 'sec-media', label: 'Media & Visual' },
+  { id: 'sec-kontak', label: 'Kontak & Alamat' },
+  { id: 'sec-seo', label: 'SEO' },
+  { id: 'sec-legal', label: 'Legalitas' },
+  { id: 'sec-sosial', label: 'Media Sosial' },
+  { id: 'sec-sk', label: 'S&K Booking' },
+  { id: 'sec-agen', label: 'Aturan Agen' },
+  { id: 'sec-rekening', label: 'Rekening Bank' },
+];
 
 const initialFormData = {
   kode_brand: '',
@@ -42,7 +57,15 @@ const initialFormData = {
   google_verification_code: '',
   biaya_pendaftaran_agen: '',
   no_wa_admin_travel: '',
-  minimal_dp: ''
+  minimal_dp: '',
+  batas_pelunasan_hari: '45',
+  ketentuan_pembatalan: '',
+  cashback_alumni: '',
+  biaya_mode: 'gratis',
+  ujroh_closing: '',
+  ujroh_pembinaan: '',
+  ujroh_repeat_booking: '',
+  syarat_ketentuan_agen: ''
 };
 
 const BrandFormPage = () => {
@@ -99,7 +122,15 @@ const BrandFormPage = () => {
             google_verification_code: data.google_verification_code || '',
             biaya_pendaftaran_agen: data.biaya_pendaftaran_agen ? String(data.biaya_pendaftaran_agen) : '',
             no_wa_admin_travel: data.no_wa_admin_travel || '',
-            minimal_dp: data.minimal_dp ? String(data.minimal_dp) : ''
+            minimal_dp: data.minimal_dp ? String(data.minimal_dp) : '',
+            batas_pelunasan_hari: data.batas_pelunasan_hari ? String(data.batas_pelunasan_hari) : '45',
+            ketentuan_pembatalan: data.ketentuan_pembatalan || '',
+            cashback_alumni: data.cashback_alumni ? String(data.cashback_alumni) : '',
+            biaya_mode: Number(data.biaya_pendaftaran_agen) > 0 ? 'berbayar' : 'gratis',
+            ujroh_closing: data.ujroh_closing ? String(data.ujroh_closing) : '',
+            ujroh_pembinaan: data.ujroh_pembinaan ? String(data.ujroh_pembinaan) : '',
+            ujroh_repeat_booking: data.ujroh_repeat_booking ? String(data.ujroh_repeat_booking) : '',
+            syarat_ketentuan_agen: data.syarat_ketentuan_agen || ''
           });
         } catch (err) {
           if (err.response?.status === 404) {
@@ -196,6 +227,17 @@ const BrandFormPage = () => {
       return;
     }
 
+    if (formData.biaya_mode === 'berbayar' && !Number(String(formData.biaya_pendaftaran_agen).replace(/\D/g, ''))) {
+      setFormErrors("Isi nominal Biaya Pendaftaran, atau pilih Gratis.");
+      return;
+    }
+
+    const pelunasanHari = Number(String(formData.batas_pelunasan_hari).replace(/\D/g, ''));
+    if (!pelunasanHari || pelunasanHari > 365) {
+      setFormErrors("Batas Pelunasan harus antara 1 dan 365 hari sebelum keberangkatan.");
+      return;
+    }
+
     if (formData.primary_color && !/^#[0-9A-Fa-f]{6}$/.test(formData.primary_color)) {
       setFormErrors("Warna Utama Brand harus berformat Hex yang valid, contoh #1B3A6B.");
       return;
@@ -231,12 +273,23 @@ const BrandFormPage = () => {
         meta_description: formData.meta_description ? formData.meta_description.trim() : null,
         google_verification_code: formData.google_verification_code ? formData.google_verification_code.trim() : null,
         // Kosong = Rp0 (brand tidak memungut biaya pendaftaran agen).
-        biaya_pendaftaran_agen: Number(String(formData.biaya_pendaftaran_agen).replace(/\D/g, '')) || 0,
+        biaya_pendaftaran_agen: formData.biaya_mode === 'berbayar'
+          ? Number(String(formData.biaya_pendaftaran_agen).replace(/\D/g, '')) || 0
+          : 0,
+        ujroh_closing: Number(String(formData.ujroh_closing).replace(/\D/g, '')) || 0,
+        ujroh_pembinaan: Number(String(formData.ujroh_pembinaan).replace(/\D/g, '')) || 0,
+        ujroh_repeat_booking: Number(String(formData.ujroh_repeat_booking).replace(/\D/g, '')) || 0,
+        syarat_ketentuan_agen: formData.syarat_ketentuan_agen ? formData.syarat_ketentuan_agen.trim() : null,
         no_wa_admin_travel: formData.no_wa_admin_travel ? formData.no_wa_admin_travel.trim() : null,
         // Wajib dikirim: backend menyimpan minimal_dp apa adanya, jadi field
         // yang tidak terkirim akan me-reset nilainya ke 0.
         minimal_dp: Number(String(formData.minimal_dp).replace(/\D/g, '')) || 0,
+        batas_pelunasan_hari: Number(String(formData.batas_pelunasan_hari).replace(/\D/g, '')) || 45,
+        ketentuan_pembatalan: formData.ketentuan_pembatalan ? formData.ketentuan_pembatalan.trim() : null,
+        cashback_alumni: Number(String(formData.cashback_alumni).replace(/\D/g, '')) || 0,
       };
+
+      delete payload.biaya_mode;
 
       if (isEditMode) {
         await updateBrand(id, payload);
@@ -244,7 +297,9 @@ const BrandFormPage = () => {
         await createBrand(payload);
       }
 
-      navigate('/brands');
+      navigate('/brands', {
+        state: { successMessage: `Brand "${payload.name}" berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
+      });
     } catch (err) {
       if (err.response?.data?.error) {
         setFormErrors(err.response.data.error);
@@ -266,87 +321,91 @@ const BrandFormPage = () => {
 
   if (notFound) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="space-y-6">
         <PageHeader 
           title="Brand Tidak Ditemukan"
-          showBack={true}
-          backUrl="/brands"
+          onBack={() => navigate('/brands')}
         />
-        <Alert variant="danger">
+        <Alert variant="error">
           Data brand yang Anda cari tidak ditemukan atau telah dihapus.
         </Alert>
       </div>
     );
   }
 
+  // Nilai lama yang tidak ada di daftar resmi tetap ditampilkan agar tidak hilang diam-diam.
+  const withCurrent = (list, current) => (current && !list.includes(current) ? [current, ...list] : list);
+  const provinceOptions = withCurrent(INDONESIAN_PROVINCES, formData.province);
+  const cityOptions = withCurrent(INDONESIAN_REGIONS[formData.province] || [], formData.city);
+
+  const handleProvinceChange = (val) => {
+    setFormData(prev => ({
+      ...prev,
+      province: val,
+      // Kota hanya valid di provinsinya; kosongkan bila tak ada di provinsi baru.
+      city: (INDONESIAN_REGIONS[val] || []).includes(prev.city) ? prev.city : '',
+    }));
+  };
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-12">
-      <PageHeader 
+    <div className="space-y-6">
+      <PageHeader
         title={isEditMode ? "Edit Profil Brand" : "Tambah Brand Baru"}
-        subtitle={isEditMode ? `Perbarui profil, konfigurasi, dan identitas visual brand ${formData.name}` : "Daftarkan brand baru untuk sistem multi-brand"}
-        showBack={true}
-        backUrl="/brands"
-      />
+        onBack={() => navigate('/brands')}
+      >
+        <Button
+          type="submit"
+          form="brand-form"
+          variant="primary"
+          isLoading={isSubmitting}
+          disabled={isSubmitting || isUploadingLogo || isUploadingIcon || isUploadingOgImage}
+        >
+          {isSubmitting ? 'Menyimpan...' : (isEditMode ? 'Perbarui Data Brand' : 'Simpan Brand Baru')}
+        </Button>
+      </PageHeader>
 
       {formErrors && (
-        <Alert variant="danger">
+        <Alert variant="error">
           {formErrors}
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          
-          {/* Kolom KIRI (Data Utama 2 Kolom) */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* MetaBox Identitas Brand */}
-            <MetaBox 
-              title="Identitas Brand" 
-              subtitle="Nama, kode, domain, dan warna tema brand"
-              icon={<Building2 size={18} className="text-neutral-700" />}
-            >
+      <form id="brand-form" onSubmit={handleSubmit}>
+        <FormTabs tabs={SECTION_LINKS}>
+<FormSection id="sec-identitas" title="Identitas Brand">
               <div className="space-y-4">
-                <FormField label="Nama Brand" required>
-                  <Input 
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Contoh: Alsha Tours, Hana Travel"
-                    required
-                  />
-                </FormField>
+                <Input
+                  label="Nama Brand"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="Contoh: Alsha Tours, Hana Travel"
+                  required
+                  className="!mb-0"
+                />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField 
-                    label="Kode Brand" 
-                    helperText="2 huruf kapital unik untuk prefix ID Jamaah (mis. AS, HN)"
-                  >
-                    <Input 
-                      name="kode_brand"
-                      value={formData.kode_brand}
-                      onChange={handleChange}
-                      placeholder="AS"
-                      maxLength={2}
-                      className="uppercase font-mono font-bold"
-                    />
-                  </FormField>
+                  <Input
+                    label="Kode Brand"
+                    name="kode_brand"
+                    value={formData.kode_brand}
+                    onChange={handleChange}
+                    placeholder="AS"
+                    maxLength={2}
+                    className="!mb-0"
+                  />
 
-                  <FormField 
-                    label="Domain Microsite" 
-                    helperText="Domain unik tanpa spasi/protokol (mis. alsha.azhan.test)"
-                  >
-                    <Input 
-                      name="domain"
-                      value={formData.domain}
-                      onChange={handleChange}
-                      placeholder="alsha.azhan.test"
-                      className="font-mono text-sm lowercase"
-                    />
-                  </FormField>
+                  <Input
+                    label="Domain"
+                    name="domain"
+                    value={formData.domain}
+                    onChange={handleChange}
+                    placeholder="alsha.azhan.test"
+                    className="!mb-0"
+                  />
                 </div>
 
-                <FormField label="Warna Utama Brand" helperText="Kode Hex warna untuk tombol & highlight (mis. #1B3A6B)">
+                <FormField label="Warna Utama" className="!mb-0">
                   <div className="flex items-center gap-2">
                     <input 
                       type="color" 
@@ -367,18 +426,11 @@ const BrandFormPage = () => {
                   </div>
                 </FormField>
               </div>
-            </MetaBox>
-
-            {/* MetaBox Media & Visual Brand */}
-            <MetaBox 
-              title="Media & Visual Brand" 
-              subtitle="Logo, favicon, dan banner social sharing"
-              icon={<Upload size={18} className="text-neutral-700" />}
-            >
+            </FormSection>
+            <FormSection id="sec-media" title="Media & Visual Brand">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FileInput 
                   label="Logo Brand" 
-                  helperText="Format PNG transparan atau SVG direkomendasikan"
                   value={formData.logo_url}
                   previewUrl={localLogoPreview}
                   onChange={handleLogoUpload}
@@ -388,12 +440,11 @@ const BrandFormPage = () => {
                   }}
                   isUploading={isUploadingLogo}
                   uploadingText="Mengunggah logo..."
-                  placeholder="Pilih file logo brand..."
+                  placeholder="Pilih file..."
                 />
 
                 <FileInput 
-                  label="Ikon Brand (Square 1:1)" 
-                  helperText="Format persegi (512x512px) untuk favicon & PWA"
+                  label="Ikon Brand (1:1)" 
                   value={formData.icon_url}
                   previewUrl={localIconPreview}
                   onChange={handleIconUpload}
@@ -403,13 +454,12 @@ const BrandFormPage = () => {
                   }}
                   isUploading={isUploadingIcon}
                   uploadingText="Mengunggah ikon..."
-                  placeholder="Pilih file ikon brand..."
+                  placeholder="Pilih file..."
                 />
 
                 <div className="md:col-span-2">
                   <FileInput 
-                    label="Banner Social Sharing (OG Image 1200x630px)" 
-                    helperText="Gambar landscape yang muncul saat link website dibagikan ke WhatsApp & Sosmed"
+                    label="Banner Sharing (1200×630)" 
                     value={formData.og_image_url}
                     previewUrl={localOgImagePreview}
                     onChange={handleOgImageUpload}
@@ -419,145 +469,111 @@ const BrandFormPage = () => {
                     }}
                     isUploading={isUploadingOgImage}
                     uploadingText="Mengunggah banner..."
-                    placeholder="Pilih file banner sharing..."
+                    placeholder="Pilih file..."
                   />
                 </div>
               </div>
-            </MetaBox>
-
-            {/* MetaBox Kontak & Lokasi */}
-            <MetaBox 
-              title="Kontak & Alamat Kantor (Local NAP)" 
-              subtitle="WhatsApp, telepon kantor, alamat fisik, dan Google Maps"
-              icon={<Phone size={18} className="text-neutral-700" />}
-            >
+            </FormSection>
+            <FormSection id="sec-kontak" title="Kontak & Alamat">
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <FormField label="Nomor WhatsApp CS">
-                    <Input 
-                      name="whatsapp_number"
-                      value={formData.whatsapp_number}
-                      onChange={handleChange}
-                      placeholder="Contoh: 62812345678"
-                    />
-                  </FormField>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="WhatsApp CS"
+                    name="whatsapp_number"
+                    value={formData.whatsapp_number}
+                    onChange={handleChange}
+                    placeholder="Contoh: 62812345678"
+                    className="!mb-0"
+                  />
 
-                  <FormField label="Telepon Kantor (PSTN)">
-                    <Input 
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="Contoh: 021-1234567"
-                    />
-                  </FormField>
-
-                  <FormField label="Email CS / Resmi">
-                    <Input 
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="cs@travel.com"
-                    />
-                  </FormField>
+                  <Input
+                    label="Email"
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="cs@travel.com"
+                    className="!mb-0"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField label="Kota Domisili Kantor">
-                    <Input 
-                      name="city"
-                      value={formData.city}
-                      onChange={handleChange}
-                      placeholder="Contoh: Jakarta Selatan"
-                    />
-                  </FormField>
+                  <AutocompleteInput
+                    label="Provinsi"
+                    name="province"
+                    value={formData.province}
+                    onChange={(e) => handleProvinceChange(e.target.value)}
+                    placeholder="Ketik / cari provinsi..."
+                    options={provinceOptions}
+                    className="!mb-0"
+                  />
 
-                  <FormField label="Provinsi Kantor">
-                    <Input 
-                      name="province"
-                      value={formData.province}
-                      onChange={handleChange}
-                      placeholder="Contoh: DKI Jakarta"
-                    />
-                  </FormField>
+                  <AutocompleteInput
+                    label="Kota / Kabupaten"
+                    name="city"
+                    value={formData.city}
+                    onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                    placeholder={formData.province ? 'Ketik / cari kota atau kabupaten...' : 'Pilih provinsi dulu'}
+                    options={cityOptions}
+                    disabled={!formData.province && !formData.city}
+                    className="!mb-0"
+                  />
                 </div>
 
-                <FormField label="URL Google Maps">
-                  <Input 
-                    name="gmaps_url"
-                    value={formData.gmaps_url}
-                    onChange={handleChange}
-                    placeholder="https://maps.google.com/..."
-                  />
-                </FormField>
+                <Input
+                  label="Google Maps"
+                  name="gmaps_url"
+                  value={formData.gmaps_url}
+                  onChange={handleChange}
+                  placeholder="https://maps.google.com/..."
+                  className="!mb-0"
+                />
 
-                <FormField label="Alamat Kantor Fisik">
-                  <Textarea 
-                    name="address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    placeholder="Jl. Utama No. 123, Jakarta"
-                    rows={3}
-                  />
-                </FormField>
+                <Textarea
+                  label="Alamat"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  placeholder="Jl. Utama No. 123, Jakarta"
+                  rows={3}
+                  className="!mb-0"
+                />
               </div>
-            </MetaBox>
-
-            {/* MetaBox Pengaturan SEO & AI Search (GEO) */}
-            <MetaBox 
-              title="Pengaturan SEO & Webmaster (GEO Optimization)" 
-              subtitle="Kustomisasi Title Tag, Meta Description, dan Google Search Console"
-              icon={<Search size={18} className="text-neutral-700" />}
-            >
+            </FormSection>
+            <FormSection id="sec-seo" title="SEO">
               <div className="space-y-4">
-                <FormField 
-                  label="Default Meta Title (Judul Google SERP)" 
-                  helperText="Maks. 70 karakter. Contoh: Alsha Travel - Paket Umroh & Haji Khusus Resmi Berizin PPIU"
-                >
-                  <Input 
-                    name="meta_title"
-                    value={formData.meta_title}
-                    onChange={handleChange}
-                    placeholder="Alsha Travel - Paket Umroh & Haji Khusus Resmi Berizin PPIU"
-                    maxLength={150}
-                  />
-                </FormField>
+                <Input
+                  label="Meta Title"
+                  name="meta_title"
+                  value={formData.meta_title}
+                  onChange={handleChange}
+                  placeholder="Alsha Travel - Paket Umroh & Haji Khusus Resmi Berizin PPIU"
+                  maxLength={150}
+                  className="!mb-0"
+                />
 
-                <FormField 
-                  label="Default Meta Description" 
-                  helperText="Maks. 160 karakter. Ringkasan yang tampil di hasil pencarian Google & AI Search"
-                >
-                  <Textarea 
-                    name="meta_description"
-                    value={formData.meta_description}
-                    onChange={handleChange}
-                    placeholder="Biro perjalanan umroh resmi terpercaya dengan jadwal keberangkatan pasti, hotel bintang 5 dekat masjid, dan bimbingan ibadah sesuai Sunnah..."
-                    rows={2}
-                    maxLength={255}
-                  />
-                </FormField>
+                <Textarea
+                  label="Meta Description"
+                  name="meta_description"
+                  value={formData.meta_description}
+                  onChange={handleChange}
+                  placeholder="Biro perjalanan umroh resmi terpercaya dengan jadwal keberangkatan pasti, hotel bintang 5 dekat masjid, dan bimbingan ibadah sesuai Sunnah..."
+                  rows={2}
+                  maxLength={255}
+                  className="!mb-0"
+                />
 
-                <FormField 
-                  label="Google Search Console Verification Code" 
-                  helperText="Tag verifikasi HTML Google Webmaster (mis. google-site-verification=xxxx...)"
-                >
-                  <Input 
-                    name="google_verification_code"
-                    value={formData.google_verification_code}
-                    onChange={handleChange}
-                    placeholder="google-site-verification=xxxxxxxxxxxx"
-                    className="font-mono text-xs"
-                  />
-                </FormField>
+                <Input
+                  label="Kode Verifikasi Google"
+                  name="google_verification_code"
+                  value={formData.google_verification_code}
+                  onChange={handleChange}
+                  placeholder="google-site-verification=xxxxxxxxxxxx"
+                  className="!mb-0"
+                />
               </div>
-            </MetaBox>
-
-            {/* MetaBox Legalitas */}
-            <MetaBox 
-              title="Legalitas & Izin Usaha" 
-              subtitle="Izin resmi Kemenag RI (PPIU & PIHK)"
-              icon={<CreditCard size={18} className="text-neutral-700" />}
-            >
+            </FormSection>
+            <FormSection id="sec-legal" title="Legalitas">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                   label="PPIU"
@@ -576,74 +592,8 @@ const BrandFormPage = () => {
                   className="!mb-0"
                 />
               </div>
-            </MetaBox>
-
-            {/* MetaBox Kebijakan Pembayaran */}
-            <MetaBox
-              title="Kebijakan Pembayaran"
-              subtitle="Nilai default untuk seluruh jadwal brand ini"
-              icon={<CreditCard size={18} className="text-neutral-700" />}
-            >
-              <FormField
-                label="Minimal DP per Jamaah (Rp)"
-                helpText="Dipakai bila jadwal tidak mengatur minimal DP sendiri. Kosongkan atau isi 0 jika tidak ada minimal DP."
-                className="!mb-0 sm:max-w-sm"
-              >
-                <Input
-                  name="minimal_dp"
-                  value={formData.minimal_dp ? Number(formData.minimal_dp).toLocaleString('id-ID') : ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, minimal_dp: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="mis. 5.000.000"
-                  inputMode="numeric"
-                  className="!mb-0"
-                />
-              </FormField>
-            </MetaBox>
-
-            {/* MetaBox Program Agen (Syiar) */}
-            <MetaBox
-              title="Program Agen (Syiar)"
-              subtitle="Biaya pendaftaran agen & kontak konfirmasi pembayaran"
-              icon={<Users size={18} className="text-neutral-700" />}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  label="Biaya Pendaftaran Agen (Rp)"
-                  helpText="Kosongkan atau isi 0 jika brand tidak memungut biaya. Perubahan hanya berlaku untuk pengajuan baru."
-                  className="!mb-0"
-                >
-                  <Input
-                    name="biaya_pendaftaran_agen"
-                    value={formData.biaya_pendaftaran_agen ? Number(formData.biaya_pendaftaran_agen).toLocaleString('id-ID') : ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, biaya_pendaftaran_agen: e.target.value.replace(/\D/g, '') }))}
-                    placeholder="mis. 150.000"
-                    inputMode="numeric"
-                    className="!mb-0"
-                  />
-                </FormField>
-                <FormField
-                  label="No. WhatsApp Admin Travel"
-                  helpText="Tujuan tombol “Konfirmasi Pembayaran via WhatsApp” di halaman pendaftaran agen."
-                  className="!mb-0"
-                >
-                  <Input
-                    name="no_wa_admin_travel"
-                    value={formData.no_wa_admin_travel}
-                    onChange={handleChange}
-                    placeholder="mis. 081234567890"
-                    inputMode="tel"
-                    className="!mb-0"
-                  />
-                </FormField>
-              </div>
-            </MetaBox>
-
-            {/* MetaBox Media Sosial */}
-            <MetaBox 
-              title="Akun Media Sosial" 
-              subtitle="Tautan channel sosial media resmi brand"
-              icon={<Globe size={18} className="text-neutral-700" />}
-            >
+            </FormSection>
+            <FormSection id="sec-sosial" title="Media Sosial">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input 
                   label="Facebook"
@@ -681,54 +631,124 @@ const BrandFormPage = () => {
                   placeholder="https://youtube.com/@..."
                 />
               </div>
-            </MetaBox>
-          </div>
+            </FormSection>
 
-          {/* Kolom KANAN (Sidebar Aksi & Simpan) */}
-          <div className="space-y-6 lg:sticky lg:top-6">
-            <MetaBox 
-              title="Aksi & Simpan" 
-              subtitle="Penyimpanan data brand"
-              icon={<Save size={18} className="text-neutral-700" />}
-            >
-              <div className="space-y-3.5">
-                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs text-neutral-600 space-y-1.5 font-body">
-                  <div className="flex items-center gap-1.5 text-neutral-900 font-semibold">
-                    <CheckCircle2 size={14} className="text-success-600" />
-                    <span>Sinkronisasi Otomatis</span>
-                  </div>
-                  <p>
-                    {isEditMode 
-                      ? "Perubahan data brand akan langsung diperbarui di seluruh ekosistem ERP dan microsite."
-                      : "Brand baru yang dibuat akan langsung aktif dan siap digunakan untuk paket & booking."}
-                  </p>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <Button 
-                    type="submit" 
-                    variant="primary" 
-                    isLoading={isSubmitting}
-                    disabled={isSubmitting || isUploadingLogo || isUploadingIcon || isUploadingOgImage}
-                    className="w-full justify-center shadow-sm"
-                  >
-                    {isSubmitting ? "Menyimpan..." : (isEditMode ? "Perbarui Data Brand" : "Simpan Brand Baru")}
-                  </Button>
-
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    onClick={() => navigate('/brands')}
-                    disabled={isSubmitting}
-                    className="w-full justify-center text-neutral-600 hover:text-neutral-900"
-                  >
-                    Batal
-                  </Button>
-                </div>
+          <FormSection id="sec-sk" title="S&K Booking">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Input
+                  label="Minimal DP (Rp)"
+                  name="minimal_dp"
+                  value={formData.minimal_dp ? Number(formData.minimal_dp).toLocaleString('id-ID') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, minimal_dp: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="mis. 5.000.000"
+                  inputMode="numeric"
+                  className="!mb-0"
+                />
+                <Input
+                  label="Cashback Alumni (Rp)"
+                  name="cashback_alumni"
+                  value={formData.cashback_alumni ? Number(formData.cashback_alumni).toLocaleString('id-ID') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, cashback_alumni: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="mis. 500.000"
+                  inputMode="numeric"
+                  className="!mb-0"
+                />
+                <Input
+                    label="Batas Pelunasan (H-)"
+                    name="batas_pelunasan_hari"
+                    value={formData.batas_pelunasan_hari}
+                    onChange={(e) => setFormData(prev => ({ ...prev, batas_pelunasan_hari: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                    placeholder="mis. 45"
+                    inputMode="numeric"
+                    className="!mb-0"
+                  />
               </div>
-            </MetaBox>
-          </div>
-        </div>
+
+              <Textarea
+                label="Ketentuan Pembatalan"
+                name="ketentuan_pembatalan"
+                value={formData.ketentuan_pembatalan}
+                onChange={handleChange}
+                placeholder={'Contoh:\n- Pembatalan H-60 s.d. H-31: potongan 25% dari total biaya\n- Pembatalan H-30 s.d. H-15: potongan 50%\n- Pembatalan di bawah H-14: tidak ada pengembalian dana'}
+                rows={8}
+                className="!mb-0"
+              />
+            </div>
+          </FormSection>
+
+          <FormSection id="sec-agen" title="Aturan Agen">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <CustomDropdown
+                  label="Biaya Pendaftaran"
+                  value={formData.biaya_mode}
+                  onChange={(val) => setFormData(prev => ({ ...prev, biaya_mode: val }))}
+                  options={[
+                    { value: 'gratis', label: 'Gratis' },
+                    { value: 'berbayar', label: 'Berbayar' },
+                  ]}
+                  className="!mb-0"
+                />
+                {formData.biaya_mode === 'berbayar' && (
+                  <Input
+                    label="Nominal Biaya Pendaftaran (Rp)"
+                    name="biaya_pendaftaran_agen"
+                    value={formData.biaya_pendaftaran_agen ? Number(formData.biaya_pendaftaran_agen).toLocaleString('id-ID') : ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, biaya_pendaftaran_agen: e.target.value.replace(/\D/g, '') }))}
+                    placeholder="mis. 150.000"
+                    inputMode="numeric"
+                    className="!mb-0"
+                  />
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Input
+                  label="Ujroh Closing (Rp/jamaah)"
+                  name="ujroh_closing"
+                  value={formData.ujroh_closing ? Number(formData.ujroh_closing).toLocaleString('id-ID') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ujroh_closing: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="mis. 500.000"
+                  inputMode="numeric"
+                  className="!mb-0"
+                />
+                <Input
+                  label="Ujroh Pembinaan (Rp/jamaah)"
+                  name="ujroh_pembinaan"
+                  value={formData.ujroh_pembinaan ? Number(formData.ujroh_pembinaan).toLocaleString('id-ID') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ujroh_pembinaan: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="mis. 200.000"
+                  inputMode="numeric"
+                  className="!mb-0"
+                />
+                <Input
+                  label="Ujroh Repeat Booking (Rp/jamaah)"
+                  name="ujroh_repeat_booking"
+                  value={formData.ujroh_repeat_booking ? Number(formData.ujroh_repeat_booking).toLocaleString('id-ID') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ujroh_repeat_booking: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="mis. 250.000"
+                  inputMode="numeric"
+                  className="!mb-0"
+                />
+              </div>
+
+              <Textarea
+                label="Syarat & Ketentuan"
+                name="syarat_ketentuan_agen"
+                value={formData.syarat_ketentuan_agen}
+                onChange={handleChange}
+                placeholder="Syarat dan ketentuan yang disetujui agen saat mendaftar..."
+                rows={8}
+                className="!mb-0"
+              />
+            </div>
+          </FormSection>
+
+          <FormSection id="sec-rekening" title="Rekening Bank">
+            <BrandBankAccounts brandId={id} />
+          </FormSection>
+        </FormTabs>
       </form>
     </div>
   );

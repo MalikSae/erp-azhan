@@ -1,31 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import PageHeader from '../components/ui/PageHeader';
-import DataTable from '../components/ui/DataTable';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Pencil, Trash2 } from 'lucide-react';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import Button from 'shared/ui/Button';
+import Modal from 'shared/ui/Modal';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import ActionMenu from 'shared/ui/ActionMenu';
 import { listBrands, deleteBrand } from '../api/brands';
 import { BrandCell } from 'shared';
 
 const ColorCell = ({ color }) => {
-  if (!color) return <span>-</span>;
+  if (!color) return <span className="text-xs text-neutral-400 font-body">-</span>;
   return (
     <div className="flex items-center gap-2">
-      <div 
-        className="w-4 h-4 rounded border border-neutral-200" 
+      <div
+        className="w-4 h-4 rounded-full border border-neutral-200 shrink-0"
         style={{ backgroundColor: color }}
       />
-      <span className="text-sm font-medium uppercase text-neutral-700">{color}</span>
+      <span className="text-[12px] font-mono uppercase text-neutral-600">{color}</span>
     </div>
   );
 };
 
 const BrandsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [successMessage, setSuccessMessage] = useState(null);
   const [brands, setBrands] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
@@ -34,7 +38,7 @@ const BrandsPage = () => {
     setErrorMessage(null);
     try {
       const data = await listBrands();
-      setBrands(data);
+      setBrands(data || []);
     } catch (error) {
       const msg = error.response?.data?.error || "Gagal memuat data brand.";
       setErrorMessage(msg);
@@ -45,6 +49,10 @@ const BrandsPage = () => {
 
   useEffect(() => {
     fetchBrands();
+    if (location.state?.successMessage) {
+      setSuccessMessage(location.state.successMessage);
+      window.history.replaceState({}, '');
+    }
   }, []);
 
   const confirmDelete = (id) => {
@@ -72,83 +80,77 @@ const BrandsPage = () => {
 
   const brandToDelete = brands.find(b => b.id === deleteConfirmId);
 
+  const columns = [
+    { header: 'Brand', key: 'name', sortable: true },
+    { header: 'Domain', key: 'domain', sortable: true },
+    { header: 'Warna', key: 'primary_color' },
+    { header: 'Aksi', key: 'aksi' },
+  ];
+
+  const renderCell = (row, key) => {
+    if (key === 'name') {
+      return (
+        <div className="flex items-center gap-3 min-w-0">
+          <BrandCell key={row.icon_url || row.id} brand={row} />
+          <div className="min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate(`/brands/${row.id}/edit`)}
+              className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            >
+              {row.name}
+            </button>
+            <div className="text-[11px] font-body text-neutral-400">
+              Kode <span className="font-mono">{row.kode_brand || '-'}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (key === 'domain') {
+      return row.domain
+        ? <span className="text-[13px] font-mono text-neutral-700">{row.domain}</span>
+        : <span className="text-xs text-neutral-400 font-body">-</span>;
+    }
+    if (key === 'primary_color') return <ColorCell color={row.primary_color} />;
+    if (key === 'aksi') {
+      const menuItems = [
+        { label: 'Edit', icon: Pencil, tooltip: 'Edit Brand', onClick: () => navigate(`/brands/${row.id}/edit`) },
+        { label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus Brand', onClick: () => confirmDelete(row.id) },
+      ];
+      return <ActionMenu items={menuItems} align="right" />;
+    }
+    return row[key];
+  };
+
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Kelola Brand" 
-        actionLabel="+ Tambah Brand" 
+      <PageHeader
+        title="Kelola Brand"
+        actionLabel="+ Tambah Brand"
         onAction={() => navigate("/brands/new")}
       />
 
+      {successMessage && (
+        <Alert variant="success" onClose={() => setSuccessMessage(null)}>{successMessage}</Alert>
+      )}
+
       {errorMessage && (
-        <Alert variant="error">{errorMessage}</Alert>
+        <Alert variant="error" onClose={() => setErrorMessage(null)}>{errorMessage}</Alert>
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
           <LoadingSpinner />
         </div>
       ) : (
         <DataTable
-          columns={[
-            { header: 'Ikon', key: 'icon_url' },
-            { header: 'Kode', key: 'kode_brand' },
-            { header: 'Nama Brand', key: 'name' },
-            { header: 'Domain', key: 'domain' },
-            { header: 'Warna', key: 'primary_color' },
-            { header: 'Aksi', key: 'aksi' },
-          ]}
+          columns={columns}
           data={brands}
           itemsPerPage={10}
           emptyMessage='Belum ada brand. Klik "+ Tambah Brand" untuk menambahkan.'
           searchPlaceholder="Cari nama brand, kode, atau domain..."
-          renderCell={(row, key) => {
-            if (key === 'icon_url') {
-              return <BrandCell key={row.icon_url || row.id} brand={row} />;
-            }
-            if (key === 'kode_brand') {
-              return row.kode_brand ? (
-                <span className="font-mono text-xs font-bold text-neutral-800 bg-neutral-100 border border-neutral-200/90 px-2 py-0.5 rounded-lg">
-                  {row.kode_brand}
-                </span>
-              ) : (
-                <span className="text-neutral-400 font-mono text-xs">-</span>
-              );
-            }
-            if (key === 'domain') {
-              return row.domain ? (
-                <span className="font-mono text-xs text-neutral-700">{row.domain}</span>
-              ) : (
-                <span className="text-neutral-400">-</span>
-              );
-            }
-            if (key === 'primary_color') {
-              return <ColorCell color={row.primary_color} />;
-            }
-            if (key === 'aksi') return (
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => navigate(`/brands/${row.id}/edit`)} 
-                  title="Edit"
-                  className="text-neutral-400 hover:text-neutral-700 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </button>
-                <button 
-                  onClick={() => confirmDelete(row.id)} 
-                  title="Hapus"
-                  className="text-neutral-400 hover:text-neutral-700 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-            );
-            return row[key];
-          }}
+          renderCell={renderCell}
         />
       )}
 

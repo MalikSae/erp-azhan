@@ -35,7 +35,14 @@ type Brand struct {
 	OgImageURL             *string   `json:"og_image_url"`
 	GoogleVerificationCode *string   `json:"google_verification_code"`
 	MinimalDP              float64   `json:"minimal_dp"`
+	BatasPelunasanHari     int       `json:"batas_pelunasan_hari"`
+	KetentuanPembatalan    *string   `json:"ketentuan_pembatalan"`
+	CashbackAlumni         float64   `json:"cashback_alumni"`
 	BiayaPendaftaranAgen   float64   `json:"biaya_pendaftaran_agen"`
+	UjrohClosing           float64   `json:"ujroh_closing"`
+	UjrohPembinaan         float64   `json:"ujroh_pembinaan"`
+	UjrohRepeatBooking     float64   `json:"ujroh_repeat_booking"`
+	SyaratKetentuanAgen    *string   `json:"syarat_ketentuan_agen"`
 	NoWAAdminTravel        *string   `json:"no_wa_admin_travel"`
 	CreatedAt              time.Time `json:"created_at"`
 }
@@ -71,7 +78,14 @@ type CreateBrandRequest struct {
 	OgImageURL             *string `json:"og_image_url"`
 	GoogleVerificationCode *string `json:"google_verification_code"`
 	MinimalDP              float64 `json:"minimal_dp"`
+	BatasPelunasanHari     int     `json:"batas_pelunasan_hari"`
+	KetentuanPembatalan    *string `json:"ketentuan_pembatalan"`
+	CashbackAlumni         float64 `json:"cashback_alumni"`
 	BiayaPendaftaranAgen   float64 `json:"biaya_pendaftaran_agen"`
+	UjrohClosing           float64 `json:"ujroh_closing"`
+	UjrohPembinaan         float64 `json:"ujroh_pembinaan"`
+	UjrohRepeatBooking     float64 `json:"ujroh_repeat_booking"`
+	SyaratKetentuanAgen    *string `json:"syarat_ketentuan_agen"`
 	NoWAAdminTravel        *string `json:"no_wa_admin_travel"`
 }
 
@@ -106,6 +120,13 @@ type UpdateBrandRequest struct {
 	OgImageURL             *string `json:"og_image_url"`
 	GoogleVerificationCode *string `json:"google_verification_code"`
 	MinimalDP              float64 `json:"minimal_dp"`
+	BatasPelunasanHari     int     `json:"batas_pelunasan_hari"`
+	KetentuanPembatalan    *string `json:"ketentuan_pembatalan"`
+	CashbackAlumni         float64 `json:"cashback_alumni"`
 	BiayaPendaftaranAgen   float64 `json:"biaya_pendaftaran_agen"`
+	UjrohClosing           float64 `json:"ujroh_closing"`
+	UjrohPembinaan         float64 `json:"ujroh_pembinaan"`
+	UjrohRepeatBooking     float64 `json:"ujroh_repeat_booking"`
+	SyaratKetentuanAgen    *string `json:"syarat_ketentuan_agen"`
 	NoWAAdminTravel        *string `json:"no_wa_admin_travel"`
 }
