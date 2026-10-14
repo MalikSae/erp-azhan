@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal, Receipt, Banknote, CheckCircle2, Clock3 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { listAgen, listRiwayatKomisi } from '../api/agen';
 import { listBrands } from '../api/brands';
 import Alert from '../components/ui/Alert';
-import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import Input from '../components/ui/Input';
-
 import DataTable from '../components/ui/DataTable';
-
 import PageHeader from '../components/ui/PageHeader';
-import { dateLabel, JENIS_KOMISI, KETERSEDIAAN, money } from '../utils/agen';
+import StatTile from '../components/ui/StatTile';
+import { dateLabel, JENIS_KOMISI, money } from '../utils/agen';
 
 const LIMIT = 200;
 const valueOf = (v) => (v?.target ? v.target.value : v);
+
+const KETERSEDIAAN_STYLE = {
+  tersedia: { label: 'Tersedia', text: 'text-success-700', dot: 'bg-success-500' },
+  tertahan: { label: 'Tertahan', text: 'text-warning-700', dot: 'bg-warning-500' },
+  kredit: { label: 'Kredit cashback', text: 'text-neutral-500', dot: 'bg-neutral-300' },
+};
 
 // Screen B3 — ledger transaksi_komisi lintas agen. Read-only, tanpa aksi
 // reversal (agen-azhan.md §5.8). showBrandColumn: Admin Master, lintas brand
@@ -37,7 +41,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    listAgen().then(setAgenList).catch(() => {});
+    listAgen().then((data) => setAgenList(data || [])).catch(() => {});
     if (showBrandColumn) listBrands().then((b) => setBrands(b || [])).catch(() => {});
   }, [showBrandColumn]);
 
@@ -48,7 +52,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
     setLoading(true);
     setError('');
     listRiwayatKomisi({ ...filter, limit: LIMIT })
-      .then(setItems)
+      .then((data) => setItems(data || []))
       .catch(() => setError('Riwayat komisi gagal dimuat. Silakan coba kembali.'))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,31 +65,51 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
     setParams(next, { replace: true });
   };
 
-  const total = useMemo(() => items.reduce((sum, it) => sum + Number(it.nominal || 0), 0), [items]);
+  const stats = useMemo(() => {
+    const sum = (list) => list.reduce((t, it) => t + Number(it.nominal || 0), 0);
+    return {
+      total: sum(items),
+      tersedia: sum(items.filter((it) => it.ketersediaan === 'tersedia')),
+      tertahan: sum(items.filter((it) => it.ketersediaan === 'tertahan')),
+    };
+  }, [items]);
 
   const columns = [
     { header: 'Tanggal', key: 'created_at', sortable: true },
-    { header: 'Agen / Penerima', key: 'penerima_nama', sortable: true },
-    { header: 'Jenis', key: 'jenis', sortable: true },
-    { header: 'Sumber Jamaah', key: 'sumber_nama', sortable: true },
-    { header: 'Booking', key: 'booking_code', sortable: true },
-    { header: 'Nominal', key: 'nominal', sortable: true },
+    { header: 'Penerima', key: 'penerima_nama', sortable: true },
+    { header: 'Sumber', key: 'sumber_nama', sortable: true },
+    { header: 'Nominal', key: 'nominal', sortable: true, sortFn: (a, b) => Number(a.nominal) - Number(b.nominal) },
     { header: 'Ketersediaan', key: 'ketersediaan' },
   ];
 
   const renderCell = (row, key) => {
-    if (key === 'created_at') return dateLabel(row.created_at);
-    if (key === 'penerima_nama') return <span className="font-semibold text-neutral-900">{row.penerima_nama}</span>;
-    if (key === 'jenis') return JENIS_KOMISI[row.jenis] || row.jenis;
-    if (key === 'booking_code') return <span className="font-mono">{row.booking_code}</span>;
-    if (key === 'nominal') return <span className="font-semibold text-neutral-900">{money(row.nominal)}</span>;
+    if (key === 'created_at') return <span className="text-[13px] font-body text-neutral-600 whitespace-nowrap">{dateLabel(row.created_at)}</span>;
+    if (key === 'penerima_nama') {
+      return (
+        <div className="min-w-0">
+          <div className="font-heading font-semibold text-neutral-900 leading-snug">{row.penerima_nama}</div>
+          <div className="text-[11px] font-body text-neutral-400">{JENIS_KOMISI[row.jenis] || row.jenis}</div>
+        </div>
+      );
+    }
+    if (key === 'sumber_nama') {
+      return (
+        <div className="min-w-0">
+          <div className="text-[13px] font-body text-neutral-800">{row.sumber_nama || '-'}</div>
+          <div className="text-[11px] font-body text-neutral-400 font-mono">{row.booking_code}</div>
+        </div>
+      );
+    }
+    if (key === 'nominal') return <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.nominal)}</span>;
     if (key === 'ketersediaan') {
-      const meta = KETERSEDIAAN[row.ketersediaan] || { label: row.ketersediaan, variant: 'neutral' };
+      const meta = KETERSEDIAAN_STYLE[row.ketersediaan] || { label: row.ketersediaan, text: 'text-neutral-500', dot: 'bg-neutral-300' };
       return (
         <div>
-          <Badge variant={meta.variant}>{meta.label}</Badge>
+          <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${meta.text}`}>
+            <span className={`w-2 h-2 rounded-full ${meta.dot}`} />{meta.label}
+          </span>
           {row.ketersediaan === 'tertahan' && (
-            <p className="mt-1 text-[11px] text-neutral-500">sampai berangkat {dateLabel(row.berangkat_tanggal)}</p>
+            <p className="mt-0.5 text-[11px] font-body text-neutral-400">sampai berangkat {dateLabel(row.berangkat_tanggal)}</p>
           )}
         </div>
       );
@@ -103,8 +127,13 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
         placeholder="Semua jenis"
         className="!mb-0 flex-1 sm:w-44 sm:flex-none"
       />
-      <Button type="button" variant={panelOpen || panelActive ? 'dark' : 'secondary'}
-        onClick={() => setPanelOpen((open) => !open)} className="h-11 shrink-0 whitespace-nowrap" aria-expanded={panelOpen}>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => setPanelOpen((open) => !open)}
+        className={`h-10 shrink-0 whitespace-nowrap ${panelOpen || panelActive ? '!border-primary-200 !bg-primary-50 !text-primary-700' : ''}`}
+        aria-expanded={panelOpen}
+      >
         <SlidersHorizontal className="w-4 h-4" />
         <span>Filter{panelActive ? ` (${panelActive})` : ''}</span>
       </Button>
@@ -147,17 +176,28 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
     </div>
   );
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Riwayat Komisi"
-        subtitle={`Seluruh transaksi komisi agen ${showBrandColumn ? 'lintas brand' : 'di brand ini'}. Hanya baca, tanpa pembatalan.`}
-      />
+    <div className="space-y-6">
+      <PageHeader title="Riwayat Komisi" />
       {error && <Alert variant="error" message={error} />}
 
-      <p className="text-sm text-neutral-600">
-        Total {items.length} transaksi: <span className="font-bold text-neutral-900">{money(total)}</span>
-        {items.length >= LIMIT && <span className="text-neutral-500"> (menampilkan {LIMIT} terbaru, persempit filter untuk melihat sisanya)</span>}
-      </p>
+      {!loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatTile
+            icon={Receipt}
+            variant="primary"
+            value={items.length}
+            label="Transaksi"
+            hint={items.length >= LIMIT ? `${LIMIT} terbaru` : undefined}
+          />
+          <StatTile icon={Banknote} variant="violet" value={money(stats.total)} label="Total komisi" hint="Termasuk cashback" />
+          <StatTile icon={CheckCircle2} variant="success" value={money(stats.tersedia)} label="Tersedia" />
+          <StatTile icon={Clock3} variant="warning" value={money(stats.tertahan)} label="Tertahan" hint="Sampai berangkat" />
+        </div>
+      )}
+
+      {items.length >= LIMIT && (
+        <p className="text-xs font-body text-neutral-500">Menampilkan {LIMIT} transaksi terbaru. Persempit filter untuk melihat sisanya.</p>
+      )}
 
       <DataTable
         columns={columns}

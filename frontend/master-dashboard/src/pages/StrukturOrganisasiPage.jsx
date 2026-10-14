@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Network, Users, Layers, Plus, Pencil, Power, Trash2 } from 'lucide-react';
-import PageHeader from '../components/ui/PageHeader';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import Input from '../components/ui/Input';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
-import StatTile from '../components/ui/StatTile';
+import PageHeader from 'shared/ui/PageHeader';
+import Button from 'shared/ui/Button';
+import Modal from 'shared/ui/Modal';
+import Input from 'shared/ui/Input';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import StatTile from 'shared/ui/StatTile';
+import ActionMenu from 'shared/ui/ActionMenu';
 import { listOrgUnits, createOrgUnit, updateOrgUnit, setOrgUnitStatus, deleteOrgUnit } from '../api/orgUnits';
-import { errMsg, actionBtn, StatusChip } from '../components/penggunaUi';
+import { errMsg, StatusChip } from '../components/penggunaUi';
 
 // Struktur Organisasi (SPEK-PENGGUNA-ORGANISASI §6): kelola divisi & tim.
 // Tidak ada urusan akun di sini; anggota diatur dari form Pengguna.
@@ -136,18 +137,26 @@ const StrukturOrganisasiPage = () => {
     );
 
   const UnitActions = ({ unit }) => (
-    <div className="flex gap-1.5 items-center justify-end">
-      <button type="button" title="Ubah" onClick={() => openEdit(unit)} className={`${actionBtn} hover:text-neutral-800 hover:bg-neutral-50`}>
-        <Pencil className="w-4 h-4" strokeWidth={1.75} />
-      </button>
-      <button type="button" title={unit.is_active ? 'Nonaktifkan' : 'Aktifkan kembali'} onClick={() => { setConfirm({ kind: 'status', unit }); setConfirmError(null); }}
-        className={`${actionBtn} ${unit.is_active ? 'hover:text-danger-600 hover:bg-danger-50 hover:border-danger-200' : 'hover:text-success-600 hover:bg-success-50 hover:border-success-200'}`}>
-        <Power className="w-4 h-4" strokeWidth={1.75} />
-      </button>
-      <button type="button" title="Hapus (hanya unit kosong)" onClick={() => { setConfirm({ kind: 'delete', unit }); setConfirmError(null); }}
-        className={`${actionBtn} hover:text-danger-600 hover:bg-danger-50 hover:border-danger-200`}>
-        <Trash2 className="w-4 h-4" strokeWidth={1.75} />
-      </button>
+    <div className="flex items-center justify-end">
+      <ActionMenu
+        align="right"
+        items={[
+          { label: 'Ubah', icon: Pencil, tooltip: 'Ubah unit', onClick: () => openEdit(unit) },
+          {
+            label: unit.is_active ? 'Nonaktifkan' : 'Aktifkan',
+            icon: Power,
+            tooltip: unit.is_active ? 'Nonaktifkan' : 'Aktifkan kembali',
+            onClick: () => { setConfirm({ kind: 'status', unit }); setConfirmError(null); },
+          },
+          {
+            label: 'Hapus',
+            icon: Trash2,
+            danger: true,
+            tooltip: 'Hapus (hanya unit kosong)',
+            onClick: () => { setConfirm({ kind: 'delete', unit }); setConfirmError(null); },
+          },
+        ]}
+      />
     </div>
   );
 
@@ -169,7 +178,7 @@ const StrukturOrganisasiPage = () => {
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-body text-neutral-500">Anggota & pemimpin diatur dari form Pengguna (bagian Penugasan). Unit yang bisa dipilih mengikuti divisi asal role.</p>
         <label className="inline-flex items-center gap-2 text-xs font-body text-neutral-600 cursor-pointer select-none">
-          <input type="checkbox" className="h-4 w-4 rounded border-neutral-300 accent-[#F26522]" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          <input type="checkbox" className="h-4 w-4 rounded border-neutral-300 accent-primary-500" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
           Tampilkan nonaktif
         </label>
       </div>
@@ -253,7 +262,7 @@ const StrukturOrganisasiPage = () => {
               options={activeDivisiOptions(editor?.unit?.parent_id)}
             />
           )}
-          <Input label="Urutan tampil" type="number" value={form.urutan} helpText="Angka kecil tampil lebih dulu."
+          <Input label="Urutan tampil" type="number" value={form.urutan}
             onChange={(e) => setForm(p => ({ ...p, urutan: e.target.value }))} />
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
             <Button type="button" variant="secondary" onClick={() => setEditor(null)} disabled={isSaving}>Batal</Button>

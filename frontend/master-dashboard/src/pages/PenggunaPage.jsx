@@ -1,18 +1,19 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Users, ShieldCheck, Building2, UserX, Pencil, KeyRound, Power } from 'lucide-react';
-import PageHeader from '../components/ui/PageHeader';
-import DataTable from '../components/ui/DataTable';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import Input from '../components/ui/Input';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
-import StatTile from '../components/ui/StatTile';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import Button from 'shared/ui/Button';
+import Modal from 'shared/ui/Modal';
+import Input from 'shared/ui/Input';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import StatTile from 'shared/ui/StatTile';
+import ActionMenu from 'shared/ui/ActionMenu';
 import { AuthContext } from '../context/AuthContext';
 import { listAdminUsers, setAdminUserStatus, resetAdminUserPassword } from '../api/adminUsers';
 import { listRoles } from '../api/roles';
-import { errMsg, actionBtn, StatusChip, AksesChip, SoftBadge } from '../components/penggunaUi';
+import { errMsg, StatusChip, AksesChip } from '../components/penggunaUi';
 
 const FILTERS = [
   { value: 'aktif', label: 'Aktif' },
@@ -179,7 +180,7 @@ const PenggunaPage = () => {
                     <button type="button" onClick={() => navigate(`/users/${row.id}`)} className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left">
                       {row.display_name}
                     </button>
-                    {isSelf(row) && <SoftBadge>Anda</SoftBadge>}
+                    {isSelf(row) && <span className="text-[11px] font-body text-neutral-400">(Anda)</span>}
                   </div>
                   <div className="text-[11px] font-body text-neutral-400 truncate">
                     {row.jabatan ? `${row.jabatan} · ` : ''}{row.email}
@@ -189,50 +190,49 @@ const PenggunaPage = () => {
             }
             if (key === 'akses') return <AksesChip brandId={row.brand_id} brandName={row.brand_name} brandColor={row.brand_color} />;
             if (key === 'roles') {
+              const list = row.roles || [];
+              if (list.length === 0) return <span className="text-xs text-neutral-400 font-body">—</span>;
               return (
-                <div className="flex flex-wrap gap-1.5 max-w-[220px]">
-                  {(row.roles || []).map(slug => <SoftBadge key={slug}>{roleName(slug)}</SoftBadge>)}
-                </div>
+                <span className="block max-w-[220px] text-[13px] font-body text-neutral-700">
+                  {list.map(roleName).join(', ')}
+                </span>
               );
             }
             if (key === 'keanggotaan') {
               const list = row.keanggotaan || [];
               if (list.length === 0) return <span className="text-xs text-neutral-400 font-body">—</span>;
               return (
-                <div className="flex flex-wrap gap-1.5 max-w-[240px]">
+                <div className="max-w-[240px] space-y-0.5 text-[13px] font-body text-neutral-700">
                   {list.map(k => (
-                    <SoftBadge key={k.org_unit_id} tone={k.posisi === 'pemimpin' ? 'warning' : 'neutral'} title={k.posisi === 'pemimpin' ? 'Pemimpin' : 'Anggota'}>
-                      {k.unit_nama}{k.posisi === 'pemimpin' ? ' · Pemimpin' : ''}
-                    </SoftBadge>
+                    <div key={k.org_unit_id}>
+                      {k.unit_nama}
+                      {k.posisi === 'pemimpin' && <span className="text-[11px] text-neutral-400"> · Pemimpin</span>}
+                    </div>
                   ))}
                 </div>
               );
             }
             if (key === 'status') return <StatusChip active={row.is_active} />;
             if (key === 'aksi') {
-              return (
-                <div className="flex gap-1.5 items-center">
-                  <button title="Edit" onClick={() => navigate(`/users/${row.id}`)} className={`${actionBtn} hover:text-neutral-800 hover:bg-neutral-50`}>
-                    <Pencil className="w-4 h-4" strokeWidth={1.75} />
-                  </button>
-                  <button
-                    title="Ganti Password"
-                    disabled={!row.is_active}
-                    onClick={() => { setResetTarget(row); setResetForm({ password: '', confirm: '' }); setResetError(null); }}
-                    className={`${actionBtn} hover:text-primary-600 hover:bg-primary-50 hover:border-primary-200`}
-                  >
-                    <KeyRound className="w-4 h-4" strokeWidth={1.75} />
-                  </button>
-                  <button
-                    title={isSelf(row) ? 'Tidak bisa menonaktifkan akun sendiri' : (row.is_active ? 'Nonaktifkan' : 'Aktifkan kembali')}
-                    disabled={isSelf(row)}
-                    onClick={() => { setStatusTarget(row); setStatusError(null); }}
-                    className={`${actionBtn} ${row.is_active ? 'hover:text-danger-600 hover:bg-danger-50 hover:border-danger-200' : 'hover:text-success-600 hover:bg-success-50 hover:border-success-200'}`}
-                  >
-                    <Power className="w-4 h-4" strokeWidth={1.75} />
-                  </button>
-                </div>
-              );
+              const menuItems = [
+                { label: 'Edit', icon: Pencil, tooltip: 'Edit Pengguna', onClick: () => navigate(`/users/${row.id}`) },
+                {
+                  label: 'Ganti Password',
+                  icon: KeyRound,
+                  disabled: !row.is_active,
+                  disabledTooltip: 'Pengguna nonaktif',
+                  onClick: () => { setResetTarget(row); setResetForm({ password: '', confirm: '' }); setResetError(null); },
+                },
+                {
+                  label: row.is_active ? 'Nonaktifkan' : 'Aktifkan',
+                  icon: Power,
+                  danger: row.is_active,
+                  disabled: isSelf(row),
+                  disabledTooltip: 'Tidak bisa menonaktifkan akun sendiri',
+                  onClick: () => { setStatusTarget(row); setStatusError(null); },
+                },
+              ];
+              return <ActionMenu items={menuItems} align="right" />;
             }
             return row[key];
           }}
@@ -274,7 +274,7 @@ const PenggunaPage = () => {
       >
         <form onSubmit={handleReset} className="space-y-1">
           {resetError && <Alert variant="error" className="mb-4">{resetError}</Alert>}
-          <Input label="Password Baru" type="password" required value={resetForm.password} helpText="Minimal 8 karakter."
+          <Input label="Password Baru" type="password" required value={resetForm.password}
             onChange={(e) => setResetForm(p => ({ ...p, password: e.target.value }))} autoFocus />
           <Input label="Konfirmasi Password Baru" type="password" required value={resetForm.confirm}
             onChange={(e) => setResetForm(p => ({ ...p, confirm: e.target.value }))} />

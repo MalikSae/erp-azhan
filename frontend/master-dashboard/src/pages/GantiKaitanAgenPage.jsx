@@ -10,14 +10,13 @@ import {
   validateKaitan,
 } from 'shared';
 import { Lock, History, Search, Users, Link2 } from 'lucide-react';
-import Alert from '../components/ui/Alert';
-import Badge from '../components/ui/Badge';
-import Button from '../components/ui/Button';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import Input from '../components/ui/Input';
-import MetaBox from '../components/ui/MetaBox';
-import PageHeader from '../components/ui/PageHeader';
-import Textarea from '../components/ui/Textarea';
+import Alert from 'shared/ui/Alert';
+import Button from 'shared/ui/Button';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import Input from 'shared/ui/Input';
+import MetaBox from 'shared/ui/MetaBox';
+import PageHeader from 'shared/ui/PageHeader';
+import Textarea from 'shared/ui/Textarea';
 
 const SUMBER = {
   jalur1: 'Jalur 1 (booking agen)',
@@ -125,11 +124,8 @@ export default function GantiKaitanAgenPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Ganti Kaitan Agen"
-        subtitle="Koreksi kaitan agen yang salah input (Jalur 3). Hanya bisa selama jamaah belum pernah menghasilkan komisi."
-      />
+    <div className="space-y-6">
+      <PageHeader title="Ganti Kaitan Agen" />
 
       {error && !selected && <Alert variant="error" message={error} />}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
@@ -176,7 +172,15 @@ export default function GantiKaitanAgenPage() {
                     <p className="text-xs text-neutral-700 mt-0.5">{kaitanLabel(j)}</p>
                   </div>
                   <div className="shrink-0">
-                    {j.bisa_diganti ? <Badge variant="success">Bisa diganti</Badge> : <Badge variant="neutral" icon={<Lock size={12} />}>Terkunci</Badge>}
+                    {j.bisa_diganti ? (
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-success-700 whitespace-nowrap">
+                        <span className="w-2 h-2 rounded-full bg-success-500" />Bisa diganti
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-neutral-500 whitespace-nowrap">
+                        <Lock size={12} />Terkunci
+                      </span>
+                    )}
                   </div>
                 </div>
               </button>
@@ -191,7 +195,8 @@ export default function GantiKaitanAgenPage() {
             <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-card px-6 py-16 sm:py-24 text-center">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-50 text-neutral-400"><Users size={26} /></div>
               <h2 className="text-sm font-bold text-neutral-900">Pilih jamaah terlebih dahulu</h2>
-              <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-neutral-500">Cari nama, nomor HP, atau ID jamaah dengan minimal 3 karakter. Detail kaitan dan riwayat akan tampil di sini.</p>
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-neutral-500">Cari nama, nomor HP, atau ID jamaah dengan minimal 3 karakter. Detail kaitan dan riwayat akan tampil di sini.</p>
+              <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-neutral-400">Dipakai untuk mengoreksi kaitan agen yang salah input (Jalur 3). Hanya bisa selama jamaah belum pernah menghasilkan komisi.</p>
             </div>
           ) : (
             <>
@@ -244,17 +249,18 @@ export default function GantiKaitanAgenPage() {
                 {log.length === 0 ? (
                   <p className="text-sm text-neutral-500">Belum pernah diganti.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <ol className="relative ml-1.5 border-l border-neutral-200 space-y-5">
                     {log.map((l) => (
-                      <div key={l.id} className="rounded-xl border border-neutral-200 p-3 space-y-1 text-sm">
-                        <p className="font-medium text-neutral-900">
+                      <li key={l.id} className="pl-5 relative">
+                        <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-primary-500 ring-4 ring-white" />
+                        <p className="text-sm font-heading font-semibold text-neutral-900">
                           {l.kaitan_status_lama === 'terikat_agen' ? l.agen_lama_nama : 'Tanpa agen'} → {l.kaitan_status_baru === 'terikat_agen' ? l.agen_baru_nama : 'Tanpa agen'}
                         </p>
-                        <p className="text-neutral-700">{l.alasan}</p>
-                        <p className="text-xs text-neutral-500">{l.diganti_oleh} • {dateTime(l.diganti_at)}</p>
-                      </div>
+                        <p className="mt-0.5 text-sm font-body text-neutral-700">{l.alasan}</p>
+                        <p className="mt-0.5 text-[11px] font-body text-neutral-400">{l.diganti_oleh} · {dateTime(l.diganti_at)}</p>
+                      </li>
                     ))}
-                  </div>
+                  </ol>
                 )}
               </MetaBox>
             </>

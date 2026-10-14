@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import api from '../api/client';
-import Alert from '../components/ui/Alert';
-import Button from '../components/ui/Button';
-import Card from '../components/ui/Card';
-import Input from '../components/ui/Input';
-import PageHeader from '../components/ui/PageHeader';
+import Alert from 'shared/ui/Alert';
+import Button from 'shared/ui/Button';
+import Card from 'shared/ui/Card';
+import Input from 'shared/ui/Input';
+import PageHeader from 'shared/ui/PageHeader';
 import { useAuth } from '../context/AuthContext';
 
 const initialForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
@@ -54,10 +54,7 @@ export default function AccountSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Pengaturan akun"
-        subtitle="Kelola keamanan akun Admin Travel Anda."
-      />
+      <PageHeader title="Pengaturan akun" />
 
       {(error || success) && (
         <Alert variant={error ? 'error' : 'success'} message={error || success} />
@@ -67,8 +64,8 @@ export default function AccountSettingsPage() {
         <Card className="p-0 overflow-hidden">
           <div className="border-b border-neutral-100 px-5 py-5 md:px-6">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
-                <KeyRound size={19} />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
+                <KeyRound size={19} strokeWidth={1.75} />
               </div>
               <div>
                 <h2 className="font-heading text-base font-semibold text-neutral-900">Informasi akun</h2>
@@ -87,7 +84,7 @@ export default function AccountSettingsPage() {
 
             <div className="border-t border-neutral-100 pt-5">
               <div className="mb-4 flex items-center gap-2">
-                <LockKeyhole size={16} className="text-neutral-500" />
+                <LockKeyhole size={16} strokeWidth={1.75} className="text-neutral-500" />
                 <h3 className="font-heading text-sm font-semibold text-neutral-900">Ubah password</h3>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -128,8 +125,8 @@ export default function AccountSettingsPage() {
         </Card>
 
         <Card className="h-fit bg-neutral-50/70">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-50 text-success-700">
-            <ShieldCheck size={19} />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-100 text-success-600">
+            <ShieldCheck size={19} strokeWidth={1.75} />
           </div>
           <h2 className="mt-4 font-heading text-base font-semibold text-neutral-900">Akses aman</h2>
           <p className="mt-2 text-sm leading-6 text-neutral-500">

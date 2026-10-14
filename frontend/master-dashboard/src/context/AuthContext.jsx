@@ -3,6 +3,8 @@ import client from '../api/client';
 
 export const AuthContext = createContext();
 
+const PESAN_BUKAN_HOLDING = "Office Dashboard khusus akun dengan Akses Holding. Akun ini terikat ke brand tertentu — gunakan Travel Dashboard (belum tersedia di fase ini).";
+
 function decodeJwtPayload(token) {
   try {
     const base64Url = token.split('.')[1];
@@ -47,7 +49,7 @@ export const AuthProvider = ({ children }) => {
       
       const payload = decodeJwtPayload(access_token);
       if (payload && payload.brand_id !== null) {
-        throw new Error("Master Dashboard khusus akun dengan Akses Holding. Akun ini terikat ke brand tertentu — gunakan Travel Dashboard (belum tersedia di fase ini).");
+        throw new Error(PESAN_BUKAN_HOLDING);
       }
 
       localStorage.setItem('erp_access_token', access_token);
@@ -56,7 +58,7 @@ export const AuthProvider = ({ children }) => {
       
       return true;
     } catch (error) {
-      if (error.message === "Master Dashboard khusus akun dengan Akses Holding. Akun ini terikat ke brand tertentu — gunakan Travel Dashboard (belum tersedia di fase ini).") {
+      if (error.message === PESAN_BUKAN_HOLDING) {
         throw error;
       }
       if (error.response && error.response.data && error.response.data.error) {

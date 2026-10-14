@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Coins, Trophy, Users } from 'lucide-react';
-import { BrandCell, getPeringkatAgen, listBrands, money } from 'shared';
-import Alert from '../components/ui/Alert';
-import Badge from '../components/ui/Badge';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import DataTable from '../components/ui/DataTable';
-import Input from '../components/ui/Input';
-import PageHeader from '../components/ui/PageHeader';
+import { getPeringkatAgen, listBrands, money } from 'shared';
+import Alert from 'shared/ui/Alert';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import DataTable from 'shared/ui/DataTable';
+import Input from 'shared/ui/Input';
+import PageHeader from 'shared/ui/PageHeader';
+import StatTile from 'shared/ui/StatTile';
 
 const ymd = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -26,6 +26,14 @@ const PRESETS = {
 const presetRange = (key) => PRESETS[key].range(new Date()).map(ymd);
 
 const TOP = 3;
+
+// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
+const BrandChip = ({ name, color }) => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
+    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color || '#9CA3AF' }} />
+    {name}
+  </span>
+);
 
 // Peringkat agen per periode (Laporan & Analytics). Sumber: ledger
 // transaksi_komisi, tanggal = saat booking pertama kali lunas.
@@ -103,39 +111,28 @@ export default function PeringkatAgenPage() {
   const renderCell = (row, key) => {
     if (key === 'peringkat') {
       return row.peringkat <= TOP
-        ? <Badge variant="primary">#{row.peringkat}</Badge>
-        : <span className="text-neutral-600">#{row.peringkat}</span>;
+        ? <span className="text-sm font-heading font-bold text-primary-600">#{row.peringkat}</span>
+        : <span className="text-[13px] font-body text-neutral-500">#{row.peringkat}</span>;
     }
     if (key === 'nama_lengkap') {
       return (
         <div className="min-w-0">
-          <p className="font-semibold text-neutral-900 truncate">{row.nama_lengkap}</p>
-          <p className="text-xs text-neutral-500 font-mono">
-            {row.kode_referral || '-'}{row.status_agen === 'nonaktif' ? ' · nonaktif' : ''}
+          <p className="font-heading font-semibold text-neutral-900 truncate leading-snug">{row.nama_lengkap}</p>
+          <p className="text-[11px] font-body text-neutral-400">
+            Kode <span className="font-mono">{row.kode_referral || '-'}</span>{row.status_agen === 'nonaktif' ? ' · nonaktif' : ''}
           </p>
         </div>
       );
     }
-    if (key === 'brand_name') return <BrandCell brand={brandsMap[row.brand_id]} brandName={row.brand_name} showText />;
-    if (['komisi_langsung', 'bonus_pembinaan', 'repeat_order'].includes(key)) return money(row[key]);
-    if (key === 'total_komisi') return <span className="font-bold text-neutral-900">{money(row.total_komisi)}</span>;
+    if (key === 'brand_name') return <BrandChip name={brandsMap[row.brand_id]?.name || row.brand_name} color={brandsMap[row.brand_id]?.primary_color} />;
+    if (['komisi_langsung', 'bonus_pembinaan', 'repeat_order'].includes(key)) return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{money(row[key])}</span>;
+    if (key === 'total_komisi') return <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.total_komisi)}</span>;
+    if (key === 'pax_closing' || key === 'booking_closing') return <span className="text-[13px] font-body text-neutral-700">{row[key] ?? 0}</span>;
     return row[key] ?? '-';
   };
 
-  const Stat = ({ icon: Icon, label, value }) => (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4 flex items-center gap-3">
-      <div className="w-10 h-10 shrink-0 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center">
-        <Icon size={18} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-neutral-500">{label}</p>
-        <p className="text-lg font-bold text-neutral-900 truncate">{value}</p>
-      </div>
-    </div>
-  );
-
   const toolbarActions = (
-    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+    <div className="flex flex-wrap items-center gap-2">
       <CustomDropdown
         name="preset"
         value={preset}
@@ -166,19 +163,18 @@ export default function PeringkatAgenPage() {
     </div>
   );
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Peringkat Agen"
-        subtitle="Kinerja agen Syiar per periode, diurutkan dari total komisi. Tanggal mengacu saat booking lunas dan komisi tercatat; cashback tidak dihitung."
-      />
+    <div className="space-y-6">
+      <PageHeader title="Peringkat Agen" />
 
       {error && <Alert variant="error" message={error} />}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Stat icon={Users} label="Agen berkomisi" value={ringkasan.agen} />
-        <Stat icon={Trophy} label="Pax closing" value={ringkasan.pax} />
-        <Stat icon={Coins} label="Total komisi" value={money(ringkasan.komisi)} />
-      </div>
+      {!loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatTile icon={Users} variant="primary" value={ringkasan.agen} label="Agen berkomisi" />
+          <StatTile icon={Trophy} variant="success" value={ringkasan.pax} label="Pax closing" />
+          <StatTile icon={Coins} variant="violet" value={money(ringkasan.komisi)} label="Total komisi" hint="Tanpa cashback" />
+        </div>
+      )}
 
       <DataTable
         columns={columns}

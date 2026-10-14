@@ -17,7 +17,6 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 
-	"erp-azhan/api/internal/addon"
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/airline"
@@ -123,8 +122,6 @@ func main() {
 	categoryRepo := category.NewRepository(db)
 	categoryHandler := category.NewHandler(categoryRepo)
 
-	addonRepo := addon.NewRepository(db)
-	addonHandler := addon.NewHandler(addonRepo)
 
 	itineraryRepo := itinerary.NewRepository(db)
 	itineraryHandler := itinerary.NewHandler(itineraryRepo)
@@ -318,11 +315,6 @@ func main() {
 		masterEdit.Put("/categories/{id}", categoryHandler.UpdateCategory)
 		masterEdit.Delete("/categories/{id}", categoryHandler.DeleteCategory)
 
-		// Add-Ons
-		masterView.Get("/addons", addonHandler.ListAddOns)
-		masterEdit.Post("/addons", addonHandler.CreateAddOn)
-		masterEdit.Put("/addons/{id}", addonHandler.UpdateAddOn)
-		masterEdit.Delete("/addons/{id}", addonHandler.DeleteAddOn)
 
 		r.Route("/brands", func(r chi.Router) {
 			r.With(identity.RequirePermission("brand.view")).Get("/", brandHandler.ListBrands)
@@ -377,6 +369,7 @@ func main() {
 		scheduleEdit := r.With(identity.RequirePermission("schedule.edit"))
 		scheduleView.Get("/schedules", scheduleHandler.ListSchedulesAdmin)
 		scheduleView.Get("/schedules/{id}", scheduleHandler.GetScheduleAdmin)
+		scheduleView.Get("/schedules/{id}/seat", scheduleHandler.GetScheduleSeat)
 		scheduleEdit.Post("/schedules", scheduleHandler.CreateSchedule)
 		scheduleEdit.Put("/schedules/{id}", scheduleHandler.UpdateSchedule)
 		scheduleEdit.Put("/schedules/{id}/status", scheduleHandler.UpdateScheduleStatus)
@@ -394,11 +387,6 @@ func main() {
 		jamaahEdit.Delete("/jamaah/{id}", jamaahHandler.DeleteJamaah)
 		jamaahEdit.Post("/jamaah/{id}/activation-link", portalHandler.GenerateActivationLink)
 
-		// Relasi Kekerabatan Jamaah
-		jamaahView.Get("/jamaah/{id}/relasi", jamaahHandler.ListRelasi)
-		jamaahEdit.Post("/jamaah/{id}/relasi", jamaahHandler.CreateRelasi)
-		jamaahEdit.Put("/jamaah/{id}/relasi/{relasi_id}", jamaahHandler.UpdateRelasi)
-		jamaahEdit.Delete("/jamaah/{id}/relasi/{relasi_id}", jamaahHandler.DeleteRelasi)
 
 		// Dokumen Jamaah
 		r.With(identity.RequirePermission("dokumen.view")).Get("/jamaah/{jamaah_id}/dokumen", dokumenHandler.ListDokumen)
@@ -418,8 +406,6 @@ func main() {
 		bookingEdit.Put("/bookings/{id}/status", bookingHandler.UpdateBookingStatus)
 		bookingEdit.Put("/bookings/{id}/seat-block", bookingHandler.BlockSeat)
 		bookingEdit.Delete("/bookings/{id}/seat-block", bookingHandler.CancelSeatBlock)
-		bookingEdit.Post("/bookings/{id}/addons", bookingHandler.AddBookingAddon)
-		bookingEdit.Delete("/bookings/{id}/addons/{addon_id}", bookingHandler.DeleteBookingAddon)
 		bookingEdit.Post("/bookings/{id}/discounts", bookingHandler.AddBookingDiscount)
 		bookingEdit.Delete("/bookings/{id}/discounts/{discountID}", bookingHandler.RemoveBookingDiscount)
 		bookingView.Get("/bookings/{id}/cashback", bookingHandler.GetKreditCashback)

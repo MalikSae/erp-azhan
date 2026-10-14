@@ -20,6 +20,7 @@ import {
   DetailAgenPage,
   RiwayatKomisiPage,
   PaymentConfirmationsPage,
+  NotFoundPage,
 } from 'shared';
 
 function App() {
@@ -55,6 +56,7 @@ function App() {
           <Route path="/agen/:id" element={<DetailAgenPage />} />
           <Route path="/pengaturan" element={<AccountSettingsPage />} />
           <Route path="/settings" element={<AccountSettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>
     </Routes>

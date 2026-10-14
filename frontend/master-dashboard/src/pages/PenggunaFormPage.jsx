@@ -1,12 +1,12 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Home, ChevronRight, ChevronDown, Plus, X, Power, Trash2, KeyRound } from 'lucide-react';
-import Button from '../components/ui/Button';
-import Alert from '../components/ui/Alert';
-import Input from '../components/ui/Input';
-import Modal from '../components/ui/Modal';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import Button from 'shared/ui/Button';
+import Alert from 'shared/ui/Alert';
+import Input from 'shared/ui/Input';
+import Modal from 'shared/ui/Modal';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { AuthContext } from '../context/AuthContext';
 import {
   getAdminUser, createAdminUser, updateAdminUser,
@@ -297,7 +297,7 @@ const PenggunaFormPage = () => {
             <Input label="Nama" required value={form.display_name} placeholder="Nama lengkap"
               onChange={(e) => setForm(p => ({ ...p, display_name: e.target.value }))} autoFocus={!isEdit} />
             <Input label="Email" type="email" required value={form.email} placeholder="nama@contoh.com"
-              helpText="Dipakai untuk login." onChange={(e) => setForm(p => ({ ...p, email: e.target.value }))} />
+ onChange={(e) => setForm(p => ({ ...p, email: e.target.value }))} />
             <div className="grid grid-cols-2 gap-3">
               <Input label="No. HP" value={form.no_hp} placeholder="08xxxxxxxxxx"
                 onChange={(e) => setForm(p => ({ ...p, no_hp: e.target.value }))} />
@@ -331,7 +331,7 @@ const PenggunaFormPage = () => {
               ) : null}
             </div>
             {!isEdit && (
-              <Input label="Password" type="password" required value={form.password} helpText="Minimal 8 karakter."
+              <Input label="Password" type="password" required value={form.password}
                 onChange={(e) => setForm(p => ({ ...p, password: e.target.value }))} />
             )}
           </Panel>
@@ -361,7 +361,7 @@ const PenggunaFormPage = () => {
                     >
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-neutral-300 accent-[#F26522] shrink-0"
+                        className="h-4 w-4 rounded border-neutral-300 accent-primary-500 shrink-0"
                         checked={checked}
                         onChange={() => toggleRole(role.slug)}
                         onClick={(e) => e.stopPropagation()}
@@ -373,7 +373,7 @@ const PenggunaFormPage = () => {
                           {role.slug === SUPER_ADMIN ? ' · semua divisi' : role.divisi_nama ? ` · divisi ${role.divisi_nama}` : ''}
                         </p>
                       </div>
-                      <span className="text-[11px] font-medium font-body text-neutral-500 bg-neutral-100 rounded-md px-2 py-0.5 shrink-0">
+                      <span className="text-[11px] font-body text-neutral-400 shrink-0">
                         {(role.permissions || []).length} permission
                       </span>
                       <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`} />
@@ -505,7 +505,7 @@ const PenggunaFormPage = () => {
         <div className="space-y-4">
           {actionError && <Alert variant="error">{actionError}</Alert>}
           {actionModal === 'password' && (
-            <Input label="Password Baru" type="password" required value={newPassword} helpText="Minimal 8 karakter."
+            <Input label="Password Baru" type="password" required value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)} autoFocus />
           )}
           {actionModal === 'status' && (

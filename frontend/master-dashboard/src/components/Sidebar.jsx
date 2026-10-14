@@ -7,20 +7,14 @@ import {
   Hotel,
   Plane,
   MapPin,
-  PlusCircle,
   Users,
   CalendarDays,
   CreditCard,
   Boxes,
-  Percent,
   Building2,
-  Landmark,
   UserCog,
   ChevronDown,
-  Link2,
   Network,
-  Coins,
-  Trophy
 } from 'lucide-react';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
@@ -60,7 +54,6 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         { name: 'Kelola Hotel', path: '/hotels', icon: Hotel, status: 'active' },
         { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, status: 'active' },
         { name: 'Kelola Itinerary', path: '/itineraries', icon: MapPin, status: 'active' },
-        { name: 'Kelola Add-On', path: '/addons', icon: PlusCircle, status: 'active' },
       ],
     },
     {
@@ -71,25 +64,9 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       ],
     },
     {
-      name: 'AGEN & KOMISI',
-      items: [
-        { name: 'Daftar Agen', path: '/agen', icon: Network, status: 'active' },
-        { name: 'Riwayat Komisi', path: '/agen/komisi', icon: Coins, status: 'active' },
-        { name: 'Persetujuan Pencairan', path: '/komisi', icon: Percent, status: 'active' },
-        { name: 'Ganti Kaitan Agen', path: '/komisi/ganti-kaitan', icon: Link2, status: 'active' },
-      ],
-    },
-    {
-      name: 'LAPORAN & ANALYTICS',
-      items: [
-        { name: 'Peringkat Agen', path: '/analytics/peringkat-agen', icon: Trophy, status: 'active' },
-      ],
-    },
-    {
       name: 'ADMINISTRASI',
       items: [
         { name: 'Kelola Brand', path: '/brands', icon: Building2, status: 'active' },
-        { name: 'Rekening Bank', path: '/bank-accounts', icon: Landmark, status: 'active' },
         { name: 'Pengguna', path: '/users', icon: UserCog, status: 'active' },
         { name: 'Struktur Organisasi', path: '/organisasi', icon: Network, status: 'active' },
       ],
@@ -114,9 +91,9 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
             </div>
             <div>
               <h1 className="text-base font-heading font-bold text-neutral-900 tracking-tight leading-none">
-                Azhan Grup
+                Azhan Corp
               </h1>
-              <p className="text-[11px] font-body text-sidebar-muted mt-1 font-medium">Master ERP</p>
+              <p className="text-[11px] font-body text-sidebar-muted mt-1 font-medium">Office Dashboard</p>
             </div>
           </div>
         </div>

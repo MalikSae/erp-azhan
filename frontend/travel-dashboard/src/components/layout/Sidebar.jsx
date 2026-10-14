@@ -2,16 +2,6 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { LayoutDashboard, Users, CalendarDays, Package, Boxes, Banknote, Settings, UserCheck, Network, Coins } from "lucide-react";
 
-function isLightColor(hexColor) {
-  if (!hexColor || typeof hexColor !== 'string' || !hexColor.startsWith('#')) return false;
-  const hex = hexColor.replace('#', '');
-  if (hex.length !== 6 && hex.length !== 3) return false;
-  const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16);
-  const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16);
-  const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16);
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness > 140;
-}
 
 const Sidebar = ({ isOpen, closeDrawer }) => {
   const { brandInfo } = useAuth();
@@ -28,9 +18,6 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     { name: "Riwayat Komisi", path: "/agen/komisi", icon: Coins },
     { name: "Pengaturan", path: "/pengaturan", icon: Settings },
   ];
-
-  const brandColor = brandInfo?.primary_color || '#FED853';
-  const isLight = isLightColor(brandColor);
 
   const logoSrc = brandInfo?.logo_url
     ? (brandInfo.logo_url.startsWith('http')
@@ -62,10 +49,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
               />
             </div>
           ) : (
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center font-heading font-bold text-lg shadow-sm shrink-0"
-              style={{ backgroundColor: brandColor, color: isLight ? '#14171A' : '#FFFFFF' }}
-            >
+            <div className="w-10 h-10 rounded-xl bg-primary-500 text-white flex items-center justify-center font-heading font-bold text-lg shadow-card shrink-0">
               {brandInfo?.name ? brandInfo.name.charAt(0).toUpperCase() : 'T'}
             </div>
           )}
@@ -79,16 +63,11 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
               to={item.path}
               end={item.path === '/' || item.path === '/agen'}
               onClick={closeDrawer}
-              style={({ isActive }) => 
-                isActive 
-                  ? { backgroundColor: brandColor, color: isLight ? '#14171A' : '#FFFFFF' }
-                  : {}
-              }
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3.5 py-2.5 text-sm transition-all rounded-xl ${
+                `flex items-center gap-3 px-3 py-2 text-[13px] transition-all rounded-lg ${
                   isActive
-                    ? 'font-semibold shadow-sm'
-                    : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 font-medium'
+                    ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
+                    : 'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
                 }`
               }
             >

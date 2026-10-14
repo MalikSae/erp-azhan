@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell, Legend
 } from 'recharts';
-import Alert from '../components/ui/Alert';
+import Alert from 'shared/ui/Alert';
 import { listBrands } from '../api/brands';
 import { listSchedulesAdmin } from '../api/schedules';
 import { listHotels } from '../api/hotels';
@@ -324,7 +324,7 @@ const DashboardHome = () => {
         )}
       </section>
 
-      <p className="text-center text-[11px] font-body text-neutral-400 pt-2">2026 © Azhan Grup — Master ERP</p>
+      <p className="text-center text-[11px] font-body text-neutral-400 pt-2">2026 © Azhan Corp — Office Dashboard</p>
     </main>
   );
 };

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Clock3, CheckCircle2, XCircle, Banknote, Eye } from 'lucide-react';
 import {
   listPencairanAdmin,
   setujuiPencairan,
@@ -7,21 +8,22 @@ import {
   openProtectedMedia,
   listBrands,
 } from 'shared';
-import Alert from '../components/ui/Alert';
-import Badge from '../components/ui/Badge';
-import Button from '../components/ui/Button';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import DataTable from '../components/ui/DataTable';
-import Modal from '../components/ui/Modal';
-import PageHeader from '../components/ui/PageHeader';
-import Textarea from '../components/ui/Textarea';
+import Alert from 'shared/ui/Alert';
+import Button from 'shared/ui/Button';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import DataTable from 'shared/ui/DataTable';
+import Modal from 'shared/ui/Modal';
+import PageHeader from 'shared/ui/PageHeader';
+import StatTile from 'shared/ui/StatTile';
+import ActionMenu from 'shared/ui/ActionMenu';
+import Textarea from 'shared/ui/Textarea';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
 const statusMeta = {
-  pending: { label: 'Menunggu', variant: 'pending' },
-  disetujui: { label: 'Disetujui', variant: 'success' },
-  ditolak: { label: 'Ditolak', variant: 'danger' },
+  pending: { label: 'Menunggu', chip: 'bg-warning-50 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
+  disetujui: { label: 'Disetujui', chip: 'bg-success-50 text-success-700 border-success-200', dot: 'bg-success-500' },
+  ditolak: { label: 'Ditolak', chip: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
 };
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Menunggu' },
@@ -44,7 +46,7 @@ export default function KomisiReferralPage() {
   const [status, setStatus] = useState('pending');
   const [brandId, setBrandId] = useState('');
   const [brands, setBrands] = useState([]);
-  const [items, setItems] = useState([]);
+  const [allItems, setAllItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
@@ -62,7 +64,7 @@ export default function KomisiReferralPage() {
     setLoading(true);
     setError('');
     try {
-      setItems(await listPencairanAdmin({ status: status === 'semua' ? '' : status, brandId }));
+      setAllItems((await listPencairanAdmin({ status: '', brandId })) || []);
     } catch {
       setError('Pengajuan pencairan gagal dimuat. Silakan coba kembali.');
     } finally {
@@ -73,7 +75,22 @@ export default function KomisiReferralPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, brandId]);
+  }, [brandId]);
+
+  // Ringkasan memakai semua status (mengikuti filter brand); tabel disaring menurut status.
+  const items = useMemo(
+    () => allItems.filter((row) => status === 'semua' || row.status === status),
+    [allItems, status]
+  );
+  const stats = useMemo(() => {
+    const by = (st) => allItems.filter((row) => row.status === st);
+    const sum = (list) => list.reduce((t, row) => t + (Number(row.nominal_diajukan) || 0), 0);
+    return {
+      pending: by('pending').length, pendingNominal: sum(by('pending')),
+      disetujui: by('disetujui').length, dicairkan: sum(by('disetujui')),
+      ditolak: by('ditolak').length,
+    };
+  }, [allItems]);
 
   const open = (row) => {
     setSelected(row);
@@ -122,7 +139,7 @@ export default function KomisiReferralPage() {
 
   const columns = [
     { header: 'Agen', key: 'nama_agen', sortable: true },
-    { header: 'Nominal', key: 'nominal_diajukan', sortable: true },
+    { header: 'Nominal', key: 'nominal_diajukan', sortable: true, sortFn: (a, b) => Number(a.nominal_diajukan) - Number(b.nominal_diajukan) },
     { header: 'Rekening Tujuan', key: 'rekening' },
     { header: 'Diajukan', key: 'diajukan_at', sortable: true },
     { header: 'Status', key: 'status', sortable: true },
@@ -133,34 +150,49 @@ export default function KomisiReferralPage() {
     if (key === 'nama_agen') {
       return (
         <div className="min-w-[150px]">
-          <p className="font-semibold text-neutral-900">{row.nama_agen}</p>
-          <p className="mt-0.5 text-xs text-neutral-500">{row.brand_name}{row.kode_referral ? ` • ${row.kode_referral}` : ''}</p>
+          <button
+            type="button"
+            onClick={() => open(row)}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          >
+            {row.nama_agen}
+          </button>
+          <p className="text-[11px] font-body text-neutral-400">
+            {row.brand_name}{row.kode_referral ? ' · ' : ''}{row.kode_referral && <span className="font-mono">{row.kode_referral}</span>}
+          </p>
         </div>
       );
     }
-    if (key === 'nominal_diajukan') return <span className="font-semibold text-neutral-900">{money(row.nominal_diajukan)}</span>;
+    if (key === 'nominal_diajukan') return <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.nominal_diajukan)}</span>;
     if (key === 'rekening') {
       return (
-        <div className="min-w-[150px] text-xs">
-          <p className="font-semibold text-neutral-800">{row.rekening_bank} • {row.rekening_nomor}</p>
-          <p className="text-neutral-500">a.n. {row.rekening_atas_nama}</p>
+        <div className="min-w-[150px]">
+          <p className="text-[13px] font-body font-medium text-neutral-800">{row.rekening_bank} · <span className="font-mono">{row.rekening_nomor}</span></p>
+          <p className="text-[11px] font-body text-neutral-400">a.n. {row.rekening_atas_nama}</p>
         </div>
       );
     }
-    if (key === 'diajukan_at') return dateLabel(row.diajukan_at);
+    if (key === 'diajukan_at') return <span className="text-[13px] font-body text-neutral-500 whitespace-nowrap">{dateLabel(row.diajukan_at)}</span>;
     if (key === 'status') {
-      const meta = statusMeta[row.status] || { label: row.status, variant: 'neutral' };
-      return <Badge variant={meta.variant}>{meta.label}</Badge>;
+      const meta = statusMeta[row.status] || { label: row.status, chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' };
+      return (
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium font-body border ${meta.chip}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+          {meta.label}
+        </span>
+      );
     }
     if (key === 'actions') {
       return (
-        <button
-          type="button"
-          onClick={() => open(row)}
-          className="rounded-full border border-neutral-200 bg-white hover:bg-neutral-50 px-3.5 py-1.5 text-xs font-semibold text-neutral-700 shadow-2xs transition-colors cursor-pointer"
-        >
-          {row.status === 'pending' ? 'Proses' : 'Detail'}
-        </button>
+        <ActionMenu
+          align="right"
+          items={[{
+            label: row.status === 'pending' ? 'Proses' : 'Lihat Detail',
+            icon: Eye,
+            tooltip: row.status === 'pending' ? 'Setujui atau tolak pengajuan ini' : 'Lihat detail pengajuan',
+            onClick: () => open(row),
+          }]}
+        />
       );
     }
     return row[key] ?? '-';
@@ -169,7 +201,7 @@ export default function KomisiReferralPage() {
   const saldoKurang = selected?.status === 'pending' && Number(selected.saldo_tersedia) < 0;
 
   const toolbarActions = (
-    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+    <div className="flex flex-wrap items-center gap-2">
       <CustomDropdown
         name="status"
         options={STATUS_OPTIONS}
@@ -189,14 +221,24 @@ export default function KomisiReferralPage() {
     </div>
   );
   return (
-    <div className="space-y-5">
-      <PageHeader title="Persetujuan Pencairan" subtitle="Pengajuan tarik saldo agen Syiar dari seluruh brand." />
+    <div className="space-y-6">
+      <PageHeader title="Persetujuan Pencairan" />
       {error && <Alert variant="error" message={error} />}
+
+      {!loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatTile icon={Clock3} variant="warning" value={stats.pending} label="Menunggu" hint={money(stats.pendingNominal)} />
+          <StatTile icon={CheckCircle2} variant="success" value={stats.disetujui} label="Disetujui" />
+          <StatTile icon={XCircle} variant="danger" value={stats.ditolak} label="Ditolak" />
+          <StatTile icon={Banknote} variant="primary" value={money(stats.dicairkan)} label="Total dicairkan" />
+        </div>
+      )}
 
       <DataTable
         columns={columns}
         data={items}
         renderCell={renderCell}
+        onRowClick={open}
         itemsPerPage={15}
         toolbarActions={toolbarActions}
         searchPlaceholder="Cari agen, brand, atau rekening..."

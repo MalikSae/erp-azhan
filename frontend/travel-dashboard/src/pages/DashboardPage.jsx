@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Banknote, BarChart3, CalendarDays, CheckCircle2, Clock3, Package, Plane, TicketCheck, TrendingUp, UserRoundCheck, UsersRound } from "lucide-react";
+import { ArrowRight, Banknote, BarChart3, CalendarDays, CheckCircle2, Clock3, Package, TicketCheck, TrendingUp, UserRoundCheck, UsersRound } from "lucide-react";
 import { listBookings, listPayments, listJamaah, listSchedulesAdmin, getStokPerlengkapan, getStatusBadgeConfig } from "shared";
-import { useAuth } from "../context/AuthContext";
-import Alert from "../components/ui/Alert";
-import Badge from "../components/ui/Badge";
-import LoadingSpinner from "../components/ui/LoadingSpinner";
-import PageHeader from "../components/ui/PageHeader";
+import Alert from "shared/ui/Alert";
+import LoadingSpinner from "shared/ui/LoadingSpinner";
+import PageHeader from "shared/ui/PageHeader";
 
 const formatRupiah = (value) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value) || 0);
 const formatCompactRupiah = (value) => {
@@ -16,17 +14,18 @@ const formatCompactRupiah = (value) => {
   return formatRupiah(number);
 };
 const formatDate = (value) => value ? new Date(value).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "-";
+const STATUS_DOT = { draft: "bg-neutral-400", baru: "bg-info-500", dp: "bg-warning-500", lunas: "bg-success-500", batal: "bg-danger-500" };
 const daysUntil = (value) => Math.ceil((new Date(value).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86400000);
 
 function MetricCard({ label, value, note, icon: Icon, tone = "primary", onClick }) {
-  const tones = { primary: "bg-primary-50 text-primary-700", success: "bg-success-50 text-success-700", warning: "bg-warning-50 text-warning-800", danger: "bg-danger-50 text-danger-700" };
-  return <button type="button" onClick={onClick} className="group rounded-lg border border-neutral-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-primary-300">
-    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-medium text-neutral-500">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight text-neutral-900">{value}</p><p className="mt-1 truncate text-xs text-neutral-400">{note}</p></div><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${tones[tone]}`}><Icon size={19} /></span></div>
+  const tones = { primary: "bg-primary-100 text-primary-600", success: "bg-success-100 text-success-600", warning: "bg-warning-100 text-warning-600", danger: "bg-danger-100 text-danger-600" };
+  return <button type="button" onClick={onClick} className="group rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-card transition-colors hover:border-primary-300">
+    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-body text-neutral-500">{label}</p><p className="mt-1 text-2xl font-heading font-bold text-neutral-900">{value}</p><p className="mt-1 truncate text-[11px] text-neutral-400">{note}</p></div><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}><Icon size={20} strokeWidth={1.75} /></span></div>
   </button>;
 }
 
 function SectionHeader({ title, subtitle, action, onAction }) {
-  return <div className="flex items-end justify-between gap-3"><div><h2 className="text-base font-bold text-neutral-900">{title}</h2><p className="mt-0.5 text-xs text-neutral-500">{subtitle}</p></div>{action && <button type="button" onClick={onAction} className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-700 hover:text-primary-800">{action}<ArrowRight size={13} /></button>}</div>;
+  return <div className="flex items-end justify-between gap-3"><div><h2 className="text-base font-heading font-bold text-neutral-900">{title}</h2><p className="mt-0.5 text-[11px] text-neutral-400">{subtitle}</p></div>{action && <button type="button" onClick={onAction} className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700">{action}<ArrowRight size={13} /></button>}</div>;
 }
 
 function PaxChart({ bookings }) {
@@ -74,13 +73,13 @@ function PaxChart({ bookings }) {
     }
   };
 
-  return <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+  return <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-card">
     <div className="flex flex-col gap-4 border-b border-neutral-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-700"><BarChart3 size={19} /></span><div><h2 className="text-base font-bold font-heading text-neutral-900">Pendaftaran Pax</h2><p className="mt-0.5 text-xs text-neutral-500">30 hari terakhir • jumlah pax aktif</p></div></div>
+      <div className="flex items-start gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-600"><BarChart3 size={20} strokeWidth={1.75} /></span><div><h2 className="text-base font-bold font-heading text-neutral-900">Pendaftaran Pax</h2><p className="mt-0.5 text-[11px] text-neutral-400">30 hari terakhir • jumlah pax aktif</p></div></div>
       <div className="flex gap-6"><div><p className="text-xs text-neutral-500">Total Pax</p><p className="font-bold text-neutral-900">{series.total} pax</p></div><div className="border-l border-neutral-200 pl-6"><p className="text-xs text-neutral-500">Rata-rata / hari</p><p className="font-bold text-neutral-900">{series.average.toFixed(1)} pax</p></div></div>
     </div>
     <div className="px-4 pb-3 pt-2 sm:px-5">
-      <div className="relative rounded-md bg-neutral-50 px-2 pt-1">
+      <div className="relative rounded-xl bg-neutral-50 px-2 pt-1">
         {hoverIndex !== null && (
           <div
             className="absolute z-20 pointer-events-none transition-all duration-75 ease-out bg-neutral-900/95 text-white px-3 py-2 rounded-xl shadow-xl backdrop-blur-xs border border-neutral-700/80 min-w-[160px]"
@@ -153,7 +152,6 @@ function PaxChart({ bookings }) {
 
 const DashboardPage = () => {
   const navigate = useNavigate();
-  const { brandInfo } = useAuth();
   const [data, setData] = useState({ bookings: [], jamaah: [], schedules: [], stock: [], payments: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -190,12 +188,10 @@ const DashboardPage = () => {
     const items = [];
     const unlocked = stats.activeBookings.filter((item) => !item.is_seat_blocked);
     const incomplete = stats.activeBookings.filter((item) => !item.siap_berangkat && item.status !== "baru");
-    const unconfirmedTickets = data.schedules.filter((item) => item.status === "published" && !item.is_ticket_confirmed);
-    if (stats.pendingPayments.length) items.push({ label: "Pembayaran perlu dikonfirmasi", count: stats.pendingPayments.length, icon: Banknote, tone: "warning", path: "/bookings" });
+if (stats.pendingPayments.length) items.push({ label: "Pembayaran perlu dikonfirmasi", count: stats.pendingPayments.length, icon: Banknote, tone: "warning", path: "/bookings" });
     if (unlocked.length) items.push({ label: "Booking tanpa block seat", count: unlocked.length, icon: TicketCheck, tone: "danger", path: "/bookings" });
     if (incomplete.length) items.push({ label: "Progress jamaah belum lengkap", count: incomplete.length, icon: UserRoundCheck, tone: "warning", path: "/bookings" });
-    if (unconfirmedTickets.length) items.push({ label: "Tiket paket belum dikonfirmasi", count: unconfirmedTickets.length, icon: Plane, tone: "danger", path: "/paket" });
-    return items.slice(0, 4);
+return items.slice(0, 4);
   }, [data, stats]);
   const recentBookings = useMemo(() => [...data.bookings].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5), [data.bookings]);
   const lowStock = useMemo(() => [...data.stock].sort((a, b) => a.stok_tersedia - b.stok_tersedia).slice(0, 4), [data.stock]);
@@ -203,7 +199,7 @@ const DashboardPage = () => {
   if (loading) return <div className="flex min-h-[420px] items-center justify-center"><LoadingSpinner /></div>;
 
   return <div className="space-y-5 pb-8">
-    <PageHeader title="Dashboard" subtitle={`Ringkasan operasional ${brandInfo?.nama || "travel"} hari ini.`} secondaryActionLabel="Tambah Jamaah" onSecondaryAction={() => navigate("/jamaah/new")} actionLabel="Booking Baru" onAction={() => navigate("/bookings/new")} />
+    <PageHeader title="Dashboard" breadcrumb={false} secondaryActionLabel="Tambah Jamaah" onSecondaryAction={() => navigate("/jamaah/new")} actionLabel="Booking Baru" onAction={() => navigate("/bookings/new")} />
     {error && <Alert variant="error" message={error} onClose={() => setError("")} />}
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <MetricCard label="Jamaah Terdaftar" value={data.jamaah.length} note={`${stats.activeBookings.length} booking aktif`} icon={UsersRound} tone="primary" onClick={() => navigate("/jamaah")} />
@@ -213,17 +209,17 @@ const DashboardPage = () => {
     </div>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       <div className="md:col-span-2"><PaxChart bookings={data.bookings} /></div>
-      <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"><SectionHeader title="Perlu Ditindaklanjuti" subtitle="Prioritas operasional saat ini" /><div className="mt-3 space-y-2">{tasks.length === 0 ? <div className="flex flex-col items-center py-8 text-center"><CheckCircle2 className="text-success-500" size={28} /><p className="mt-2 text-sm font-semibold text-neutral-700">Semua terkendali</p></div> : tasks.map((task) => <button key={task.label} onClick={() => navigate(task.path)} className="flex w-full items-center gap-3 rounded-md border border-neutral-100 px-3 py-2.5 text-left hover:bg-neutral-50"><span className={`flex h-8 w-8 items-center justify-center rounded-md ${task.tone === "danger" ? "bg-danger-50 text-danger-600" : "bg-warning-50 text-warning-700"}`}><task.icon size={15} /></span><span className="min-w-0 flex-1 text-xs font-medium text-neutral-700">{task.label}</span><span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-neutral-900 px-1.5 text-xs font-bold text-white">{task.count}</span></button>)}</div></section>
+      <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-card"><SectionHeader title="Perlu Ditindaklanjuti" subtitle="Prioritas operasional saat ini" /><div className="mt-3 space-y-2">{tasks.length === 0 ? <div className="flex flex-col items-center py-8 text-center"><CheckCircle2 className="text-success-500" size={28} /><p className="mt-2 text-sm font-semibold text-neutral-700">Semua terkendali</p></div> : tasks.map((task) => <button key={task.label} onClick={() => navigate(task.path)} className="flex w-full items-center gap-3 rounded-xl border border-neutral-100 px-3 py-2.5 text-left hover:bg-neutral-50"><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${task.tone === "danger" ? "bg-danger-100 text-danger-600" : "bg-warning-100 text-warning-600"}`}><task.icon size={15} strokeWidth={1.75} /></span><span className="min-w-0 flex-1 text-xs font-medium text-neutral-700">{task.label}</span><span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-neutral-900 px-1.5 text-xs font-bold text-white">{task.count}</span></button>)}</div></section>
     </div>
     <div className="grid grid-cols-1 gap-4">
-      <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"><SectionHeader title="Keberangkatan Terdekat" subtitle="Paket aktif berdasarkan tanggal keberangkatan" action="Lihat paket" onAction={() => navigate("/paket")} /><div className="mt-3 space-y-2">{upcomingSchedules.length === 0 ? <p className="py-8 text-center text-sm text-neutral-400">Belum ada jadwal terdekat.</p> : upcomingSchedules.map((schedule) => {
+      <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-card"><SectionHeader title="Keberangkatan Terdekat" subtitle="Paket aktif berdasarkan tanggal keberangkatan" action="Lihat paket" onAction={() => navigate("/paket")} /><div className="mt-3 space-y-2">{upcomingSchedules.length === 0 ? <p className="py-8 text-center text-sm text-neutral-400">Belum ada jadwal terdekat.</p> : upcomingSchedules.map((schedule) => {
         const filled = Math.max(0, schedule.seat_total - schedule.seat_sisa); const percent = schedule.seat_total ? Math.round((filled / schedule.seat_total) * 100) : 0; const days = daysUntil(schedule.berangkat_tanggal);
-        return <button key={schedule.id} onClick={() => navigate("/paket")} className="block w-full rounded-lg border border-neutral-100 bg-neutral-50/60 px-3 py-2.5 text-left hover:border-primary-200"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold text-neutral-900">{schedule.jadwal_nama}</p><p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-neutral-500"><CalendarDays size={12} />{formatDate(schedule.berangkat_tanggal)} • {days === 0 ? "Hari ini" : `${days} hari lagi`}</p></div><Badge variant={schedule.is_ticket_confirmed ? "success" : "warning"}>{schedule.is_ticket_confirmed ? "Tiket Confirm" : "Tiket Pending"}</Badge></div><div className="mt-2"><div className="mb-1 flex justify-between text-[10px]"><span className="text-neutral-500">{filled} dari {schedule.seat_total} kursi terisi</span><span className="font-semibold text-neutral-700">{percent}%</span></div><div className="h-1 overflow-hidden rounded-full bg-neutral-200"><div className="h-full rounded-full bg-primary-600" style={{ width: `${Math.min(100, percent)}%` }} /></div></div></button>;
+        return <button key={schedule.id} onClick={() => navigate("/paket")} className="block w-full rounded-xl border border-neutral-100 bg-neutral-50/60 px-3 py-2.5 text-left hover:border-primary-200"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold text-neutral-900">{schedule.jadwal_nama}</p><p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-neutral-500"><CalendarDays size={12} />{formatDate(schedule.berangkat_tanggal)} • {days === 0 ? "Hari ini" : `${days} hari lagi`}</p></div></div><div className="mt-2"><div className="mb-1 flex justify-between text-[10px]"><span className="text-neutral-500">{filled} dari {schedule.seat_total} kursi terisi</span><span className="font-semibold text-neutral-700">{percent}%</span></div><div className="h-1 overflow-hidden rounded-full bg-neutral-200"><div className="h-full rounded-full bg-primary-600" style={{ width: `${Math.min(100, percent)}%` }} /></div></div></button>;
       })}</div></section>
     </div>
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm lg:col-span-2"><div className="p-4 pb-3"><SectionHeader title="Booking Terbaru" subtitle="Aktivitas reservasi jamaah terkini" action="Lihat semua" onAction={() => navigate("/bookings")} /></div><div className="overflow-x-auto"><table className="min-w-full text-left"><thead><tr className="border-y border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wider text-neutral-500"><th className="px-4 py-2 font-semibold">Jamaah</th><th className="px-3 py-2 font-semibold">Paket</th><th className="px-3 py-2 font-semibold">Tagihan</th><th className="px-4 py-2 font-semibold">Status</th></tr></thead><tbody className="divide-y divide-neutral-100">{recentBookings.map((booking) => <tr key={booking.id} onClick={() => navigate(`/bookings/${booking.id}`)} className="cursor-pointer hover:bg-neutral-50"><td className="px-4 py-2.5"><p className="text-xs font-semibold text-neutral-900">{booking.nama_jamaah}</p><p className="mt-0.5 text-xs font-mono text-neutral-400">{booking.id_booking || `ID: ${booking.id}`}</p></td><td className="max-w-48 truncate px-3 py-2.5 text-xs text-neutral-600">{booking.jadwal_nama}</td><td className="px-3 py-2.5 text-xs font-semibold text-neutral-700">{formatRupiah(booking.total_harga)}</td><td className="px-4 py-2.5">{(() => { const [v, l] = getStatusBadgeConfig(booking.status); return <Badge variant={v} hideIcon={true}>{l}</Badge>; })()}</td></tr>)}</tbody></table></div>{recentBookings.length === 0 && <p className="py-8 text-center text-sm text-neutral-400">Belum ada booking.</p>}</section>
-      <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"><SectionHeader title="Kesiapan Perlengkapan" subtitle="Stok terendah yang perlu dipantau" action="Kelola stok" onAction={() => navigate("/stok-perlengkapan")} /><div className="mt-3 space-y-2.5">{lowStock.map((item) => { const isLow = item.stok_tersedia <= 40; return <div key={item.perlengkapan_item_id} className="flex items-center gap-3"><span className={`flex h-8 w-8 items-center justify-center rounded-md ${isLow ? "bg-warning-50 text-warning-700" : "bg-neutral-100 text-neutral-600"}`}><Package size={15} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-neutral-700">{item.nama_item}</p><p className="mt-0.5 text-xs text-neutral-400">{item.qty_per_set} item per set</p></div><span className={`text-sm font-bold ${isLow ? "text-warning-700" : "text-neutral-800"}`}>{item.stok_tersedia}</span></div>; })}</div><div className="mt-4 rounded-md bg-neutral-50 px-3 py-2.5"><div className="flex items-center gap-2 text-xs text-neutral-600"><Clock3 size={13} className="text-primary-600" /><span>Estimasi set lengkap tersedia</span></div><p className="mt-0.5 text-lg font-bold text-neutral-900">{data.stock.length ? Math.min(...data.stock.map((item) => Math.floor(item.stok_tersedia / Math.max(1, item.qty_per_set)))) : 0} set</p></div></section>
+      <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-card lg:col-span-2"><div className="p-4 pb-3"><SectionHeader title="Booking Terbaru" subtitle="Aktivitas reservasi jamaah terkini" action="Lihat semua" onAction={() => navigate("/bookings")} /></div><div className="overflow-x-auto"><table className="min-w-full text-left"><thead><tr className="border-y border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wider text-neutral-500"><th className="px-4 py-2 font-semibold">Jamaah</th><th className="px-3 py-2 font-semibold">Paket</th><th className="px-3 py-2 font-semibold">Tagihan</th><th className="px-4 py-2 font-semibold">Status</th></tr></thead><tbody className="divide-y divide-neutral-100">{recentBookings.map((booking) => <tr key={booking.id} onClick={() => navigate(`/bookings/${booking.id}`)} className="cursor-pointer hover:bg-neutral-50"><td className="px-4 py-2.5"><p className="text-xs font-semibold text-neutral-900">{booking.nama_jamaah}</p><p className="mt-0.5 text-xs font-mono text-neutral-400">{booking.id_booking || `ID: ${booking.id}`}</p></td><td className="max-w-48 truncate px-3 py-2.5 text-xs text-neutral-600">{booking.jadwal_nama}</td><td className="px-3 py-2.5 text-xs font-semibold text-neutral-700">{formatRupiah(booking.total_harga)}</td><td className="px-4 py-2.5">{(() => { const [v, l] = getStatusBadgeConfig(booking.status); return <span className="inline-flex items-center gap-1.5 text-xs font-body text-neutral-700"><span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[booking.status] || (v === "success" ? "bg-success-500" : "bg-neutral-400")}`} />{l}</span>; })()}</td></tr>)}</tbody></table></div>{recentBookings.length === 0 && <p className="py-8 text-center text-sm text-neutral-400">Belum ada booking.</p>}</section>
+      <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-card"><SectionHeader title="Kesiapan Perlengkapan" subtitle="Stok terendah yang perlu dipantau" action="Kelola stok" onAction={() => navigate("/stok-perlengkapan")} /><div className="mt-3 space-y-2.5">{lowStock.map((item) => { const isLow = item.stok_tersedia <= 40; return <div key={item.perlengkapan_item_id} className="flex items-center gap-3"><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${isLow ? "bg-warning-100 text-warning-600" : "bg-neutral-100 text-neutral-600"}`}><Package size={15} strokeWidth={1.75} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-neutral-700">{item.nama_item}</p><p className="mt-0.5 text-xs text-neutral-400">{item.qty_per_set} item per set</p></div><span className={`text-sm font-bold ${isLow ? "text-warning-700" : "text-neutral-800"}`}>{item.stok_tersedia}</span></div>; })}</div><div className="mt-4 rounded-xl bg-neutral-50 px-3 py-2.5"><div className="flex items-center gap-2 text-xs text-neutral-600"><Clock3 size={13} className="text-primary-600" /><span>Estimasi set lengkap tersedia</span></div><p className="mt-0.5 text-lg font-bold text-neutral-900">{data.stock.length ? Math.min(...data.stock.map((item) => Math.floor(item.stok_tersedia / Math.max(1, item.qty_per_set)))) : 0} set</p></div></section>
     </div>
   </div>;
 };
