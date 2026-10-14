@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Eye, Trash2 } from "lucide-react";
 import { listJamaah, deleteJamaah } from "../api/jamaah";
 import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
@@ -9,23 +10,53 @@ import Alert from "../components/ui/Alert";
 import Modal from "../components/ui/Modal";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import CustomDropdown from "../components/ui/CustomDropdown";
-import BrandCell from "../components/BrandCell";
-import { Eye, Trash2 } from "lucide-react";
+import ActionMenu from "../components/ui/ActionMenu";
+
+const terikatAgen = (j) => j.kaitan_status === "terikat_agen" && !!j.direkrut_oleh_nama;
+
+// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
+const BrandChip = ({ brand, brandId }) => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
+    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: brand?.primary_color || "#9CA3AF" }} />
+    {brand?.name || `Brand #${brandId}`}
+  </span>
+);
+
+const ProgressCell = ({ value, title }) => {
+  const pct = value || 0;
+  const color = pct === 100 ? "bg-success-500" : pct >= 50 ? "bg-warning-500" : "bg-danger-500";
+  return (
+    <div className="flex items-center gap-2" title={title}>
+      <div className="w-16 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs font-body text-neutral-600 w-8">{pct}%</span>
+    </div>
+  );
+};
 
 export const JamaahPage = ({ showBrandColumn = false }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [data, setData] = useState([]);
   const [brands, setBrands] = useState([]);
   const [brandsMap, setBrandsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   const [filterBrandId, setFilterBrandId] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
     fetchData();
+    if (location.state?.successMessage) {
+      setSuccessMessage(location.state.successMessage);
+      window.history.replaceState({}, "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchData = async () => {
@@ -63,6 +94,7 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
     try {
       await deleteJamaah(selectedItem.id);
       setIsDeleteModalOpen(false);
+      setSuccessMessage(`Jamaah "${selectedItem.nama_lengkap}" berhasil dihapus.`);
       setSelectedItem(null);
       fetchData();
     } catch (err) {
@@ -71,169 +103,140 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
     }
   };
 
-  const filteredData = useMemo(() => {
-    return data.filter(j => {
-      if (showBrandColumn && filterBrandId && j.brand_id?.toString() !== filterBrandId) return false;
+  // Ringkasan mengikuti filter brand, supaya angkanya cocok dengan tabel.
+  const baseData = useMemo(
+    () => data.filter(j => !(showBrandColumn && filterBrandId && j.brand_id?.toString() !== filterBrandId)),
+    [data, showBrandColumn, filterBrandId]
+  );
+
+  // Hitungan ditampilkan di label filter (bukan kartu KPI).
+  const statusOptions = useMemo(() => [
+    { value: "", label: `Semua Jamaah (${baseData.length})` },
+    { value: "data", label: `Data belum lengkap (${baseData.filter(j => j.pct_data !== 100).length})` },
+    { value: "dokumen", label: `Dokumen belum lengkap (${baseData.filter(j => j.pct_dokumen !== 100).length})` },
+    { value: "tanpa_agen", label: `Tanpa agen (${baseData.filter(j => !terikatAgen(j)).length})` },
+  ], [baseData]);
+
+  const rows = useMemo(() => baseData
+    .filter(j => {
+      if (filterStatus === "data") return j.pct_data !== 100;
+      if (filterStatus === "dokumen") return j.pct_dokumen !== 100;
+      if (filterStatus === "tanpa_agen") return !terikatAgen(j);
       return true;
-    });
-  }, [data, showBrandColumn, filterBrandId]);
+    })
+    // Kolom bantu pencarian: nama brand ikut bisa dicari.
+    .map(j => ({ ...j, _cari: brandsMap[j.brand_id]?.name || "" })), [baseData, filterStatus, brandsMap]);
 
   const columns = useMemo(() => {
-    const cols = [];
+    const cols = [{ header: "Jamaah", key: "nama_lengkap", sortable: true }];
+    if (showBrandColumn) cols.push({ header: "Brand", key: "brand_id" });
+    cols.push(
+      { header: "Kontak", key: "no_hp" },
+      { header: "Agen", key: "direkrut_oleh_nama", sortable: true },
+      { header: "Data", key: "pct_data", sortable: true, sortFn: (a, b) => (a.pct_data || 0) - (b.pct_data || 0) },
+      { header: "Dokumen", key: "pct_dokumen", sortable: true, sortFn: (a, b) => (a.pct_dokumen || 0) - (b.pct_dokumen || 0) },
+      { header: "Aksi", key: "aksi" },
+    );
+    return cols;
+  }, [showBrandColumn]);
 
-    if (showBrandColumn) {
-      cols.push({
-        header: "Brand",
-        key: "brand_id",
-        accessor: (row) => {
-          const brand = brandsMap[row.brand_id];
-          return <BrandCell brand={brand} brandId={row.brand_id} />;
-        }
-      });
+  const renderCell = (row, key) => {
+    if (key === "nama_lengkap") {
+      const gender = row.jenis_kelamin === "L" ? "Laki-laki" : row.jenis_kelamin === "P" ? "Perempuan" : "";
+      const sub = [row.id_jamaah, gender].filter(Boolean).join(" · ");
+      return (
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={() => navigate(`/jamaah/${row.id}`)}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            title="Lihat Detail Jamaah"
+          >
+            {row.nama_lengkap}
+          </button>
+          {sub && <div className="mt-0.5 text-[11px] font-body text-neutral-400">{sub}</div>}
+        </div>
+      );
     }
 
-    cols.push(
-      { 
-        header: "Nama Lengkap", 
-        key: "nama_lengkap",
-        accessor: (row) => (
-          <div className="flex flex-col">
-            <button
-              type="button"
-              onClick={() => navigate(`/jamaah/${row.id}`)}
-              className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body"
-              title="Lihat Detail Jamaah"
-            >
-              {row.nama_lengkap}
-            </button>
-            {row.id_jamaah && (
-              <span className="text-xs text-neutral-500 font-mono">
-                {row.id_jamaah}
-              </span>
-            )}
-          </div>
-        )
-      },
-      { 
-        header: "L/P", 
-        key: "jenis_kelamin", 
-        accessor: (row) => row.jenis_kelamin || "-" 
-      },
-      { header: "NIK", key: "nik", accessor: "nik" },
-      { header: "No HP", key: "no_hp", accessor: "no_hp" },
-      {
-        header: "Agen",
-        key: "direkrut_oleh_nama",
-        sortable: true,
-        accessor: (row) =>
-          row.kaitan_status === "terikat_agen" && row.direkrut_oleh_nama ? (
-            <span className="font-medium text-neutral-900 whitespace-nowrap">{row.direkrut_oleh_nama}</span>
-          ) : (
-            <span className="text-neutral-500 whitespace-nowrap">{row.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}</span>
-          )
-      },
-      {
-        header: "% Data",
-        key: "pct_data",
-        accessor: (row) => (
-          <div className="flex items-center gap-2" title="Kelengkapan Data Profil">
-            <div className="w-16 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
-              <div 
-                className={`h-full ${row.pct_data === 100 ? 'bg-success-500' : row.pct_data >= 50 ? 'bg-warning-500' : 'bg-danger-500'}`} 
-                style={{ width: `${row.pct_data || 0}%` }}
-              />
-            </div>
-            <span className="text-xs font-medium text-neutral-600 w-8">{row.pct_data || 0}%</span>
-          </div>
-        )
-      },
-      {
-        header: "% Dokumen",
-        key: "pct_dokumen",
-        accessor: (row) => (
-          <div className="flex items-center gap-2" title="Kelengkapan Dokumen Wajib">
-            <div className="w-16 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
-              <div 
-                className={`h-full ${row.pct_dokumen === 100 ? 'bg-success-500' : row.pct_dokumen >= 50 ? 'bg-warning-500' : 'bg-danger-500'}`} 
-                style={{ width: `${row.pct_dokumen || 0}%` }}
-              />
-            </div>
-            <span className="text-xs font-medium text-neutral-600 w-8">{row.pct_dokumen || 0}%</span>
-          </div>
-        )
-      }
-    );
+    if (key === "brand_id") return <BrandChip brand={brandsMap[row.brand_id]} brandId={row.brand_id} />;
 
-    cols.push({
-      header: "Aksi",
-      key: "aksi",
-      accessor: (row) => (
-        <div className="flex gap-1">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => navigate(`/jamaah/${row.id}`)}
-            title="Lihat Detail"
-            className="p-1.5 text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg"
-          >
-            <Eye size={16} />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => handleDeleteClick(row)}
-            title="Hapus Jamaah"
-            className="p-1.5 text-danger-400 hover:text-danger-700 hover:bg-danger-50 rounded-lg"
-          >
-            <Trash2 size={16} />
-          </Button>
+    if (key === "no_hp") {
+      return (
+        <div className="min-w-0">
+          <div className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.no_hp || "-"}</div>
+          {row.nik && <div className="mt-0.5 text-[11px] font-body text-neutral-400">NIK {row.nik}</div>}
         </div>
-      )
-    });
+      );
+    }
 
-    return cols;
-  }, [showBrandColumn, brandsMap, navigate]);
+    if (key === "direkrut_oleh_nama") {
+      return terikatAgen(row)
+        ? <span className="text-[13px] font-body font-medium text-neutral-800 whitespace-nowrap">{row.direkrut_oleh_nama}</span>
+        : <span className="text-[13px] font-body text-neutral-400 whitespace-nowrap">{row.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}</span>;
+    }
+
+    if (key === "pct_data") return <ProgressCell value={row.pct_data} title="Kelengkapan Data Profil" />;
+    if (key === "pct_dokumen") return <ProgressCell value={row.pct_dokumen} title="Kelengkapan Dokumen Wajib" />;
+
+    if (key === "aksi") {
+      const menuItems = [
+        { label: "Lihat", icon: Eye, tooltip: "Lihat Detail Jamaah", onClick: () => navigate(`/jamaah/${row.id}`) },
+        { label: "Hapus", icon: Trash2, danger: true, tooltip: "Hapus Jamaah", onClick: () => handleDeleteClick(row) },
+      ];
+      return <ActionMenu items={menuItems} align="right" />;
+    }
+
+    return row[key];
+  };
 
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Kelola Jamaah" 
+      <PageHeader
+        title="Kelola Jamaah"
         actionLabel="+ Tambah Jamaah"
         onAction={() => navigate("/jamaah/new")}
       />
 
-      {error && <Alert variant="error">{error}</Alert>}
+      {successMessage && <Alert variant="success" onClose={() => setSuccessMessage(null)}>{successMessage}</Alert>}
+      {error && <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>}
 
       {loading ? (
-        <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
           <LoadingSpinner />
         </div>
       ) : (
-        <div className="space-y-4">
-          <DataTable 
-            columns={columns}
-            data={filteredData}
-            itemsPerPage={15}
-            searchPlaceholder="Cari nama, NIK, atau nomor HP..."
-            emptyMessage='Belum ada data jamaah. Klik "+ Tambah Jamaah" untuk menambahkan.'
-            toolbarActions={
-              showBrandColumn && brands.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <CustomDropdown
-                    value={filterBrandId}
-                    onChange={(val) => setFilterBrandId(val)}
-                    options={[
-                      { value: '', label: 'Semua Brand' },
-                      ...brands.map(b => ({ value: b.id.toString(), label: b.name }))
-                    ]}
-                    placeholder="Semua Brand"
-                    className="!mb-0 min-w-40"
-                  />
-                </div>
-              ) : null
-            }
-          />
-        </div>
+        <DataTable
+          columns={columns}
+          data={rows}
+          itemsPerPage={15}
+          searchPlaceholder="Cari nama, NIK, atau nomor HP..."
+          emptyMessage='Belum ada data jamaah. Klik "+ Tambah Jamaah" untuk menambahkan.'
+          toolbarActions={
+            <div className="flex flex-wrap items-center gap-2">
+              <CustomDropdown
+                value={filterStatus}
+                onChange={(val) => setFilterStatus(val)}
+                options={statusOptions}
+                placeholder="Semua Jamaah"
+                className="!mb-0 w-60"
+              />
+              {showBrandColumn && brands.length > 0 && (
+                <CustomDropdown
+                  value={filterBrandId}
+                  onChange={(val) => setFilterBrandId(val)}
+                  options={[
+                    { value: "", label: "Semua Brand" },
+                    ...brands.map(b => ({ value: b.id.toString(), label: b.name }))
+                  ]}
+                  placeholder="Semua Brand"
+                  className="!mb-0 w-40"
+                />
+              )}
+            </div>
+          }
+          renderCell={renderCell}
+        />
       )}
 
       <Modal

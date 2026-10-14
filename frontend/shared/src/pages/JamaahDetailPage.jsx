@@ -1,24 +1,25 @@
 ﻿import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { getJamaah, listRelasi, createRelasi, deleteRelasi, updateCatatan, listJamaah, createActivationLink } from "../api/jamaah";
+import { getJamaah, updateCatatan, createActivationLink } from "../api/jamaah";
 import { listDokumen, upsertDokumen } from "../api/dokumen";
 import { uploadMedia, openProtectedMedia } from "../api/media";
 import { listBookings } from "../api/bookings";
 import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
-import MetaBox from "../components/ui/MetaBox";
+import { Surface, Section, Field, SummaryItem, PILL_STRONG, BrandBadge } from "../components/ui/DetailLayout";
+import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
-import Badge from "../components/ui/Badge";
+import ActionMenu from "../components/ui/ActionMenu";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Table from "../components/ui/Table";
 import Modal from "../components/ui/Modal";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import Textarea from "../components/ui/Textarea";
-import BrandCell from "../components/BrandCell";
 import DocumentReview from "../components/DocumentReview";
-import { Edit2, Eye, Upload, ExternalLink, RefreshCw, Users, Plus, Save, ArrowRight, Building2, Copy, Check, Network } from "lucide-react";
+import { Eye, Upload, ExternalLink, RefreshCw, Save, Copy, Check, Printer } from "lucide-react";
 import { STATUS_AGEN } from "../utils/agen";
+import { printJamaah } from "../utils/printJamaah";
 
 const DOKUMEN_TYPES = [
   { key: "pas_foto", label: "Pas Foto" },
@@ -28,15 +29,6 @@ const DOKUMEN_TYPES = [
   { key: "buku_nikah", label: "Buku Nikah" },
   { key: "akte_lahir", label: "Akte Lahir" },
   { key: "vaksin_meningitis", label: "Vaksin Meningitis" },
-];
-
-const HUBUNGAN_OPTIONS = [
-  { value: "Pasangan", label: "Pasangan" },
-  { value: "Orang Tua", label: "Orang Tua" },
-  { value: "Anak", label: "Anak" },
-  { value: "Saudara Kandung", label: "Saudara Kandung" },
-  { value: "Mahram", label: "Mahram" },
-  { value: "Kerabat Lain", label: "Kerabat Lain" },
 ];
 
 const formatRupiah = (angka) => {
@@ -92,11 +84,30 @@ const formatTanggalWaktu = (dateStr) => {
 };
 
 const InfoItem = ({ label, value, colSpan = false }) => (
-  <div className={colSpan ? "md:col-span-2" : ""}>
-    <span className="block text-xs text-neutral-500 font-body mb-0.5">{label}</span>
-    <p className="text-sm font-medium font-body text-neutral-900 break-words">{value || "-"}</p>
-  </div>
+  <Field label={label} className={colSpan ? "md:col-span-2" : ""}>
+    {value || "-"}
+  </Field>
 );
+
+// Status = titik berwarna kecil + teks (bukan pil berwarna).
+const StatusDot = ({ label, text, dot }) => (
+  <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${text}`}>
+    <span className={`w-2 h-2 rounded-full ${dot}`} />
+    {label}
+  </span>
+);
+
+const BOOKING_STATUS = {
+  baru: { text: "text-info-700", dot: "bg-info-500" },
+  dp: { text: "text-warning-700", dot: "bg-warning-500" },
+  lunas: { text: "text-success-700", dot: "bg-success-500" },
+  batal: { text: "text-danger-700", dot: "bg-danger-500" },
+};
+const NEUTRAL_STATUS = { text: "text-neutral-500", dot: "bg-neutral-300" };
+const AGEN_STATUS_STYLE = {
+  success: { text: "text-success-700", dot: "bg-success-500" },
+  neutral: NEUTRAL_STATUS,
+};
 
 export const JamaahDetailPage = ({ showBrandColumn = false }) => {
   const { id } = useParams();
@@ -111,19 +122,6 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-
-  // Relasi Kekerabatan
-  const [relasiList, setRelasiList] = useState([]);
-  const [isRelasiModalOpen, setIsRelasiModalOpen] = useState(false);
-  const [candidateList, setCandidateList] = useState([]);
-  const [loadingCandidates, setLoadingCandidates] = useState(false);
-  const [relasiForm, setRelasiForm] = useState({
-    relasi_jamaah_id: "",
-    hubungan: "Pasangan",
-    keterangan: "",
-  });
-  const [savingRelasi, setSavingRelasi] = useState(false);
-  const [relasiModalError, setRelasiModalError] = useState(null);
 
   // Catatan
   const [catatanText, setCatatanText] = useState("");
@@ -144,17 +142,15 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
     try {
       setLoading(true);
       setError(null);
-      const [jamaahRes, dokRes, bookRes, relasiRes] = await Promise.all([
+      const [jamaahRes, dokRes, bookRes] = await Promise.all([
         getJamaah(id),
         listDokumen(id),
         listBookings({ jamaahId: id }),
-        listRelasi(id),
       ]);
       setJamaah(jamaahRes);
       setCatatanText(jamaahRes.catatan || "");
       setDokumenList(dokRes || []);
       setBookings(bookRes || []);
-      setRelasiList(relasiRes || []);
 
       if (showBrandColumn && jamaahRes?.brand_id) {
         try {
@@ -210,78 +206,6 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
     } finally {
       setUploadingJenis(null);
       setActiveUploadJenis(null);
-    }
-  };
-
-  // ─── Relasi Actions ──────────────────────────────────────────────────────────
-
-  const handleOpenRelasiModal = async () => {
-    setRelasiModalError(null);
-    setRelasiForm({
-      relasi_jamaah_id: "",
-      hubungan: "Pasangan",
-      keterangan: "",
-    });
-    setIsRelasiModalOpen(true);
-
-    try {
-      setLoadingCandidates(true);
-      const allJamaah = await listJamaah({ status: "aktif" });
-      // Filter: brand sama & exclude diri sendiri
-      const currentBrandId = jamaah?.brand_id;
-      const currentId = Number(id);
-      const filtered = (allJamaah || []).filter(
-        (j) => j.id !== currentId && (!currentBrandId || j.brand_id === currentBrandId)
-      );
-      setCandidateList(filtered);
-    } catch (err) {
-      setRelasiModalError("Gagal mengambil daftar jamaah untuk pilihan relasi");
-    } finally {
-      setLoadingCandidates(false);
-    }
-  };
-
-  const handleSaveRelasi = async (e) => {
-    e.preventDefault();
-    if (!relasiForm.relasi_jamaah_id) {
-      setRelasiModalError("Pilih jamaah target relasi");
-      return;
-    }
-
-    try {
-      setSavingRelasi(true);
-      setRelasiModalError(null);
-      await createRelasi(id, {
-        relasi_jamaah_id: Number(relasiForm.relasi_jamaah_id),
-        hubungan: relasiForm.hubungan,
-        keterangan: relasiForm.keterangan ? relasiForm.keterangan.trim() : null,
-      });
-
-      setSuccess("Hubungan kekerabatan berhasil ditambahkan.");
-      setIsRelasiModalOpen(false);
-      const updatedRelasi = await listRelasi(id);
-      setRelasiList(updatedRelasi || []);
-    } catch (err) {
-      setRelasiModalError(err.response?.data?.error || "Gagal menambahkan relasi");
-    } finally {
-      setSavingRelasi(false);
-    }
-  };
-
-  const handleDeleteRelasi = async (relasiId, targetNama) => {
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus relasi dengan ${targetNama}?`)) {
-      return;
-    }
-
-    try {
-      setError(null);
-      setSuccess(null);
-      await deleteRelasi(id, relasiId);
-      setSuccess("Relasi kekerabatan berhasil dihapus.");
-      const updatedRelasi = await listRelasi(id);
-      setRelasiList(updatedRelasi || []);
-    } catch (err) {
-      setError(err.response?.data?.error || "Gagal menghapus relasi");
     }
   };
 
@@ -341,6 +265,60 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
     }
   };
 
+  // ─── Cetak / PDF ──────────────────────────────────────────────────────────────
+
+  const assetSrc = (url) => {
+    if (!url) return "";
+    if (url.startsWith("http")) return url;
+    return `${import.meta.env.VITE_API_BASE_URL || "http://localhost:9090"}${url.startsWith("/") ? "" : "/"}${url}`;
+  };
+
+  const handlePrint = () => {
+    const gender = jamaah.jenis_kelamin === "L" ? "Laki-laki" : jamaah.jenis_kelamin === "P" ? "Perempuan" : "";
+    const ttl = jamaah.tempat_lahir || jamaah.tanggal_lahir
+      ? `${jamaah.tempat_lahir || "-"}, ${formatTanggal(jamaah.tanggal_lahir)}`
+      : "";
+    printJamaah({
+      nama: jamaah.nama_lengkap || jamaah.id_jamaah || `ID: ${jamaah.id}`,
+      idJamaah: jamaah.id_jamaah || jamaah.kode_jamaah || "",
+      noHp: jamaah.no_hp || "",
+      brandName: brand?.name || "",
+      accentColor: brand?.primary_color || "",
+      logoUrl: brand?.logo_url ? assetSrc(brand.logo_url) : (brand?.icon_url ? assetSrc(brand.icon_url) : ""),
+      identitas: [
+        ["Nama Lengkap", jamaah.nama_lengkap],
+        ["Jenis Kelamin", gender],
+        ["Nama Ayah Kandung", jamaah.nama_ayah_kandung],
+        ["NIK", jamaah.nik],
+        ["Tempat, Tanggal Lahir", ttl],
+        ["No HP / WhatsApp", jamaah.no_hp],
+        ["Email", jamaah.email],
+        ["Kota / Kabupaten", jamaah.kota],
+        ["Alamat Lengkap", jamaah.alamat],
+      ],
+      pekerjaan: [
+        ["Pekerjaan", jamaah.pekerjaan],
+        ["Pendidikan Terakhir", jamaah.pendidikan_terakhir],
+        ["Penjamin Kesehatan", jamaah.penjamin_kesehatan],
+        ["No BPJS / Asuransi", jamaah.no_asuransi_bpjs],
+      ],
+      paspor: [
+        ["Nomor Paspor", jamaah.no_paspor],
+        ["Kantor Imigrasi Penerbit", jamaah.tempat_paspor_keluar],
+        ["Tanggal Dikeluarkan", jamaah.tanggal_paspor_keluar ? formatTanggal(jamaah.tanggal_paspor_keluar) : ""],
+        ["Masa Berlaku", jamaah.paspor_berlaku_sampai ? formatTanggal(jamaah.paspor_berlaku_sampai) : ""],
+      ],
+      darurat: [
+        ["Nama Kontak Darurat", jamaah.emergency_nama],
+        ["Hubungan", jamaah.emergency_hubungan],
+        ["No HP Kontak Darurat", jamaah.emergency_hp],
+        ["NIK Kontak Darurat", jamaah.emergency_nik],
+        ["Alamat Kontak Darurat", jamaah.emergency_alamat],
+      ],
+      printedAt: formatTanggalWaktu(new Date().toISOString()),
+    });
+  };
+
   if (loading) {
     return (
       <div className="p-12 flex justify-center items-center">
@@ -360,11 +338,6 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
     );
   }
 
-  const candidateOptions = candidateList.map((j) => ({
-    value: j.id,
-    label: `${j.nama_lengkap} (${j.id_jamaah || j.nik || `ID: ${j.id}`})`,
-  }));
-
   return (
     <div className="space-y-6">
       {/* Hidden File Input for Document Upload */}
@@ -378,28 +351,52 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
 
       {/* Header */}
       <PageHeader
-        title={jamaah.id_jamaah || jamaah.kode_jamaah || `ID: ${jamaah.id}`}
+        title={jamaah.nama_lengkap || jamaah.id_jamaah || `ID: ${jamaah.id}`}
+        breadcrumb={false}
+        subtitle={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <Badge variant="neutral" hideIcon className={`${PILL_STRONG} !font-mono`}>
+              {jamaah.id_jamaah || jamaah.kode_jamaah || `ID: ${jamaah.id}`}
+            </Badge>
+            {showBrandColumn && (brand || jamaah.brand_id) && (
+              <BrandBadge name={brand?.name || `Brand #${jamaah.brand_id}`} color={brand?.primary_color} />
+            )}
+          </span>
+        }
         onBack={() => navigate("/jamaah")}
+        actionLabel="Edit Data"
+        onAction={() => navigate(`/jamaah/${id}/edit`)}
       >
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => navigate(`/jamaah/${id}/edit`)}
-          className="flex items-center gap-1.5 shadow-2xs"
-        >
-          <Edit2 size={14} />
-          <span>Edit Data</span>
+        <Button variant="secondary" onClick={handlePrint}>
+          <Printer size={16} strokeWidth={1.75} />
+          <span>Cetak / PDF</span>
         </Button>
       </PageHeader>
 
       {error && <Alert variant="error">{error}</Alert>}
       {success && <Alert variant="success">{success}</Alert>}
 
-      {/* Main Grid: Data Identitas & Info Lainnya */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Kolom Kiri: Identitas Utama (2 span) */}
-        <div className="lg:col-span-2 space-y-6">
-          <MetaBox title="Identitas Pribadi">
+      {/* Ringkasan: satu strip */}
+      <Surface className="grid grid-cols-3 divide-x divide-neutral-200">
+        <SummaryItem
+          label="Booking"
+          value={bookings.length}
+          hint={bookings.length > 0 ? "Lihat riwayat di bawah" : "Belum ada booking"}
+        />
+        <SummaryItem
+          label="Dokumen terunggah"
+          value={`${dokumenList.filter((d) => d.file_url).length}/${DOKUMEN_TYPES.length}`}
+        />
+        <SummaryItem
+          label="Akun portal"
+          value={jamaah.portal_aktif ? "Aktif" : "Belum aktif"}
+        />
+      </Surface>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Kolom kiri: satu card, section dipisah garis tipis */}
+        <Surface className="lg:col-span-2 divide-y divide-neutral-200/80">
+          <Section title="Identitas Pribadi">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
               <InfoItem label="Nama Lengkap" value={jamaah.nama_lengkap} />
               <InfoItem label="Jenis Kelamin" value={jamaah.jenis_kelamin === 'L' ? 'Laki-laki' : jamaah.jenis_kelamin === 'P' ? 'Perempuan' : '-'} />
@@ -416,20 +413,29 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
               <InfoItem label="No HP / WhatsApp" value={jamaah.no_hp} />
               <InfoItem label="Email" value={jamaah.email} />
               <InfoItem label="Kota / Kabupaten" value={jamaah.kota} />
-              <InfoItem label="Alamat Lengkap" value={jamaah.alamat} />
+              <InfoItem label="Alamat Lengkap" value={jamaah.alamat} colSpan={true} />
             </div>
-          </MetaBox>
+          </Section>
 
-          <MetaBox title="Pendidikan & Pekerjaan">
+          <Section title="Pendidikan & Pekerjaan">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
               <InfoItem label="Pekerjaan" value={jamaah.pekerjaan} />
               <InfoItem label="Pendidikan Terakhir" value={jamaah.pendidikan_terakhir} />
               <InfoItem label="Penjamin Kesehatan" value={jamaah.penjamin_kesehatan} />
               <InfoItem label="No BPJS / Asuransi" value={jamaah.no_asuransi_bpjs} />
             </div>
-          </MetaBox>
+          </Section>
 
-          <MetaBox title="Kontak Darurat (Emergency Contact)">
+          <Section title="Dokumen Paspor">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
+              <InfoItem label="Nomor Paspor" value={jamaah.no_paspor} />
+              <InfoItem label="Kantor Imigrasi Penerbit" value={jamaah.tempat_paspor_keluar} />
+              <InfoItem label="Tanggal Dikeluarkan (Issued Date)" value={formatTanggal(jamaah.tanggal_paspor_keluar)} />
+              <InfoItem label="Masa Berlaku Paspor (Expiry Date)" value={formatTanggal(jamaah.paspor_berlaku_sampai)} />
+            </div>
+          </Section>
+
+          <Section title="Kontak Darurat">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
               <InfoItem label="Nama Kontak Darurat" value={jamaah.emergency_nama} />
               <InfoItem label="Hubungan" value={jamaah.emergency_hubungan} />
@@ -437,85 +443,21 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
               <InfoItem label="NIK Kontak Darurat" value={jamaah.emergency_nik} />
               <InfoItem label="Alamat Kontak Darurat" value={jamaah.emergency_alamat} colSpan={true} />
             </div>
-          </MetaBox>
+          </Section>
+        </Surface>
 
-          {/* Hubungan Kekerabatan & Mahram */}
-          <MetaBox 
-            title="Hubungan Kekerabatan & Mahram"
-            headerActions={
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleOpenRelasiModal}
-                className="flex items-center gap-1.5 text-xs"
-              >
-                <Plus size={14} />
-                <span>Tambah Kerabat</span>
-              </Button>
-            }
-          >
-            {relasiList.length === 0 ? (
-              <p className="text-sm text-neutral-500 font-body">
-                Belum ada relasi kekerabatan / mahram yang terdaftar untuk jamaah ini.
-              </p>
-            ) : (
-              <div className="divide-y divide-neutral-100">
-                {relasiList.map((rel) => (
-                  <div
-                    key={rel.id}
-                    className="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold font-heading text-neutral-900">
-                          {rel.nama_relasi}
-                        </span>
-                        <span className="text-xs font-bold font-body px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
-                          {rel.hubungan}
-                        </span>
-                      </div>
-                      {rel.id_jamaah_relasi && (
-                        <p className="text-xs text-neutral-500 font-mono font-medium">
-                          {rel.id_jamaah_relasi}
-                        </p>
-                      )}
-                      {rel.keterangan && (
-                        <p className="text-xs text-neutral-500 font-body">
-                          {rel.keterangan}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigate(`/jamaah/${rel.relasi_jamaah_id}`)}
-                        className="text-xs flex items-center gap-1 text-neutral-600 hover:text-neutral-900"
-                        title="Buka Profil Kerabat"
-                      >
-                        <span>Lihat Profil</span>
-                        <ArrowRight size={13} />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </MetaBox>
-        </div>
-
-        {/* Kolom Kanan: Akun Portal Jamaah, Afiliasi Biro Travel, Paspor, Dokumen Digital, Catatan (1 span) */}
-        <div className="space-y-6">
-          {/* Akun Portal Jamaah */}
-          <MetaBox title="Akun Portal Jamaah">
+        {/* Kolom kanan: satu card */}
+        <Surface className="divide-y divide-neutral-200/80">
+          <Section title="Akun Portal Jamaah">
             <div className="space-y-4">
               {/* Baris Status */}
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-neutral-500 font-body">Status</span>
-                <Badge variant={jamaah.portal_aktif ? "success" : "warning"} hideIcon={false}>
-                  {jamaah.portal_aktif ? "Sudah aktif" : "Belum aktif"}
-                </Badge>
+                <StatusDot
+                  label={jamaah.portal_aktif ? "Sudah aktif" : "Belum aktif"}
+                  text={jamaah.portal_aktif ? "text-success-700" : "text-warning-700"}
+                  dot={jamaah.portal_aktif ? "bg-success-500" : "bg-warning-500"}
+                />
               </div>
 
               {/* Keterangan Link Aktif jika ada */}
@@ -592,9 +534,9 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
                   : "Terbitkan Link Aktivasi"}
               </Button>
             </div>
-          </MetaBox>
-          {/* Kaitan Agen Syiar: agen yang mengajak (read-only; penggantian lewat Admin Master) */}
-          <MetaBox title="Agen Syiar" icon={<Network size={18} className="text-neutral-700" />}>
+          </Section>
+
+          <Section title="Agen Syiar">
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-medium text-neutral-500 font-body">Agen yang mengajak</span>
@@ -615,37 +557,17 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
                 <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-3">
                   <span className="text-xs font-medium text-neutral-500 font-body">Jamaah ini juga agen</span>
                   <Link to={`/agen/${jamaah.id}`}>
-                    <Badge variant={STATUS_AGEN[jamaah.status_agen].variant}>
-                      {STATUS_AGEN[jamaah.status_agen].label}
-                    </Badge>
+                    <StatusDot
+                      label={STATUS_AGEN[jamaah.status_agen].label}
+                      {...(AGEN_STATUS_STYLE[STATUS_AGEN[jamaah.status_agen].variant] || NEUTRAL_STATUS)}
+                    />
                   </Link>
                 </div>
               )}
             </div>
-          </MetaBox>
+          </Section>
 
-          {/* Afiliasi Biro Travel (Khusus Super Admin / Master Dashboard) */}
-          {showBrandColumn && (brand || jamaah.brand_id) && (
-            <MetaBox 
-              title="Afiliasi Biro Travel"
-              icon={<Building2 size={18} className="text-neutral-700" />}
-            >
-              <div className="py-0.5">
-                <BrandCell brand={brand} brandId={jamaah.brand_id} showText={true} />
-              </div>
-            </MetaBox>
-          )}
-
-          <MetaBox title="Dokumen Paspor">
-            <div className="space-y-4">
-              <InfoItem label="Nomor Paspor" value={jamaah.no_paspor} />
-              <InfoItem label="Kantor Imigrasi Penerbit" value={jamaah.tempat_paspor_keluar} />
-              <InfoItem label="Tanggal Dikeluarkan (Issued Date)" value={formatTanggal(jamaah.tanggal_paspor_keluar)} />
-              <InfoItem label="Masa Berlaku Paspor (Expiry Date)" value={formatTanggal(jamaah.paspor_berlaku_sampai)} />
-            </div>
-          </MetaBox>
-
-          <MetaBox title="Dokumen Digital Jamaah">
+          <Section title="Dokumen Digital">
             <div className="divide-y divide-neutral-100">
               {DOKUMEN_TYPES.map((docType) => {
                 const existing = dokumenList.find((d) => d.jenis === docType.key);
@@ -696,10 +618,9 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
                 );
               })}
             </div>
-          </MetaBox>
+          </Section>
 
-          {/* Catatan Jamaah */}
-          <MetaBox title="Catatan Khusus Jamaah">
+          <Section title="Catatan Internal">
             <div className="space-y-3">
               <Textarea
                 name="catatan"
@@ -727,12 +648,13 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
                 </Button>
               </div>
             </div>
-          </MetaBox>
-        </div>
+          </Section>
+        </Surface>
       </div>
 
       {/* Riwayat Booking */}
-      <MetaBox title="Riwayat Booking & Keberangkatan">
+      <Surface>
+        <Section title="Riwayat Booking & Keberangkatan">
         {bookings.length === 0 ? (
           <p className="text-sm text-neutral-500 font-body">Belum ada riwayat booking untuk jamaah ini.</p>
         ) : (
@@ -750,7 +672,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
             renderCell={(row, key) => {
               if (key === "id_booking") {
                 return (
-                  <span className="font-mono text-xs font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded border border-neutral-200">
+                  <span className="font-mono text-xs font-semibold text-neutral-900">
                     {row.id_booking || `ID: ${row.id}`}
                   </span>
                 );
@@ -758,91 +680,30 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
               if (key === "berangkat_tanggal") return formatBulanTahun(row.berangkat_tanggal);
               if (key === "total_harga") return formatRupiah(row.total_harga);
               if (key === "status") {
-                const mapVariant = {
-                  baru: "neutral",
-                  dp: "warning",
-                  lunas: "success",
-                  batal: "danger",
-                };
-                return (
-                  <Badge variant={mapVariant[row.status] || "neutral"} hideIcon={true}>
-                    {row.status?.toUpperCase()}
-                  </Badge>
-                );
+                const s = BOOKING_STATUS[row.status] || NEUTRAL_STATUS;
+                return <StatusDot label={row.status?.toUpperCase()} text={s.text} dot={s.dot} />;
               }
               if (key === "aksi") {
                 return (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate(`/bookings/${row.id}`)}
-                    title="Lihat Detail Booking"
-                  >
-                    <Eye size={16} className="text-primary-600" />
-                  </Button>
+                  <ActionMenu
+                    items={[
+                      {
+                        label: "Lihat Detail",
+                        icon: Eye,
+                        tooltip: "Lihat Detail Booking",
+                        onClick: () => navigate(`/bookings/${row.id}`),
+                      },
+                    ]}
+                  />
                 );
               }
               return row[key];
             }}
           />
         )}
-      </MetaBox>
+        </Section>
+      </Surface>
 
-      {/* Modal Tambah Relasi Kekerabatan */}
-      <Modal
-        isOpen={isRelasiModalOpen}
-        onClose={() => setIsRelasiModalOpen(false)}
-        title="Tambah Hubungan Kekerabatan / Mahram"
-        maxWidth="max-w-lg"
-      >
-        <form onSubmit={handleSaveRelasi} className="space-y-4">
-          {relasiModalError && <Alert variant="error">{relasiModalError}</Alert>}
-
-          <CustomDropdown
-            label="Pilih Jamaah Kerabat"
-            options={candidateOptions}
-            value={relasiForm.relasi_jamaah_id}
-            onChange={(val) => setRelasiForm((prev) => ({ ...prev, relasi_jamaah_id: val }))}
-            placeholder={loadingCandidates ? "Memuat daftar jamaah..." : "Pilih jamaah..."}
-            disabled={loadingCandidates}
-          />
-
-          <CustomDropdown
-            label="Hubungan Kekerabatan"
-            options={HUBUNGAN_OPTIONS}
-            value={relasiForm.hubungan}
-            onChange={(val) => setRelasiForm((prev) => ({ ...prev, hubungan: val }))}
-          />
-
-          <Textarea
-            label="Keterangan (Opsional)"
-            name="keterangan"
-            value={relasiForm.keterangan}
-            onChange={(e) => setRelasiForm((prev) => ({ ...prev, keterangan: e.target.value }))}
-            placeholder="Catatan tambahan (mis. No. Kartu Keluarga sama, Mahram resmi)..."
-            rows={2}
-          />
-
-          <div className="flex justify-end gap-2 pt-4 border-t border-neutral-200">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsRelasiModalOpen(false)}
-            >
-              Batal
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={savingRelasi || loadingCandidates}
-            >
-              {savingRelasi ? "Menyimpan..." : "Simpan Hubungan"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
       {/* Modal Konfirmasi Terbitkan Link Baru (Reset) */}
       <Modal
         isOpen={isConfirmModalOpen}
