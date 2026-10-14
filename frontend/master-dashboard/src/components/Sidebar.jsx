@@ -7,23 +7,14 @@ import {
   Hotel,
   Plane,
   MapPin,
-  PlusCircle,
   Users,
   CalendarDays,
   CreditCard,
   Boxes,
-  Percent,
-  BarChart3,
-  FileBarChart,
-  ShieldCheck,
   Building2,
-  Landmark,
   UserCog,
   ChevronDown,
-  Link2,
   Network,
-  Coins,
-  Trophy
 } from 'lucide-react';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
@@ -63,7 +54,6 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         { name: 'Kelola Hotel', path: '/hotels', icon: Hotel, status: 'active' },
         { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, status: 'active' },
         { name: 'Kelola Itinerary', path: '/itineraries', icon: MapPin, status: 'active' },
-        { name: 'Kelola Add-On', path: '/addons', icon: PlusCircle, status: 'active' },
       ],
     },
     {
@@ -74,29 +64,11 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       ],
     },
     {
-      name: 'AGEN & KOMISI',
-      items: [
-        { name: 'Daftar Agen', path: '/agen', icon: Network, status: 'active' },
-        { name: 'Riwayat Komisi', path: '/agen/komisi', icon: Coins, status: 'active' },
-        { name: 'Persetujuan Pencairan', path: '/komisi', icon: Percent, status: 'active' },
-        { name: 'Ganti Kaitan Agen', path: '/komisi/ganti-kaitan', icon: Link2, status: 'active' },
-      ],
-    },
-    {
-      name: 'LAPORAN & ANALYTICS',
-      items: [
-        { name: 'Peringkat Agen', path: '/analytics/peringkat-agen', icon: Trophy, status: 'active' },
-        { name: 'Analytics Lintas Brand', path: '/analytics/lintas-brand', icon: BarChart3, status: 'inactive' },
-        { name: 'Laporan Keuangan', path: '/analytics/keuangan', icon: FileBarChart, status: 'inactive' },
-      ],
-    },
-    {
       name: 'ADMINISTRASI',
       items: [
         { name: 'Kelola Brand', path: '/brands', icon: Building2, status: 'active' },
-        { name: 'Rekening Bank', path: '/bank-accounts', icon: Landmark, status: 'active' },
-        { name: 'User Management', path: '/users', icon: UserCog, status: 'active' },
-        { name: 'Legalitas & Perizinan', path: '/compliance', icon: ShieldCheck, status: 'inactive' },
+        { name: 'Pengguna', path: '/users', icon: UserCog, status: 'active' },
+        { name: 'Struktur Organisasi', path: '/organisasi', icon: Network, status: 'active' },
       ],
     },
   ];
@@ -110,18 +82,18 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         />
       )}
 
-      <aside className={`w-64 bg-sidebar-bg text-neutral-300 h-screen flex flex-col fixed left-0 top-0 border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out select-none ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <aside className={`w-64 bg-sidebar-bg text-neutral-600 h-screen flex flex-col fixed left-0 top-0 border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out select-none ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Brand Header */}
         <div className="px-5 h-16 border-b border-sidebar-border shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sidebar-surface border border-primary-500/50 flex items-center justify-center text-primary-500">
+            <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-sm">
               <KaabaIcon className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-base font-heading font-bold text-white tracking-tight leading-none">
-                Azhan Grup
+              <h1 className="text-base font-heading font-bold text-neutral-900 tracking-tight leading-none">
+                Azhan Corp
               </h1>
-              <p className="text-[11px] font-body text-sidebar-muted mt-1 font-medium">Master ERP</p>
+              <p className="text-[11px] font-body text-sidebar-muted mt-1 font-medium">Office Dashboard</p>
             </div>
           </div>
         </div>
@@ -135,10 +107,10 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
               end
               onClick={closeDrawer}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3.5 py-2.5 text-sm transition-all rounded-xl ${
+                `flex items-center gap-3 px-3 py-2 text-[13px] transition-all rounded-lg ${
                   isActive
                     ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
-                    :'text-sidebar-muted hover:text-white hover:bg-sidebar-surface font-medium'
+                    :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
                 }`
               }
             >
@@ -147,24 +119,16 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
             </NavLink>
           </div>
 
-          {/* Menu Groups */}
+          {/* Menu Groups — label seksi statis ala SmartHR; semua item terlihat */}
           {menuGroups.map((group) => {
-            const isExpanded = openGroup === group.name;
             return (
-              <div key={group.name} className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(group.name)}
-                  className="w-full flex items-center justify-between px-3.5 py-1.5 text-[11px] font-bold text-sidebar-muted hover:text-neutral-200 transition-colors uppercase tracking-wider"
-                >
-                  <span>{group.name}</span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-neutral-400' : 'text-neutral-600'}`}
-                  />
-                </button>
+              <div key={group.name} className="space-y-0.5">
+                <div className="px-3.5 pt-2 pb-1 text-[10.5px] font-semibold text-neutral-400 uppercase tracking-[0.08em]">
+                  {group.name}
+                </div>
 
-                {isExpanded && (
-                  <div className="space-y-1 pt-0.5">
+                {(
+                  <div className="space-y-0.5">
                     {group.items.map((item) => {
                       const Icon = item.icon;
                       const isInactive = item.status === 'inactive';
@@ -177,13 +141,13 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                           onClick={closeDrawer}
                           className={({ isActive }) => {
                             if (isInactive) {
-                              return 'flex items-center justify-between px-3.5 py-2 text-sm transition-all rounded-xl text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
+                              return 'flex items-center justify-between px-3 py-1.5 text-[13px] transition-all rounded-lg text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
                             }
                             
-                            return `flex items-center justify-between px-3.5 py-2.5 text-sm transition-all rounded-xl ${
+                            return `flex items-center justify-between px-3 py-2 text-[13px] transition-all rounded-lg ${
                               isActive
                                 ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
-                                :'text-sidebar-muted hover:text-white hover:bg-sidebar-surface font-medium'
+                                :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
                             }`;
                           }}
                         >
@@ -192,7 +156,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                             <span className="truncate">{item.name}</span>
                           </div>
                           {isInactive && (
-                            <span className="text-[10px] bg-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-[10px] bg-neutral-100 text-neutral-400 px-1.5 py-0.5 rounded font-mono">
                               Soon
                             </span>
                           )}

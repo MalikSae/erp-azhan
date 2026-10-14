@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { BrandFilterContext } from '../context/BrandFilterContext';
 import { listBrands } from '../api/brands';
-import CustomDropdown from './ui/CustomDropdown';
+import CustomDropdown from 'shared/ui/CustomDropdown';
 
 const BrandSwitcher = () => {
   const { selectedBrandId, setSelectedBrandId } = useContext(BrandFilterContext);

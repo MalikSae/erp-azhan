@@ -87,8 +87,11 @@ func (h *Handler) CreateItinerary(w http.ResponseWriter, r *http.Request) {
 	if ok := validateItineraryInput(w, req.Title, req.Days); !ok {
 		return
 	}
+	if ok := h.validateCategory(w, r, req.CategoryID); !ok {
+		return
+	}
 
-	it, err := h.repo.Create(r.Context(), strings.TrimSpace(req.Title), req.Days)
+	it, err := h.repo.Create(r.Context(), strings.TrimSpace(req.Title), req.CategoryID, req.Days)
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -116,8 +119,11 @@ func (h *Handler) UpdateItinerary(w http.ResponseWriter, r *http.Request) {
 	if ok := validateItineraryInput(w, req.Title, req.Days); !ok {
 		return
 	}
+	if ok := h.validateCategory(w, r, req.CategoryID); !ok {
+		return
+	}
 
-	it, err := h.repo.Update(r.Context(), id, strings.TrimSpace(req.Title), req.Days)
+	it, err := h.repo.Update(r.Context(), id, strings.TrimSpace(req.Title), req.CategoryID, req.Days)
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -143,6 +149,23 @@ func (h *Handler) DeleteItinerary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
 }
 
+// validateCategory memastikan category_id (jika dikirim) ada di master kategori.
+func (h *Handler) validateCategory(w http.ResponseWriter, r *http.Request, categoryID *int64) bool {
+	if categoryID == nil {
+		return true
+	}
+	exists, err := h.repo.CategoryExists(r.Context(), *categoryID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		return false
+	}
+	if !exists {
+		writeError(w, http.StatusBadRequest, "category_id tidak valid")
+		return false
+	}
+	return true
+}
+
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 // validateItineraryInput menjalankan semua validasi sesuai urutan gate yang ditentukan.
@@ -159,9 +182,9 @@ func validateItineraryInput(w http.ResponseWriter, rawTitle string, days []DayRe
 	for i, d := range days {
 		n := i + 1 // posisi 1-based untuk pesan error
 
-		// Gate 3: title hari wajib
-		if strings.TrimSpace(d.Title) == "" {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("title hari ke-%d wajib diisi", n))
+		// Gate 3: judul atau rute/lokasi hari wajib (format baru memakai rute sebagai judul hari)
+		if strings.TrimSpace(d.Title) == "" && strings.TrimSpace(d.Location) == "" {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("rute/lokasi hari ke-%d wajib diisi", n))
 			return false
 		}
 

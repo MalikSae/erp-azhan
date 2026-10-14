@@ -541,7 +541,8 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 
 	// 11. Minimal DP
 	var globalMinDP float64
-	err = tx.QueryRowContext(ctx, `SELECT minimal_dp FROM brands WHERE id=?`, brandID).Scan(&globalMinDP)
+	var pelunasanHari int
+	err = tx.QueryRowContext(ctx, `SELECT minimal_dp, batas_pelunasan_hari FROM brands WHERE id=?`, brandID).Scan(&globalMinDP, &pelunasanHari)
 	if err != nil {
 		return nil, fmt.Errorf("get brand minimal dp: %w", err)
 	}
@@ -554,8 +555,8 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		return nil, ErrInvalidDP
 	}
 	totalMinDP := dpPerReguler * float64(regulerPaxCount)
-	fullPayment := !depDate.After(now.AddDate(0, 0, 45))
-	dueAt := depDate.AddDate(0, 0, -45)
+	fullPayment := !depDate.After(now.AddDate(0, 0, pelunasanHari))
+	dueAt := depDate.AddDate(0, 0, -pelunasanHari)
 	if fullPayment {
 		totalMinDP = totalHarga
 		dueAt = seatHoldExpiresAt

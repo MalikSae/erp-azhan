@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -132,7 +133,7 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inp, ok := h.validateScheduleInput(r.Context(), w, &req)
+	inp, ok := h.validateScheduleInput(r.Context(), w, &req, nil)
 	if !ok {
 		return
 	}
@@ -198,7 +199,7 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	// agar kapasitas di bawah alokasi mendapat pesan yang tepat (MP-07).
 	req.SeatSisa = nil
 
-	inp, ok := h.validateScheduleInput(r.Context(), w, &req)
+	inp, ok := h.validateScheduleInput(r.Context(), w, &req, existing)
 	if !ok {
 		return
 	}
@@ -307,11 +308,32 @@ func (h *Handler) UpdateScheduleSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.repo.UpdateSeat(r.Context(), id, req.SeatSisa, req.ExpectedSeatSisa, brandID, req.Reason); err != nil {
+	if err := validateMaxLen("reason", strings.TrimSpace(req.Reason), maxAlasanSeat); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := h.repo.UpdateSeat(r.Context(), id, req.SeatSisa, req.ExpectedSeatSisa, brandID, req.Reason, identity.GetAdminUserID(r.Context())); err != nil {
 		handleRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "seat_sisa": req.SeatSisa})
+}
+
+// GetScheduleSeat godoc
+// GET /api/admin/schedules/{id}/seat
+// Response 200: SeatOverview (ringkasan kursi + riwayat penyesuaian terakhir)
+func (h *Handler) GetScheduleSeat(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	o, err := h.repo.SeatOverview(r.Context(), id, identity.GetBrandID(r.Context()))
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, o)
 }
 
 // ─── Admin: Delete ────────────────────────────────────────────────────────────
@@ -338,7 +360,8 @@ func (h *Handler) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 // validateScheduleInput menjalankan semua 17 gate validasi sesuai urutan spesifikasi.
 // Gate yang memerlukan DB query (6, 11, 13, 15) memanggil repo existence checks.
 // Mengembalikan *ScheduleInput yang sudah siap pakai, atau false jika ada gate yang gagal.
-func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWriter, req *CreateScheduleRequest) (*ScheduleInput, bool) {
+// existing nil = paket baru; terisi = edit (sebagian gate hanya berlaku untuk nilai yang berubah).
+func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWriter, req *CreateScheduleRequest, existing *Schedule) (*ScheduleInput, bool) {
 	const dateLayout = "2006-01-02"
 
 	ctxBrandID := identity.GetBrandID(ctx)
@@ -378,14 +401,16 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
-	// Gate 3 & 4: seat_sisa resolution
-	seatSisa := req.SeatTotal // default: sama dengan seat_total
-	if req.SeatSisa != nil {
-		if *req.SeatSisa < 0 || *req.SeatSisa > req.SeatTotal {
-			writeError(w, http.StatusBadRequest, "seat_sisa harus antara 0 dan seat_total")
+	// Gate 3 & 4: seat_sisa. Paket baru selalu mulai penuh; pada edit, nilai ini
+	// diabaikan dan dihitung repository dari kursi teralokasi.
+	seatSisa := req.SeatTotal
+	if existing == nil {
+		var err error
+		seatSisa, err = seatSisaForCreate(req.SeatTotal, req.SeatSisa)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return nil, false
 		}
-		seatSisa = *req.SeatSisa
 	}
 
 	// Gate 5: maskapai_id wajib
@@ -505,14 +530,21 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
+	// Brand selalu diperiksa, bukan hanya saat DP kosong: brand_id tak dikenal akan
+	// menabrak FK saat insert dan sampai ke klien sebagai 500 (TP-01).
+	brandDP, err := h.repo.BrandMinimalDP(ctx, finalBrandID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusBadRequest, "brand_id tidak valid")
+		return nil, false
+	}
+	if err != nil {
+		log.Printf("[ERROR] schedule: cek brand: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		return nil, false
+	}
 	effectiveDP := req.MinimalDP
 	if effectiveDP == nil {
-		value, err := h.repo.BrandMinimalDP(ctx, finalBrandID)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "brand_id tidak valid")
-			return nil, false
-		}
-		effectiveDP = &value
+		effectiveDP = &brandDP
 	}
 	if err := validateDP(effectiveDP, req.HargaQuad, req.HargaTriple, req.HargaDouble); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -543,18 +575,6 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
-	// Gate 14.5: Validasi harga_coret
-	var finalHargaCoret *float64
-	if req.IsPromo {
-		if req.HargaCoret != nil {
-			if *req.HargaCoret <= req.HargaQuad {
-				writeError(w, http.StatusBadRequest, "harga_coret harus lebih besar dari harga_quad")
-				return nil, false
-			}
-			finalHargaCoret = req.HargaCoret
-		}
-	}
-
 	// Gate 15: itinerary_id opsional, tapi kalau dikirim harus ada di DB
 	if req.ItineraryID != nil {
 		if exists, err := h.repo.ItineraryExists(ctx, *req.ItineraryID); err != nil {
@@ -574,21 +594,6 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		} else if !exists {
 			writeError(w, http.StatusBadRequest, "category_id tidak valid")
 			return nil, false
-		}
-	}
-
-	// Gate 15.5: add_on_ids opsional, tiap elemen wajib ada di DB
-	var finalAddOnIDs []int64
-	if req.AddOnIDs != nil && len(req.AddOnIDs) > 0 {
-		for _, addonID := range req.AddOnIDs {
-			if exists, err := h.repo.AddOnExists(ctx, addonID); err != nil {
-				writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
-				return nil, false
-			} else if !exists {
-				writeError(w, http.StatusBadRequest, "add_on_id tidak valid")
-				return nil, false
-			}
-			finalAddOnIDs = append(finalAddOnIDs, addonID)
 		}
 	}
 
@@ -642,15 +647,44 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		}
 	}
 
+	// Gate 16.6: format jam dan panjang teks penerbangan (TP-02, TP-03).
+	for _, f := range []error{
+		validateJam("berangkat_jam", req.BerangkatJam),
+		validateJam("pulang_jam", req.PulangJam),
+		validateMaxLen("berangkat_kode_penerbangan", strings.TrimSpace(req.BerangkatKodePenerbangan), maxKodePenerbangan),
+		validateMaxLen("pulang_kode_penerbangan", strings.TrimSpace(req.PulangKodePenerbangan), maxKodePenerbangan),
+		validateMaxLen("transit_bandara", strings.TrimSpace(req.TransitBandara), maxTransitBandara),
+	} {
+		if f != nil {
+			writeError(w, http.StatusBadRequest, f.Error())
+			return nil, false
+		}
+	}
+
 	// Gate 17: brosur_url dan brosur_thumb_url harus path unggahan atau URL http(s) (MP-08)
 	if !shared.ValidMediaURL(req.BrosurURL) || !shared.ValidMediaURL(req.BrosurThumbURL) {
 		writeError(w, http.StatusBadRequest, "brosur harus berupa berkas unggahan atau URL http(s)")
 		return nil, false
 	}
 
-	var promoUntil *time.Time
-	if req.IsPromo && req.PromoUntil != nil && req.PromoUntil.Valid {
-		promoUntil = &req.PromoUntil.Time
+	// Gate 18: nama + tanggal berangkat tidak boleh kembar dalam satu brand (TP-06).
+	// Hanya dicek untuk paket baru atau saat ketiganya berubah, agar duplikat lama tetap bisa diedit.
+	namaFinal := strings.TrimSpace(req.JadwalNama)
+	if existing == nil || namaFinal != existing.JadwalNama || req.BerangkatTanggal != existing.BerangkatTanggal || finalBrandID != existing.BrandID {
+		var excludeID int64
+		if existing != nil {
+			excludeID = existing.ID
+		}
+		taken, err := h.repo.NameTaken(ctx, finalBrandID, namaFinal, req.BerangkatTanggal, excludeID)
+		if err != nil {
+			log.Printf("[ERROR] schedule: cek nama kembar: %v", err)
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return nil, false
+		}
+		if taken {
+			writeError(w, http.StatusConflict, "paket dengan nama dan tanggal berangkat yang sama sudah ada di brand ini")
+			return nil, false
+		}
 	}
 
 	return &ScheduleInput{
@@ -659,9 +693,6 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		CategoryID:               req.CategoryID,
 		JadwalNama:               strings.TrimSpace(req.JadwalNama),
 		Status:                   reqStatus,
-		IsPromo:                  req.IsPromo,
-		PromoUntil:               promoUntil,
-		IsTicketConfirmed:        req.IsTicketConfirmed,
 		IsDirectFlight:           req.IsDirectFlight,
 		SeatTotal:                req.SeatTotal,
 		SeatSisa:                 seatSisa,
@@ -684,14 +715,12 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		HargaTriple:              req.HargaTriple,
 		HargaDouble:              req.HargaDouble,
 		HargaInfant:              finalHargaInfant,
-		HargaCoret:               finalHargaCoret,
 		MinimalDP:                req.MinimalDP,
 		NominalKomisiLangsung:    req.NominalKomisiLangsung,
 		NominalBonusPembinaan:    req.NominalBonusPembinaan,
 		ItineraryID:              req.ItineraryID,
 		IncludeItems:             includeItems,
 		ExcludeItems:             excludeItems,
-		AddOnIDs:                 finalAddOnIDs,
 		BrosurURL:                req.BrosurURL,
 		BrosurThumbURL:           req.BrosurThumbURL,
 	}, true
@@ -729,7 +758,7 @@ func (h *Handler) checkHotelCity(ctx context.Context, w http.ResponseWriter, id 
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 		return false
 	}
-	if !strings.EqualFold(strings.TrimSpace(city), kota) {
+	if normalizeKota(city) != normalizeKota(kota) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("%s harus hotel di %s (hotel terpilih berada di %s)", field, kota, city))
 		return false
 	}

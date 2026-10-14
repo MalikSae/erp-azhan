@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Table from './Table';
 import Input from './Input';
 import Button from './Button';
@@ -13,7 +13,6 @@ const DataTable = ({
   emptyMessage = "Tidak ada data",
   renderCell,
   toolbarActions,
-  // toolbarPanel: konten opsional di bawah baris toolbar (mis. panel filter lanjutan).
   toolbarPanel,
   onRowClick
 }) => {
@@ -82,7 +81,7 @@ const DataTable = ({
     <div className="w-full bg-white rounded-2xl border border-neutral-200/80 shadow-card overflow-hidden">
       {/* Header / Toolbar */}
       {(searchable || toolbarActions) && (
-        <div className="p-4 border-b border-neutral-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white gap-4">
+        <div className="p-4 border-b border-neutral-200/80 flex flex-col sm:flex-row sm:flex-wrap justify-between items-start sm:items-center bg-white gap-4">
           <div className="w-full max-w-sm relative">
             {searchable && (
               <>
@@ -96,18 +95,19 @@ const DataTable = ({
                   placeholder={searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-neutral-200/90 pl-10 pr-3.5 py-2 text-xs md:text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs font-body bg-white transition-all"
+                  className="w-full rounded-lg border border-neutral-200 pl-10 pr-3.5 py-2 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body bg-white transition-all"
                 />
               </>
             )}
           </div>
           {toolbarActions && (
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
               {toolbarActions}
             </div>
           )}
         </div>
       )}
+
       {toolbarPanel && (
         <div className="p-4 border-b border-neutral-200/80 bg-neutral-50/60">
           {toolbarPanel}

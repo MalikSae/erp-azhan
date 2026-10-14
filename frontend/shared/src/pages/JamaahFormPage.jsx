@@ -1,18 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { 
-  getJamaah, 
-  createJamaah, 
-  updateJamaah, 
-  listJamaah, 
-  listRelasi, 
-  createRelasi, 
-  updateRelasi, 
-  deleteRelasi 
-} from "../api/jamaah";
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { getJamaah, createJamaah, updateJamaah } from "../api/jamaah";
 import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
-import MetaBox from "../components/ui/MetaBox";
+import FormLayout, { FormSection, SidebarSection, FormAside } from "../components/ui/FormLayout";
 import Input from "../components/ui/Input";
 import AutocompleteInput from "../components/ui/AutocompleteInput";
 import CustomDropdown from "../components/ui/CustomDropdown";
@@ -20,30 +11,13 @@ import Textarea from "../components/ui/Textarea";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
-import KaitanAgenPicker, { EMPTY_KAITAN, validateKaitan, toKaitanPayload } from "../components/KaitanAgenPicker";
 import { INDONESIAN_CITIES } from "../data/indonesianCities";
-import { 
-  Building2, 
-  User, 
-  FileText, 
-  MapPin, 
-  PhoneCall, 
-  ClipboardList, 
-  Users, 
-  Plus, 
-  X, 
-  Save,
-  CheckCircle2,
-  UserCheck
-} from "lucide-react";
 
-const HUBUNGAN_OPTIONS = [
-  { value: "Pasangan", label: "Pasangan" },
-  { value: "Orang Tua", label: "Orang Tua" },
-  { value: "Anak", label: "Anak" },
-  { value: "Saudara Kandung", label: "Saudara Kandung" },
-  { value: "Mahram", label: "Mahram" },
-  { value: "Kerabat Lain", label: "Kerabat Lain" },
+const SECTION_LINKS = [
+  { id: "sec-identitas", label: "Identitas" },
+  { id: "sec-paspor", label: "Paspor" },
+  { id: "sec-kontak", label: "Kontak" },
+  { id: "sec-darurat", label: "Kontak Darurat" },
 ];
 
 export const JamaahFormPage = ({ showBrandColumn = false }) => {
@@ -54,19 +28,16 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [notFound, setNotFound] = useState(false);
   // Konten dashboard menggulir di container dalam, bukan window; gulir ke pesan error langsung.
   const errorRef = useRef(null);
   useEffect(() => {
     if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [error]);
 
-  // Brands State (Khusus Master Dashboard / Super Admin)
+  // Brands State (Khusus Office Dashboard / Super Admin)
   const [brands, setBrands] = useState([]);
   const [brandError, setBrandError] = useState(null);
-
-  // Kaitan agen (Jalur 3) — hanya dipilih saat membuat jamaah baru.
-  const [kaitan, setKaitan] = useState(EMPTY_KAITAN);
-  const [kaitanError, setKaitanError] = useState(null);
 
   const [formData, setFormData] = useState({
     brand_id: "",
@@ -96,42 +67,27 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     catatan: ""
   });
 
-  // Relasi Kekerabatan Repeater State
-  const [candidateList, setCandidateList] = useState([]);
-  const [relasiList, setRelasiList] = useState([]);
-  const [initialRelasiList, setInitialRelasiList] = useState([]);
-  const [relasiErrors, setRelasiErrors] = useState({});
-
-  // Fetch data jamaah & relasi saat mode Edit
+  // Fetch data jamaah saat mode Edit
   useEffect(() => {
     if (isEdit) {
-      Promise.all([getJamaah(id), listRelasi(id)])
-        .then(([jamaahData, relasiData]) => {
-          setFormData(prev => ({ 
-            ...prev, 
+      getJamaah(id)
+        .then((jamaahData) => {
+          setFormData(prev => ({
+            ...prev,
             ...jamaahData,
-            brand_id: jamaahData.brand_id || prev.brand_id || "" 
+            brand_id: jamaahData.brand_id || prev.brand_id || ""
           }));
-          const mappedRelasi = (relasiData || []).map(r => ({
-            id: r.id,
-            db_relasi_id: r.id,
-            relasi_jamaah_id: r.relasi_jamaah_id,
-            searchText: `${r.nama_relasi} (${r.id_jamaah_relasi || r.nik_relasi || `ID: ${r.relasi_jamaah_id}`})`,
-            hubungan: r.hubungan,
-            keterangan: r.keterangan || "",
-          }));
-          setRelasiList(mappedRelasi);
-          setInitialRelasiList(mappedRelasi);
           setLoading(false);
         })
-        .catch(() => {
-          setError("Gagal memuat data jamaah");
+        .catch((err) => {
+          if (err.response?.status === 404) setNotFound(true);
+          else setError("Gagal memuat data jamaah");
           setLoading(false);
         });
     }
   }, [id, isEdit]);
 
-  // Fetch daftar Brands jika diakses dari Master Dashboard
+  // Fetch daftar Brands jika diakses dari Office Dashboard
   useEffect(() => {
     if (showBrandColumn) {
       listBrands()
@@ -145,35 +101,6 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     }
   }, [showBrandColumn, isEdit]);
 
-  // Fetch candidate list untuk Autocomplete Relasi
-  useEffect(() => {
-    const fetchCandidates = async () => {
-      try {
-        const data = await listJamaah({ status: "aktif" });
-        setCandidateList(data || []);
-      } catch (err) {
-        console.error("Gagal memuat daftar jamaah", err);
-      }
-    };
-    fetchCandidates();
-  }, []);
-
-  const candidateOptions = useMemo(() => {
-    return candidateList
-      .filter((j) => {
-        if (isEdit && String(j.id) === String(id)) return false;
-        if (showBrandColumn && formData.brand_id && j.brand_id && Number(j.brand_id) !== Number(formData.brand_id)) {
-          return false;
-        }
-        return true;
-      })
-      .map((j) => ({
-        value: j.id,
-        label: `${j.nama_lengkap} (${j.id_jamaah || j.nik || `ID: ${j.id}`})`,
-        item: j,
-      }));
-  }, [candidateList, isEdit, id, showBrandColumn, formData.brand_id]);
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -183,97 +110,6 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     const actualVal = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
     setFormData(prev => ({ ...prev, brand_id: actualVal ? Number(actualVal) : "" }));
     if (brandError) setBrandError(null);
-    // Agen terikat brand; pilihan agen lama tidak berlaku di brand lain.
-    setKaitan(prev => (prev.agen ? { mode: "agen", agen: null } : prev));
-  };
-
-  // Repeater Relasi Handlers
-  const handleAddRelasi = () => {
-    setRelasiList((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        relasi_jamaah_id: "",
-        searchText: "",
-        hubungan: "Pasangan",
-      },
-    ]);
-  };
-
-  const handleRemoveRelasi = (rowId) => {
-    setRelasiList((prev) => prev.filter((r) => r.id !== rowId));
-    setRelasiErrors((prev) => {
-      const next = { ...prev };
-      delete next[`row_${rowId}_jamaah`];
-      delete next[`row_${rowId}_hubungan`];
-      return next;
-    });
-  };
-
-  const handleRelasiSearchChange = (rowId, value) => {
-    const textVal = typeof value === 'string' ? value : (value?.target ? value.target.value : String(value ?? ''));
-    setRelasiList(prev => prev.map(row => {
-      if (row.id === rowId) {
-        return {
-          ...row,
-          searchText: textVal,
-          relasi_jamaah_id: textVal ? row.relasi_jamaah_id : "",
-        };
-      }
-      return row;
-    }));
-
-    if (relasiErrors[`row_${rowId}_jamaah`]) {
-      setRelasiErrors(prev => {
-        const next = { ...prev };
-        delete next[`row_${rowId}_jamaah`];
-        return next;
-      });
-    }
-  };
-
-  const handleRelasiSelectJamaah = (rowId, selectedItem) => {
-    setRelasiList(prev => prev.map(row => {
-      if (row.id === rowId) {
-        if (!selectedItem) {
-          return {
-            ...row,
-            relasi_jamaah_id: "",
-            searchText: "",
-          };
-        }
-        const itemObj = selectedItem?.item;
-        const candidateId = selectedItem?.value || itemObj?.id;
-        const label = selectedItem?.label || (typeof selectedItem === 'string' ? selectedItem : '');
-        return {
-          ...row,
-          relasi_jamaah_id: candidateId || "",
-          searchText: label,
-        };
-      }
-      return row;
-    }));
-
-    if (relasiErrors[`row_${rowId}_jamaah`]) {
-      setRelasiErrors(prev => {
-        const next = { ...prev };
-        delete next[`row_${rowId}_jamaah`];
-        return next;
-      });
-    }
-  };
-
-  const handleRelasiFieldChange = (rowId, field, value) => {
-    setRelasiList((prev) =>
-      prev.map((r) => (r.id === rowId ? { ...r, [field]: value } : r))
-    );
-    if (field === "hubungan") {
-      setRelasiErrors((prev) => {
-        const next = { ...prev };
-        delete next[`row_${rowId}_hubungan`];
-        return next;
-      });
-    }
   };
 
   const sanitizePayload = (data) => {
@@ -290,39 +126,11 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     e.preventDefault();
     setError(null);
 
-    // Validasi Brand jika Super Admin di Master Dashboard
+    // Validasi Brand jika Super Admin di Office Dashboard
     if (showBrandColumn && !formData.brand_id) {
       setBrandError("Pilih biro travel / brand terlebih dahulu");
       setError("Silakan pilih biro travel / brand untuk jamaah ini.");
       return;
-    }
-
-    if (!isEdit) {
-      const kErr = validateKaitan(kaitan);
-      setKaitanError(kErr);
-      if (kErr) {
-        setError(kErr);
-        return;
-      }
-    }
-
-    // Validasi relasi jika ada baris relasi (berlaku di mode create dan edit)
-    if (relasiList.length > 0) {
-      const rErrors = {};
-      relasiList.forEach((r, idx) => {
-        if (!r.relasi_jamaah_id) {
-          rErrors[`row_${r.id}_jamaah`] = `Pilih jamaah untuk Relasi #${idx + 1}`;
-        }
-        if (!r.hubungan) {
-          rErrors[`row_${r.id}_hubungan`] = `Pilih hubungan untuk Relasi #${idx + 1}`;
-        }
-      });
-
-      if (Object.keys(rErrors).length > 0) {
-        setRelasiErrors(rErrors);
-        setError("Silakan lengkapi baris relasi yang belum valid atau hapus baris jika tidak digunakan.");
-        return;
-      }
     }
 
     setSubmitting(true);
@@ -339,92 +147,11 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
       
       if (isEdit) {
         await updateJamaah(id, payload);
-
-        // Rekonsiliasi sinkronisasi relasi di mode Edit
-        const failedRelasi = [];
-
-        // 1. DELETE: Baris yang ada di initialRelasiList tapi sudah dihapus dari UI
-        const currentDbIds = new Set(relasiList.filter(r => r.db_relasi_id).map(r => r.db_relasi_id));
-        const toDelete = initialRelasiList.filter(r => !currentDbIds.has(r.db_relasi_id));
-        for (const delItem of toDelete) {
-          try {
-            await deleteRelasi(id, delItem.db_relasi_id);
-          } catch (delErr) {
-            const errMsg = delErr.response?.data?.error || delErr.message || "Gagal menghapus relasi";
-            failedRelasi.push(`Hapus relasi (${delItem.searchText || 'Kerabat'}): ${errMsg}`);
-          }
-        }
-
-        // 2. UPDATE (PUT) & CREATE (POST)
-        for (let i = 0; i < relasiList.length; i++) {
-          const row = relasiList[i];
-          if (row.db_relasi_id) {
-            // Baris existing: cek apakah hubungan / keterangan berubah
-            const initialItem = initialRelasiList.find(r => r.db_relasi_id === row.db_relasi_id);
-            const isHubunganChanged = initialItem && initialItem.hubungan !== row.hubungan;
-            const isKeteranganChanged = initialItem && (initialItem.keterangan || "") !== (row.keterangan || "").trim();
-
-            if (isHubunganChanged || isKeteranganChanged) {
-              try {
-                await updateRelasi(id, row.db_relasi_id, {
-                  hubungan: row.hubungan,
-                  keterangan: row.keterangan ? row.keterangan.trim() : null,
-                });
-              } catch (updErr) {
-                const errMsg = updErr.response?.data?.error || updErr.message || "Gagal memperbarui relasi";
-                failedRelasi.push(`Update Relasi #${i + 1} (${row.searchText || 'Kerabat'}): ${errMsg}`);
-              }
-            }
-          } else {
-            // Baris baru tanpa db_relasi_id: POST
-            try {
-              await createRelasi(id, {
-                relasi_jamaah_id: Number(row.relasi_jamaah_id),
-                hubungan: row.hubungan,
-                keterangan: row.keterangan ? row.keterangan.trim() : null,
-              });
-            } catch (addErr) {
-              const errMsg = addErr.response?.data?.error || addErr.message || "Gagal menambahkan relasi baru";
-              failedRelasi.push(`Tambah Relasi #${i + 1} (${row.searchText || 'Kerabat'}): ${errMsg}`);
-            }
-          }
-        }
-
-        if (failedRelasi.length > 0) {
-          const warningMsg = `Data jamaah berhasil diperbarui, tapi ada ${failedRelasi.length} relasi yang gagal disinkronkan: ${failedRelasi.join("; ")}`;
-          navigate(`/jamaah/${id}`, { state: { error: warningMsg } });
-          return;
-        }
-
-        navigate(`/jamaah/${id}`);
+        navigate(`/jamaah/${id}`, { state: { success: `Data jamaah "${payload.nama_lengkap}" berhasil diperbarui.` } });
       } else {
-        const res = await createJamaah({ ...payload, kaitan_agen: toKaitanPayload(kaitan) });
+        const res = await createJamaah({ ...payload, kaitan_agen: { mode: "tanpa_agen" } });
         const newJamaahId = res?.id;
-
-        if (newJamaahId && relasiList.length > 0) {
-          const failedRelasi = [];
-          for (let i = 0; i < relasiList.length; i++) {
-            const row = relasiList[i];
-            try {
-              await createRelasi(newJamaahId, {
-                relasi_jamaah_id: Number(row.relasi_jamaah_id),
-                hubungan: row.hubungan,
-                keterangan: row.keterangan ? row.keterangan.trim() : null,
-              });
-            } catch (relErr) {
-              const errMsg = relErr.response?.data?.error || relErr.message || "Gagal menambahkan relasi";
-              failedRelasi.push(`Relasi #${i + 1} (${row.searchText || 'Jamaah'}): ${errMsg}`);
-            }
-          }
-
-          if (failedRelasi.length > 0) {
-            const warningMsg = `Data jamaah berhasil disimpan, tapi ada ${failedRelasi.length} relasi yang gagal ditambahkan: ${failedRelasi.join("; ")}`;
-            navigate(`/jamaah/${newJamaahId}`, { state: { error: warningMsg } });
-            return;
-          }
-        }
-
-        navigate(newJamaahId ? `/jamaah/${newJamaahId}` : "/jamaah");
+        navigate(newJamaahId ? `/jamaah/${newJamaahId}` : "/jamaah", { state: { success: `Jamaah "${payload.nama_lengkap}" berhasil ditambahkan.` } });
       }
     } catch (err) {
       setError(err.response?.data?.error || "Gagal menyimpan data jamaah");
@@ -439,11 +166,19 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
 
   if (loading) return <div className="p-8 flex justify-center"><LoadingSpinner /></div>;
 
+  if (notFound) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Jamaah Tidak Ditemukan" onBack={() => navigate("/jamaah")} />
+        <Alert variant="error">Data jamaah yang Anda cari tidak ada atau sudah dihapus.</Alert>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-20">
+    <div className="space-y-6">
       <PageHeader 
-        title={isEdit ? "Edit Data Jamaah" : "Tambah Data Jamaah"} 
-        subtitle={isEdit ? "Perbarui informasi lengkap identitas dan dokumen jamaah" : "Daftarkan jamaah baru ke dalam sistem administrasi"}
+        title={isEdit ? "Edit Data Jamaah" : "Tambah Data Jamaah"}
         onBack={handleBack}
       />
 
@@ -453,17 +188,10 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
 
       <form onSubmit={handleSubmit}>
         {/* Responsive 2-Column Grid Layout: Konten Utama (Kiri) & Sidebar Aksi/Meta (Kanan) */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
-          
-          {/* KOLOM KIRI: Data Utama Jamaah */}
-          <div className="space-y-6">
+        <FormLayout tabs={SECTION_LINKS}>
 
             {/* 1. IDENTITAS & DATA PRIBADI */}
-            <MetaBox 
-              title="Identitas & Data Pribadi" 
-              subtitle="Data identitas diri, kependudukan, dan latar belakang jamaah"
-              icon={<User size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-identitas" title="Identitas & Data Pribadi">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Baris 1: Nama Lengkap & Jenis Kelamin */}
                 <Input 
@@ -475,33 +203,20 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   placeholder="Contoh: Muhammad Abdullah" 
                 />
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-neutral-900 font-heading">Jenis Kelamin</label>
-                  <div className="flex gap-6 h-10 items-center">
-                    <label className="flex items-center gap-2 text-sm font-body cursor-pointer text-neutral-700 hover:text-neutral-900">
-                      <input 
-                        type="radio" 
-                        name="jenis_kelamin" 
-                        value="L" 
-                        checked={formData.jenis_kelamin === 'L'} 
-                        onChange={handleChange} 
-                        className="w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500" 
-                      />
-                      Laki-laki
-                    </label>
-                    <label className="flex items-center gap-2 text-sm font-body cursor-pointer text-neutral-700 hover:text-neutral-900">
-                      <input 
-                        type="radio" 
-                        name="jenis_kelamin" 
-                        value="P" 
-                        checked={formData.jenis_kelamin === 'P'} 
-                        onChange={handleChange} 
-                        className="w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500" 
-                      />
-                      Perempuan
-                    </label>
-                  </div>
-                </div>
+                <CustomDropdown
+                  label="Jenis Kelamin"
+                  name="jenis_kelamin"
+                  value={formData.jenis_kelamin || ""}
+                  onChange={(val) => {
+                    const actual = (val && typeof val === "object" && "target" in val) ? val.target.value : val;
+                    setFormData(prev => ({ ...prev, jenis_kelamin: actual }));
+                  }}
+                  placeholder="Pilih jenis kelamin"
+                  options={[
+                    { value: "L", label: "Laki-laki" },
+                    { value: "P", label: "Perempuan" },
+                  ]}
+                />
 
                 {/* Baris 2: NIK & Nama Ayah Kandung */}
                 <Input 
@@ -569,14 +284,10 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   placeholder="Nomor kepesertaan asuransi" 
                 />
               </div>
-            </MetaBox>
+            </FormSection>
 
             {/* 2. DOKUMEN PASPOR */}
-            <MetaBox 
-              title="Dokumen Paspor" 
-              subtitle="Kelengkapan dokumen paspor jamaah untuk manifest & visa"
-              icon={<FileText size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-paspor" title="Dokumen Paspor">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input 
                   label="Nomor Paspor" 
@@ -608,14 +319,10 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   onChange={handleChange} 
                 />
               </div>
-            </MetaBox>
+            </FormSection>
 
             {/* 3. KONTAK & ALAMAT DOMISILI */}
-            <MetaBox 
-              title="Kontak & Alamat Domisili" 
-              subtitle="Informasi nomor kontak aktif dan alamat tempat tinggal"
-              icon={<MapPin size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-kontak" title="Kontak & Alamat Domisili">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input 
                   label="No HP / WhatsApp" 
@@ -653,14 +360,10 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   />
                 </div>
               </div>
-            </MetaBox>
+            </FormSection>
 
             {/* 4. KONTAK DARURAT */}
-            <MetaBox 
-              title="Kontak Darurat" 
-              subtitle="Keluarga atau kerabat yang dapat dihubungi dalam situasi darurat"
-              icon={<PhoneCall size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-darurat" title="Kontak Darurat">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input 
                   label="Nama Kontak Darurat" 
@@ -702,183 +405,32 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   />
                 </div>
               </div>
-            </MetaBox>
+            </FormSection>
 
-            {/* 5. HUBUNGAN KEKERABATAN (OPSIONAL) */}
-            <MetaBox
-              title="Hubungan Kekerabatan (Opsional)"
-              subtitle={isEdit ? "Hubungan dengan anggota keluarga atau mahram yang sudah terdaftar" : "Hubungkan jamaah ini dengan keluarga atau mahram yang sudah terdaftar"}
-              icon={<Users size={18} className="text-neutral-700" />}
-              headerActions={
+          <FormAside>
+            <SidebarSection title="Simpan">
+              <div className="space-y-3">
+                <p className="text-xs text-neutral-500 font-body">
+                  Pastikan nama dan nomor dokumen identitas sesuai dengan KTP dan paspor fisik jamaah.
+                </p>
                 <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleAddRelasi}
-                  className="flex items-center gap-1.5 text-xs"
+                  type="submit"
+                  variant="primary"
+                  disabled={submitting}
+                  className="w-full justify-center"
                 >
-                  <Plus size={14} />
-                  <span>Tambah Relasi</span>
+                  {submitting ? "Menyimpan..." : (isEdit ? "Perbarui Data Jamaah" : "Simpan Data Jamaah")}
                 </Button>
-              }
-            >
-              <p className="text-xs text-neutral-500 font-body -mt-1 mb-4">
-                Cari jamaah yang sudah terdaftar, lalu tentukan jenis hubungannya.
-              </p>
-
-              {relasiList.length === 0 ? (
-                <div className="text-center py-6 border-2 border-dashed border-neutral-200 rounded-xl bg-neutral-50/50">
-                  <p className="text-xs md:text-sm text-neutral-500 font-body mb-3">
-                    Belum ada relasi kekerabatan yang ditambahkan.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleAddRelasi}
-                    className="inline-flex items-center gap-1.5 text-xs"
-                  >
-                    <Plus size={14} />
-                    <span>+ Tambah Relasi</span>
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {relasiList.map((row, idx) => {
-                    const jamaahError = relasiErrors[`row_${row.id}_jamaah`];
-                    const hubunganError = relasiErrors[`row_${row.id}_hubungan`];
-
-                    return (
-                      <div
-                        key={row.id}
-                        className="p-4 rounded-xl border border-neutral-200 bg-white space-y-3 relative hover:border-neutral-300 transition-colors"
-                      >
-                        <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
-                          <span className="font-heading font-semibold text-xs md:text-sm text-neutral-900 flex items-center gap-2">
-                            <span>Relasi #{idx + 1}</span>
-                            {row.db_relasi_id && (
-                              <span className="text-[10px] font-medium text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full">
-                                Tersimpan
-                              </span>
-                            )}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveRelasi(row.id)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-danger-600 hover:bg-danger-50 transition-colors cursor-pointer"
-                            title="Hapus baris relasi"
-                            aria-label={`Hapus Relasi #${idx + 1}`}
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                          {/* Autocomplete Jamaah */}
-                          <div>
-                            <AutocompleteInput
-                              label="Pilih Jamaah"
-                              name={`relasi_jamaah_${row.id}`}
-                              value={row.searchText || ""}
-                              onChange={(e) => handleRelasiSearchChange(row.id, e.target.value)}
-                              onSelect={(opt) => handleRelasiSelectJamaah(row.id, opt)}
-                              options={candidateOptions}
-                              placeholder="Cari nama atau NIK jamaah..."
-                              error={jamaahError}
-                              disabled={Boolean(row.db_relasi_id)}
-                              minChars={0}
-                              required
-                            />
-                          </div>
-
-                          {/* Dropdown Hubungan */}
-                          <div>
-                            <CustomDropdown
-                              label="Hubungan"
-                              name={`hubungan_${row.id}`}
-                              options={HUBUNGAN_OPTIONS}
-                              value={row.hubungan}
-                              onChange={(val) => {
-                                const actualVal = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
-                                handleRelasiFieldChange(row.id, "hubungan", actualVal);
-                              }}
-                              error={hubunganError}
-                              required
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div className="mt-4 flex justify-center">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleAddRelasi}
-                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs"
-                    >
-                      <Plus size={14} />
-                      <span>Tambah Relasi Lagi</span>
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </MetaBox>
-
-          </div>
-
-          {/* KOLOM KANAN: Sidebar Aksi, Brand Afiliasi, & Catatan Khusus */}
-          <div className="space-y-6 lg:sticky lg:top-6">
-
-            {/* Panel Aksi & Simpan */}
-            <MetaBox 
-              title="Aksi & Simpan" 
-              subtitle="Penyimpanan data pendaftaran"
-              icon={<Save size={18} className="text-neutral-700" />}
-            >
-              <div className="space-y-3.5">
-                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs text-neutral-600 space-y-1.5 font-body">
-                  <div className="flex items-center gap-1.5 text-neutral-900 font-semibold">
-                    <CheckCircle2 size={14} className="text-success-600" />
-                    <span>Verifikasi Data</span>
-                  </div>
-                  <p>Pastikan nama dan nomor dokumen identitas sesuai dengan KTP dan Paspor fisik jamaah.</p>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <Button 
-                    type="submit" 
-                    variant="primary" 
-                    disabled={submitting} 
-                    className="w-full justify-center shadow-sm"
-                  >
-                    {submitting ? "Menyimpan..." : (isEdit ? "Perbarui Data Jamaah" : "Simpan Data Jamaah")}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    onClick={handleBack} 
-                    className="w-full justify-center text-neutral-600 hover:text-neutral-900"
-                  >
-                    Batal
-                  </Button>
-                </div>
               </div>
-            </MetaBox>
+            </SidebarSection>
 
-            {/* Panel Afiliasi Biro Travel (Hanya Super Admin di Master Dashboard) */}
+            {/* Panel Afiliasi Biro Travel (Hanya Super Admin di Office Dashboard) */}
             {showBrandColumn && (
-              <MetaBox 
-                title="Afiliasi Biro Travel" 
-                subtitle="Penetapan biro travel pengelola"
-                icon={<Building2 size={18} className="text-neutral-700" />}
-              >
+              <SidebarSection title={<>Brand <span className="text-danger-500" aria-hidden="true">*</span></>}>
                 <div className="space-y-2">
                   <CustomDropdown
-                    label="Biro Travel / Brand"
                     name="brand_id"
+                    className="!mb-0"
                     options={brands.map(b => ({ value: b.id, label: b.name }))}
                     value={formData.brand_id || ""}
                     onChange={handleBrandChange}
@@ -887,63 +439,19 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                     error={brandError}
                     disabled={isEdit}
                   />
-                  <p className="text-[11px] text-neutral-500 font-body">
+                  <p className="text-[11px] text-neutral-400 font-body">
                     Data jamaah akan terdaftar dan dikelola di bawah unit biro travel yang dipilih.
                   </p>
                 </div>
-              </MetaBox>
+              </SidebarSection>
             )}
 
-            {/* Panel Kaitan Agen Syiar (Jalur 3) */}
-            <MetaBox
-              title="Kaitan Agen"
-              subtitle={isEdit ? "Agen Syiar yang terkait dengan jamaah" : "Wajib dipilih untuk jamaah baru"}
-              icon={<UserCheck size={18} className="text-neutral-700" />}
-            >
-              {isEdit ? (
-                <div className="text-sm font-body text-neutral-700">
-                  {formData.kaitan_status === "terikat_agen" && (
-                    <p>Terikat ke agen <span className="font-semibold text-neutral-900">{formData.direkrut_oleh_nama || `#${formData.direkrut_oleh_jamaah_id}`}</span></p>
-                  )}
-                  {formData.kaitan_status === "tanpa_agen" && <p>Tanpa agen</p>}
-                  {(!formData.kaitan_status || formData.kaitan_status === "belum_ditentukan") && <p>Belum ditentukan</p>}
-                  {/* Ganti kaitan hanya lewat menu Admin Master (C4); Admin Travel diarahkan ke Admin Master. */}
-                  {showBrandColumn ? (
-                    <p className="text-xs text-neutral-500 mt-1.5">
-                      Kaitan tidak dapat diubah dari form ini.{" "}
-                      <Link
-                        to={`/komisi/ganti-kaitan?jamaah=${id}&q=${encodeURIComponent(formData.id_jamaah || formData.nama_lengkap || "")}`}
-                        className="font-semibold text-neutral-900 underline underline-offset-2"
-                      >
-                        Buka Ganti Kaitan Agen
-                      </Link>
-                    </p>
-                  ) : (
-                    <p className="text-xs text-neutral-500 mt-1.5">Kaitan tidak dapat diubah dari form ini. Hubungi Admin Master untuk menggantinya.</p>
-                  )}
-                </div>
-              ) : (
-                <KaitanAgenPicker
-                  value={kaitan}
-                  onChange={(v) => { setKaitan(v); setKaitanError(null); }}
-                  brandId={formData.brand_id}
-                  brandRequired={showBrandColumn}
-                  error={kaitanError}
-                  hint="Jamaah yang dikaitkan ke agen akan menghasilkan komisi untuk agen tersebut saat booking lunas."
-                />
-              )}
-            </MetaBox>
-
             {/* Panel Catatan Khusus Internal */}
-            <MetaBox 
-              title="Catatan Khusus (Internal)" 
-              subtitle="Kondisi fisik, alergi, atau preferensi khusus"
-              icon={<ClipboardList size={18} className="text-neutral-700" />}
-            >
+            <SidebarSection title="Catatan Internal">
               <div>
                 <Textarea 
-                  label="Catatan Internal" 
                   name="catatan" 
+                  className="!mb-0"
                   value={formData.catatan || ''} 
                   onChange={handleChange} 
                   rows={4} 
@@ -953,11 +461,10 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   Hanya dapat dilihat oleh petugas internal biro travel.
                 </p>
               </div>
-            </MetaBox>
+            </SidebarSection>
 
-          </div>
-
-        </div>
+          </FormAside>
+        </FormLayout>
       </form>
     </div>
   );

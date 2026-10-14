@@ -1,17 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Boxes, Package, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getStokPerlengkapan } from 'shared';
-import PageHeader from '../components/ui/PageHeader';
-import DataTable from '../components/ui/DataTable';
-import Badge from '../components/ui/Badge';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import StatTile from 'shared/ui/StatTile';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+
+const STOK_OPTIONS = [
+  { value: '', label: 'Semua Stok' },
+  { value: 'habis', label: 'Stok habis' },
+  { value: 'ada', label: 'Stok tersedia' },
+];
 
 const StokPerlengkapanPage = () => {
   const { brandInfo } = useAuth();
   const [stokList, setStokList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [filterStok, setFilterStok] = useState('');
 
   const fetchStok = async () => {
     setIsLoading(true);
@@ -29,6 +38,19 @@ const StokPerlengkapanPage = () => {
   useEffect(() => {
     fetchStok();
   }, [brandInfo?.id]);
+
+  const rows = useMemo(() => stokList.filter(row => {
+    const stok = row.stok_tersedia || 0;
+    if (filterStok === 'habis') return stok === 0;
+    if (filterStok === 'ada') return stok > 0;
+    return true;
+  }), [stokList, filterStok]);
+
+  const stats = useMemo(() => ({
+    item: stokList.length,
+    totalStok: stokList.reduce((sum, r) => sum + (r.stok_tersedia || 0), 0),
+    habis: stokList.filter(r => (r.stok_tersedia || 0) === 0).length,
+  }), [stokList]);
 
   const columns = [
     { header: 'Nama Item', key: 'nama', sortable: true },
@@ -51,28 +73,36 @@ const StokPerlengkapanPage = () => {
     switch (key) {
       case 'nama':
         return (
-          <span className="font-heading font-medium text-neutral-900 text-sm">
+          <span className="font-heading font-semibold text-neutral-900 leading-snug">
             {row.nama}
           </span>
         );
       case 'qty_per_set':
         return (
-          <span className="text-sm font-medium text-neutral-600">
+          <span className="text-[13px] font-body text-neutral-600">
             {row.qty_per_set || 0} pcs / pax
           </span>
         );
       case 'stok_tersedia':
         return (
-          <span className="font-mono font-medium text-sm text-neutral-900">
+          <span className="text-[13px] font-body font-semibold text-neutral-900">
             {row.stok_tersedia || 0} pcs
           </span>
         );
       case 'status': {
         const stok = row.stok_tersedia || 0;
         if (stok > 0) {
-          return <Badge variant="published">Tersedia</Badge>;
+          return (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-neutral-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-success-500" />Tersedia
+            </span>
+          );
         }
-        return <Badge variant="draft">Stok Habis</Badge>;
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-danger-600">
+            <span className="w-1.5 h-1.5 rounded-full bg-danger-500" />Stok Habis
+          </span>
+        );
       }
       default:
         return row[key];
@@ -81,26 +111,42 @@ const StokPerlengkapanPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Stok Perlengkapan"
-        subtitle={`Daftar ketersediaan stok fisik perlengkapan ibadah untuk ${brandInfo?.name || 'Travel'}.`}
-      />
+      <PageHeader title="Stok Perlengkapan" />
 
       {errorMessage && (
         <Alert variant="error">{errorMessage}</Alert>
       )}
 
+      {!isLoading && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatTile icon={Boxes} variant="primary" value={stats.item} label="Item" />
+          <StatTile icon={Package} variant="success" value={stats.totalStok} label="Total stok" />
+          <StatTile icon={XCircle} variant="danger" value={stats.habis} label="Stok habis" />
+        </div>
+      )}
+
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
           <LoadingSpinner />
         </div>
       ) : (
         <DataTable
           columns={columns}
-          data={stokList}
+          data={rows}
           itemsPerPage={15}
           emptyMessage="Belum ada data stok perlengkapan untuk travel Anda."
           searchPlaceholder="Cari nama atau kode perlengkapan..."
+          toolbarActions={
+            <div className="flex flex-wrap items-center gap-2">
+              <CustomDropdown
+                value={filterStok}
+                onChange={(val) => setFilterStok(val)}
+                className="!mb-0 w-40"
+                placeholder="Semua Stok"
+                options={STOK_OPTIONS}
+              />
+            </div>
+          }
           renderCell={renderCell}
         />
       )}

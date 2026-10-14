@@ -1,22 +1,41 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getDetailAgen, ubahStatusAgen } from '../api/agen';
-import { Banknote, History, IdCard, Network, TrendingUp, UserCheck, Wallet } from 'lucide-react';
+import { Banknote, Clock3, History, IdCard, Network, TrendingUp, UserCheck, Wallet } from 'lucide-react';
 import Alert from '../components/ui/Alert';
-import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import MetaBox from '../components/ui/MetaBox';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
+import StatTile from '../components/ui/StatTile';
 import useProtectedImage from '../utils/useProtectedImage';
 import { dateLabel, money, STATUS_AGEN } from '../utils/agen';
 
 const Row = ({ label, children }) => (
   <div className="flex justify-between gap-3 border-b border-neutral-100 pb-2 last:border-b-0 last:pb-0 text-sm">
-    <span className="text-neutral-500">{label}</span>
-    <span className="text-neutral-900 text-right font-medium">{children}</span>
+    <span className="text-[13px] font-body text-neutral-500">{label}</span>
+    <span className="text-neutral-900 text-right font-heading font-semibold">{children}</span>
   </div>
 );
+
+// Status = titik berwarna kecil + teks (bukan pil berwarna).
+const DOT_STYLE = {
+  success: { text: 'text-success-700', dot: 'bg-success-500' },
+  danger: { text: 'text-danger-700', dot: 'bg-danger-500' },
+  pending: { text: 'text-warning-700', dot: 'bg-warning-500' },
+  primary: { text: 'text-primary-700', dot: 'bg-primary-500' },
+  neutral: { text: 'text-neutral-500', dot: 'bg-neutral-300' },
+};
+
+const StatusDot = ({ variant = 'neutral', children }) => {
+  const s = DOT_STYLE[variant] || DOT_STYLE.neutral;
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${s.text}`}>
+      <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+      {children}
+    </span>
+  );
+};
 
 const bayarMeta = {
   menunggu_verifikasi: { label: 'Menunggu verifikasi', variant: 'pending' },
@@ -84,35 +103,23 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
   const siklusAktifId = agen.siklus?.find((s) => s.keputusan_agen === 'disetujui')?.id;
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title={agen.nama_lengkap}
-        subtitle={showBrandColumn ? `Detail agen Syiar · ${agen.brand_name}` : 'Detail agen Syiar'}
-        onBack={() => navigate('/agen')}
-      >
+    <div className="space-y-6">
+      <PageHeader title={agen.nama_lengkap} onBack={() => navigate('/agen')}>
         <Button variant={agen.status_agen === 'aktif' ? 'danger-light' : 'primary'} onClick={() => setConfirmOpen(true)}>
           {agen.status_agen === 'aktif' ? 'Nonaktifkan Agen' : 'Aktifkan Kembali'}
         </Button>
       </PageHeader>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        <div className="space-y-5 lg:col-span-2">
-          {/* e. Ringkasan komisi & saldo */}
-          <MetaBox title="Komisi & Saldo" subtitle="Saldo tersedia hanya dari booking yang sudah berangkat" icon={<Wallet size={18} className="text-neutral-700" />}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-success-200 bg-success-50 p-3">
-                <p className="text-xs text-success-700">Saldo tersedia</p>
-                <p className="mt-1 text-lg font-bold text-neutral-900">{money(agen.saldo.saldo_tersedia)}</p>
-              </div>
-              <div className="rounded-xl border border-warning-200 bg-warning-50 p-3">
-                <p className="text-xs text-warning-800">Saldo tertahan</p>
-                <p className="mt-1 text-lg font-bold text-neutral-900">{money(agen.saldo.saldo_tertahan)}</p>
-              </div>
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
-                <p className="text-xs text-neutral-600">Kredit cashback</p>
-                <p className="mt-1 text-lg font-bold text-neutral-900">{money(agen.saldo.kredit_cashback)}</p>
-              </div>
-            </div>
+      {/* e. Ringkasan komisi & saldo */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatTile icon={Wallet} variant="success" value={money(agen.saldo.saldo_tersedia)} label="Saldo tersedia" hint="Dari booking yang sudah berangkat" />
+        <StatTile icon={Clock3} variant="warning" value={money(agen.saldo.saldo_tertahan)} label="Saldo tertahan" />
+        <StatTile icon={Banknote} variant="violet" value={money(agen.saldo.kredit_cashback)} label="Kredit cashback" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div className="space-y-6 lg:col-span-2">
+          <MetaBox title="Komisi & Saldo" subtitle="Total komisi per jenis" icon={<Wallet size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="space-y-2">
               <Row label="Total komisi langsung">{money(agen.total_per_jenis.langsung)}</Row>
               <Row label="Total bonus pembinaan">{money(agen.total_per_jenis.pembinaan)}</Row>
@@ -125,7 +132,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
           </MetaBox>
 
           {/* f. Riwayat pencairan (read-only) */}
-          <MetaBox title="Riwayat Pencairan" subtitle="Persetujuan pencairan dilakukan Admin Master" icon={<Banknote size={18} className="text-neutral-700" />}>
+          <MetaBox title="Riwayat Pencairan" subtitle="Persetujuan pencairan dilakukan Admin Master" icon={<Banknote size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             {agen.pencairan.length === 0 ? (
               <p className="text-sm text-neutral-500">Belum ada pengajuan pencairan.</p>
             ) : (
@@ -135,10 +142,10 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
                   return (
                     <div key={p.id} className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-2 last:border-b-0 text-sm">
                       <div>
-                        <p className="font-semibold text-neutral-900">{money(p.nominal_diajukan)}</p>
-                        <p className="text-xs text-neutral-500">{dateLabel(p.diajukan_at)}</p>
+                        <p className="font-heading font-semibold text-neutral-900">{money(p.nominal_diajukan)}</p>
+                        <p className="text-[11px] text-neutral-400">{dateLabel(p.diajukan_at)}</p>
                       </div>
-                      <Badge variant={meta.variant}>{meta.label}</Badge>
+                      <StatusDot variant={meta.variant}>{meta.label}</StatusDot>
                     </div>
                   );
                 })}
@@ -147,7 +154,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
           </MetaBox>
 
           {/* g. Riwayat siklus pengajuan */}
-          <MetaBox title="Riwayat Siklus Pengajuan" subtitle="Setiap pengajuan keagenan dan pembayarannya" icon={<History size={18} className="text-neutral-700" />}>
+          <MetaBox title="Riwayat Siklus Pengajuan" subtitle="Setiap pengajuan keagenan dan pembayarannya" icon={<History size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             {agen.siklus.length === 0 ? (
               <p className="text-sm text-neutral-500">Tidak ada riwayat pengajuan.</p>
             ) : (
@@ -157,18 +164,18 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
                   const bayar = bayarMeta[s.status] || { label: s.status, variant: 'neutral' };
                   const aktif = s.id === siklusAktifId;
                   return (
-                    <div key={s.id} className={`rounded-xl border p-3 space-y-2 ${aktif ? 'border-success-200 bg-success-50' : 'border-neutral-200'}`}>
+                    <div key={s.id} className={`rounded-xl border p-3 space-y-2 ${aktif ? 'border-primary-200 bg-primary-50/40' : 'border-neutral-200'}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-neutral-900">Diajukan {dateLabel(s.created_at)}</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {aktif && <Badge variant="primary">Siklus aktif</Badge>}
-                          <Badge variant={kep.variant}>Keagenan: {kep.label}</Badge>
+                        <span className="text-sm font-heading font-semibold text-neutral-900">Diajukan {dateLabel(s.created_at)}</span>
+                        <div className="flex flex-wrap items-center gap-3">
+                          {aktif && <StatusDot variant="primary">Siklus aktif</StatusDot>}
+                          <StatusDot variant={kep.variant}>Keagenan: {kep.label}</StatusDot>
                         </div>
                       </div>
                       {s.alasan_ditolak_agen && <p className="text-xs text-danger-700">Alasan ditolak: {s.alasan_ditolak_agen}</p>}
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-600">
                         <span>{Number(s.nominal_tagihan) > 0 ? `Biaya ${money(s.nominal_tagihan)}` : 'Tanpa biaya pendaftaran'}</span>
-                        {Number(s.nominal_tagihan) > 0 && <Badge variant={bayar.variant}>{bayar.label}</Badge>}
+                        {Number(s.nominal_tagihan) > 0 && <StatusDot variant={bayar.variant}>{bayar.label}</StatusDot>}
                       </div>
                     </div>
                   );
@@ -178,27 +185,29 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
           </MetaBox>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-6">
           {/* a. Identitas & data profil */}
-          <MetaBox title="Identitas" icon={<IdCard size={18} className="text-neutral-700" />}>
+          <MetaBox title="Identitas" icon={<IdCard size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="flex items-center gap-3">
               <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
                 {fotoSrc && <img src={fotoSrc} alt={`Foto ${agen.nama_lengkap}`} className="h-full w-full object-cover" />}
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-neutral-900 truncate">{agen.nama_lengkap}</p>
-                <p className="text-xs text-neutral-500 font-mono">{agen.no_hp || '-'}</p>
+                <p className="font-heading font-semibold text-neutral-900 truncate">{agen.nama_lengkap}</p>
+                <p className="text-[11px] text-neutral-400 font-mono">{agen.no_hp || '-'}</p>
               </div>
             </div>
             <div className="space-y-2">
+              {showBrandColumn && <Row label="Brand">{agen.brand_name || '-'}</Row>}
               <Row label="Domisili">{agen.domisili || '-'}</Row>
               <Row label="Setuju S&K">{dateLabel(agen.menyetujui_syarat_ketentuan_agen_at)}</Row>
             </div>
           </MetaBox>
 
           {/* b. Status keagenan */}
-          <MetaBox title="Status Keagenan" icon={<UserCheck size={18} className="text-neutral-700" />} badge={<Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>}>
+          <MetaBox title="Status Keagenan" icon={<UserCheck size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="space-y-2">
+              <Row label="Status"><StatusDot variant={statusMeta.variant}>{statusMeta.label}</StatusDot></Row>
               <Row label="Kode referral"><span className="font-mono">{agen.kode_referral || '-'}</span></Row>
               <Row label="Diajukan">{dateLabel(agen.diajukan_agen_at)}</Row>
               <Row label="Disetujui">{dateLabel(agen.disetujui_agen_at)}</Row>
@@ -207,7 +216,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
           </MetaBox>
 
           {/* c. Jaringan & d. Performa closing */}
-          <MetaBox title="Jaringan & Closing" icon={<Network size={18} className="text-neutral-700" />}>
+          <MetaBox title="Jaringan & Closing" icon={<Network size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="space-y-2">
               <Row label="Upline">
                 {agen.upline_jamaah_id ? (
@@ -217,9 +226,9 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
               <Row label="Jumlah downline (agen)">{agen.jumlah_downline}</Row>
             </div>
             <div className="flex items-center gap-2 rounded-xl bg-neutral-50 border border-neutral-200 p-3">
-              <TrendingUp size={16} className="text-neutral-600" />
+              <TrendingUp size={16} strokeWidth={1.75} className="text-neutral-600" />
               <span className="text-sm text-neutral-700">
-                <span className="font-bold text-neutral-900">{agen.jumlah_closing}</span> jamaah di-closing
+                <span className="font-heading font-semibold text-neutral-900">{agen.jumlah_closing}</span> jamaah di-closing
               </span>
             </div>
           </MetaBox>

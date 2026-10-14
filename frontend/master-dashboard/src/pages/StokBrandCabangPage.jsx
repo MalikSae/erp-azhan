@@ -1,6 +1,6 @@
 import React from 'react';
-import PageHeader from '../components/ui/PageHeader';
-import Card from '../components/ui/Card';
+import PageHeader from 'shared/ui/PageHeader';
+import Card from 'shared/ui/Card';
 
 const StokBrandCabangPage = () => {
   return (

@@ -9,6 +9,7 @@ export { default as DaftarAgenPage } from './pages/DaftarAgenPage';
 export { default as DetailAgenPage } from './pages/DetailAgenPage';
 export { default as RiwayatKomisiPage } from './pages/RiwayatKomisiPage';
 export { default as PaymentConfirmationsPage } from './pages/PaymentConfirmationsPage';
+export { default as NotFoundPage } from './pages/NotFoundPage';
 
 // Components
 export { default as BrandCell } from './components/BrandCell';

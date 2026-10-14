@@ -1,5 +1,8 @@
 import React, { useEffect } from 'react';
+import { X } from 'lucide-react';
 
+// Modal gaya SmartHR: dialog putih radius 10px tanpa border, backdrop redup
+// polos, header kompak dengan tombol tutup kotak berbingkai, footer putih.
 const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
   // Prevent scrolling on body when modal is open
   useEffect(() => {
@@ -36,42 +39,40 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4 sm:p-0">
         {/* Backdrop */}
-        <div 
-          className="fixed inset-0 bg-neutral-900/50 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
+        <div
+          className="fixed inset-0 bg-neutral-900/60 transition-opacity animate-in fade-in duration-200"
           onClick={onClose}
           aria-hidden="true"
         />
 
         {/* Modal Dialog */}
-        <div 
-          className={`bg-white rounded-2xl shadow-2xl border border-neutral-200/80 ${sizeClasses[size]} relative z-50 animate-in fade-in zoom-in-95 duration-150 my-8`}
+        <div
+          className={`bg-white rounded-[10px] shadow-xl ${sizeClasses[size]} relative z-50 animate-in fade-in zoom-in-95 duration-150 my-8`}
           role="dialog"
           aria-modal="true"
         >
           {/* Header */}
-          <div className="px-6 py-4.5 border-b border-neutral-200/80 flex items-center justify-between bg-white rounded-t-2xl">
-            <h3 className="text-base md:text-lg font-bold font-heading text-neutral-900">
+          <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between gap-4">
+            <h3 className="text-[15px] md:text-base font-bold font-heading text-neutral-900 truncate">
               {title}
             </h3>
             <button
               onClick={onClose}
-              className="text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 p-1.5 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500/60"
+              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50 transition-colors focus:outline-none"
               aria-label="Close modal"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-4 h-4" strokeWidth={2} />
             </button>
           </div>
 
           {/* Body */}
-          <div className="p-6">
+          <div className="p-5">
             {children}
           </div>
 
           {/* Footer */}
           {footer && (
-            <div className="px-6 py-3.5 bg-neutral-50/70 border-t border-neutral-200/80 flex items-center justify-end gap-3 rounded-b-2xl">
+            <div className="px-5 py-4 border-t border-neutral-200 flex items-center justify-end gap-2.5">
               {footer}
             </div>
           )}

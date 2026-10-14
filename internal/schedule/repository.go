@@ -24,10 +24,7 @@ const selectFull = `
 		COALESCE(cat.slug, '') AS category_slug,
 		s.jadwal_nama,
 		s.status,
-		s.is_promo,
 		s.views,
-		s.promo_until,
-		s.is_ticket_confirmed,
 		s.is_direct_flight,
 		s.seat_total,
 		s.seat_sisa,
@@ -61,18 +58,11 @@ const selectFull = `
 		s.harga_triple,
 		s.harga_double,
 		s.harga_infant,
-		s.harga_coret,
 		s.minimal_dp,
 		COALESCE(s.minimal_dp, br.minimal_dp, 0),
 		s.nominal_komisi_langsung,
 		s.nominal_bonus_pembinaan,
 		s.itinerary_id,
-		(
-			SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('id', ao.id, 'name', ao.name)), '[]')
-			FROM schedule_add_ons sao
-			JOIN add_ons ao ON ao.id = sao.add_on_id
-			WHERE sao.schedule_id = s.id
-		) AS add_ons,
 		COALESCE(s.include_items, '[]') AS include_items,
 		COALESCE(s.exclude_items, '[]') AS exclude_items,
 		COALESCE(s.brosur_url, '') AS brosur_url,
@@ -102,16 +92,10 @@ func NewRepository(db *sql.DB) *Repository {
 func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListItem, error) {
 	q := `
 		SELECT s.id, s.brand_id, s.category_id, COALESCE(cat.name, ''), COALESCE(cat.slug, ''),
-			s.jadwal_nama, s.status, s.is_promo, s.is_ticket_confirmed, s.is_direct_flight,
+			s.jadwal_nama, s.status, s.is_direct_flight,
 			s.maskapai_id, COALESCE(a.name, ''), a.logo_url,
 			DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d') AS berangkat_tanggal,
-			s.seat_total, s.seat_sisa, s.harga_quad, s.harga_triple, s.harga_double, s.harga_infant,
-			(
-				SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('id', ao.id, 'name', ao.name)), '[]')
-				FROM schedule_add_ons sao
-				JOIN add_ons ao ON ao.id = sao.add_on_id
-				WHERE sao.schedule_id = s.id
-			) AS add_ons
+			s.seat_total, s.seat_sisa, s.harga_quad, s.harga_triple, s.harga_double, s.harga_infant
 		FROM schedules s
 		LEFT JOIN package_categories cat ON cat.id = s.category_id
 		LEFT JOIN airlines a ON a.id = s.maskapai_id
@@ -134,7 +118,6 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 	items := make([]ScheduleListItem, 0)
 	for rows.Next() {
 		var item ScheduleListItem
-		var addOnsJSON []byte
 		var maskapaiID *int64
 		var maskapaiName string
 		var maskapaiLogo *string
@@ -144,10 +127,10 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 		var hargaInfant sql.NullFloat64
 
 		if err := rows.Scan(&item.ID, &item.BrandID, &categoryID, &categoryName, &categorySlug,
-			&item.JadwalNama, &item.Status, &item.IsPromo, &item.IsTicketConfirmed, &item.IsDirectFlight,
+			&item.JadwalNama, &item.Status, &item.IsDirectFlight,
 			&maskapaiID, &maskapaiName, &maskapaiLogo,
 			&item.BerangkatTanggal, &item.SeatTotal, &item.SeatSisa,
-			&item.HargaQuad, &item.HargaTriple, &item.HargaDouble, &hargaInfant, &addOnsJSON); err != nil {
+			&item.HargaQuad, &item.HargaTriple, &item.HargaDouble, &hargaInfant); err != nil {
 			return nil, fmt.Errorf("schedule.List scan: %w", err)
 		}
 
@@ -171,11 +154,6 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 				Name:    maskapaiName,
 				LogoURL: maskapaiLogo,
 			}
-		}
-
-		item.AddOns = []AddOnRef{}
-		if len(addOnsJSON) > 0 {
-			_ = json.Unmarshal(addOnsJSON, &item.AddOns)
 		}
 
 		th, _ := r.GetTransitHotelsByScheduleID(ctx, item.ID)
@@ -256,25 +234,25 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 
 	const q = `
 		INSERT INTO schedules (
-			brand_id, category_id, jadwal_nama, status, is_promo, views, promo_until, is_ticket_confirmed, is_direct_flight, seat_total, seat_sisa,
+			brand_id, category_id, jadwal_nama, status, views, is_direct_flight, seat_total, seat_sisa,
 			maskapai_id, berangkat_tanggal, berangkat_jam, berangkat_kode_penerbangan, berangkat_bandara_asal, berangkat_bandara_tujuan,
 			pulang_tanggal, pulang_jam, pulang_kode_penerbangan, pulang_bandara_asal, pulang_bandara_tujuan, transit_bandara,
 			hotel_mekkah_id, hotel_madinah_id,
-			harga_quad, harga_triple, harga_double, harga_infant, harga_coret, minimal_dp,
+			harga_quad, harga_triple, harga_double, harga_infant, minimal_dp,
 			nominal_komisi_langsung, nominal_bonus_pembinaan,
 			itinerary_id, include_items, exclude_items,
 			brosur_url, brosur_thumb_url
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	res, err := tx.ExecContext(ctx, q,
-		inp.BrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, 0, inp.PromoUntil, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
+		inp.BrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, 0, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
 		nullInt64(inp.MaskapaiID),
 		inp.BerangkatTanggal, nullString(inp.BerangkatJam), nullString(inp.BerangkatKodePenerbangan),
 		nullString(inp.BerangkatBandaraAsal), nullString(inp.BerangkatBandaraTujuan),
 		inp.PulangTanggal, nullString(inp.PulangJam), nullString(inp.PulangKodePenerbangan),
 		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
-		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret, inp.MinimalDP,
+		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.MinimalDP,
 		inp.NominalKomisiLangsung, inp.NominalBonusPembinaan,
 		inp.ItineraryID, includeJSON, excludeJSON,
 		nullString(inp.BrosurURL), nullString(inp.BrosurThumbURL),
@@ -286,15 +264,6 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 	id, err := res.LastInsertId()
 	if err != nil {
 		return nil, fmt.Errorf("schedule.Create LastInsertId: %w", err)
-	}
-
-	if len(inp.AddOnIDs) > 0 {
-		for _, addonID := range inp.AddOnIDs {
-			_, err := tx.ExecContext(ctx, `INSERT INTO schedule_add_ons (schedule_id, add_on_id) VALUES (?, ?)`, id, addonID)
-			if err != nil {
-				return nil, fmt.Errorf("schedule.Create addon: %w", err)
-			}
-		}
 	}
 
 	if err := r.UpdateTransitHotels(ctx, tx, id, inp.TransitHotelIDs); err != nil {
@@ -331,25 +300,25 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 
 	const q = `
 		UPDATE schedules SET
-			brand_id=?, category_id=?, jadwal_nama=?, status=COALESCE(NULLIF(?, ''), status), is_promo=?, promo_until=?, is_ticket_confirmed=?, is_direct_flight=?, seat_total=?, seat_sisa=?,
+			brand_id=?, category_id=?, jadwal_nama=?, status=COALESCE(NULLIF(?, ''), status), is_direct_flight=?, seat_total=?, seat_sisa=?,
 			maskapai_id=?, berangkat_tanggal=?, berangkat_jam=?, berangkat_kode_penerbangan=?, berangkat_bandara_asal=?, berangkat_bandara_tujuan=?,
 			pulang_tanggal=?, pulang_jam=?, pulang_kode_penerbangan=?, pulang_bandara_asal=?, pulang_bandara_tujuan=?, transit_bandara=?,
 			hotel_mekkah_id=?, hotel_madinah_id=?,
-			harga_quad=?, harga_triple=?, harga_double=?, harga_infant=?, harga_coret=?, minimal_dp=?,
+			harga_quad=?, harga_triple=?, harga_double=?, harga_infant=?, minimal_dp=?,
 			nominal_komisi_langsung=?, nominal_bonus_pembinaan=?,
 			itinerary_id=?, include_items=?, exclude_items=?,
 			brosur_url=?, brosur_thumb_url=?
 		WHERE id=?`
 
 	_, err = tx.ExecContext(ctx, q,
-		finalBrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsPromo, inp.PromoUntil, inp.IsTicketConfirmed, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
+		finalBrandID, nullInt64Ptr(inp.CategoryID), inp.JadwalNama, inp.Status, inp.IsDirectFlight, inp.SeatTotal, inp.SeatSisa,
 		nullInt64(inp.MaskapaiID),
 		inp.BerangkatTanggal, nullString(inp.BerangkatJam), nullString(inp.BerangkatKodePenerbangan),
 		nullString(inp.BerangkatBandaraAsal), nullString(inp.BerangkatBandaraTujuan),
 		inp.PulangTanggal, nullString(inp.PulangJam), nullString(inp.PulangKodePenerbangan),
 		nullString(inp.PulangBandaraAsal), nullString(inp.PulangBandaraTujuan), nullString(inp.TransitBandara),
 		nullInt64(inp.HotelMekkahID), nullInt64(inp.HotelMadinahID),
-		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.HargaCoret, inp.MinimalDP,
+		inp.HargaQuad, inp.HargaTriple, inp.HargaDouble, inp.HargaInfant, inp.MinimalDP,
 		inp.NominalKomisiLangsung, inp.NominalBonusPembinaan,
 		inp.ItineraryID, includeJSON, excludeJSON,
 		nullString(inp.BrosurURL), nullString(inp.BrosurThumbURL),
@@ -357,18 +326,6 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 	)
 	if err != nil {
 		return nil, fmt.Errorf("schedule.Update: %w", err)
-	}
-
-	// Update schedule_add_ons (replace-all)
-	if _, err := tx.ExecContext(ctx, `DELETE FROM schedule_add_ons WHERE schedule_id=?`, id); err != nil {
-		return nil, fmt.Errorf("schedule.Update delete addons: %w", err)
-	}
-	if len(inp.AddOnIDs) > 0 {
-		for _, addonID := range inp.AddOnIDs {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO schedule_add_ons (schedule_id, add_on_id) VALUES (?, ?)`, id, addonID); err != nil {
-				return nil, fmt.Errorf("schedule.Update insert addon: %w", err)
-			}
-		}
 	}
 
 	if err := r.UpdateTransitHotels(ctx, tx, id, inp.TransitHotelIDs); err != nil {
@@ -419,42 +376,99 @@ func (r *Repository) GetSeatTotal(ctx context.Context, id int64, brandID *int64)
 	return seatTotal, nil
 }
 
-// UpdateSeat mengupdate kolom seat_sisa saja (tanpa validasi, sudah dilakukan handler).
-func (r *Repository) UpdateSeat(ctx context.Context, id int64, seatSisa int, expected *int, brandID *int64, reason string) error {
-	if expected == nil || strings.TrimSpace(reason) == "" {
-		return fmt.Errorf("%w: sisa kursi sebelumnya dan alasan penyesuaian wajib diisi", ErrConflict)
-	}
+// UpdateSeat mengupdate kolom seat_sisa saja (range dasar sudah dicek handler) dan
+// mencatat riwayatnya di schedule_seat_adjustments beserta pelakunya (SM-03).
+func (r *Repository) UpdateSeat(ctx context.Context, id int64, seatSisa int, expected *int, brandID *int64, reason string, actorID int64) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	var total, current int
-	var owner int64
-	if err := tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &current, &owner); err != nil {
-		return err
-	}
-	if brandID != nil && owner != *brandID {
-		return ErrNotFound
-	}
-	if current != *expected {
-		return fmt.Errorf("%w: kursi berubah, muat ulang paket", ErrConflict)
-	}
-	var allocated int
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(seat_count),0) FROM bookings WHERE schedule_id=? AND is_seat_blocked=1 AND status <> 'batal'`, id).Scan(&allocated); err != nil {
-		return err
-	}
-	if seatSisa < 0 || seatSisa > total-allocated {
-		return fmt.Errorf("%w: sisa kursi melampaui kapasitas setelah alokasi booking", ErrConflict)
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, seatSisa, id); err != nil {
+	owner, current, err := updateSeatTx(ctx, tx, id, seatSisa, expected, brandID, reason, actorID)
+	if err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	log.Printf("[AUDIT] schedule_seat_adjustment id=%d brand=%d before=%d after=%d reason=%q", id, owner, current, seatSisa, reason)
+	log.Printf("[AUDIT] schedule_seat_adjustment id=%d brand=%d before=%d after=%d by=%d reason=%q", id, owner, current, seatSisa, actorID, strings.TrimSpace(reason))
 	return nil
+}
+
+// updateSeatTx menjalankan penyesuaian di dalam transaksi pemanggil; mengembalikan
+// brand pemilik dan sisa kursi sebelum diubah.
+func updateSeatTx(ctx context.Context, tx *sql.Tx, id int64, seatSisa int, expected *int, brandID *int64, reason string, actorID int64) (owner int64, current int, err error) {
+	reason = strings.TrimSpace(reason)
+	if expected == nil || reason == "" {
+		return 0, 0, fmt.Errorf("%w: sisa kursi sebelumnya dan alasan penyesuaian wajib diisi", ErrConflict)
+	}
+	var total int
+	if err := tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &current, &owner); err != nil {
+		return 0, 0, err
+	}
+	if brandID != nil && owner != *brandID {
+		return 0, 0, ErrNotFound
+	}
+	if current != *expected {
+		return 0, 0, fmt.Errorf("%w: kursi berubah, muat ulang paket", ErrConflict)
+	}
+	var allocated int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(seat_count),0) FROM bookings WHERE schedule_id=? AND is_seat_blocked=1 AND status <> 'batal'`, id).Scan(&allocated); err != nil {
+		return 0, 0, err
+	}
+	if seatSisa < 0 || seatSisa > total-allocated {
+		return 0, 0, fmt.Errorf("%w: sisa kursi melampaui kapasitas setelah alokasi booking", ErrConflict)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, seatSisa, id); err != nil {
+		return 0, 0, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO schedule_seat_adjustments (schedule_id, admin_user_id, seat_before, seat_after, reason) VALUES (?,?,?,?,?)`,
+		id, nullInt64(actorID), current, seatSisa, reason); err != nil {
+		return 0, 0, fmt.Errorf("catat riwayat penyesuaian kursi: %w", err)
+	}
+	return owner, current, nil
+}
+
+// SeatOverview mengambil ringkasan kursi dan 20 riwayat penyesuaian terakhir.
+// brandID non-nil membatasi ke paket milik brand itu (ErrNotFound bila bukan).
+func (r *Repository) SeatOverview(ctx context.Context, id int64, brandID *int64) (*SeatOverview, error) {
+	var o SeatOverview
+	err := r.db.QueryRowContext(ctx, `
+		SELECT s.seat_total, s.seat_sisa,
+		       COALESCE((SELECT SUM(b.seat_count) FROM bookings b WHERE b.schedule_id=s.id AND b.is_seat_blocked=1 AND b.status <> 'batal'),0)
+		FROM schedules s WHERE s.id=? AND (? IS NULL OR s.brand_id=?)`, id, brandID, brandID).
+		Scan(&o.SeatTotal, &o.SeatSisa, &o.SeatDialokasikan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("schedule.SeatOverview: %w", err)
+	}
+	o.SeatDiLuarBooking = o.SeatTotal - o.SeatSisa - o.SeatDialokasikan
+	o.SeatSisaMaks = o.SeatTotal - o.SeatDialokasikan
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT a.id, a.seat_before, a.seat_after, a.reason, u.email, a.created_at
+		FROM schedule_seat_adjustments a LEFT JOIN admin_users u ON u.id=a.admin_user_id
+		WHERE a.schedule_id=? ORDER BY a.id DESC LIMIT 20`, id)
+	if err != nil {
+		return nil, fmt.Errorf("schedule.SeatOverview riwayat: %w", err)
+	}
+	defer rows.Close()
+	o.Adjustments = []SeatAdjustment{}
+	for rows.Next() {
+		var a SeatAdjustment
+		var email sql.NullString
+		if err := rows.Scan(&a.ID, &a.SeatBefore, &a.SeatAfter, &a.Reason, &email, &a.CreatedAt); err != nil {
+			return nil, fmt.Errorf("schedule.SeatOverview scan: %w", err)
+		}
+		if email.Valid {
+			a.AdminEmail = &email.String
+		}
+		o.Adjustments = append(o.Adjustments, a)
+	}
+	return &o, rows.Err()
 }
 
 // Delete menghapus schedule berdasarkan id.
@@ -486,13 +500,6 @@ func (r *Repository) HotelExists(ctx context.Context, id int64) (bool, error) {
 func (r *Repository) ItineraryExists(ctx context.Context, id int64) (bool, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM itineraries WHERE id=?`, id).Scan(&count)
-	return count > 0, err
-}
-
-// AddOnExists memeriksa apakah add-on dengan id tersebut ada.
-func (r *Repository) AddOnExists(ctx context.Context, id int64) (bool, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM add_ons WHERE id=?`, id).Scan(&count)
 	return count > 0, err
 }
 
@@ -634,19 +641,17 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		hmdPhoto       sql.NullString
 		hmdVideo       sql.NullString
 		hargaInfant    sql.NullFloat64
-		hargaCoret     sql.NullFloat64
 		minimalDP      sql.NullFloat64
 		komisiLangsung sql.NullFloat64
 		bonusPembinaan sql.NullFloat64
 		itineraryID    sql.NullInt64
-		addOnsJSON     []byte
 		includeJSON    []byte
 		excludeJSON    []byte
 	)
 
 	err := rows.Scan(
 		&s.ID, &s.BrandID, &categoryID, &categoryName, &categorySlug,
-		&s.JadwalNama, &s.Status, &s.IsPromo, &s.Views, &s.PromoUntil, &s.IsTicketConfirmed, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
+		&s.JadwalNama, &s.Status, &s.Views, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
 		&maskapaiID, &maskapaiName, &maskapaiLogo,
 		&s.BerangkatTanggal, &s.BerangkatJam, &s.BerangkatKodePenerbangan,
 		&s.BerangkatBandaraAsal, &s.BerangkatBandaraTujuan,
@@ -654,9 +659,9 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		&s.PulangBandaraAsal, &s.PulangBandaraTujuan, &s.TransitBandara,
 		&hotelMekkahID, &hmName, &hmStar, &hmDist, &hmPhoto, &hmVideo,
 		&hotelMadinahID, &hmdName, &hmdStar, &hmdDist, &hmdPhoto, &hmdVideo,
-		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &hargaCoret, &minimalDP, &s.EffectiveMinimalDP,
+		&s.HargaQuad, &s.HargaTriple, &s.HargaDouble, &hargaInfant, &minimalDP, &s.EffectiveMinimalDP,
 		&komisiLangsung, &bonusPembinaan,
-		&itineraryID, &addOnsJSON, &includeJSON, &excludeJSON,
+		&itineraryID, &includeJSON, &excludeJSON,
 		&s.BrosurURL, &s.BrosurThumbURL,
 		&s.CreatedAt, &s.UpdatedAt,
 	)
@@ -721,12 +726,6 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		s.HargaInfant = &v
 	}
 
-	// Harga Coret nullable
-	if hargaCoret.Valid {
-		v := hargaCoret.Float64
-		s.HargaCoret = &v
-	}
-
 	// Minimal DP nullable
 	if komisiLangsung.Valid {
 		v := komisiLangsung.Float64
@@ -749,15 +748,11 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 	// JSON arrays — default ke slice kosong bukan nil
 	s.IncludeItems = []string{}
 	s.ExcludeItems = []string{}
-	s.AddOns = []AddOnRef{}
 	if len(includeJSON) > 0 {
 		_ = json.Unmarshal(includeJSON, &s.IncludeItems)
 	}
 	if len(excludeJSON) > 0 {
 		_ = json.Unmarshal(excludeJSON, &s.ExcludeItems)
-	}
-	if len(addOnsJSON) > 0 {
-		_ = json.Unmarshal(addOnsJSON, &s.AddOns)
 	}
 
 	return &s, nil
@@ -844,4 +839,12 @@ func (r *Repository) BrandMinimalDP(ctx context.Context, id int64) (float64, err
 	var dp float64
 	err := r.db.QueryRowContext(ctx, `SELECT minimal_dp FROM brands WHERE id=?`, id).Scan(&dp)
 	return dp, err
+}
+
+// NameTaken: sudah ada paket dengan nama dan tanggal berangkat yang sama di brand itu.
+// excludeID mengecualikan paket yang sedang diedit (0 untuk paket baru).
+func (r *Repository) NameTaken(ctx context.Context, brandID int64, nama, berangkat string, excludeID int64) (bool, error) {
+	var n int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schedules WHERE brand_id=? AND jadwal_nama=? AND berangkat_tanggal=? AND id<>?`, brandID, nama, berangkat, excludeID).Scan(&n)
+	return n > 0, err
 }

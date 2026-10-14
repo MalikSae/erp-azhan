@@ -70,7 +70,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("[OK] Admin berhasil dibuat: %s\n", email)
+	// Sejak RBAC (migrasi 071) izin datang dari user_roles. Admin hasil seed
+	// wajib memegang Super Admin; tanpa itu database baru tidak punya siapa
+	// pun yang bisa mengelola pengguna. perm_version dinaikkan agar sesi lama
+	// (bila ada) memuat ulang izinnya.
+	if _, err := db.Exec(`
+		INSERT IGNORE INTO user_roles (admin_user_id, role_id)
+		SELECT u.id, r.id FROM admin_users u JOIN roles r ON r.slug = 'super_admin_grup'
+		WHERE u.email = ?`, email); err != nil {
+		fmt.Printf("[ERROR] Gagal memberi role Super Admin (sudah jalankan migrasi RBAC?): %v\n", err)
+		os.Exit(1)
+	}
+	var punya int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM user_roles ur
+		JOIN roles r ON r.id = ur.role_id JOIN admin_users u ON u.id = ur.admin_user_id
+		WHERE u.email = ? AND r.slug = 'super_admin_grup'`, email).Scan(&punya); err != nil || punya == 0 {
+		fmt.Println("[ERROR] Role super_admin_grup tidak ditemukan — jalankan migrasi RBAC dulu")
+		os.Exit(1)
+	}
+	if _, err := db.Exec(`UPDATE admin_users SET role = 'admin', brand_id = NULL, is_active = TRUE,
+		perm_version = perm_version + 1 WHERE email = ?`, email); err != nil {
+		fmt.Printf("[ERROR] Gagal menyiapkan akun: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("[OK] Admin berhasil dibuat sebagai Super Admin: %s\n", email)
 }
 
 func getEnv(key, fallback string) string {

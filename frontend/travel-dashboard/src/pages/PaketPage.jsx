@@ -1,15 +1,31 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import PageHeader from '../components/ui/PageHeader';
-import DataTable from '../components/ui/DataTable';
-import Button from '../components/ui/Button';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
-import Badge from '../components/ui/Badge';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import ActionMenu from '../components/ui/ActionMenu';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import StatTile from 'shared/ui/StatTile';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import ActionMenu from 'shared/ui/ActionMenu';
 import { listSchedulesAdmin } from 'shared';
-import { Eye, Files, Check, Archive, Minus, Zap } from 'lucide-react';
+import { Eye, Package, CheckCircle2, FileText, Clock3, CalendarDays } from 'lucide-react';
+
+const STATUS_STYLE = {
+  published: { label: 'Published', chip: 'bg-success-50 text-success-700 border-success-200', dot: 'bg-success-500' },
+  draft: { label: 'Draft', chip: 'bg-warning-50 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
+  archived: { label: 'Archived', chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' },
+};
+
+const StatusPill = ({ status }) => {
+  const s = STATUS_STYLE[status];
+  if (!s) return <span className="text-xs text-neutral-400 font-body">-</span>;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium font-body border ${s.chip}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+      {s.label}
+    </span>
+  );
+};
 
 // Helper: hitung hari tersisa sampai keberangkatan
 const getDaysRemaining = (dateStr) => {
@@ -118,7 +134,11 @@ const PaketPage = () => {
   }, [schedules]);
 
   const filteredSchedules = useMemo(() => {
-    return schedules.filter(s => {
+    return schedules.map(s => ({
+      ...s,
+      // Kolom bantu pencarian: maskapai ikut bisa dicari.
+      _cari: s.maskapai?.name || '',
+    })).filter(s => {
       // 1. Tab Filter
       if (activeTab === 'urgent') {
         if (!isScheduleUrgent(s)) return false;
@@ -150,7 +170,7 @@ const PaketPage = () => {
 
   const tabs = [
     { id: 'all', label: 'Semua Paket', count: counts.all },
-    { id: 'urgent', label: '🚨 Mendesak (<60 Hari)', count: counts.urgent, isUrgent: true },
+    { id: 'urgent', label: 'Mendesak (<60 Hari)', count: counts.urgent },
     { id: 'published', label: 'Published', count: counts.published },
     { id: 'draft', label: 'Draft', count: counts.draft },
     { id: 'archived', label: 'Archived', count: counts.archived },
@@ -167,20 +187,21 @@ const PaketPage = () => {
           <div className="flex flex-col items-start gap-0.5">
             <button
               type="button"
-              onClick={() => navigate(`/schedules/${row.id}`)}
-              className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body leading-snug cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); navigate(`/schedules/${row.id}`); }}
+              className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors cursor-pointer"
               title="Lihat Detail Paket"
             >
               {row.jadwal_nama}
             </button>
-            <div className="flex items-center gap-1.5 text-xs text-neutral-500 font-body">
+            <div className="flex items-center gap-1.5 text-[11px] font-body text-neutral-400">
+              <CalendarDays className="w-3.5 h-3.5" strokeWidth={1.75} />
               <span>{formatDate(row.berangkat_tanggal)}</span>
               {isUrgent && days !== null && (
-                <span 
-                  className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold text-danger-700 bg-danger-50 border border-danger-200"
+                <span
+                  className="text-danger-600 font-medium"
                   title="Mendekati keberangkatan & belum penuh"
                 >
-                  {days} hr lagi
+                  · {days} hari lagi
                 </span>
               )}
             </div>
@@ -212,65 +233,11 @@ const PaketPage = () => {
       }
     },
     { 
-      header: 'Publish', 
+      header: 'Status',
       key: 'status',
-      align: 'center',
-      accessor: (row) => {
-        if (row.status === 'published') {
-          return (
-            <div className="flex items-center justify-center">
-              <div title="Published" className="w-5 h-5 rounded-full bg-success-500 text-white flex items-center justify-center shadow-2xs">
-                <Check size={12} strokeWidth={3} />
-              </div>
-            </div>
-          );
-        }
-        if (row.status === 'draft') {
-          return (
-            <div className="flex items-center justify-center">
-              <div title="Draft" className="flex items-center justify-center text-neutral-600">
-                <Files size={18} />
-              </div>
-            </div>
-          );
-        }
-        if (row.status === 'archived') {
-          return (
-            <div className="flex items-center justify-center">
-              <div title="Archived" className="flex items-center justify-center text-neutral-400">
-                <Archive size={18} />
-              </div>
-            </div>
-          );
-        }
-        return <div className="text-center text-xs text-neutral-400">-</div>;
-      }
+      accessor: (row) => <StatusPill status={row.status} />
     },
-    { 
-      header: 'Tiket', 
-      key: 'tiket',
-      align: 'center',
-      sortable: true,
-      sortFn: (a, b) => {
-        const valA = a.is_ticket_confirmed ? 1 : 0;
-        const valB = b.is_ticket_confirmed ? 1 : 0;
-        return valA - valB;
-      },
-      accessor: (row) => (
-        <div className="flex items-center justify-center">
-          {row.is_ticket_confirmed ? (
-            <div title="Tiket Confirmed" className="w-5 h-5 rounded-full bg-success-500 text-white flex items-center justify-center shadow-2xs">
-              <Check size={12} strokeWidth={3} />
-            </div>
-          ) : (
-            <div title="Tiket Belum Confirmed" className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-400 flex items-center justify-center shadow-2xs">
-              <Minus size={12} strokeWidth={3} />
-            </div>
-          )}
-        </div>
-      )
-    },
-    { 
+    {
       header: 'Sisa Seat', 
       key: 'seat_sisa',
       sortable: true,
@@ -279,30 +246,27 @@ const PaketPage = () => {
         const sisa = row.seat_sisa !== null && row.seat_sisa !== undefined ? Number(row.seat_sisa) : null;
         if (sisa !== null && sisa <= 0) {
           return (
-            <div className="flex items-center">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-heading tracking-wide uppercase bg-neutral-900 text-white shadow-2xs">
-                FULL BOOKED
-              </span>
-            </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-heading tracking-wide uppercase bg-neutral-900 text-white">
+              Penuh
+            </span>
           );
         }
         const isUrgent = isScheduleUrgent(row);
-        const filled = (row.seat_total || 0) - (row.seat_sisa || 0);
-        const percent = row.seat_total > 0 ? (filled / row.seat_total) * 100 : 0;
+        const total = Number(row.seat_total) || 0;
+        const filled = Math.max(0, total - (row.seat_sisa || 0));
+        const percent = total > 0 ? Math.min(100, (filled / total) * 100) : 0;
+        const barColor = isUrgent ? 'bg-danger-500' : percent >= 80 ? 'bg-warning-500' : 'bg-primary-500';
         return (
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1 font-body">
-              <span className={`font-semibold ${isUrgent ? 'text-danger-700 font-bold' : 'text-neutral-900'}`}>
+          <div className="min-w-[110px]">
+            <div className="flex items-baseline gap-1 font-body">
+              <span className={`text-sm font-semibold ${isUrgent ? 'text-danger-700' : 'text-neutral-900'}`}>
                 {row.seat_sisa ?? '-'}
               </span>
-              <span className="text-neutral-400 text-xs">/ {row.seat_total ?? '-'} pax</span>
+              <span className="text-[11px] text-neutral-400">sisa dari {row.seat_total ?? '-'} pax</span>
             </div>
-            {isUrgent && row.seat_total > 0 && (
-              <div className="w-20 h-1.5 bg-neutral-100 rounded-full overflow-hidden mt-1 border border-neutral-200" title={`Terisi ${filled}/${row.seat_total} pax`}>
-                <div 
-                  className="h-full bg-danger-500 rounded-full" 
-                  style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} 
-                />
+            {row.seat_total > 0 && (
+              <div className="mt-1 h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden" title={`Terisi ${filled}/${row.seat_total} pax`}>
+                <div className={`h-full rounded-full ${barColor}`} style={{ width: `${percent}%` }} />
               </div>
             )}
           </div>
@@ -316,21 +280,8 @@ const PaketPage = () => {
       sortFn: (a, b) => getMinPrice(a) - getMinPrice(b),
       accessor: (row) => {
         const minPrice = getMinPrice(row);
-        if (minPrice <= 0) return '-';
-        return (
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-neutral-900 font-body">{formatCurrency(minPrice)}</span>
-            {row.is_promo && (
-              <span 
-                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold font-heading bg-warning-50 text-warning-700 border border-warning-200 shadow-2xs shrink-0"
-                title="Paket Promo Aktif"
-              >
-                <Zap size={10} className="fill-warning-500 text-warning-500" />
-                Promo
-              </span>
-            )}
-          </div>
-        );
+        if (minPrice <= 0) return <span className="text-xs text-neutral-400 font-body">-</span>;
+        return <span className="text-[13px] font-semibold text-neutral-900 font-body whitespace-nowrap">{formatCurrency(minPrice)}</span>;
       }
     },
     {
@@ -365,42 +316,17 @@ const PaketPage = () => {
         <Alert variant="error">{errorMessage}</Alert>
       )}
 
-      {/* Quick Filter Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-3">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const isUrgentTab = tab.id === 'urgent';
-          const hasUrgentCount = isUrgentTab && tab.count > 0;
-
-          let btnClass = 'bg-white text-neutral-600 hover:bg-neutral-50 border border-neutral-200/90';
-          let badgeClass = 'bg-neutral-100 text-neutral-600';
-
-          if (isActive) {
-            btnClass = isUrgentTab ? 'bg-danger-600 text-white shadow-2xs font-bold' : 'bg-[#181C1F] text-white shadow-2xs font-bold';
-            badgeClass = 'bg-white/20 text-white';
-          } else if (hasUrgentCount) {
-            btnClass = 'bg-danger-50 text-danger-700 hover:bg-danger-100 border border-danger-200';
-            badgeClass = 'bg-danger-200 text-danger-800 font-bold';
-          }
-
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold font-heading transition-all ${btnClass}`}
-            >
-              <span>{tab.label}</span>
-              <span className={`px-2 py-0.5 rounded-full text-[11px] ${badgeClass}`}>
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {!isLoading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatTile icon={Package} variant="primary" value={counts.all} label="Total Paket" />
+          <StatTile icon={CheckCircle2} variant="success" value={counts.published} label="Published" />
+          <StatTile icon={FileText} variant="warning" value={counts.draft} label="Draft" />
+          <StatTile icon={Clock3} variant="danger" value={counts.urgent} label="Mendesak" hint="Berangkat < 60 hari" />
+        </div>
+      )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
           <LoadingSpinner />
         </div>
       ) : (
@@ -410,10 +336,18 @@ const PaketPage = () => {
             data={filteredSchedules}
             itemsPerPage={15}
             onRowClick={(row) => navigate(`/schedules/${row.id}`)}
-            searchPlaceholder="Cari paket..."
+            searchPlaceholder="Cari nama paket atau maskapai..."
             emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket untuk travel Anda.'}
             toolbarActions={
               <div className="flex flex-wrap items-center gap-2">
+                {/* 0. Status */}
+                <CustomDropdown
+                  value={activeTab}
+                  onChange={(val) => setActiveTab(val)}
+                  className="!mb-0 w-52"
+                  placeholder="Semua Status"
+                  options={tabs.map(tab => ({ value: tab.id, label: `${tab.label} (${tab.count})` }))}
+                />
                 {/* 1. Jadwal (Bulan) */}
                 <CustomDropdown 
                   value={filterMonth}

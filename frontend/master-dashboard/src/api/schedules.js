@@ -25,6 +25,11 @@ export async function updateScheduleStatus(id, status) {
   return response.data;
 }
 
+export async function getScheduleSeat(id) {
+  const response = await client.get(`/api/admin/schedules/${id}/seat`);
+  return response.data;
+}
+
 export async function updateScheduleSeat(id, seatSisa, expectedSeatSisa, reason) {
   const response = await client.put(`/api/admin/schedules/${id}/seat`, { seat_sisa: seatSisa, expected_seat_sisa: expectedSeatSisa, reason });
   return response.data;

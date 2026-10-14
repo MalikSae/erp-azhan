@@ -21,7 +21,7 @@ func (h *Handler) InvoiceLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "gagal memuat invoice")
 		return
 	}
-	_, snapshotErr := h.repo.db.ExecContext(r.Context(), `INSERT IGNORE INTO booking_checkout(booking_id,dp_per_pax,full_payment,due_at,original_expires_at,invoice_token,terms_version) SELECT b.id,COALESCE(s.minimal_dp,br.minimal_dp,0),FALSE,GREATEST(DATE_SUB(s.berangkat_tanggal,INTERVAL 45 DAY),DATE_ADD(b.created_at,INTERVAL 1 DAY)),b.seat_hold_expires_at,?,'admin-legacy' FROM bookings b JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE b.id=?`, fresh, bookingID)
+	_, snapshotErr := h.repo.db.ExecContext(r.Context(), `INSERT IGNORE INTO booking_checkout(booking_id,dp_per_pax,full_payment,due_at,original_expires_at,invoice_token,terms_version) SELECT b.id,COALESCE(s.minimal_dp,br.minimal_dp,0),FALSE,GREATEST(DATE_SUB(s.berangkat_tanggal,INTERVAL br.batas_pelunasan_hari DAY),DATE_ADD(b.created_at,INTERVAL 1 DAY)),b.seat_hold_expires_at,?,'admin-legacy' FROM bookings b JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE b.id=?`, fresh, bookingID)
 	if snapshotErr != nil {
 		writeError(w, 500, "gagal memuat invoice")
 		return

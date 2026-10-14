@@ -4,15 +4,6 @@ import "time"
 
 // ─── Response structs ─────────────────────────────────────────────────────────
 
-// BookingAddon adalah detail biaya tambahan pada booking.
-type BookingAddon struct {
-	ID        int64     `json:"id"`
-	BookingID int64     `json:"booking_id"`
-	Nama      string    `json:"nama"`
-	Nominal   float64   `json:"nominal"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 // BookingDiscount adalah detail diskon pada booking.
 type BookingDiscount struct {
 	ID        int64     `json:"id"`
@@ -74,8 +65,6 @@ type Booking struct {
 	// ProgressPaspor dihitung dinamis dari dokumen_jamaah
 	ProgressPaspor bool `json:"progress_paspor"`
 	ProgressVisa   bool `json:"progress_visa"`
-	// ProgressTiket dihitung dinamis dari schedules.is_ticket_confirmed
-	ProgressTiket             bool           `json:"progress_tiket"`
 	ProgressHotel             bool           `json:"progress_hotel"`
 	ProgressLandArrangement   bool           `json:"progress_land_arrangement"`
 	ProgressManasik           bool           `json:"progress_manasik"`
@@ -83,7 +72,6 @@ type Booking struct {
 	ProgressVaksinMeningitis  bool           `json:"progress_vaksin_meningitis"`
 	SiapBerangkat             bool           `json:"siap_berangkat"`
 	Pax                       []BookingPax   `json:"pax"`
-	Addons                    []BookingAddon    `json:"addons"`
 	Discounts                 []BookingDiscount `json:"discounts"`
 	CreatedBy                 *int64            `json:"created_by"`
 	CreatedAt                 time.Time      `json:"created_at"`
@@ -125,12 +113,6 @@ type SeatBlockRequest struct {
 // UpdatePaxRoomTypeRequest adalah payload untuk PUT /api/admin/bookings/{id}/pax/{pax_id}/room-type.
 type UpdatePaxRoomTypeRequest struct {
 	RoomType string `json:"room_type"`
-}
-
-// AddBookingAddonRequest adalah payload untuk POST /api/admin/bookings/{id}/addons.
-type AddBookingAddonRequest struct {
-	Nama    string  `json:"nama"`
-	Nominal float64 `json:"nominal"`
 }
 
 // AddBookingDiscountRequest adalah payload untuk POST /api/admin/bookings/{id}/discounts.

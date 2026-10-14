@@ -18,7 +18,6 @@ import {
   UserCheck, 
   Receipt, 
   CheckCircle2,
-  Check,
   UserPlus,
   Save,
   Loader2
@@ -37,14 +36,13 @@ import { listSchedulesAdmin, getScheduleAdmin } from "../api/schedules";
 import { listBrands } from "../api/brands";
 import { listAirports } from "../api/airports";
 import PageHeader from "../components/ui/PageHeader";
-import MetaBox from "../components/ui/MetaBox";
+import FormLayout, { FormSection, SidebarSection, FormAside } from "../components/ui/FormLayout";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import AutocompleteInput from "../components/ui/AutocompleteInput";
 import FormField from "../components/ui/FormField";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
-import Badge from "../components/ui/Badge";
 import Modal from "../components/ui/Modal";
 
 const formatRupiah = (val) => {
@@ -122,7 +120,7 @@ export const getContrastTextColor = (hexColor) => {
     b = parseInt(cleanHex.substring(4, 6), 16);
   }
   const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq >= 150 ? '#14171A' : '#FFFFFF';
+  return yiq >= 150 ? '#111827' : '#FFFFFF';
 };
 
 export const parseTransitDetails = (rawStr = '', airportMap = {}) => {
@@ -207,7 +205,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
   const [brandsMap, setBrandsMap] = useState({});
   const [airportsList, setAirportsList] = useState([]);
 
-  // State pemilihan: Brand dulu (jika Master Dashboard), Bulan, lalu Paket
+  // State pemilihan: Brand dulu (jika Office Dashboard), Bulan, lalu Paket
   const [selectedBrandId, setSelectedBrandId] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedScheduleId, setSelectedScheduleId] = useState("");
@@ -1067,7 +1065,6 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
     <div className="space-y-6">
       <PageHeader
         title={isEditDraft ? "Lanjutkan Draft Booking" : "Booking Baru"}
-        subtitle={isEditDraft ? "Lengkapi data pendaftaran sebelum finalisasi booking" : "Form pendaftaran jamaah paket umroh"}
         onBack={() => navigate("/bookings")}
       />
 
@@ -1113,25 +1110,17 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       {clientErrors.quota && <Alert variant="error">{clientErrors.quota}</Alert>}
 
       <form onSubmit={handleSubmit}>
-        {/* Responsive 2-Column Grid Layout: Konten Form Pax (Kiri) & Sticky Summary/Actions (Kanan) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          
-          {/* KOLOM KIRI: Pemilihan Travel, Paket & Manifest Pax */}
-          <div className="lg:col-span-2 space-y-6">
+        <FormLayout>
 
             {/* 1. PILIH BIRO TRAVEL & PAKET JADWAL */}
-            <MetaBox 
-              title="Pilih Paket Umroh" 
-              subtitle={showBrandColumn ? "Tentukan biro travel, bulan keberangkatan, dan paket jadwal" : "Pilih bulan keberangkatan dan paket jadwal aktif"}
-              icon={<Calendar size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-paket" title="Pilih Paket Umroh">
               <div className="space-y-4">
-                {/* Mode Master Dashboard: 1. Brand, 2. Filter Bulan, 3. Paket Jadwal */}
+                {/* Mode Office Dashboard: 1. Brand, 2. Filter Bulan, 3. Paket Jadwal */}
                 {showBrandColumn ? (
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                     <div className="md:col-span-4">
                       <CustomDropdown
-                        label="1. Biro Travel"
+                        label="Biro Travel"
                         value={selectedBrandId}
                         onChange={handleBrandChange}
                         placeholder="Pilih biro travel..."
@@ -1146,7 +1135,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                     <div className="md:col-span-4">
                       <CustomDropdown
-                        label="2. Bulan Berangkat"
+                        label="Bulan Berangkat"
                         value={selectedMonth}
                         onChange={handleMonthChange}
                         placeholder={
@@ -1166,7 +1155,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                     <div className="md:col-span-4">
                       <CustomDropdown
-                        label="3. Paket Umroh"
+                        label="Paket Umroh"
                         value={selectedScheduleId}
                         onChange={handleScheduleChange}
                         placeholder={
@@ -1199,7 +1188,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                     <div className="md:col-span-4">
                       <CustomDropdown
-                        label="1. Bulan Berangkat"
+                        label="Bulan Berangkat"
                         value={selectedMonth}
                         onChange={handleMonthChange}
                         placeholder={
@@ -1217,7 +1206,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                     <div className="md:col-span-8">
                       <CustomDropdown
-                        label="2. Paket Umroh"
+                        label="Paket Umroh"
                         value={selectedScheduleId}
                         onChange={handleScheduleChange}
                         placeholder={
@@ -1247,58 +1236,34 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                 {/* Preview Rincian Paket Terpilih */}
                 {selectedSchedule && (
-                  <div className="p-4 bg-neutral-50/80 rounded-xl border border-neutral-200/90 space-y-3.5 font-body">
-                    {/* Header: Nama Paket + Brand Tag + Tombol Expand */}
+                  <div className="border-t border-neutral-200 pt-5 space-y-5 font-body">
+                    {/* Judul paket + brand + buka/tutup rincian */}
                     <div className="flex flex-wrap items-center justify-between gap-2.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-heading font-bold text-sm md:text-base text-neutral-900">
+                        <span className="font-heading font-bold text-base text-neutral-900">
                           {selectedSchedule.jadwal_nama}
                         </span>
-                        {showBrandColumn && (brandsMap[selectedSchedule.brand_id]?.name || selectedSchedule.brand?.name) && (() => {
-                          const brandObj = brandsMap[selectedSchedule.brand_id] || selectedSchedule.brand || brands.find(b => String(b.id) === String(selectedSchedule.brand_id));
-                          const brandName = brandObj?.name || '';
-                          const brandColor = brandObj?.primary_color || '#181C1F';
-                          const textColor = getContrastTextColor(brandColor);
-                          return (
-                            <span 
-                              className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md shadow-2xs"
-                              style={{
-                                backgroundColor: brandColor,
-                                color: textColor
-                              }}
-                            >
-                              {brandName}
-                            </span>
-                          );
-                        })()}
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {/* Tombol Expand / Collapse Rincian Paket */}
-                        <button
-                          type="button"
-                          onClick={() => setShowScheduleDetails((prev) => !prev)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-100/80 hover:text-neutral-900 transition-colors shadow-2xs cursor-pointer"
-                          title={showScheduleDetails ? "Tutup rincian paket" : "Buka rincian lengkap paket"}
-                        >
-                          <span>{showScheduleDetails ? "Tutup Rincian" : "Lihat Rincian"}</span>
-                          <ChevronDown
-                            size={14}
-                            className={`transition-transform duration-200 ${showScheduleDetails ? "rotate-180 text-neutral-900" : "text-neutral-500"}`}
-                          />
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowScheduleDetails((prev) => !prev)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-100/80 hover:text-neutral-900 transition-colors shadow-2xs cursor-pointer"
+                        title={showScheduleDetails ? "Tutup rincian paket" : "Buka rincian lengkap paket"}
+                      >
+                        <span>{showScheduleDetails ? "Tutup Rincian" : "Lihat Rincian"}</span>
+                        <ChevronDown
+                          size={14}
+                          className={`transition-transform duration-200 ${showScheduleDetails ? "rotate-180 text-neutral-900" : "text-neutral-500"}`}
+                        />
+                      </button>
                     </div>
 
-                    {/* Ringkasan Cepat: Tanggal & Durasi, Maskapai & Tipe Penerbangan */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3 px-3.5 bg-white rounded-lg border border-neutral-200/80 text-xs">
-                      {/* 1. Jadwal Keberangkatan & Durasi */}
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-neutral-500">
-                          <CalendarDays size={13} className="text-neutral-500 shrink-0" />
-                          <span className="text-[11px] font-medium">Periode Berangkat</span>
-                        </div>
-                        <div className="font-semibold text-neutral-800">
+                    {/* Ringkasan: periode, penerbangan */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                      <div>
+                        <span className="block text-[11px] text-neutral-400 mb-0.5">Periode Berangkat</span>
+                        <div className="font-medium text-neutral-900">
                           {selectedSchedule.berangkat_tanggal ? (
                             selectedSchedule.pulang_tanggal ? (
                               <>
@@ -1318,215 +1283,167 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                         </div>
                       </div>
 
-                      {/* 2. Maskapai & Tipe Penerbangan */}
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-neutral-500">
-                          <Plane size={13} className="text-neutral-500 shrink-0" />
-                          <span className="text-[11px] font-medium">Penerbangan</span>
-                        </div>
+                      <div>
+                        <span className="block text-[11px] text-neutral-400 mb-0.5">Penerbangan</span>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-neutral-800">
+                          <span className="font-medium text-neutral-900">
                             {selectedSchedule.maskapai?.name || "-"}
                           </span>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            selectedSchedule.is_direct_flight 
-                              ? "bg-success-50 text-success-700 border border-success-200" 
-                              : "bg-neutral-100 text-neutral-700 border border-neutral-200"
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                            selectedSchedule.is_direct_flight ? "text-success-700" : "text-neutral-500"
                           }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${selectedSchedule.is_direct_flight ? "bg-success-500" : "bg-neutral-400"}`} />
                             {selectedSchedule.is_direct_flight ? "Direct" : (transitInfo.badgeText || "Transit")}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* EXPANDABLE SECTION: Rincian Lengkap untuk Penjelasan Front Desk */}
+                    {/* Harga per tipe kamar */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+                      {[
+                        ["Quad", selectedSchedule.harga_quad],
+                        ["Triple", selectedSchedule.harga_triple],
+                        ["Double", selectedSchedule.harga_double],
+                        ["Infant", selectedSchedule.harga_infant || 0],
+                      ].map(([label, value]) => (
+                        <div key={label}>
+                          <span className="block text-[11px] text-neutral-400 mb-0.5">{label}</span>
+                          <span className="font-heading font-semibold text-neutral-900">{formatRupiah(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Rincian lengkap (buka/tutup): tiap kelompok = judul + isi, dipisah garis */}
                     {showScheduleDetails && (
-                      <div className="pt-2 border-t border-neutral-200/80 space-y-3.5 text-xs animate-in fade-in slide-in-from-top-2 duration-200">
-                        {/* 1. Detail Rute & Jam Penerbangan */}
-                        <div className="p-3.5 bg-white rounded-lg border border-neutral-200/80 space-y-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 pb-2.5">
-                            <span className="font-heading font-semibold text-neutral-900 flex items-center gap-1.5 text-xs md:text-sm">
-                              <Plane size={14} className="text-primary-600" />
-                              Jadwal Penerbangan
-                            </span>
-                            {selectedSchedule.is_ticket_confirmed && (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center gap-1 bg-success-600 text-white px-2.5 py-0.5 rounded-full text-[10px] font-semibold shadow-2xs">
-                                  <Check size={11} className="stroke-[2.5]" />
-                                  <span>Tiket Confirmed</span>
-                                </span>
+                      <div className="border-t border-neutral-200 pt-5 space-y-6 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                        {/* Jadwal Penerbangan */}
+                        <div className="space-y-3">
+                          <h4 className="font-heading text-sm font-bold text-neutral-900">Jadwal Penerbangan</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                            {[
+                              {
+                                title: "Keberangkatan",
+                                route: `${selectedSchedule.berangkat_bandara_asal || "-"} → ${selectedSchedule.berangkat_bandara_tujuan || "-"}`,
+                                flight: selectedSchedule.berangkat_kode_penerbangan,
+                                time: selectedSchedule.berangkat_jam,
+                                transit: transitInfo.berangkat,
+                              },
+                              {
+                                title: "Kepulangan",
+                                route: `${selectedSchedule.pulang_bandara_asal || "-"} → ${selectedSchedule.pulang_bandara_tujuan || "-"}`,
+                                flight: selectedSchedule.pulang_kode_penerbangan,
+                                time: selectedSchedule.pulang_jam,
+                                transit: transitInfo.pulang,
+                              },
+                            ].map((leg) => (
+                              <div key={leg.title} className="space-y-1">
+                                <span className="block text-[11px] text-neutral-400">{leg.title}</span>
+                                <div className="font-heading font-bold text-neutral-900">{leg.route}</div>
+                                <div className="text-xs text-neutral-600 space-y-0.5">
+                                  <div>Maskapai: <span className="font-medium text-neutral-800">{selectedSchedule.maskapai?.name || "-"}</span></div>
+                                  <div>Flight: <span className="font-medium text-neutral-800">{leg.flight || "-"}</span></div>
+                                  <div>Waktu: <span className="font-medium text-neutral-800">{leg.time || "-"}</span></div>
+                                  {!selectedSchedule.is_direct_flight && leg.transit && (
+                                    <div>Transit: <span className="font-medium text-neutral-800">{leg.transit}</span></div>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                            {/* Keberangkatan */}
-                            <div className="bg-neutral-50/70 p-3 rounded-lg border border-neutral-200/60 space-y-1.5">
-                              <div className="text-[11px] font-semibold text-neutral-700 flex items-center gap-1.5">
-                                <PlaneTakeoff size={13} className="text-primary-600" />
-                                <span>Keberangkatan</span>
-                              </div>
-                              <div className="text-neutral-900 font-bold text-xs md:text-sm">
-                                {selectedSchedule.berangkat_bandara_asal || "-"} → {selectedSchedule.berangkat_bandara_tujuan || "-"}
-                              </div>
-                              <div className="text-neutral-600 text-[11px] space-y-0.5">
-                                <div>Maskapai: <span className="font-medium text-neutral-800">{selectedSchedule.maskapai?.name || "-"}</span></div>
-                                <div>Flight: <span className="font-medium text-neutral-800">{selectedSchedule.berangkat_kode_penerbangan || "-"}</span></div>
-                                <div>Waktu: <span className="font-medium text-neutral-800">{selectedSchedule.berangkat_jam || "-"}</span></div>
-                                {!selectedSchedule.is_direct_flight && transitInfo.berangkat && (
-                                  <div>Transit: <span className="font-medium text-neutral-800">{transitInfo.berangkat}</span></div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Kepulangan */}
-                            <div className="bg-neutral-50/70 p-3 rounded-lg border border-neutral-200/60 space-y-1.5">
-                              <div className="text-[11px] font-semibold text-neutral-700 flex items-center gap-1.5">
-                                <PlaneLanding size={13} className="text-primary-600" />
-                                <span>Kepulangan</span>
-                              </div>
-                              <div className="text-neutral-900 font-bold text-xs md:text-sm">
-                                {selectedSchedule.pulang_bandara_asal || "-"} → {selectedSchedule.pulang_bandara_tujuan || "-"}
-                              </div>
-                              <div className="text-neutral-600 text-[11px] space-y-0.5">
-                                <div>Maskapai: <span className="font-medium text-neutral-800">{selectedSchedule.maskapai?.name || "-"}</span></div>
-                                <div>Flight: <span className="font-medium text-neutral-800">{selectedSchedule.pulang_kode_penerbangan || "-"}</span></div>
-                                <div>Waktu: <span className="font-medium text-neutral-800">{selectedSchedule.pulang_jam || "-"}</span></div>
-                                {!selectedSchedule.is_direct_flight && transitInfo.pulang && (
-                                  <div>Transit: <span className="font-medium text-neutral-800">{transitInfo.pulang}</span></div>
-                                )}
-                              </div>
-                            </div>
+                            ))}
                           </div>
                         </div>
 
-                        {/* 2. Detail Hotel Mekkah, Madinah & Transit */}
-                        <div className="p-3.5 bg-white rounded-lg border border-neutral-200/80 space-y-3">
-                          <span className="font-heading font-semibold text-neutral-900 flex items-center gap-1.5 text-xs md:text-sm border-b border-neutral-100 pb-2.5">
-                            <Building2 size={14} className="text-primary-600" />
-                            Akomodasi Hotel
-                          </span>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                            {/* Hotel Mekkah */}
-                            <div className="bg-neutral-50/70 p-3 rounded-lg border border-neutral-200/60 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-semibold text-neutral-700">Hotel Mekkah</span>
-                                {selectedSchedule.hotel_mekkah?.star_rating > 0 && (
-                                  <span className="text-amber-500 font-bold text-xs tracking-wider">
-                                    {"★".repeat(selectedSchedule.hotel_mekkah.star_rating)}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="font-bold text-neutral-900 text-xs md:text-sm">
-                                {selectedSchedule.hotel_mekkah?.name || "-"}
-                              </div>
-                              {selectedSchedule.hotel_mekkah?.distance_m ? (
-                                <div className="text-neutral-600 text-[11px] flex items-center gap-1 pt-0.5">
-                                  <MapPin size={12} className="text-neutral-400 shrink-0" />
-                                  <span>±{selectedSchedule.hotel_mekkah.distance_m}m ke Masjidil Haram</span>
+                        {/* Akomodasi Hotel */}
+                        <div className="border-t border-neutral-200 pt-5 space-y-3">
+                          <h4 className="font-heading text-sm font-bold text-neutral-900">Akomodasi Hotel</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                            {[
+                              { label: "Hotel Mekkah", hotel: selectedSchedule.hotel_mekkah, near: "Masjidil Haram" },
+                              { label: "Hotel Madinah", hotel: selectedSchedule.hotel_madinah, near: "Masjid Nabawi" },
+                            ].map(({ label, hotel, near }) => (
+                              <div key={label} className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] text-neutral-400">{label}</span>
+                                  {hotel?.star_rating > 0 && (
+                                    <span className="text-warning-500 font-bold text-xs tracking-wider">
+                                      {"★".repeat(hotel.star_rating)}
+                                    </span>
+                                  )}
                                 </div>
-                              ) : null}
-                            </div>
-
-                            {/* Hotel Madinah */}
-                            <div className="bg-neutral-50/70 p-3 rounded-lg border border-neutral-200/60 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-semibold text-neutral-700">Hotel Madinah</span>
-                                {selectedSchedule.hotel_madinah?.star_rating > 0 && (
-                                  <span className="text-amber-500 font-bold text-xs tracking-wider">
-                                    {"★".repeat(selectedSchedule.hotel_madinah.star_rating)}
-                                  </span>
-                                )}
+                                <div className="font-heading font-bold text-neutral-900">{hotel?.name || "-"}</div>
+                                {hotel?.distance_m ? (
+                                  <div className="text-xs text-neutral-600">±{hotel.distance_m}m ke {near}</div>
+                                ) : null}
                               </div>
-                              <div className="font-bold text-neutral-900 text-xs md:text-sm">
-                                {selectedSchedule.hotel_madinah?.name || "-"}
-                              </div>
-                              {selectedSchedule.hotel_madinah?.distance_m ? (
-                                <div className="text-neutral-600 text-[11px] flex items-center gap-1 pt-0.5">
-                                  <MapPin size={12} className="text-neutral-400 shrink-0" />
-                                  <span>±{selectedSchedule.hotel_madinah.distance_m}m ke Masjid Nabawi</span>
-                                </div>
-                              ) : null}
-                            </div>
+                            ))}
 
-                            {/* Hotel Transit (Jika Ada) */}
+                            {/* Hotel Transit (jika ada) */}
                             {selectedSchedule.transit_hotels && selectedSchedule.transit_hotels.length > 0 && (
                               selectedSchedule.transit_hotels.map((th, idx) => (
-                                <div key={idx} className="bg-neutral-50/70 p-3 rounded-lg border border-neutral-200/60 space-y-1 sm:col-span-2">
+                                <div key={idx} className="space-y-1 sm:col-span-2">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-semibold text-neutral-700">
+                                    <span className="text-[11px] text-neutral-400">
                                       Hotel Transit {th.kota ? `(${th.kota})` : ""}
                                     </span>
                                     {th.star_rating > 0 && (
-                                      <span className="text-amber-500 font-bold text-xs tracking-wider">
+                                      <span className="text-warning-500 font-bold text-xs tracking-wider">
                                         {"★".repeat(th.star_rating)}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="font-bold text-neutral-900 text-xs md:text-sm">
-                                    {th.nama || "-"}
-                                  </div>
+                                  <div className="font-heading font-bold text-neutral-900">{th.nama || "-"}</div>
                                 </div>
                               ))
                             )}
                           </div>
                         </div>
 
-                        {/* 3. Fasilitas Termasuk (Includes) & Tidak Termasuk (Excludes) */}
-                        {((selectedSchedule.include_items && selectedSchedule.include_items.length > 0) || 
+                        {/* Fasilitas Paket */}
+                        {((selectedSchedule.include_items && selectedSchedule.include_items.length > 0) ||
                           (selectedSchedule.exclude_items && selectedSchedule.exclude_items.length > 0)) && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {/* Includes */}
-                            {selectedSchedule.include_items && selectedSchedule.include_items.length > 0 && (
-                              <div className="p-3.5 bg-white rounded-lg border border-neutral-200/80 space-y-2">
-                                <span className="font-heading font-semibold text-success-800 text-xs flex items-center gap-1.5">
-                                  <CheckCircle2 size={14} className="text-success-600 shrink-0" />
-                                  Fasilitas Termasuk
-                                </span>
-                                <ul className="space-y-1.5 text-xs text-neutral-700">
-                                  {selectedSchedule.include_items.map((item, idx) => (
-                                    <li key={idx} className="flex items-start gap-1.5">
-                                      <span className="text-success-600 font-bold shrink-0">✓</span>
-                                      <span>{item}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
+                          <div className="border-t border-neutral-200 pt-5 space-y-3">
+                            <h4 className="font-heading text-sm font-bold text-neutral-900">Fasilitas Paket</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                              {selectedSchedule.include_items && selectedSchedule.include_items.length > 0 && (
+                                <div className="space-y-2">
+                                  <span className="block text-[11px] text-neutral-400">Termasuk</span>
+                                  <ul className="space-y-1.5 text-xs text-neutral-700">
+                                    {selectedSchedule.include_items.map((item, idx) => (
+                                      <li key={idx} className="flex items-start gap-1.5">
+                                        <span className="text-success-600 font-bold shrink-0">✓</span>
+                                        <span>{item}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
 
-                            {/* Excludes */}
-                            {selectedSchedule.exclude_items && selectedSchedule.exclude_items.length > 0 && (
-                              <div className="p-3.5 bg-white rounded-lg border border-neutral-200/80 space-y-2">
-                                <span className="font-heading font-semibold text-neutral-800 text-xs flex items-center gap-1.5">
-                                  <AlertCircle size={14} className="text-neutral-400 shrink-0" />
-                                  Tidak Termasuk
-                                </span>
-                                <ul className="space-y-1.5 text-xs text-neutral-600">
-                                  {selectedSchedule.exclude_items.map((item, idx) => (
-                                    <li key={idx} className="flex items-start gap-1.5">
-                                      <span className="text-danger-500 font-bold shrink-0">✕</span>
-                                      <span>{item}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
+                              {selectedSchedule.exclude_items && selectedSchedule.exclude_items.length > 0 && (
+                                <div className="space-y-2">
+                                  <span className="block text-[11px] text-neutral-400">Tidak Termasuk</span>
+                                  <ul className="space-y-1.5 text-xs text-neutral-600">
+                                    {selectedSchedule.exclude_items.map((item, idx) => (
+                                      <li key={idx} className="flex items-start gap-1.5">
+                                        <span className="text-danger-500 font-bold shrink-0">✕</span>
+                                        <span>{item}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
 
-                        {/* 4. Brosur & Materi Paket */}
+                        {/* Brosur */}
                         {selectedSchedule.brosur_url && (
-                          <div className="flex items-center justify-between p-3 bg-primary-50/60 border border-primary-200/70 rounded-lg">
-                            <div className="flex items-center gap-2">
-                              <FileText size={16} className="text-primary-700" />
-                              <span className="text-xs font-medium text-neutral-900">Brosur Paket</span>
-                            </div>
+                          <div className="flex items-center justify-between border-t border-neutral-200 pt-5">
+                            <span className="text-sm font-medium text-neutral-900">Brosur Paket</span>
                             <a
                               href={selectedSchedule.brosur_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary-800 hover:text-primary-900 underline"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
                             >
                               <span>Lihat Brosur</span>
                               <ExternalLink size={12} />
@@ -1535,37 +1452,16 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                         )}
                       </div>
                     )}
-
-                    {/* Tarif Kamar Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
-                      <div className="bg-white p-2.5 rounded-lg border border-neutral-200/80">
-                        <span className="text-neutral-500 block text-[11px]">Quad</span>
-                        <span className="font-semibold text-neutral-900">{formatRupiah(selectedSchedule.harga_quad)}</span>
-                      </div>
-                      <div className="bg-white p-2.5 rounded-lg border border-neutral-200/80">
-                        <span className="text-neutral-500 block text-[11px]">Triple</span>
-                        <span className="font-semibold text-neutral-900">{formatRupiah(selectedSchedule.harga_triple)}</span>
-                      </div>
-                      <div className="bg-white p-2.5 rounded-lg border border-neutral-200/80">
-                        <span className="text-neutral-500 block text-[11px]">Double</span>
-                        <span className="font-semibold text-neutral-900">{formatRupiah(selectedSchedule.harga_double)}</span>
-                      </div>
-                      <div className="bg-white p-2.5 rounded-lg border border-neutral-200/80">
-                        <span className="text-neutral-500 block text-[11px]">Infant</span>
-                        <span className="font-semibold text-neutral-900">{formatRupiah(selectedSchedule.harga_infant || 0)}</span>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
-            </MetaBox>
+            </FormSection>
 
             {/* 2. REPEATER DAFTAR JAMAAH / PAX */}
-            <MetaBox
-              title="Daftar Jamaah (Manifest)"
-              subtitle={(() => { const filled = paxList.filter(p => p.jamaah_id).length; return filled > 0 ? `${filled} jamaah terdaftar` : 'Belum ada jamaah dipilih'; })()}
-              icon={<Users size={18} className="text-neutral-700" />}
-              headerActions={
+            <FormSection
+              id="sec-jamaah"
+              title="Daftar Jamaah"
+              aside={
                 <Button
                   type="button"
                   variant="secondary"
@@ -1598,23 +1494,22 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                   return (
                     <div
                       key={pax.id}
-                      className="p-4 rounded-xl border border-neutral-200 bg-white space-y-3 relative hover:border-neutral-300 transition-colors shadow-2xs"
+                      className="space-y-3 border-t border-neutral-200 pt-5 first:border-t-0 first:pt-0"
                     >
                       {/* Header Baris Pax */}
-                      <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                           <span className="font-heading font-semibold text-xs md:text-sm text-neutral-900">
                             Jamaah #{index + 1}
                           </span>
                           {isPic && (
-                            <Badge variant="primary" showIcon={false}>
-                              PIC
-                            </Badge>
+                            <span className="text-[11px] font-body font-medium text-neutral-500">PIC</span>
                           )}
                           {isInfant && (
-                            <Badge variant="warning" showIcon={false}>
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-body font-medium text-warning-700">
+                              <span className="w-1.5 h-1.5 rounded-full bg-warning-500" />
                               Infant
-                            </Badge>
+                            </span>
                           )}
                         </div>
 
@@ -1632,7 +1527,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                             title={paxList.length <= 1 ? "Reset jamaah ini" : "Hapus jamaah ini"}
                             aria-label={`Hapus Pax #${index + 1}`}
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={16} strokeWidth={1.75} />
                           </button>
                         </div>
                       </div>
@@ -1661,7 +1556,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                               type="button"
                               disabled={!selectedScheduleId}
                               onClick={() => handleOpenQuickCreate(pax.id)}
-                              className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-500 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="w-10 h-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                               title="Tambah jamaah baru langsung dari sini"
                               aria-label="Tambah jamaah baru"
                               style={{ marginBottom: '1rem' }}
@@ -1675,7 +1570,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                             const inlineState = inlineDobMap[pax.jamaah_id] || {};
                             return (
                               <div className="-mt-2 mb-0 space-y-1">
-                                <div className="flex flex-wrap items-center gap-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200/80 px-3 py-2 rounded-lg">
+                                <div className="flex flex-wrap items-center gap-2 text-[11px] text-warning-800 bg-warning-50 border border-warning-200/80 px-3 py-2 rounded-lg">
                                   <AlertCircle size={12} className="shrink-0" />
                                   <span className="font-medium flex-1">Tanggal lahir belum diisi</span>
                                   <div className="flex items-center gap-1.5 w-full sm:w-auto">
@@ -1683,14 +1578,14 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                                       type="date"
                                       value={inlineState.value || ''}
                                       onChange={e => handleInlineDobChange(pax.jamaah_id, e.target.value)}
-                                      className="h-8 rounded-lg border border-amber-300 bg-white px-2 text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 font-body flex-1 sm:flex-none sm:w-36"
+                                      className="h-8 rounded-lg border border-warning-300 bg-white px-2 text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-warning-400/40 font-body flex-1 sm:flex-none sm:w-36"
                                       max={new Date().toISOString().split('T')[0]}
                                     />
                                     <button
                                       type="button"
                                       onClick={() => handleInlineDobSave(pax.id, pax.jamaah_id)}
                                       disabled={inlineState.saving || !inlineState.value}
-                                      className="h-8 px-2.5 inline-flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="h-8 px-2.5 inline-flex items-center gap-1 rounded-lg bg-warning-600 hover:bg-warning-700 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       {inlineState.saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                                       <span>Simpan</span>
@@ -1710,7 +1605,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                           {isInfant ? (
                             /* Kondisi B: Infant (< 2 tahun) -> Tanpa Kamar */
                             <FormField label="Tipe Kamar">
-                              <div className="h-11 w-full rounded-xl border border-neutral-200/90 bg-neutral-50 px-3.5 flex items-center text-xs md:text-sm text-neutral-400 font-body select-none shadow-2xs">
+                              <div className="h-10 w-full rounded-lg border border-neutral-200/90 bg-neutral-50 px-3.5 flex items-center text-[13px] text-neutral-400 font-body select-none">
                                 Tanpa Kamar
                               </div>
                             </FormField>
@@ -1742,7 +1637,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                         {/* 3. Harga Pax Subtotal (3 col) */}
                         <div className="sm:col-span-3">
                           <FormField label={isInfant ? "Harga Infant" : "Harga / Pax"}>
-                            <div className="h-11 w-full rounded-xl border border-neutral-200/90 bg-neutral-50 px-3.5 flex items-center text-xs md:text-sm font-semibold text-neutral-900 font-body select-none shadow-2xs">
+                            <div className="h-10 w-full rounded-lg border border-neutral-200/90 bg-neutral-50 px-3.5 flex items-center text-[13px] font-semibold text-neutral-900 font-body select-none">
                               {paxPrice !== null ? formatRupiah(paxPrice) : "-"}
                             </div>
                           </FormField>
@@ -1766,28 +1661,21 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                   </Button>
                 </div>
               </div>
-            </MetaBox>
+            </FormSection>
 
-          </div>
-
-          {/* KOLOM KANAN: Sticky Sidebar Ringkasan Harga, PIC & Aksi Simpan */}
-          <div className="space-y-6 lg:sticky lg:top-6">
+          <FormAside>
 
             {/* 1. Ringkasan & Total Harga */}
-            <MetaBox 
-              title="Ringkasan Biaya" 
-              subtitle="Estimasi total pembayaran"
-              icon={<Receipt size={18} className="text-neutral-700" />}
-            >
+            <SidebarSection title="Ringkasan Biaya">
               <div className="space-y-4">
                 {selectedSchedule ? (
                   <>
                     {/* Status Kuota Kursi */}
                     <div
-                      className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
+                      className={`flex items-start gap-2.5 text-xs ${
                         isOverQuota
-                          ? "bg-danger-50 text-danger-800 border-danger-200"
-                          : "bg-neutral-50 text-neutral-700 border-neutral-200"
+                          ? "p-3 rounded-lg border bg-danger-50 text-danger-800 border-danger-200"
+                          : "text-neutral-700"
                       }`}
                     >
                       {isOverQuota ? (
@@ -1815,7 +1703,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     </div>
 
                     {/* Breakdown Rincian Pax */}
-                    <div className="space-y-2 pt-1 text-xs text-neutral-600 font-body border-t border-neutral-100">
+                    <div className="space-y-2 border-t border-neutral-200 pt-4 text-xs text-neutral-600 font-body">
                       <div className="flex justify-between">
                         <span>Jamaah Reguler ({regularPaxCount}x)</span>
                         <span className="font-medium text-neutral-900">
@@ -1841,8 +1729,8 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     </div>
 
                     {/* Total Harga Highlight Card */}
-                    <div className="p-4 bg-primary-50/70 border border-primary-200/80 rounded-xl">
-                      <span className="text-[11px] uppercase tracking-wider font-bold text-neutral-600 block">
+                    <div className="border-t border-neutral-200 pt-4">
+                      <span className="text-[11px] text-neutral-400 block">
                         Total Biaya
                       </span>
                       <div className="mt-1 font-heading font-bold text-xl md:text-2xl text-neutral-900">
@@ -1857,19 +1745,19 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     </div>
                   </>
                 ) : (
-                  <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-500 text-xs font-body">
+                  <div className="text-neutral-500 text-xs font-body">
                     Pilih travel dan paket umroh untuk melihat kalkulasi biaya.
                   </div>
                 )}
 
                 {/* Tombol Submit & Batal */}
-                <div className="space-y-2 pt-2 border-t border-neutral-100">
+                <div className="space-y-2 border-t border-neutral-200 pt-4">
                   <Button
                     type="button"
                     variant="secondary"
                     onClick={handleSaveDraft}
                     disabled={draftSubmitting || submitting || deleteDraftSubmitting || !selectedScheduleId || (showBrandColumn && !selectedBrandId)}
-                    className="w-full justify-center shadow-sm"
+                    className="w-full justify-center"
                   >
                     {draftSubmitting ? "Menyimpan Draft..." : "Simpan Draft"}
                   </Button>
@@ -1877,18 +1765,9 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     type="submit"
                     variant="primary"
                     disabled={isSubmitDisabled || submitting || draftSubmitting || deleteDraftSubmitting}
-                    className="w-full justify-center shadow-sm"
+                    className="w-full justify-center"
                   >
                     {submitting ? "Memproses..." : (isEditDraft ? "Selesaikan Booking" : "Buat Booking")}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    onClick={() => navigate("/bookings")}
-                    disabled={draftSubmitting || submitting || deleteDraftSubmitting}
-                    className="w-full justify-center text-neutral-600 hover:text-neutral-900"
-                  >
-                    Batal
                   </Button>
                   {isEditDraft && (
                     <Button
@@ -1896,21 +1775,17 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                       variant="danger"
                       onClick={() => setDeleteDraftModalOpen(true)}
                       disabled={draftSubmitting || submitting || deleteDraftSubmitting}
-                      className="w-full justify-center shadow-sm"
+                      className="w-full justify-center"
                     >
                       Hapus Draft
                     </Button>
                   )}
                 </div>
               </div>
-            </MetaBox>
+            </SidebarSection>
 
             {/* 2. Kontak Utama (PIC Booking) */}
-            <MetaBox 
-              title="Kontak Utama (PIC)" 
-              subtitle="Penanggung jawab invoice & grup"
-              icon={<UserCheck size={18} className="text-neutral-700" />}
-            >
+            <SidebarSection title="Kontak Utama (PIC)">
               <div className="space-y-3">
                 <CustomDropdown
                   label="Pilih PIC"
@@ -1938,11 +1813,10 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                   Penanggung jawab invoice dan komunikasi rombongan.
                 </p>
               </div>
-            </MetaBox>
+            </SidebarSection>
 
-          </div>
-
-        </div>
+          </FormAside>
+        </FormLayout>
       </form>
 
       {/* Modal Konfirmasi Cascade Delete */}
@@ -2059,14 +1933,14 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 value={quickCreateForm.nama_lengkap}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
                 placeholder="cth: Ahmad Fauzi"
-                className="h-11 w-full rounded-xl border border-neutral-200/90 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs"
+                className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                 autoFocus
               />
             </div>
             {/* Jenis Kelamin */}
             <div>
               <label className="mb-1.5 block text-xs font-medium text-neutral-700">Jenis Kelamin</label>
-              <div className="flex gap-4 items-center h-11 px-1">
+              <div className="flex gap-4 items-center h-10 px-1">
                 <label className="flex items-center gap-2 text-sm text-neutral-900 cursor-pointer">
                   <input
                     type="radio"
@@ -2100,7 +1974,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 value={quickCreateForm.nik}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, nik: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
                 placeholder="16 digit NIK (opsional)"
-                className="h-11 w-full rounded-xl border border-neutral-200/90 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs"
+                className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>
             {/* Tanggal Lahir */}
@@ -2114,7 +1988,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 value={quickCreateForm.tanggal_lahir}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, tanggal_lahir: e.target.value }))}
                 max={new Date().toISOString().split('T')[0]}
-                className="h-11 w-full rounded-xl border border-neutral-200/90 bg-white px-3.5 text-sm text-neutral-900 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs"
+                className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>
             {/* No HP */}
@@ -2125,7 +1999,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 value={quickCreateForm.no_hp}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, no_hp: e.target.value }))}
                 placeholder="cth: 08123456789"
-                className="h-11 w-full rounded-xl border border-neutral-200/90 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs"
+                className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>
             {/* Kaitan Agen (Jalur 3) */}

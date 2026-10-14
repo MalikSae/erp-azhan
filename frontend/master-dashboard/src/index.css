@@ -24,17 +24,9 @@
 }
 
 .brand-color-picker:focus {
-  border: 2px solid #000;
+  border: 2px solid theme('colors.primary.500');
   outline: none;
   box-shadow: none;
-}
-
-/* Komponen bersama (shared/ui/Button) membaca warna tombol utama dari variabel ini.
-   Travel Dashboard mengisinya per brand; Master Dashboard memakai palet holding
-   (tombol onyx, teks gading). */
-:root {
-  --brand-primary: theme('colors.brand.dark');
-  --brand-primary-text: theme('colors.brand.ivory');
 }
 
 @layer base {
@@ -61,12 +53,40 @@
     background: transparent;
   }
   .scrollbar-dark::-webkit-scrollbar-thumb {
-    background: #2D3339;
+    background: theme('colors.neutral.300');
     border-radius: 4px;
   }
   .scrollbar-dark::-webkit-scrollbar-thumb:hover {
-    background: #3A424A;
+    background: theme('colors.neutral.400');
   }
+}
+
+@property --aurora-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes gradient-shift {
+  0%   { --aurora-angle: 0deg;   background-position: 0% 0%, 100% 20%, 50% 100%, 50% 50%; }
+  50%  { --aurora-angle: 180deg; background-position: 70% 50%, 20% 80%, 90% 10%, 50% 50%; }
+  100% { --aurora-angle: 360deg; background-position: 0% 0%, 100% 20%, 50% 100%, 50% 50%; }
+}
+
+.bg-animated-gradient {
+  background-color: #fffaf5;
+  background-image:
+    radial-gradient(circle at center, rgba(251, 146, 60, 0.5), transparent 65%),
+    radial-gradient(circle at center, rgba(196, 181, 253, 0.55), transparent 65%),
+    radial-gradient(circle at center, rgba(253, 186, 116, 0.5), transparent 65%),
+    conic-gradient(from var(--aurora-angle) at 50% 50%, #fff7ed, #f5f0ff, #ffedd5, #fdf2f8, #fff7ed);
+  background-size: 70% 80%, 65% 75%, 75% 70%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: gradient-shift 24s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-animated-gradient { animation: none; }
 }
 
 @keyframes progress-stripes {

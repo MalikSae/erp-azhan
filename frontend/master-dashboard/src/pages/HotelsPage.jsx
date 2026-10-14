@@ -1,16 +1,15 @@
-﻿import React, { useState, useEffect } from 'react';
-import PageHeader from '../components/ui/PageHeader';
-import Card from '../components/ui/Card';
-import DataTable from '../components/ui/DataTable';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import FormField from '../components/ui/FormField';
-import Input from '../components/ui/Input';
-import FileInput from '../components/ui/FileInput';
-import Select from '../components/ui/Select';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Hotel, MapPin, Star, Play, Pencil, Trash2 } from 'lucide-react';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import Button from 'shared/ui/Button';
+import Modal from 'shared/ui/Modal';
+import Input from 'shared/ui/Input';
+import FileInput from 'shared/ui/FileInput';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import ActionMenu from 'shared/ui/ActionMenu';
 import { listHotels, listHotelCities, createHotel, updateHotel, deleteHotel } from '../api/hotels';
 import { uploadMedia } from '../api/media';
 
@@ -23,22 +22,28 @@ const initialForm = {
   video_url: ''
 };
 
+// Ejaan "Mekkah" dan "Makkah" dihitung satu kota.
+const cityKey = (city) => {
+  const k = (city || '').trim().toLowerCase();
+  return k === 'mekkah' ? 'makkah' : k;
+};
+
 const PhotoCell = ({ url, name }) => {
   const [error, setError] = React.useState(false);
-  
-  const placeholder = (
-    <div className="w-8 h-8 bg-neutral-100 rounded border border-neutral-200 flex items-center justify-center text-neutral-400 text-xs font-medium">
-      —
-    </div>
-  );
-  
-  if (!url || error) return placeholder;
-  
+
+  if (!url || error) {
+    return (
+      <div className="w-10 h-10 shrink-0 bg-neutral-100 rounded-lg border border-neutral-200 flex items-center justify-center text-neutral-400">
+        <Hotel className="w-4 h-4" strokeWidth={1.75} />
+      </div>
+    );
+  }
+
   return (
-    <img 
-      src={url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL}${url}` : url} 
+    <img
+      src={url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL}${url}` : url}
       alt={`${name} foto`}
-      className="w-8 h-8 object-contain rounded bg-white"
+      className="w-10 h-10 shrink-0 object-cover rounded-lg border border-neutral-200 bg-white"
       onError={() => setError(true)}
     />
   );
@@ -49,9 +54,9 @@ const HotelsPage = () => {
   const [cities, setCities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
-  
+
   const [cityFilter, setCityFilter] = useState('');
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingHotel, setEditingHotel] = useState(null);
   const [formData, setFormData] = useState(initialForm);
@@ -60,7 +65,7 @@ const HotelsPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   const fetchHotelsAndCities = async () => {
@@ -222,113 +227,167 @@ const HotelsPage = () => {
 
   const hotelToDelete = hotels.find(h => h.id === deleteConfirmId);
 
-  const filteredHotels = hotels.filter(hotel => {
-    if (cityFilter && (hotel.city || '').toLowerCase() !== cityFilter.toLowerCase()) {
-      return false;
+  const countByCity = useMemo(() => {
+    const map = {};
+    hotels.forEach(h => {
+      const k = cityKey(h.city);
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  }, [hotels]);
+
+  // Tab kota: satu per kota yang punya hotel (Mekkah/Makkah digabung).
+  const cityTabs = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    cities.forEach(c => {
+      const k = cityKey(c);
+      if (seen.has(k)) return;
+      seen.add(k);
+      list.push({ value: k, label: c });
+    });
+    return list;
+  }, [cities]);
+
+  const rows = useMemo(
+    () => hotels.filter(h => !cityFilter || cityKey(h.city) === cityFilter),
+    [hotels, cityFilter]
+  );
+
+  const columns = [
+    { header: 'Hotel', key: 'name', sortable: true },
+    { header: 'Kota', key: 'city', sortable: true },
+    { header: 'Bintang', key: 'star_rating', sortable: true },
+    {
+      header: 'Jarak ke Masjid',
+      key: 'distance_m',
+      sortable: true,
+      sortFn: (a, b) => (a.distance_m ?? Infinity) - (b.distance_m ?? Infinity),
+    },
+    { header: 'Video', key: 'video_url' },
+    { header: 'Aksi', key: 'aksi' },
+  ];
+
+  const renderCell = (row, key) => {
+    if (key === 'name') {
+      return (
+        <div className="flex items-center gap-3 min-w-0">
+          <PhotoCell url={row.photo_url} name={row.name} />
+          <button
+            type="button"
+            onClick={() => handleOpenModal(row)}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          >
+            {row.name}
+          </button>
+        </div>
+      );
     }
-    return true;
-  });
+
+    if (key === 'city') {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-[13px] font-body text-neutral-700 whitespace-nowrap">
+          <MapPin className="w-3.5 h-3.5 text-neutral-400" strokeWidth={1.75} />
+          {row.city}
+        </span>
+      );
+    }
+
+    if (key === 'star_rating') {
+      if (row.star_rating === null || row.star_rating === undefined) {
+        return <span className="text-xs text-neutral-400 font-body">-</span>;
+      }
+      return (
+        <span className="inline-flex items-center gap-1 text-[13px] font-body font-medium text-neutral-800">
+          <Star className="w-3.5 h-3.5 fill-warning-400 text-warning-400" strokeWidth={1.5} />
+          {row.star_rating}
+        </span>
+      );
+    }
+
+    if (key === 'distance_m') {
+      if (row.distance_m === null || row.distance_m === undefined) {
+        return <span className="text-xs text-neutral-400 font-body">-</span>;
+      }
+      return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">±{row.distance_m} m</span>;
+    }
+
+    if (key === 'video_url') {
+      if (!row.video_url) return <span className="text-xs text-neutral-400 font-body">-</span>;
+      return (
+        <a
+          href={row.video_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-xs font-medium font-body text-primary-600 hover:text-primary-700 hover:underline"
+          title={row.video_url}
+        >
+          <Play className="w-3 h-3 fill-current" />
+          Tonton
+        </a>
+      );
+    }
+
+    if (key === 'aksi') {
+      const menuItems = [
+        { label: 'Edit', icon: Pencil, tooltip: 'Edit Hotel', onClick: () => handleOpenModal(row) },
+        { label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus Hotel', onClick: () => confirmDelete(row.id) },
+      ];
+      return <ActionMenu items={menuItems} align="right" />;
+    }
+
+    return row[key];
+  };
+
+  const filterTabs = [{ value: '', label: 'Semua', count: hotels.length }, ...cityTabs.map(c => ({ ...c, count: countByCity[c.value] || 0 }))];
 
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Kelola Hotel" 
-        actionLabel="+ Tambah Hotel" 
+      <PageHeader
+        title="Kelola Hotel"
+        actionLabel="+ Tambah Hotel"
         onAction={() => handleOpenModal()}
       />
 
       {errorMessage && (
-        <Alert variant="error">{errorMessage}</Alert>
+        <Alert variant="error" onClose={() => setErrorMessage(null)}>{errorMessage}</Alert>
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
-          <LoadingSpinner />
-        </div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
       ) : (
         <DataTable
-          columns={[
-            { header: 'Foto', key: 'photo_url' },
-            { header: 'Nama', key: 'name' },
-            { header: 'Kota', key: 'city' },
-            { header: 'Bintang', key: 'star_rating' },
-            { header: 'Jarak (m)', key: 'distance_m' },
-            { header: 'Video', key: 'video_url' },
-            { header: 'Aksi', key: 'aksi' },
-          ]}
-          data={filteredHotels}
+          columns={columns}
+          data={rows}
+          itemsPerPage={10}
+          emptyMessage='Belum ada hotel. Klik "+ Tambah Hotel" untuk menambahkan.'
+          searchPlaceholder="Cari nama hotel atau kota..."
           toolbarActions={
             <CustomDropdown
               value={cityFilter}
               onChange={(val) => setCityFilter(val)}
-              options={[
-                { value: '', label: 'Semua Kota' },
-                ...cities.map(c => ({ value: c, label: c }))
-              ]}
-              placeholder="Pilih Kota"
-              className="!mb-0 min-w-44"
+              className="!mb-0 w-52"
+              placeholder="Semua Kota"
+              options={filterTabs.map(tab => ({
+                value: tab.value,
+                label: `${tab.value === '' ? 'Semua Kota' : tab.label} (${tab.count})`,
+              }))}
             />
           }
-          itemsPerPage={10}
-          emptyMessage='Belum ada hotel. Klik "+ Tambah Hotel" untuk menambahkan.'
-          searchPlaceholder="Cari nama hotel atau kota..."
-          renderCell={(row, key) => {
-            if (key === 'photo_url') {
-              return <PhotoCell url={row.photo_url} name={row.name} />;
-            }
-            if (key === 'star_rating') return `${row.star_rating} bintang`;
-            if (key === 'distance_m') return row.distance_m !== null ? `±${row.distance_m}m` : '-';
-            if (key === 'video_url') {
-              if (!row.video_url) return <span className="text-neutral-400 text-xs">-</span>;
-              return (
-                <a
-                  href={row.video_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 hover:text-neutral-900 rounded text-xs font-medium transition-colors border border-neutral-200"
-                  title={row.video_url}
-                >
-                  <svg className="w-3.5 h-3.5 fill-current text-neutral-600 shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                  <span>Video</span>
-                </a>
-              );
-            }
-            if (key === 'aksi') return (
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => handleOpenModal(row)} 
-                  title="Edit"
-                  className="text-neutral-400 hover:text-neutral-700 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </button>
-                <button 
-                  onClick={() => confirmDelete(row.id)} 
-                  title="Hapus"
-                  className="text-neutral-400 hover:text-neutral-700 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-            );
-            return row[key];
-          }}
+          renderCell={renderCell}
         />
       )}
 
       {/* Form Modal */}
-      <Modal 
-        isOpen={isModalOpen} 
+      <Modal
+        isOpen={isModalOpen}
         onClose={handleCloseModal}
         title={editingHotel ? "Edit Hotel" : "Tambah Hotel"}
         size="md"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input 
+          <Input
             label="Nama Hotel"
             name="name"
             value={formData.name}
@@ -336,7 +395,7 @@ const HotelsPage = () => {
             required
             placeholder="Contoh: Hilton Makkah"
           />
-          
+
           {!isNewCity ? (
             <CustomDropdown
               label="Kota"
@@ -373,18 +432,17 @@ const HotelsPage = () => {
                   ← Pilih dari daftar
                 </button>
               </div>
-              <Input 
+              <Input
                 name="city"
                 value={formData.city}
                 onChange={handleChange}
                 required
                 placeholder="Contoh: Dubai, Istanbul, Doha"
                 className="!mb-0"
-                helperText="Gunakan ejaan yang konsisten (mis. 'Makkah', 'Madinah', 'Dubai', 'Istanbul')."
               />
             </div>
           )}
-          
+
           <CustomDropdown
             label="Rating Bintang"
             required
@@ -399,8 +457,8 @@ const HotelsPage = () => {
             ]}
             placeholder="Pilih Rating Bintang"
           />
-          
-          <Input 
+
+          <Input
             label="Jarak ke Masjid (meter)"
             type="number"
             name="distance_m"
@@ -421,16 +479,14 @@ const HotelsPage = () => {
             isUploading={isUploading}
             uploadingText="Mengupload foto hotel..."
             placeholder="Pilih file foto hotel (JPG, PNG, WebP)..."
-            helperText="Format JPG, PNG, atau WebP"
           />
 
-          <Input 
+          <Input
             label="Link Video Hotel (Opsional)"
             name="video_url"
             value={formData.video_url}
             onChange={handleChange}
             placeholder="Contoh: https://www.youtube.com/watch?v=... atau https://youtu.be/..."
-            helperText="Link video review atau tur hotel"
           />
 
           {formErrors && (

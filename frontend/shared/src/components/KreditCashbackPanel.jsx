@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Coins } from 'lucide-react';
 import { getKreditCashback, pakaiKreditCashback } from '../api/agen';
-import MetaBox from './ui/MetaBox';
+import { Surface, Section } from './ui/DetailLayout';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Alert from './ui/Alert';
@@ -63,12 +62,10 @@ const KreditCashbackPanel = ({ bookingId, refreshKey, onApplied }) => {
 
   return (
     <>
-      <MetaBox
-        title="Kredit Cashback"
-        subtitle="Cashback repeat order milik pax, bisa dipakai sebagai potongan tagihan"
-        icon={<Coins size={18} className="text-neutral-700" />}
-      >
-        <div className="divide-y divide-neutral-100">
+      <Surface>
+      <Section title="Kredit Cashback">
+        <p className="-mt-2 mb-3 text-xs text-neutral-500 font-body">Cashback repeat order milik pax, bisa dipakai sebagai potongan tagihan.</p>
+        <div className="divide-y divide-neutral-200/80">
           {info.pax.map((p) => (
             <div key={p.jamaah_id} className="py-2.5 flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -84,7 +81,6 @@ const KreditCashbackPanel = ({ bookingId, refreshKey, onApplied }) => {
         {!info.bisa_dipakai && (
           <p className="text-xs text-neutral-500 font-body">Kredit hanya bisa dipakai pada booking berstatus baru atau DP yang masih punya sisa tagihan.</p>
         )}
-      </MetaBox>
 
       <Modal isOpen={Boolean(selected)} onClose={() => !saving && setSelected(null)} title="Pakai Kredit Cashback">
         {selected && (
@@ -106,6 +102,8 @@ const KreditCashbackPanel = ({ bookingId, refreshKey, onApplied }) => {
           </form>
         )}
       </Modal>
+      </Section>
+      </Surface>
     </>
   );
 };

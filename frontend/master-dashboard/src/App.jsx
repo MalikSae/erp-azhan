@@ -14,21 +14,17 @@ import SchedulesPage from './pages/SchedulesPage';
 import ScheduleDetailPage from './pages/ScheduleDetailPage';
 import ScheduleFormPage from './pages/ScheduleFormPage';
 import CategoriesPage from './pages/CategoriesPage';
-import AddOnsPage from './pages/AddOnsPage';
-import DesignSystemPage from './pages/DesignSystemPage';
 import InventoryPerlengkapanPage from './pages/InventoryPerlengkapanPage';
 import InventoryStokPerlengkapanPage from './pages/InventoryStokPerlengkapanPage';
 import StokBrandCabangPage from './pages/StokBrandCabangPage';
 import KomisiReferralPage from './pages/KomisiReferralPage';
 import GantiKaitanAgenPage from './pages/GantiKaitanAgenPage';
-import AnalyticsLintasBrandPage from './pages/AnalyticsLintasBrandPage';
 import PeringkatAgenPage from './pages/PeringkatAgenPage';
-import LaporanKeuanganPage from './pages/LaporanKeuanganPage';
-import CompliancePage from './pages/CompliancePage';
-import UserManagementPage from './pages/UserManagementPage';
+import PenggunaPage from './pages/PenggunaPage';
+import PenggunaFormPage from './pages/PenggunaFormPage';
+import StrukturOrganisasiPage from './pages/StrukturOrganisasiPage';
 import BrandsPage from './pages/BrandsPage';
 import BrandFormPage from './pages/BrandFormPage';
-import BankAccountsPage from './pages/BankAccountsPage';
 
 import {
   JamaahPage,
@@ -49,7 +45,6 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/design-system" element={<DesignSystemPage />} />
           
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
@@ -64,7 +59,6 @@ function App() {
               <Route path="/schedules/new" element={<ScheduleFormPage />} />
               <Route path="/schedules/:id" element={<ScheduleDetailPage />} />
               <Route path="/schedules/:id/edit" element={<ScheduleFormPage />} />
-              <Route path="/addons" element={<AddOnsPage />} />
               
               {/* Jamaah & Booking (Shared) */}
               <Route path="/jamaah" element={<JamaahPage showBrandColumn={true} />} />
@@ -89,19 +83,18 @@ function App() {
               <Route path="/agen/:id" element={<DetailAgenPage showBrandColumn={true} />} />
               
               {/* Analytics & Laporan */}
-              <Route path="/analytics/lintas-brand" element={<AnalyticsLintasBrandPage />} />
               <Route path="/analytics/peringkat-agen" element={<PeringkatAgenPage />} />
-              <Route path="/analytics/keuangan" element={<LaporanKeuanganPage />} />
               
               {/* Compliance */}
-              <Route path="/compliance" element={<CompliancePage />} />
               
               {/* Administrasi */}
               <Route path="/brands" element={<BrandsPage />} />
               <Route path="/brands/new" element={<BrandFormPage />} />
               <Route path="/brands/:id/edit" element={<BrandFormPage />} />
-              <Route path="/users" element={<UserManagementPage />} />
-              <Route path="/bank-accounts" element={<BankAccountsPage />} />
+              <Route path="/users" element={<PenggunaPage />} />
+              <Route path="/users/new" element={<PenggunaFormPage />} />
+              <Route path="/users/:id" element={<PenggunaFormPage />} />
+              <Route path="/organisasi" element={<StrukturOrganisasiPage />} />
               <Route path="/payments" element={<PaymentConfirmationsPage showBrandColumn={true} />} />
             </Route>
           </Route>

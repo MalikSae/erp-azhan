@@ -34,7 +34,7 @@ var validRoomTypes = map[string]bool{
 	"Double": true,
 }
 
-// maxNominal adalah batas kolom nominal DECIMAL(12,0) pada booking_addons/booking_discounts.
+// maxNominal adalah batas kolom nominal DECIMAL(12,0) pada booking_discounts.
 const maxNominal = 999_999_999_999
 
 // validStatuses berisi enum status booking yang valid.
@@ -631,97 +631,7 @@ func (h *Handler) BlockSeat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, booking)
 }
 
-// ─── Addons & Diskon ──────────────────────────────────────────────────────────
-
-// AddBookingAddon godoc
-// POST /api/admin/bookings/{id}/addons
-func (h *Handler) AddBookingAddon(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
-	if !ok {
-		return
-	}
-
-	var req AddBookingAddonRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
-		return
-	}
-
-	req.Nama = strings.TrimSpace(req.Nama)
-	if req.Nama == "" {
-		writeError(w, http.StatusBadRequest, "nama addon wajib diisi")
-		return
-	}
-
-	if req.Nominal <= 0 {
-		writeError(w, http.StatusBadRequest, "nominal harus lebih besar dari 0")
-		return
-	}
-	if req.Nominal > maxNominal {
-		writeError(w, http.StatusBadRequest, "nominal terlalu besar")
-		return
-	}
-
-	brandID := identity.GetBrandID(r.Context())
-
-	// Verifikasi booking exists dan milik brand
-	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
-		handleRepoError(w, err)
-		return
-	}
-
-	if err := h.repo.AddAddon(r.Context(), id, req.Nama, req.Nominal); err != nil {
-		handleRepoError(w, err)
-		return
-	}
-
-	b, err := h.repo.GetByID(r.Context(), id, brandID)
-	if err != nil {
-		handleRepoError(w, err)
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, b)
-}
-
-// DeleteBookingAddon godoc
-// DELETE /api/admin/bookings/{id}/addons/{addon_id}
-func (h *Handler) DeleteBookingAddon(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
-	if !ok {
-		return
-	}
-
-	rawAddonID := chi.URLParam(r, "addon_id")
-	addonID, err := strconv.ParseInt(rawAddonID, 10, 64)
-	if err != nil || addonID <= 0 {
-		writeError(w, http.StatusBadRequest, "addon_id tidak valid")
-		return
-	}
-
-	brandID := identity.GetBrandID(r.Context())
-
-	// Verifikasi booking exists dan milik brand
-	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
-		handleRepoError(w, err)
-		return
-	}
-
-	if err := h.repo.DeleteAddon(r.Context(), id, addonID); err != nil {
-		handleRepoError(w, err)
-		return
-	}
-
-	b, err := h.repo.GetByID(r.Context(), id, brandID)
-	if err != nil {
-		handleRepoError(w, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, b)
-}
-
-// ─── Diskon ───────────────────────────────────────────────────────────────────
+// ─── Diskon ──────────────────────────────────────────────────────────
 
 // AddBookingDiscount godoc
 // POST /api/admin/bookings/{id}/discounts
@@ -831,10 +741,6 @@ func (h *Handler) UpdateBookingProgress(w http.ResponseWriter, r *http.Request) 
 	for key := range body {
 		if key == "paspor" {
 			writeError(w, http.StatusBadRequest, "status paspor tidak bisa diubah manual, status otomatis tercentang jika dokumen paspor sudah diunggah")
-			return
-		}
-		if key == "tiket" {
-			writeError(w, http.StatusBadRequest, "status tiket tidak bisa diubah manual, status otomatis tercentang jika status tiket jadwal sudah confirmed")
 			return
 		}
 		if _, ok := AllowedPaxProgressFields[key]; ok {

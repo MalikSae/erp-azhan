@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
 import { listRefunds, createRefund } from '../api/bookings';
-import MetaBox from './ui/MetaBox';
+import { Surface, Section } from './ui/DetailLayout';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Alert from './ui/Alert';
@@ -72,31 +71,31 @@ const RefundPanel = ({ booking, onRecorded }) => {
 
   return (
     <>
-      <MetaBox
+      <Surface>
+      <Section
         title="Pengembalian Dana"
-        subtitle="Booking dibatalkan setelah ada pembayaran terkonfirmasi"
-        icon={<RotateCcw size={18} className="text-neutral-700" />}
-        headerAction={sisa > 0 && (
+        aside={sisa > 0 && (
           <Button size="sm" variant="primary" onClick={buka} className="text-xs">Catat Pengembalian</Button>
         )}
       >
+        <p className="-mt-2 mb-3 text-xs text-neutral-500 font-body">Booking dibatalkan setelah ada pembayaran terkonfirmasi.</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm font-body">
-          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+          <div>
             <p className="text-xs text-neutral-500">Dana diterima</p>
             <p className="font-semibold text-neutral-900">{rupiah(booking.total_dibayar)}</p>
           </div>
-          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+          <div>
             <p className="text-xs text-neutral-500">Sudah dikembalikan</p>
             <p className="font-semibold text-neutral-900">{rupiah(booking.total_refund)}</p>
           </div>
-          <div className={`rounded-xl border p-3 ${sisa > 0 ? 'border-warning-200 bg-warning-50' : 'border-success-200 bg-success-50'}`}>
-            <p className={`text-xs ${sisa > 0 ? 'text-warning-800' : 'text-success-800'}`}>{sisa > 0 ? 'Belum dikembalikan' : 'Selesai'}</p>
-            <p className={`font-semibold ${sisa > 0 ? 'text-warning-900' : 'text-success-900'}`}>{rupiah(sisa)}</p>
+          <div>
+            <p className="text-xs text-neutral-500">{sisa > 0 ? 'Belum dikembalikan' : 'Selesai'}</p>
+            <p className={`font-semibold ${sisa > 0 ? 'text-warning-800' : 'text-success-800'}`}>{rupiah(sisa)}</p>
           </div>
         </div>
 
         {items.length > 0 && (
-          <div className="divide-y divide-neutral-100 pt-2">
+          <div className="divide-y divide-neutral-200/80 pt-4 mt-4 border-t border-neutral-200/80">
             {items.map((rf) => (
               <div key={rf.id} className="py-2.5 flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -110,7 +109,6 @@ const RefundPanel = ({ booking, onRecorded }) => {
             ))}
           </div>
         )}
-      </MetaBox>
 
       <Modal isOpen={open} onClose={() => !saving && setOpen(false)} title="Catat Pengembalian Dana">
         <form onSubmit={submit} className="space-y-4">
@@ -128,6 +126,8 @@ const RefundPanel = ({ booking, onRecorded }) => {
           </div>
         </form>
       </Modal>
+      </Section>
+      </Surface>
     </>
   );
 };

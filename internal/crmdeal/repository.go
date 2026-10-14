@@ -22,6 +22,7 @@ import (
 var (
 	ErrNotFound             = errors.New("jadwal atau jamaah tidak ditemukan pada brand aktif")
 	ErrSeatUnavailable      = errors.New("kursi pada jadwal tidak mencukupi")
+	ErrScheduleClosed       = errors.New("paket tidak menerima booking baru")
 	ErrAmbiguousJamaah      = errors.New("lebih dari satu jamaah memiliki nomor telepon tersebut")
 	ErrIdempotencyConflict  = errors.New("idempotency key pernah digunakan untuk payload berbeda")
 	ErrLeadAlreadyConverted = errors.New("lead ini sudah pernah dikonversi")
@@ -99,15 +100,20 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 	var scheduleBrandID int64
 	var seatRemaining int
 	var quad, triple, double float64
+	var scheduleStatus string
+	var scheduleBerangkat sql.NullString
 	err = tx.QueryRowContext(ctx,
-		`SELECT brand_id,seat_sisa,harga_quad,harga_triple,harga_double FROM schedules WHERE id=? FOR UPDATE`,
+		`SELECT brand_id,seat_sisa,harga_quad,harga_triple,harga_double,status,DATE_FORMAT(berangkat_tanggal,'%Y-%m-%d') FROM schedules WHERE id=? FOR UPDATE`,
 		req.ScheduleID,
-	).Scan(&scheduleBrandID, &seatRemaining, &quad, &triple, &double)
+	).Scan(&scheduleBrandID, &seatRemaining, &quad, &triple, &double, &scheduleStatus, &scheduleBerangkat)
 	if errors.Is(err, sql.ErrNoRows) || scheduleBrandID != brandID {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("lock schedule: %w", err)
+	}
+	if reason := shared.ScheduleClosedReason(scheduleStatus, scheduleBerangkat.String, shared.TodayWIB()); reason != "" {
+		return nil, fmt.Errorf("%w: %s", ErrScheduleClosed, reason)
 	}
 
 	unitPrice := map[string]float64{"Quad": quad, "Triple": triple, "Double": double}[req.RoomType]
@@ -362,10 +368,7 @@ func (r *Repository) releaseSingleSeatHold(ctx context.Context, bookingID int64)
 		return false, nil
 	}
 
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE schedules SET seat_sisa=LEAST(seat_total, seat_sisa+?) WHERE id=?`,
-		seatCount, scheduleID,
-	); err != nil {
+	if err := shared.RestoreSeats(ctx, tx, scheduleID, seatCount); err != nil {
 		return false, fmt.Errorf("restore seat for schedule %d: %w", scheduleID, err)
 	}
 

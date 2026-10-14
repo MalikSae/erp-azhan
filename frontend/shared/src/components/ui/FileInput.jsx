@@ -47,7 +47,7 @@ const FileInput = ({
   };
 
   return (
-    <FormField label={label} error={error} required={required} helperText={helperText} className={className}>
+    <FormField label={label} error={error} required={required} helpText={helperText} className={className}>
       <input
         ref={fileInputRef}
         type="file"
@@ -79,13 +79,12 @@ const FileInput = ({
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800 truncate">
-              <ImageIcon size={14} className="text-neutral-500 shrink-0" />
-              <span className="truncate">File terpilih</span>
-            </div>
-            <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-              {isUploading ? uploadingText : 'Klik tombol untuk mengganti atau menghapus'}
-            </p>
+            {isUploading && (
+              <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-800 truncate">
+                <ImageIcon size={14} className="text-neutral-400 shrink-0" />
+                <span className="truncate">{uploadingText}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
@@ -104,7 +103,7 @@ const FileInput = ({
                 type="button"
                 onClick={handleRemove}
                 disabled={disabled || isUploading}
-                className="p-1.5 text-neutral-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-xs text-neutral-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors cursor-pointer"
                 title="Hapus file"
               >
                 <X size={16} />
@@ -118,11 +117,11 @@ const FileInput = ({
           className={`flex items-center justify-between gap-3 px-3.5 py-2.5 bg-white border rounded-xl shadow-2xs transition-all cursor-pointer group ${
             error
               ? 'border-danger-500 ring-2 ring-danger-500/20'
-              : 'border-neutral-200/90 hover:border-neutral-300 hover:bg-neutral-50/50'
+              : 'border-neutral-200/90 hover:border-primary-300 hover:bg-primary-50/40'
           } ${disabled || isUploading ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-neutral-100 border border-neutral-200/80 flex items-center justify-center text-neutral-500 group-hover:text-neutral-900 group-hover:bg-primary-500 transition-colors shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-neutral-100 border border-neutral-200/80 flex items-center justify-center text-neutral-500 group-hover:text-primary-600 group-hover:bg-primary-50 group-hover:border-primary-200 transition-colors shrink-0">
               {isUploading ? (
                 <Loader2 size={14} className="animate-spin text-neutral-700" />
               ) : (
@@ -137,7 +136,7 @@ const FileInput = ({
           </div>
 
           <div className="shrink-0">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-neutral-100 text-neutral-700 border border-neutral-200 group-hover:bg-primary-500 group-hover:text-neutral-900 group-hover:border-primary-500 transition-all shadow-2xs">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-neutral-100 text-neutral-700 border border-neutral-200 group-hover:bg-primary-50 group-hover:text-primary-700 group-hover:border-primary-300 transition-all shadow-2xs">
               <Upload size={12} />
               <span>Pilih File</span>
             </span>

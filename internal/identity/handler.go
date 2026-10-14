@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -25,17 +26,47 @@ const (
 	loginAttemptWindow = 15 * time.Minute
 )
 
+// UserAccess hasil resolusi RBAC untuk satu user (lihat internal/rbac).
+type UserAccess struct {
+	Roles       []string
+	Permissions []string
+	PermVersion int
+}
+
+// AccessLoader dipenuhi rbac.Repository lewat adaptor di main.go. Gagal/nil
+// loader tidak memblokir login: klaim RBAC dikosongkan (fallback transisi).
+type AccessLoader func(ctx context.Context, adminUserID int64) (*UserAccess, error)
+
 type Handler struct {
 	repo          *Repository
+	loadAccess    AccessLoader
 	failedLogins  map[string]*loginAttempt
 	failedLoginMu sync.Mutex
 }
 
-func NewHandler(repo *Repository) *Handler {
-	return &Handler{
+func NewHandler(repo *Repository, loaders ...AccessLoader) *Handler {
+	h := &Handler{
 		repo:         repo,
 		failedLogins: make(map[string]*loginAttempt),
 	}
+	if len(loaders) > 0 {
+		h.loadAccess = loaders[0]
+	}
+	return h
+}
+
+// resolveAccess memuat roles/perms user; error hanya dicatat supaya login tetap
+// berjalan bila tabel RBAC belum termigrasi di sebuah environment.
+func (h *Handler) resolveAccess(ctx context.Context, adminUserID int64) *UserAccess {
+	if h.loadAccess == nil {
+		return &UserAccess{}
+	}
+	access, err := h.loadAccess(ctx, adminUserID)
+	if err != nil || access == nil {
+		log.Printf("[WARN] identity.resolveAccess user_id=%d: %v", adminUserID, err)
+		return &UserAccess{}
+	}
+	return access
 }
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
@@ -160,7 +191,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	h.recordSuccessLogin(rateLimitKey)
 	log.Printf("[AUDIT] login_success ip=%s user_id=%d role=%s", getClientIP(r), user.ID, user.Role)
 
-	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role, user.Email)
+	access := h.resolveAccess(r.Context(), user.ID)
+	accessToken, err := GenerateAccessTokenWithAccess(user.ID, user.BrandID, user.Role, user.Email,
+		access.Roles, access.Permissions, access.PermVersion)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateAccessToken: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal membuat access token")
@@ -186,6 +219,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		DisplayName:  user.DisplayName,
 		Email:        user.Email,
 		Role:         user.Role,
+		Roles:        access.Roles,
+		Permissions:  access.Permissions,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    ttl,
@@ -254,7 +289,9 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := GenerateAccessToken(user.ID, user.BrandID, user.Role, user.Email)
+	access := h.resolveAccess(r.Context(), user.ID)
+	accessToken, err := GenerateAccessTokenWithAccess(user.ID, user.BrandID, user.Role, user.Email,
+		access.Roles, access.Permissions, access.PermVersion)
 	if err != nil {
 		log.Printf("[ERROR] identity.Refresh GenerateAccessToken: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal membuat access token")
@@ -268,6 +305,8 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		DisplayName: user.DisplayName,
 		Email:       user.Email,
 		Role:        user.Role,
+		Roles:       access.Roles,
+		Permissions: access.Permissions,
 		AccessToken: accessToken,
 		ExpiresIn:   ttl,
 		TokenType:   "Bearer",

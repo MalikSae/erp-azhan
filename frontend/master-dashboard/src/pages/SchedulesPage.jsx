@@ -1,43 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Files, Check, Archive, Minus, Zap, Eye, Edit2, Trash2 } from 'lucide-react';
-import PageHeader from '../components/ui/PageHeader';
-import Card from '../components/ui/Card';
-import DataTable from '../components/ui/DataTable';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
-import Badge from '../components/ui/Badge';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import ActionMenu from '../components/ui/ActionMenu';
-import { listSchedulesAdmin, deleteSchedule } from '../api/schedules';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Eye, Pencil, Trash2, CalendarDays, Copy, Archive, Send, FilePen } from 'lucide-react';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import Button from 'shared/ui/Button';
+import Badge from 'shared/ui/Badge';
+import Modal from 'shared/ui/Modal';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import ActionMenu from 'shared/ui/ActionMenu';
+import { listSchedulesAdmin, deleteSchedule, updateScheduleStatus } from '../api/schedules';
 import { listBrands } from '../api/brands';
-import UrgentPackagesBanner from '../components/UrgentPackagesBanner';
 
-const BrandCell = ({ brand }) => {
-  const [imageError, setImageError] = useState(false);
-  
-  if (!brand) return <span>-</span>;
-  
-  const showInitial = !brand.icon_url || imageError;
-  
-  return (
-    <div className="flex items-center" title={brand.name}>
-      {showInitial ? (
-        <div className="w-7 h-7 shrink-0 rounded-full bg-neutral-200 border border-neutral-300 flex items-center justify-center text-xs font-bold text-neutral-700 uppercase font-heading">
-          {brand.name.charAt(0)}
-        </div>
-      ) : (
-        <img 
-          src={brand.icon_url.startsWith('http') ? brand.icon_url : `${import.meta.env.VITE_API_BASE_URL}${brand.icon_url.startsWith('/') ? '' : '/'}${brand.icon_url}`} 
-          alt={brand.name} 
-          className="w-7 h-7 shrink-0 rounded-full object-cover bg-neutral-100 border border-neutral-200" 
-          onError={() => setImageError(true)}
-        />
-      )}
-    </div>
-  );
+const STATUS_LABEL = { published: 'Published', draft: 'Draft', archived: 'Archived' };
+
+const STATUS_STRONG = {
+  published: '!bg-success-100 !border-success-300 !text-success-800',
+  draft: '!border-neutral-400 !text-neutral-800',
+  archived: '!bg-neutral-200 !border-neutral-300 !text-neutral-800',
+};
+
+const StatusBadge = ({ status }) => {
+  if (!STATUS_LABEL[status]) return <span className="text-xs text-neutral-400 font-body">-</span>;
+  return <Badge variant={status} hideIcon className={STATUS_STRONG[status]}>{STATUS_LABEL[status]}</Badge>;
 };
 
 const formatDate = (dateStr) => {
@@ -69,12 +55,14 @@ const generateRandomCode = (length = 6) => {
 
 const SchedulesPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [successMessage, setSuccessMessage] = useState(null);
   const [schedules, setSchedules] = useState([]);
   const [brands, setBrands] = useState([]);
   const [brandsMap, setBrandsMap] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
-  
+
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [confirmCode, setConfirmCode] = useState('');
   const [inputConfirmCode, setInputConfirmCode] = useState('');
@@ -89,13 +77,17 @@ const SchedulesPage = () => {
     return t;
   }, []);
 
+  const getDaysRemaining = (dateStr) => {
+    if (!dateStr) return null;
+    const departDate = new Date(dateStr);
+    departDate.setHours(0, 0, 0, 0);
+    return Math.round((departDate - today) / (1000 * 60 * 60 * 24));
+  };
+
   const isScheduleUrgent = (s) => {
     if (s.status !== 'published') return false;
-    if (!s.berangkat_tanggal) return false;
-    const departDate = new Date(s.berangkat_tanggal);
-    departDate.setHours(0, 0, 0, 0);
-    const daysRemaining = Math.round((departDate - today) / (1000 * 60 * 60 * 24));
-    if (daysRemaining < 0 || daysRemaining > 60) return false;
+    const daysRemaining = getDaysRemaining(s.berangkat_tanggal);
+    if (daysRemaining === null || daysRemaining < 0 || daysRemaining > 60) return false;
     if (!s.seat_sisa || s.seat_sisa <= 0) return false;
     return true;
   };
@@ -104,16 +96,7 @@ const SchedulesPage = () => {
   // Tidak diarsipkan otomatis: admin masih perlu mengurus booking setelah berangkat.
   const isScheduleDeparted = (s) => {
     if (s.status === 'archived' || !s.berangkat_tanggal) return false;
-    const departDate = new Date(s.berangkat_tanggal);
-    departDate.setHours(0, 0, 0, 0);
-    return departDate < today;
-  };
-
-  const getDaysRemaining = (dateStr) => {
-    if (!dateStr) return null;
-    const departDate = new Date(dateStr);
-    departDate.setHours(0, 0, 0, 0);
-    return Math.round((departDate - today) / (1000 * 60 * 60 * 24));
+    return getDaysRemaining(s.berangkat_tanggal) < 0;
   };
 
   const fetchSchedules = async () => {
@@ -142,6 +125,14 @@ const SchedulesPage = () => {
     fetchSchedules();
   }, []);
 
+  // Pesan sukses dari halaman form (simpan/ubah paket); dibersihkan agar tidak muncul lagi saat refresh.
+  useEffect(() => {
+    if (location.state?.successMessage) {
+      setSuccessMessage(location.state.successMessage);
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
+
   const handleDeleteClick = (id) => {
     setDeleteConfirmId(id);
     setConfirmCode(generateRandomCode(6));
@@ -152,6 +143,23 @@ const SchedulesPage = () => {
     setDeleteConfirmId(null);
     setConfirmCode('');
     setInputConfirmCode('');
+  };
+
+  const changeStatus = async (row, status) => {
+    try {
+      await updateScheduleStatus(row.id, status);
+      fetchSchedules();
+    } catch (error) {
+      setErrorMessage(error.response?.data?.error || 'Gagal mengubah status paket.');
+    }
+  };
+
+  const statusItems = (row) => {
+    const make = (label, icon, status) => ({ label, icon, tooltip: label, onClick: () => changeStatus(row, status) });
+    if (row.status === 'published') return [make('Jadikan Draft', FilePen, 'draft'), make('Arsipkan', Archive, 'archived')];
+    if (row.status === 'draft') return [make('Publish', Send, 'published'), make('Arsipkan', Archive, 'archived')];
+    if (row.status === 'archived') return [make('Kembalikan ke Draft', FilePen, 'draft')];
+    return [];
   };
 
   const handleConfirmDelete = async () => {
@@ -187,7 +195,7 @@ const SchedulesPage = () => {
   }, [schedules]);
 
   const counts = useMemo(() => {
-    const base = filterBrandId 
+    const base = filterBrandId
       ? schedules.filter(s => String(s.brand_id) === filterBrandId)
       : schedules;
 
@@ -201,41 +209,47 @@ const SchedulesPage = () => {
     };
   }, [schedules, filterBrandId, today]);
 
-  const filteredSchedules = useMemo(() => {
-    return schedules.filter(s => {
-      // 1. Tab Filter
-      if (activeTab === 'urgent') {
-        if (!isScheduleUrgent(s)) return false;
-      } else if (activeTab === 'published') {
-        if (s.status !== 'published') return false;
-      } else if (activeTab === 'draft') {
-        if (s.status !== 'draft') return false;
-      } else if (activeTab === 'archived') {
-        if (s.status !== 'archived') return false;
-      } else if (activeTab === 'departed') {
-        if (!isScheduleDeparted(s)) return false;
-      }
+  const rows = useMemo(() => {
+    return schedules
+      .filter(s => {
+        if (activeTab === 'urgent' && !isScheduleUrgent(s)) return false;
+        if (activeTab === 'published' && s.status !== 'published') return false;
+        if (activeTab === 'draft' && s.status !== 'draft') return false;
+        if (activeTab === 'archived' && s.status !== 'archived') return false;
+        if (activeTab === 'departed' && !isScheduleDeparted(s)) return false;
 
-      // 2. Brand Filter
-      if (filterBrandId && String(s.brand_id) !== filterBrandId) {
-        return false;
-      }
+        if (filterBrandId && String(s.brand_id) !== filterBrandId) return false;
 
-      // 3. Month Filter
-      if (filterMonth) {
-        if (!s.berangkat_tanggal) return false;
-        const d = new Date(s.berangkat_tanggal);
-        const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        if (val !== filterMonth) return false;
-      }
-
-      return true;
-    });
-  }, [schedules, activeTab, filterBrandId, filterMonth, today]);
+        if (filterMonth) {
+          if (!s.berangkat_tanggal) return false;
+          const d = new Date(s.berangkat_tanggal);
+          const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          if (val !== filterMonth) return false;
+        }
+        return true;
+      })
+      // Kolom bantu pencarian: brand, maskapai, dan kategori ikut bisa dicari.
+      .map(s => ({
+        ...s,
+        _cari: [brandsMap[s.brand_id]?.name, s.maskapai?.name, s.category?.name].filter(Boolean).join(' '),
+      }))
+      // Urutan bawaan: yang paling dekat berangkat di atas; yang sudah lewat di bawah.
+      .sort((a, b) => {
+        const da = getDaysRemaining(a.berangkat_tanggal);
+        const db = getDaysRemaining(b.berangkat_tanggal);
+        if (da === null && db === null) return 0;
+        if (da === null) return 1;
+        if (db === null) return -1;
+        const pastA = da < 0;
+        const pastB = db < 0;
+        if (pastA !== pastB) return pastA ? 1 : -1;
+        return pastA ? db - da : da - db;
+      });
+  }, [schedules, activeTab, filterBrandId, filterMonth, brandsMap, today]);
 
   const tabs = [
-    { id: 'all', label: 'Semua Paket', count: counts.all },
-    { id: 'urgent', label: '🚨 Mendesak (<60 Hari)', count: counts.urgent, isUrgent: true },
+    { id: 'all', label: 'Semua', count: counts.all },
+    { id: 'urgent', label: 'Mendesak', count: counts.urgent },
     { id: 'published', label: 'Published', count: counts.published },
     { id: 'draft', label: 'Draft', count: counts.draft },
     { id: 'archived', label: 'Archived', count: counts.archived },
@@ -243,290 +257,193 @@ const SchedulesPage = () => {
   ];
 
   const columns = [
-    { header: 'Brand', key: 'brand' }
-  ];
-  columns.push(
-    { header: 'Nama Paket', key: 'jadwal_nama' },
-    { header: 'Publish', key: 'status', align: 'center' },
-    { 
-      header: 'Tiket', 
-      key: 'tiket',
-      align: 'center',
+    { header: 'Paket', key: 'jadwal_nama' },
+    {
+      header: 'Keberangkatan',
+      key: 'berangkat_tanggal',
       sortable: true,
-      sortFn: (a, b) => {
-        const valA = a.is_ticket_confirmed ? 1 : 0;
-        const valB = b.is_ticket_confirmed ? 1 : 0;
-        return valA - valB;
-      }
+      sortFn: (a, b) => String(a.berangkat_tanggal || '').localeCompare(String(b.berangkat_tanggal || '')),
     },
-    { 
-      header: 'Sisa Seat', 
+    {
+      header: 'Terisi',
       key: 'seat_sisa',
       sortable: true,
-      sortFn: (a, b) => (a.seat_sisa || 0) - (b.seat_sisa || 0)
+      sortFn: (a, b) => ((a.seat_total || 0) - (a.seat_sisa || 0)) - ((b.seat_total || 0) - (b.seat_sisa || 0)),
     },
-    { 
-      header: 'Harga Mulai', 
+    {
+      header: 'Harga Mulai',
       key: 'harga',
       sortable: true,
-      sortFn: (a, b) => getMinPrice(a) - getMinPrice(b)
+      sortFn: (a, b) => getMinPrice(a) - getMinPrice(b),
     },
-    { header: 'Aksi', key: 'aksi' }
-  );
+    { header: 'Status', key: 'status' },
+    { header: 'Aksi', key: 'aksi' },
+  ];
+
+  const renderCell = (row, key) => {
+    if (key === 'jadwal_nama') {
+      const brand = brandsMap[row.brand_id];
+      const sub = [row.maskapai?.name, row.is_direct_flight ? 'Direct' : null, row.category?.name].filter(Boolean).join(' · ');
+      return (
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate(`/schedules/${row.id}`); }}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            title="Lihat Detail Paket"
+          >
+            {row.jadwal_nama}
+          </button>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-body text-neutral-500 min-w-0">
+            {brand && (
+              <span className="inline-flex items-center gap-1.5 shrink-0 font-medium text-neutral-700">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: brand.primary_color || '#9CA3AF' }} />
+                {brand.name}
+              </span>
+            )}
+            {sub && <span className="truncate text-neutral-400">{brand ? '· ' : ''}{sub}</span>}
+          </div>
+        </div>
+      );
+    }
+
+    if (key === 'berangkat_tanggal') {
+      const days = getDaysRemaining(row.berangkat_tanggal);
+      return (
+        <div>
+          <div className="flex items-center gap-1.5 text-[13px] leading-snug font-body text-neutral-700 whitespace-nowrap">
+            <CalendarDays className="w-3.5 h-3.5 text-neutral-400" strokeWidth={1.75} />
+            {formatDate(row.berangkat_tanggal)}
+          </div>
+          {isScheduleDeparted(row) ? (
+            <div className="mt-0.5 text-[11px] font-body text-neutral-400">Sudah berangkat</div>
+          ) : days !== null && days >= 0 ? (
+            <div
+              className={`mt-0.5 text-[11px] font-body ${isScheduleUrgent(row) ? 'text-danger-600 font-medium' : 'text-neutral-400'}`}
+              title={isScheduleUrgent(row) ? 'Mendekati keberangkatan & belum penuh' : undefined}
+            >
+              {days} hari lagi
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (key === 'status') return <StatusBadge status={row.status} />;
+
+    if (key === 'seat_sisa') {
+      const total = Number(row.seat_total) || 0;
+      const sisa = row.seat_sisa !== null && row.seat_sisa !== undefined ? Number(row.seat_sisa) : null;
+      if (sisa === null) return <span className="text-xs text-neutral-400 font-body">-</span>;
+      if (sisa <= 0) {
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-heading tracking-wide uppercase bg-neutral-900 text-white">
+            Penuh
+          </span>
+        );
+      }
+      const filled = Math.max(0, total - sisa);
+      const urgent = isScheduleUrgent(row);
+      return (
+        <div className="min-w-[120px]" title={urgent ? 'Mendekati keberangkatan dan masih banyak kursi kosong' : undefined}>
+          <div className="text-[13px] font-body text-neutral-700 leading-snug whitespace-nowrap">
+            <span className="font-semibold text-neutral-900">{filled}</span> dari {total} terisi
+          </div>
+          <div className={`mt-0.5 text-[11px] font-body ${urgent ? 'text-danger-600 font-medium' : 'text-neutral-400'}`}>
+            {urgent ? `Mendesak · ${sisa} kursi kosong` : `${sisa} kursi kosong`}
+          </div>
+        </div>
+      );
+    }
+
+    if (key === 'harga') {
+      const minPrice = getMinPrice(row);
+      if (minPrice <= 0) return <span className="text-xs text-neutral-400 font-body">-</span>;
+      return <span className="text-[13px] font-semibold text-neutral-900 font-body whitespace-nowrap">{formatCurrency(minPrice)}</span>;
+    }
+
+    if (key === 'aksi') {
+      const hasBookings = (row.booking_count || 0) > 0;
+      const menuItems = [
+        { label: 'Lihat', icon: Eye, tooltip: 'Lihat Detail Paket', onClick: () => navigate(`/schedules/${row.id}`) },
+        { label: 'Edit', icon: Pencil, tooltip: 'Edit Paket', onClick: () => navigate(`/schedules/${row.id}/edit`) },
+        { label: 'Duplikat', icon: Copy, tooltip: 'Buat paket baru dari paket ini', onClick: () => navigate(`/schedules/new?from=${row.id}`) },
+        ...statusItems(row),
+        {
+          label: 'Hapus',
+          icon: Trash2,
+          danger: true,
+          tooltip: 'Hapus Paket',
+          disabled: hasBookings,
+          disabledTooltip: `Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`,
+          onClick: () => handleDeleteClick(row.id),
+        },
+      ];
+      return <ActionMenu items={menuItems} align="right" />;
+    }
+
+    return row[key];
+  };
 
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Kelola Paket" 
-        actionLabel="+ Tambah Paket" 
+      <PageHeader
+        title="Kelola Paket"
+        actionLabel="+ Tambah Paket"
         onAction={() => navigate('/schedules/new')}
       />
 
-      {errorMessage && (
-        <Alert variant="error">{errorMessage}</Alert>
+      {successMessage && (
+        <Alert variant="success" onClose={() => setSuccessMessage(null)}>{successMessage}</Alert>
       )}
 
-      {/* Quick Filter Tabs (Option 3) */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-3">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const isUrgentTab = tab.id === 'urgent';
-          const hasUrgentCount = isUrgentTab && tab.count > 0;
-
-          let btnClass = 'bg-white text-neutral-600 hover:bg-neutral-50 border border-neutral-200/90';
-          let badgeClass = 'bg-neutral-100 text-neutral-600';
-
-          if (isActive) {
-            btnClass = isUrgentTab ? 'bg-danger-600 text-white shadow-2xs font-bold' : 'bg-sidebar-bg text-white shadow-2xs font-bold';
-            badgeClass = 'bg-white/20 text-white';
-          } else if (hasUrgentCount) {
-            btnClass = 'bg-danger-50 text-danger-700 hover:bg-danger-100 border border-danger-200';
-            badgeClass = 'bg-danger-200 text-danger-800 font-bold';
-          }
-
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold font-heading transition-all ${btnClass}`}
-            >
-              <span>{tab.label}</span>
-              <span className={`px-2 py-0.5 rounded-full text-[11px] ${badgeClass}`}>
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {errorMessage && (
+        <Alert variant="error" onClose={() => setErrorMessage(null)}>{errorMessage}</Alert>
+      )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
-          <LoadingSpinner />
-        </div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
       ) : (
-        <div className="space-y-4">
-          <DataTable
-            columns={columns}
-            data={filteredSchedules}
-            itemsPerPage={15}
-            onRowClick={(row) => navigate(`/schedules/${row.id}`)}
-            emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.'}
-            searchPlaceholder="Cari nama paket atau brand..."
-            toolbarActions={
-              <div className="flex flex-wrap items-center gap-2">
-                <CustomDropdown 
-                  value={filterBrandId}
-                  onChange={(val) => setFilterBrandId(val)}
-                  className="!mb-0 w-40"
-                  placeholder="Semua Brand"
-                  options={[
-                    { value: '', label: 'Semua Brand' },
-                    ...brands.map(b => ({ value: b.id.toString(), label: b.name }))
-                  ]}
-                />
-                <CustomDropdown 
-                  value={filterMonth}
-                  onChange={(val) => setFilterMonth(val)}
-                  className="!mb-0 w-40"
-                  placeholder="Semua Bulan"
-                  options={[
-                    { value: '', label: 'Semua Bulan' },
-                    ...availableMonths.map(m => ({ value: m.value, label: m.label }))
-                  ]}
-                />
-              </div>
-            }
-            renderCell={(row, key) => {
-              if (key === 'brand') {
-                return <BrandCell brand={brandsMap[row.brand_id]} />;
-              }
-              if (key === 'jadwal_nama') {
-                const days = getDaysRemaining(row.berangkat_tanggal);
-                const isUrgent = isScheduleUrgent(row);
-                return (
-                  <div className="flex flex-col items-start gap-0.5">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/schedules/${row.id}`);
-                      }}
-                      className="font-semibold text-neutral-900 hover:text-neutral-600 hover:underline text-left transition-colors font-body leading-snug cursor-pointer"
-                      title="Lihat Detail Paket"
-                    >
-                      {row.jadwal_nama}
-                    </button>
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-500 font-body">
-                      <span>{formatDate(row.berangkat_tanggal)}</span>
-                      {isScheduleDeparted(row) && (
-                        <Badge variant="archived" hideIcon={true}>Sudah berangkat</Badge>
-                      )}
-                      {isUrgent && days !== null && (
-                        <span 
-                          className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[10px] font-bold text-danger-700 bg-danger-50 border border-danger-200"
-                          title="Mendekati keberangkatan & belum penuh"
-                        >
-                          {days} hr lagi
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-            if (key === 'status') {
-              if (row.status === 'published') {
-                return (
-                  <div className="flex items-center justify-center">
-                    <div title="Published" className="w-5 h-5 rounded-full bg-success-500 text-white flex items-center justify-center shadow-2xs">
-                      <Check size={12} strokeWidth={3} />
-                    </div>
-                  </div>
-                );
-              }
-              if (row.status === 'draft') {
-                return (
-                  <div className="flex items-center justify-center">
-                    <div title="Draft" className="flex items-center justify-center text-neutral-600">
-                      <Files size={18} />
-                    </div>
-                  </div>
-                );
-              }
-              if (row.status === 'archived') {
-                return (
-                  <div className="flex items-center justify-center">
-                    <div title="Archived" className="flex items-center justify-center text-neutral-400">
-                      <Archive size={18} />
-                    </div>
-                  </div>
-                );
-              }
-              return <div className="text-center text-xs text-neutral-400">-</div>;
-            }
-            if (key === 'tiket') {
-              return (
-                <div className="flex items-center justify-center">
-                  {row.is_ticket_confirmed ? (
-                    <div title="Tiket Confirmed" className="w-5 h-5 rounded-full bg-success-500 text-white flex items-center justify-center shadow-2xs">
-                      <Check size={12} strokeWidth={3} />
-                    </div>
-                  ) : (
-                    <div title="Tiket Belum Confirmed" className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-400 flex items-center justify-center shadow-2xs">
-                      <Minus size={12} strokeWidth={3} />
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            if (key === 'seat_sisa') {
-              const sisa = row.seat_sisa !== null && row.seat_sisa !== undefined ? Number(row.seat_sisa) : null;
-              if (sisa !== null && sisa <= 0) {
-                return (
-                  <div className="flex items-center">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-heading tracking-wide uppercase bg-neutral-900 text-white shadow-2xs">
-                      FULL BOOKED
-                    </span>
-                  </div>
-                );
-              }
-              const isUrgent = isScheduleUrgent(row);
-              const filled = (row.seat_total || 0) - (row.seat_sisa || 0);
-              const percent = row.seat_total > 0 ? (filled / row.seat_total) * 100 : 0;
-              return (
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-1 font-body">
-                    <span className={`font-semibold ${isUrgent ? 'text-danger-700 font-bold' : 'text-neutral-900'}`}>
-                      {row.seat_sisa ?? '-'}
-                    </span>
-                    <span className="text-neutral-400 text-xs">/ {row.seat_total ?? '-'} pax</span>
-                  </div>
-                  {isUrgent && row.seat_total > 0 && (
-                    <div className="w-20 h-1.5 bg-neutral-100 rounded-full overflow-hidden mt-1 border border-neutral-200" title={`Terisi ${filled}/${row.seat_total} pax`}>
-                      <div 
-                        className="h-full bg-danger-500 rounded-full" 
-                        style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} 
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
-            if (key === 'harga') {
-              const minPrice = getMinPrice(row);
-              if (minPrice <= 0) return '-';
-              return (
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-neutral-900 font-body">{formatCurrency(minPrice)}</span>
-                  {row.is_promo && (
-                    <span 
-                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold font-heading bg-warning-50 text-warning-700 border border-warning-200 shadow-2xs shrink-0"
-                      title="Paket Promo Aktif"
-                    >
-                      <Zap size={10} className="fill-warning-500 text-warning-500" />
-                      Promo
-                    </span>
-                  )}
-                </div>
-              );
-            }
-            if (key === 'aksi') {
-              const hasBookings = (row.booking_count || 0) > 0;
-              const menuItems = [
-                {
-                  label: 'Lihat',
-                  icon: Eye,
-                  onClick: () => navigate(`/schedules/${row.id}`),
-                  tooltip: 'Lihat Detail Paket'
-                },
-                {
-                  label: 'Edit',
-                  icon: Edit2,
-                  onClick: () => navigate(`/schedules/${row.id}/edit`),
-                  tooltip: 'Edit Paket'
-                },
-                {
-                  label: 'Hapus',
-                  icon: Trash2,
-                  danger: true,
-                  disabled: hasBookings,
-                  disabledTooltip: `Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`,
-                  onClick: () => handleDeleteClick(row.id),
-                  tooltip: 'Hapus Paket'
-                }
-              ];
-
-              return (
-                <div className="flex items-center justify-center">
-                  <ActionMenu items={menuItems} align="right" />
-                </div>
-              );
-            }
-            return row[key];
-          }}
-          />
-        </div>
+        <DataTable
+          columns={columns}
+          data={rows}
+          itemsPerPage={15}
+          onRowClick={(row) => navigate(`/schedules/${row.id}`)}
+          emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.'}
+          searchPlaceholder="Cari nama paket, brand, atau maskapai..."
+          toolbarActions={
+            <div className="flex flex-wrap items-center gap-2">
+              <CustomDropdown
+                value={activeTab}
+                onChange={(val) => setActiveTab(val)}
+                className="!mb-0 w-48"
+                placeholder="Semua Status"
+                options={tabs.map(tab => ({ value: tab.id, label: `${tab.label} (${tab.count})` }))}
+              />
+              <CustomDropdown
+                value={filterBrandId}
+                onChange={(val) => setFilterBrandId(val)}
+                className="!mb-0 w-40"
+                placeholder="Semua Brand"
+                options={[
+                  { value: '', label: 'Semua Brand' },
+                  ...brands.map(b => ({ value: b.id.toString(), label: b.name })),
+                ]}
+              />
+              <CustomDropdown
+                value={filterMonth}
+                onChange={(val) => setFilterMonth(val)}
+                className="!mb-0 w-40"
+                placeholder="Semua Bulan"
+                options={[
+                  { value: '', label: 'Semua Bulan' },
+                  ...availableMonths.map(m => ({ value: m.value, label: m.label })),
+                ]}
+              />
+            </div>
+          }
+          renderCell={renderCell}
+        />
       )}
 
       {/* Delete Confirmation Modal */}
@@ -538,8 +455,8 @@ const SchedulesPage = () => {
         footer={
           <>
             <Button variant="ghost" onClick={handleCloseDeleteModal}>Batal</Button>
-            <Button 
-              variant="danger" 
+            <Button
+              variant="danger"
               onClick={handleConfirmDelete}
               disabled={!confirmCode || inputConfirmCode !== confirmCode}
             >

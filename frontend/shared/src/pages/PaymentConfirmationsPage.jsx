@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal, Eye } from 'lucide-react';
 import client from '../api/client';
 import { listAllPayments, verifyPayment } from '../api/bookings';
 import Alert from '../components/ui/Alert';
@@ -10,6 +10,7 @@ import DataTable from '../components/ui/DataTable';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
+import ActionMenu from '../components/ui/ActionMenu';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${String(value).slice(0, 10)}T00:00:00`));
@@ -18,12 +19,12 @@ const statusMeta = {
   confirmed: { label: 'Terkonfirmasi', variant: 'success' },
   rejected: { label: 'Ditolak', variant: 'danger' },
 };
-const STATUS_OPTIONS = [
-  { value: '', label: 'Semua status' },
-  { value: 'pending', label: 'Menunggu' },
-  { value: 'confirmed', label: 'Terkonfirmasi' },
-  { value: 'rejected', label: 'Ditolak' },
-];
+// Warna dipertegas agar tetap terbaca di atas latar halaman abu-abu.
+const STATUS_STRONG = {
+  pending: '!bg-warning-100 !border-warning-300 !text-warning-800',
+  confirmed: '!bg-success-100 !border-success-300 !text-success-800',
+  rejected: '!bg-danger-100 !border-danger-200 !text-danger-700',
+};
 const EMPTY_FILTERS = { status: '', brand: '', bank: '', from: '', to: '' };
 // CustomDropdown mengirim nilai langsung atau objek event.
 const valueOf = (v) => (v?.target ? v.target.value : v);
@@ -35,6 +36,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [panelOpen, setPanelOpen] = useState(false);
 
@@ -126,6 +128,24 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     ].filter(Boolean).join(' '),
   })), [items, filters, showBrandColumn]);
 
+  // Hitungan ditampilkan di label filter status (bukan kartu KPI); mengikuti filter lain.
+  const statusOptions = useMemo(() => {
+    const base = items.filter((item) => {
+      const date = String(item.tanggal || '').slice(0, 10);
+      return (!filters.brand || item.brand_name === filters.brand)
+        && (!filters.bank || item.destination_bank_name === filters.bank)
+        && (!filters.from || date >= filters.from)
+        && (!filters.to || date <= filters.to);
+    });
+    const count = (status) => base.filter((i) => i.status === status).length;
+    return [
+      { value: '', label: `Semua status (${base.length})` },
+      { value: 'pending', label: `Menunggu (${count('pending')})` },
+      { value: 'confirmed', label: `Terkonfirmasi (${count('confirmed')})` },
+      { value: 'rejected', label: `Ditolak (${count('rejected')})` },
+    ];
+  }, [items, filters.brand, filters.bank, filters.from, filters.to]);
+
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
   const resetFilters = () => setFilters(EMPTY_FILTERS);
   const hasFilters = Object.values(filters).some(Boolean);
@@ -154,6 +174,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     setActionError('');
     try {
       await verifyPayment(selectedPayment.id, 'confirmed', null);
+      setSuccessMessage(`Pembayaran ${selectedPayment.jamaah_name || ''} sebesar ${money(selectedPayment.jumlah)} dikonfirmasi.`.replace('  ', ' '));
       closeDetail();
       await load();
     } catch (err) {
@@ -173,6 +194,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     setActionError('');
     try {
       await verifyPayment(selectedPayment.id, 'rejected', rejectionReason.trim());
+      setSuccessMessage(`Pembayaran ${selectedPayment.jamaah_name || ''} ditolak.`.replace('  ', ' '));
       closeDetail();
       await load();
     } catch (err) {
@@ -183,7 +205,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
   };
 
   const columns = [
-    { header: 'Invoice & Jamaah', key: 'jamaah_name', sortable: true },
+    { header: 'Jamaah', key: 'jamaah_name', sortable: true },
     { header: 'Paket', key: 'schedule_name', sortable: true },
     { header: 'Transfer', key: 'tanggal', sortable: true },
     { header: 'Rekening Tujuan', key: 'destination_bank_name', sortable: true },
@@ -196,42 +218,48 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     if (key === 'jamaah_name') {
       return (
         <div className="min-w-40">
-          <p className="font-semibold text-neutral-900">{row.jamaah_name || '-'}</p>
-          {showBrandColumn && <p className="text-xs text-neutral-500">{row.brand_name || '-'}</p>}
-          {row.booking_id ? (
-            <a
-              href={`/bookings/${row.booking_id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-neutral-100 hover:bg-neutral-200 border border-neutral-200/80 text-neutral-800 hover:text-neutral-950 font-mono text-xs font-bold transition-all cursor-pointer group"
-              title="Buka Detail Booking di tab baru"
-            >
-              <span>{row.invoice}</span>
-              <svg className="w-3 h-3 text-neutral-400 group-hover:text-neutral-700 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
-          ) : (
-            <p className="mt-0.5 text-xs text-neutral-500 font-mono">{row.invoice}</p>
-          )}
+          <button
+            type="button"
+            onClick={() => openDetail(row)}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          >
+            {row.jamaah_name || '-'}
+          </button>
+          <div className="mt-0.5 text-[11px] font-body text-neutral-400">
+            {showBrandColumn && row.brand_name ? `${row.brand_name} · ` : ''}
+            {row.booking_id ? (
+              <a
+                href={`/bookings/${row.booking_id}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="font-mono hover:text-primary-600 hover:underline"
+                title="Buka Detail Booking di tab baru"
+              >
+                {row.invoice}
+              </a>
+            ) : (
+              <span className="font-mono">{row.invoice}</span>
+            )}
+          </div>
         </div>
       );
     }
     if (key === 'schedule_name') {
       return (
         <div className="min-w-36 max-w-56 whitespace-normal">
-          <p className="font-medium text-neutral-700 leading-tight">{row.schedule_name || '-'}</p>
-          {row.departure_date && <p className="mt-0.5 text-xs text-neutral-400">{dateLabel(row.departure_date)}</p>}
+          <p className="text-[13px] font-body font-medium text-neutral-800 leading-tight">{row.schedule_name || '-'}</p>
+          {row.departure_date && <p className="mt-0.5 text-[11px] font-body text-neutral-400">{dateLabel(row.departure_date)}</p>}
         </div>
       );
     }
     if (key === 'tanggal') {
       return (
         <div className="min-w-28">
-          <p className="font-medium text-neutral-800 whitespace-nowrap">{dateLabel(row.tanggal)}</p>
-          <p className="mt-0.5 text-xs text-neutral-500">
+          <p className="text-[13px] font-body font-medium text-neutral-800 whitespace-nowrap">{dateLabel(row.tanggal)}</p>
+          <p className="mt-0.5 text-[11px] font-body text-neutral-400">
             {row.sender_name || 'Pengirim belum diisi'}
-            {row.sender_bank ? ` • ${row.sender_bank}` : ''}
+            {row.sender_bank ? ` · ${row.sender_bank}` : ''}
           </p>
         </div>
       );
@@ -239,35 +267,32 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     if (key === 'destination_bank_name') {
       return (
         <div className="min-w-28">
-          <p className="font-medium text-neutral-800">{row.destination_bank_name || '-'}</p>
-          <p className="mt-0.5 text-xs text-neutral-500">
+          <p className="text-[13px] font-body font-medium text-neutral-800">{row.destination_bank_name || '-'}</p>
+          <p className="mt-0.5 text-[11px] font-body text-neutral-400">
             {row.destination_account_number || '-'}
-            {row.destination_account_holder ? ` • ${row.destination_account_holder}` : ''}
+            {row.destination_account_holder ? ` · ${row.destination_account_holder}` : ''}
           </p>
         </div>
       );
     }
     if (key === 'jumlah') {
-      return <span className="font-semibold text-neutral-900 whitespace-nowrap">{money(row.jumlah)}</span>;
+      return <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.jumlah)}</span>;
     }
     if (key === 'status') {
-      const meta = statusMeta[row.status] || { label: row.status || '-', variant: 'neutral' };
+      const meta = statusMeta[row.status] || { label: row.status || '-', variant: 'archived' };
       return (
         <div className="max-w-44 whitespace-normal">
-          <Badge variant={meta.variant}>{meta.label}</Badge>
-          {row.rejection_reason && <p className="mt-1.5 text-xs text-danger-700 leading-tight">{row.rejection_reason}</p>}
+          <Badge variant={meta.variant} hideIcon className={STATUS_STRONG[row.status]}>{meta.label}</Badge>
+          {row.rejection_reason && <p className="mt-1 text-[11px] font-body text-danger-700 leading-tight">{row.rejection_reason}</p>}
         </div>
       );
     }
     if (key === 'actions') {
       return (
-        <button
-          type="button"
-          onClick={() => openDetail(row)}
-          className="whitespace-nowrap rounded-full border border-neutral-200 bg-white hover:bg-neutral-50 px-3.5 py-1.5 text-xs font-semibold text-neutral-700 shadow-2xs hover:border-neutral-300 transition-colors cursor-pointer"
-        >
-          Lihat Detail
-        </button>
+        <ActionMenu
+          align="right"
+          items={[{ label: 'Lihat Detail', icon: Eye, tooltip: 'Lihat detail dan verifikasi pembayaran', onClick: () => openDetail(row) }]}
+        />
       );
     }
     return row[key] ?? '-';
@@ -280,15 +305,15 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       <CustomDropdown
         value={filters.status}
         onChange={(v) => setFilter('status', valueOf(v))}
-        options={STATUS_OPTIONS}
+        options={statusOptions}
         placeholder="Semua status"
-        className="!mb-0 flex-1 sm:w-44 sm:flex-none"
+        className="!mb-0 flex-1 sm:w-52 sm:flex-none"
       />
       <Button
         type="button"
-        variant={panelOpen || panelActive ? 'dark' : 'secondary'}
+        variant="secondary"
         onClick={() => setPanelOpen((open) => !open)}
-        className="h-11 shrink-0 whitespace-nowrap"
+        className={`h-10 shrink-0 whitespace-nowrap ${panelOpen || panelActive ? '!border-primary-200 !bg-primary-50 !text-primary-700' : ''}`}
         aria-expanded={panelOpen}
       >
         <SlidersHorizontal className="w-4 h-4" />
@@ -330,18 +355,17 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
   );
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title={showBrandColumn ? 'Konfirmasi Pembayaran' : 'Pembayaran'}
-        subtitle={showBrandColumn ? 'Cari dan verifikasi transfer jamaah dari seluruh brand.' : 'Cari dan verifikasi transfer manual jamaah dalam satu tabel.'}
-      />
+    <div className="space-y-6">
+      <PageHeader title="Pembayaran" />
 
-      {error && <Alert variant="error" message={error} />}
+      {successMessage && <Alert variant="success" onClose={() => setSuccessMessage('')}>{successMessage}</Alert>}
+      {error && <Alert variant="error" onClose={() => setError('')}>{error}</Alert>}
 
       <DataTable
         columns={columns}
         data={filteredItems}
         renderCell={renderCell}
+        onRowClick={openDetail}
         itemsPerPage={10}
         searchPlaceholder={showBrandColumn ? 'Cari brand, invoice, jamaah, paket, pengirim...' : 'Cari invoice, jamaah, paket, pengirim...'}
         emptyMessage={loading ? 'Memuat pembayaran...' : hasFilters ? 'Tidak ada pembayaran yang sesuai filter' : 'Belum ada pembayaran'}
@@ -390,7 +414,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                   </Button>
                   <Button
                     variant="primary"
-                    className="!bg-emerald-600 hover:!bg-emerald-700 !text-white !border-emerald-600 shadow-xs"
+                    className="!bg-success-600 hover:!bg-success-700 !text-white !border-success-600 shadow-xs"
                     onClick={handleConfirmPayment}
                     isLoading={saving}
                   >

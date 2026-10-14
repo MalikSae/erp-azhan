@@ -426,7 +426,10 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 		targetStatus = "dp"
 	}
 	if targetStatus != currentStatus {
-		if currentStatus == "baru" && (targetStatus == "dp" || targetStatus == "lunas") && !isSeatBlocked {
+		// Kursi diambil setiap kali booking akan ditandai memegang kursi (dp/lunas) tetapi
+		// belum terblokir. Tidak cukup untuk status "baru": booking dp/lunas yang kursinya
+		// dilepas manual lalu naik status juga harus mengambil kursi lagi (SM-01).
+		if (targetStatus == "dp" || targetStatus == "lunas") && !isSeatBlocked {
 			var activeRegularPax int
 			if err = tx.QueryRowContext(ctx, `
 				SELECT COUNT(*) FROM booking_pax

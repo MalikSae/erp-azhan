@@ -10,20 +10,30 @@ import {
   openProtectedMedia,
   useProtectedImage,
 } from 'shared';
-import Alert from '../components/ui/Alert';
-import Badge from '../components/ui/Badge';
-import Button from '../components/ui/Button';
-import DataTable from '../components/ui/DataTable';
-import Modal from '../components/ui/Modal';
-import PageHeader from '../components/ui/PageHeader';
+import Alert from 'shared/ui/Alert';
+import ActionMenu from 'shared/ui/ActionMenu';
+import StatTile from 'shared/ui/StatTile';
+import Button from 'shared/ui/Button';
+import DataTable from 'shared/ui/DataTable';
+import Modal from 'shared/ui/Modal';
+import PageHeader from 'shared/ui/PageHeader';
+import { Eye, UserCheck, ClipboardList, Banknote } from 'lucide-react';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
 const bayarMeta = {
-  menunggu_verifikasi: { label: 'Menunggu verifikasi', variant: 'pending' },
-  terverifikasi: { label: 'Terverifikasi', variant: 'success' },
-  ditolak: { label: 'Ditolak', variant: 'danger' },
+  menunggu_verifikasi: { label: 'Menunggu verifikasi', variant: 'pending', dot: 'bg-warning-500' },
+  terverifikasi: { label: 'Terverifikasi', variant: 'success', dot: 'bg-success-500' },
+  ditolak: { label: 'Ditolak', variant: 'danger', dot: 'bg-danger-500' },
 };
+
+// Status = titik berwarna kecil + teks (bukan badge berwarna).
+const StatusDot = ({ meta }) => (
+  <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-neutral-700">
+    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot || 'bg-neutral-400'}`} />
+    {meta.label}
+  </span>
+);
 
 // Screen B1 — antrian pengajuan agen. Approve keagenan TIDAK PERNAH dikunci
 // oleh status pembayaran (agen-azhan.md §5 poin 20).
@@ -119,12 +129,19 @@ export default function PersetujuanAgenPage() {
     if (key === 'nama_lengkap') {
       return (
         <div className="min-w-[160px]">
-          <p className="font-semibold text-neutral-900">{row.nama_lengkap}</p>
-          <p className="mt-0.5 text-xs text-neutral-500 font-mono">{row.id_jamaah || '-'}{row.no_hp ? ` • ${row.no_hp}` : ''}</p>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); open(row); }}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors cursor-pointer"
+            title="Tinjau Pengajuan"
+          >
+            {row.nama_lengkap}
+          </button>
+          <p className="mt-0.5 text-[11px] text-neutral-400 font-mono">{row.id_jamaah || '-'}{row.no_hp ? ` • ${row.no_hp}` : ''}</p>
           {row.status_agen !== 'pengajuan' && (
-            <div className="mt-1"><Badge variant="success">Agen {row.status_agen} • tinggal pembayaran</Badge></div>
+            <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-body text-success-700"><span className="w-1.5 h-1.5 rounded-full bg-success-500" />Agen {row.status_agen} • tinggal pembayaran</div>
           )}
-          {row.direkrut_oleh_nama && <p className="mt-0.5 text-xs text-neutral-500">Direkrut: {row.direkrut_oleh_nama}</p>}
+          {row.direkrut_oleh_nama && <p className="mt-0.5 text-[11px] text-neutral-400">Direkrut: {row.direkrut_oleh_nama}</p>}
         </div>
       );
     }
@@ -136,21 +153,13 @@ export default function PersetujuanAgenPage() {
       const meta = bayarMeta[p.status] || { label: p.status, variant: 'neutral' };
       return (
         <div>
-          <p className="font-semibold text-neutral-900">{money(p.nominal_tagihan)}</p>
-          <div className="mt-1"><Badge variant={meta.variant}>{meta.label}</Badge></div>
+          <p className="text-[13px] font-semibold text-neutral-900">{money(p.nominal_tagihan)}</p>
+          <div className="mt-1"><StatusDot meta={meta} /></div>
         </div>
       );
     }
     if (key === 'actions') {
-      return (
-        <button
-          type="button"
-          onClick={() => open(row)}
-          className="rounded-full border border-neutral-200 bg-white hover:bg-neutral-50 px-3.5 py-1.5 text-xs font-semibold text-neutral-700 shadow-2xs hover:border-neutral-300 transition-colors cursor-pointer"
-        >
-          Tinjau
-        </button>
-      );
+      return <ActionMenu items={[{ label: 'Tinjau', icon: Eye, tooltip: 'Tinjau Pengajuan', onClick: () => open(row) }]} align="right" />;
     }
     return row[key] ?? '-';
   };
@@ -161,14 +170,23 @@ export default function PersetujuanAgenPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Persetujuan Agen" subtitle="Tinjau pengajuan agen Syiar dan verifikasi pembayaran pendaftarannya." />
+      <PageHeader title="Persetujuan Agen" />
       {error && <Alert variant="error" message={error} />}
+
+      {!loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatTile icon={ClipboardList} variant="primary" value={items.length} label="Total Pengajuan" />
+          <StatTile icon={UserCheck} variant="warning" value={items.filter((it) => it.status_agen === 'pengajuan').length} label="Menunggu Persetujuan" />
+          <StatTile icon={Banknote} variant="info" value={items.filter((it) => it.pembayaran?.status === 'menunggu_verifikasi').length} label="Menunggu Verifikasi Bayar" />
+        </div>
+      )}
 
       <DataTable
         columns={columns}
         data={items}
         renderCell={renderCell}
         itemsPerPage={10}
+        onRowClick={open}
         searchPlaceholder="Cari nama, ID jamaah, atau domisili..."
         emptyMessage={loading ? 'Memuat pengajuan...' : 'Belum ada pengajuan agen'}
       />
@@ -235,7 +253,7 @@ export default function PersetujuanAgenPage() {
                 <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200/80 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Pembayaran pendaftaran</span>
-                    {berbayar && bayarLabel && <Badge variant={bayarLabel.variant}>{bayarLabel.label}</Badge>}
+                    {berbayar && bayarLabel && <StatusDot meta={bayarLabel} />}
                   </div>
                   <p className="text-xl font-black text-neutral-900">{berbayar ? money(p.nominal_tagihan) : 'Tanpa biaya'}</p>
                   {p?.status === 'ditolak' && p.catatan_penolakan && (

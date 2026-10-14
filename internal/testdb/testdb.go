@@ -35,6 +35,10 @@ func Tx(t *testing.T) (*sql.DB, *sql.Tx) {
 	if err != nil {
 		t.Fatalf("koneksi database: %v", err)
 	}
+	// Fixture memakai baris bersama (jadwal pertama, brand-nya); paket uji Go berjalan
+	// paralel, jadi transaksi uji saling mengunci baris itu dan deadlock. Kunci bernama
+	// menyerialkan semua test Tx lintas paket.
+	Serialize(t, db, "erp_test_tx_fixture")
 	tx, err := db.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
@@ -60,6 +64,46 @@ func Tx(t *testing.T) (*sql.DB, *sql.Tx) {
 		t.Fatalf("temporary checkout fixture: %v", err)
 	}
 	return db, tx
+}
+
+// DB membuka koneksi untuk integration test atas repository yang membuka
+// transaksinya sendiri (mis. adminuser, orgunit) sehingga tidak bisa dibungkus
+// Tx. Data yang dibuat test WAJIB dibersihkan sendiri lewat t.Cleanup.
+func DB(t *testing.T) *sql.DB {
+	t.Helper()
+	if os.Getenv("ERP_TEST_DB") != "1" {
+		t.Skip("integration test dilewati: set ERP_TEST_DB=1 untuk menjalankan")
+	}
+	_, file, _, _ := runtime.Caller(0)
+	_ = godotenv.Load(filepath.Join(filepath.Dir(file), "..", "..", ".env"))
+	db, err := shared.NewDB(shared.LoadConfig())
+	if err != nil {
+		t.Fatalf("koneksi database: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// Serialize memegang named lock MySQL selama test berjalan. Paket uji Go
+// berjalan paralel; test yang menyentuh baris bersama (pengguna, unit, role)
+// di paket berbeda dikunci dengan nama yang sama agar tidak saling menghapus
+// data atau deadlock. Panggil SEBELUM fixture lain supaya dilepas paling akhir.
+func Serialize(t *testing.T, db *sql.DB, name string) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("koneksi lock: %v", err)
+	}
+	var got sql.NullInt64
+	if err := conn.QueryRowContext(ctx, `SELECT GET_LOCK(?, 120)`, name).Scan(&got); err != nil || got.Int64 != 1 {
+		_ = conn.Close()
+		t.Fatalf("GET_LOCK %q: hasil=%v err=%v", name, got, err)
+	}
+	t.Cleanup(func() {
+		_, _ = conn.ExecContext(ctx, `SELECT RELEASE_LOCK(?)`, name)
+		_ = conn.Close()
+	})
 }
 
 // Booking adalah fixture booking satu pax di jadwal pertama yang brand-nya

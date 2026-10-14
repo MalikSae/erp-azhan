@@ -15,6 +15,8 @@ const (
 	AdminUserIDKey    contextKey = "adminUserID"
 	BrandIDKey        contextKey = "brandID"
 	RoleKey           contextKey = "role"
+	RolesKey          contextKey = "roles"
+	PermsKey          contextKey = "perms"
 	PortalJamaahIDKey contextKey = "portalJamaahID"
 )
 
@@ -28,28 +30,72 @@ func RequireAuth(next http.Handler) http.Handler {
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		adminUserID, brandID, role, err := ValidateToken(tokenString, "access")
+		claims, err := ValidateAccessClaims(tokenString)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), AdminUserIDKey, adminUserID)
-		ctx = context.WithValue(ctx, BrandIDKey, brandID)
-		ctx = context.WithValue(ctx, RoleKey, role)
+		ctx := context.WithValue(r.Context(), AdminUserIDKey, claims.AdminUserID)
+		ctx = context.WithValue(ctx, BrandIDKey, claims.BrandID)
+		ctx = context.WithValue(ctx, RoleKey, claims.Role)
+		ctx = context.WithValue(ctx, RolesKey, claims.Roles)
+		ctx = context.WithValue(ctx, PermsKey, claims.Perms)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// RequireAdminRole mencegah akun CS mengakses endpoint operasional ERP di luar gateway CRM.
+// RequireAdminRole mencegah akun CS mengakses endpoint operasional ERP di luar
+// gateway CRM. Wrapper transisi RBAC Fase 1: semua role non-CS lolos; penggantian
+// per-route ke RequirePermission dilakukan bertahap di Fase 2.
 func RequireAdminRole(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if GetRole(r.Context()) != "admin" {
+		if GetRole(r.Context()) == "cs" {
 			writeError(w, http.StatusForbidden, "akun CS hanya dapat mengakses modul CRM")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RequirePermission memeriksa klaim perms pada access token (diisi saat
+// login/refresh dari tabel RBAC). Tanpa permission yang diminta → 403.
+func RequirePermission(perm string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !HasPermission(r.Context(), perm) {
+				writeError(w, http.StatusForbidden, "anda tidak memiliki izin untuk aksi ini")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// HasPermission true bila klaim perms pada context memuat permission tsb.
+func HasPermission(ctx context.Context, perm string) bool {
+	for _, p := range GetPerms(ctx) {
+		if p == perm {
+			return true
+		}
+	}
+	return false
+}
+
+// GetPerms mengambil daftar permission dari context.
+func GetPerms(ctx context.Context) []string {
+	if val, ok := ctx.Value(PermsKey).([]string); ok {
+		return val
+	}
+	return nil
+}
+
+// GetRoles mengambil daftar slug role dari context.
+func GetRoles(ctx context.Context) []string {
+	if val, ok := ctx.Value(RolesKey).([]string); ok {
+		return val
+	}
+	return nil
 }
 
 // RequireAdminOrCRMAccess keeps CS credentials out of the ERP backoffice while

@@ -27,10 +27,12 @@ type RefreshRequest struct {
 
 // TokenResponse kembalian sukses login/refresh
 type TokenResponse struct {
-	UserID       int64  `json:"user_id"`
-	DisplayName  string `json:"display_name"`
-	Email        string `json:"email"`
-	Role         string `json:"role"`
+	UserID       int64    `json:"user_id"`
+	DisplayName  string   `json:"display_name"`
+	Email        string   `json:"email"`
+	Role         string   `json:"role"`
+	Roles        []string `json:"roles"`       // slug role RBAC (Fase 1)
+	Permissions  []string `json:"permissions"` // kode permission RBAC (Fase 1)
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token,omitempty"` // tidak selalu ada (misal di refresh token response kalau mau disembunyikan, tapi req minta diabaikan)
 	ExpiresIn    int    `json:"expires_in"`              // dalam detik

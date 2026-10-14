@@ -2,24 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { LogOut } from "lucide-react";
 
-function isLightColor(hexColor) {
-  if (!hexColor || typeof hexColor !== 'string' || !hexColor.startsWith('#')) return true;
-  const hex = hexColor.replace('#', '');
-  if (hex.length !== 6 && hex.length !== 3) return true;
-  const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.slice(0, 2), 16);
-  const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.slice(2, 4), 16);
-  const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.slice(4, 6), 16);
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness > 140;
-}
 
 const Topbar = ({ toggleSidebar }) => {
   const { user, brandInfo, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
-
-  const brandColor = brandInfo?.primary_color || '#FED853';
-  const isLight = isLightColor(brandColor);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -33,7 +20,7 @@ const Topbar = ({ toggleSidebar }) => {
   }, []);
 
   return (
-    <header className="bg-white border-b border-neutral-200/80 h-16 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-30 font-body">
+    <header className="bg-white border-b border-neutral-200/80 h-16 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-30 shadow-xs font-body">
       {/* Mobile Hamburger Menu */}
       <button 
         className="md:hidden p-2 -ml-2 text-neutral-600 hover:bg-neutral-100 rounded-xl transition-colors focus:outline-none"
@@ -58,10 +45,7 @@ const Topbar = ({ toggleSidebar }) => {
           onClick={() => setDropdownOpen(!dropdownOpen)}
           className="flex items-center gap-2.5 hover:bg-neutral-50 p-1.5 pr-2.5 rounded-xl transition-colors focus:outline-none border border-transparent hover:border-neutral-200 cursor-pointer"
         >
-          <div 
-            className="w-8 h-8 rounded-xl flex items-center justify-center font-bold font-heading text-xs shadow-2xs shrink-0"
-            style={{ backgroundColor: brandColor, color: isLight ? '#14171A' : '#FFFFFF' }}
-          >
+          <div className="w-8 h-8 rounded-xl bg-primary-500 text-white flex items-center justify-center font-bold font-heading text-xs shadow-2xs shrink-0">
             {brandInfo?.name ? brandInfo.name.charAt(0).toUpperCase() : 'T'}
           </div>
           <div className="text-left hidden sm:block">

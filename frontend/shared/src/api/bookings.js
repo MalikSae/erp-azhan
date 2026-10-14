@@ -95,16 +95,6 @@ export const deletePayment = async (paymentId) => {
   return data;
 };
 
-export const addBookingAddon = async (bookingId, payload) => {
-  const { data } = await api.post(`/api/admin/bookings/${bookingId}/addons`, payload);
-  return data;
-};
-
-export const deleteBookingAddon = async (bookingId, addonId) => {
-  const { data } = await api.delete(`/api/admin/bookings/${bookingId}/addons/${addonId}`);
-  return data;
-};
-
 export const addBookingDiscount = async (bookingId, payload) => {
   const { data } = await api.post(`/api/admin/bookings/${bookingId}/discounts`, payload);
   return data;
