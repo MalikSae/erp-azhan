@@ -40,6 +40,18 @@ func (h *Handler) ListItems(w http.ResponseWriter, r *http.Request) {
 	h.sendJSON(w, http.StatusOK, items)
 }
 
+// cleanPhotoURL menormalkan URL foto: kosong menjadi nil.
+func cleanPhotoURL(v *string) *string {
+	if v == nil {
+		return nil
+	}
+	t := strings.TrimSpace(*v)
+	if t == "" {
+		return nil
+	}
+	return &t
+}
+
 // CreateItem: POST /api/admin/perlengkapan-items
 func (h *Handler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	var req CreateItemRequest
@@ -59,7 +71,7 @@ func (h *Handler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		qtyPerSet = *req.QtyPerSet
 	}
 
-	item, err := h.repo.CreateItem(r.Context(), nama, qtyPerSet)
+	item, err := h.repo.CreateItem(r.Context(), nama, cleanPhotoURL(req.PhotoURL), qtyPerSet)
 	if err != nil {
 		if errors.Is(err, ErrDuplicate) {
 			h.sendError(w, http.StatusConflict, "Nama item perlengkapan sudah terdaftar")
@@ -98,7 +110,7 @@ func (h *Handler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		qtyPerSet = *req.QtyPerSet
 	}
 
-	item, err := h.repo.UpdateItem(r.Context(), id, nama, qtyPerSet)
+	item, err := h.repo.UpdateItem(r.Context(), id, nama, cleanPhotoURL(req.PhotoURL), qtyPerSet)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan")

@@ -1,40 +1,33 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import PageHeader from '../components/ui/PageHeader';
-import DataTable from '../components/ui/DataTable';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import FormField from '../components/ui/FormField';
-import Input from '../components/ui/Input';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { Boxes, Package, Building2, XCircle, SlidersHorizontal } from 'lucide-react';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import Button from 'shared/ui/Button';
+import Modal from 'shared/ui/Modal';
+import FormField from 'shared/ui/FormField';
+import Input from 'shared/ui/Input';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import StatTile from 'shared/ui/StatTile';
+import ActionMenu from 'shared/ui/ActionMenu';
 import { listPerlengkapanStok, updatePerlengkapanStok } from '../api/perlengkapan';
 import { listBrands } from '../api/brands';
+import ItemPhoto from '../components/ItemPhoto';
 
-const BrandCell = ({ brandName, brandLogoUrl, brandIconUrl }) => {
-  const [imageError, setImageError] = useState(false);
+// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
+const BrandChip = ({ name, color }) => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
+    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color || '#9CA3AF' }} />
+    {name}
+  </span>
+);
 
-  const imageUrl = brandIconUrl || brandLogoUrl;
-  const showInitial = !imageUrl || imageError;
-
-  return (
-    <div className="flex items-center gap-2">
-      {showInitial ? (
-        <div className="w-6 h-6 shrink-0 rounded-full bg-neutral-200 flex items-center justify-center text-xs font-bold text-neutral-600 uppercase font-heading">
-          {brandName ? brandName.charAt(0) : '?'}
-        </div>
-      ) : (
-        <img
-          src={imageUrl.startsWith('http') ? imageUrl : `${import.meta.env.VITE_API_BASE_URL}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`}
-          alt={brandName}
-          className="w-6 h-6 shrink-0 rounded-full object-cover bg-neutral-100"
-          onError={() => setImageError(true)}
-        />
-      )}
-      <span className="font-heading font-medium text-neutral-900 text-sm">{brandName}</span>
-    </div>
-  );
-};
+const STOK_OPTIONS = [
+  { value: '', label: 'Semua Stok' },
+  { value: 'habis', label: 'Stok habis' },
+  { value: 'ada', label: 'Stok tersedia' },
+];
 
 const InventoryStokPerlengkapanPage = () => {
   const [stokList, setStokList] = useState([]);
@@ -44,6 +37,7 @@ const InventoryStokPerlengkapanPage = () => {
   const [successMessage, setSuccessMessage] = useState(null);
 
   const [filterBrandId, setFilterBrandId] = useState('');
+  const [filterStok, setFilterStok] = useState('');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -143,47 +137,123 @@ const InventoryStokPerlengkapanPage = () => {
     }
   };
 
-  // Filter client-side berdasarkan dropdown Brand lokal
-  const filteredData = useMemo(() => {
-    if (!filterBrandId) return stokList;
-    return stokList.filter(row => String(row.brand_id) === filterBrandId);
-  }, [stokList, filterBrandId]);
+  const brandColor = useMemo(() => {
+    const map = {};
+    brands.forEach(b => { map[b.id] = b.primary_color; });
+    return map;
+  }, [brands]);
+
+  // Filter client-side. Ringkasan mengikuti filter brand supaya cocok dengan tabel.
+  const brandRows = useMemo(
+    () => stokList.filter(row => !filterBrandId || String(row.brand_id) === filterBrandId),
+    [stokList, filterBrandId]
+  );
+
+  const rows = useMemo(() => brandRows.filter(row => {
+    if (filterStok === 'habis') return row.stok_tersedia === 0;
+    if (filterStok === 'ada') return row.stok_tersedia > 0;
+    return true;
+  }), [brandRows, filterStok]);
+
+  const stats = useMemo(() => ({
+    item: new Set(brandRows.map(r => r.perlengkapan_item_id)).size,
+    brand: new Set(brandRows.map(r => r.brand_id)).size,
+    totalStok: brandRows.reduce((sum, r) => sum + (r.stok_tersedia || 0), 0),
+    habis: brandRows.filter(r => r.stok_tersedia === 0).length,
+  }), [brandRows]);
 
   const columns = [
-    { header: 'Brand', key: 'brand_name' },
-    { header: 'Nama Item', key: 'nama_item' },
-    { header: 'Stok Tersedia', key: 'stok_tersedia' },
+    { header: 'Item', key: 'nama_item', sortable: true },
+    { header: 'Brand', key: 'brand_name', sortable: true },
+    { header: 'Stok Tersedia', key: 'stok_tersedia', sortable: true, sortFn: (a, b) => (a.stok_tersedia || 0) - (b.stok_tersedia || 0) },
     { header: 'Aksi', key: 'aksi' }
   ];
 
+  const renderCell = (row, key) => {
+    if (key === 'nama_item') {
+      return (
+        <div className="flex items-center gap-3 min-w-0">
+          <ItemPhoto url={row.photo_url} name={row.nama_item} />
+          <button
+            type="button"
+            onClick={() => handleOpenModal(row)}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          >
+            {row.nama_item}
+          </button>
+        </div>
+      );
+    }
+
+    if (key === 'brand_name') {
+      return <BrandChip name={row.brand_name} color={brandColor[row.brand_id]} />;
+    }
+
+    if (key === 'stok_tersedia') {
+      return row.stok_tersedia === 0 ? (
+        <span className="text-[13px] font-body whitespace-nowrap">
+          <span className="font-semibold text-danger-600">0</span>
+          <span className="ml-1.5 text-[11px] text-danger-600">Habis</span>
+        </span>
+      ) : (
+        <span className="text-[13px] font-body font-semibold text-neutral-900">{row.stok_tersedia}</span>
+      );
+    }
+
+    if (key === 'aksi') {
+      const menuItems = [
+        { label: 'Atur Stok', icon: SlidersHorizontal, tooltip: 'Tambah atau kurangi stok', onClick: () => handleOpenModal(row) },
+      ];
+      return <ActionMenu items={menuItems} align="right" />;
+    }
+
+    return row[key];
+  };
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Stok Perlengkapan per Brand" />
+      <PageHeader title="Stok per Brand" />
 
       {errorMessage && (
-        <Alert variant="error">{errorMessage}</Alert>
+        <Alert variant="error" onClose={() => setErrorMessage(null)}>{errorMessage}</Alert>
       )}
       {successMessage && (
-        <Alert variant="success">{successMessage}</Alert>
+        <Alert variant="success" onClose={() => setSuccessMessage(null)}>{successMessage}</Alert>
+      )}
+
+      {!isLoading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatTile icon={Boxes} variant="primary" value={stats.item} label="Item" />
+          <StatTile icon={Building2} variant="info" value={stats.brand} label="Brand" />
+          <StatTile icon={Package} variant="success" value={stats.totalStok} label="Total stok" />
+          <StatTile icon={XCircle} variant="danger" value={stats.habis} label="Stok habis" />
+        </div>
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-pure-white rounded-lg border border-neutral-200 shadow-sm">
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
           <LoadingSpinner />
         </div>
       ) : (
         <DataTable
           columns={columns}
-          data={filteredData}
+          data={rows}
           itemsPerPage={15}
           emptyMessage="Belum ada data stok perlengkapan."
-          searchPlaceholder="Cari nama atau kode perlengkapan..."
+          searchPlaceholder="Cari item perlengkapan atau brand..."
           toolbarActions={
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2">
+              <CustomDropdown
+                value={filterStok}
+                onChange={(val) => setFilterStok(val)}
+                className="!mb-0 w-40"
+                placeholder="Semua Stok"
+                options={STOK_OPTIONS}
+              />
               <CustomDropdown
                 value={filterBrandId}
                 onChange={(val) => setFilterBrandId(val)}
-                className="!mb-0 w-full sm:w-48"
+                className="!mb-0 w-44"
                 placeholder="Semua Brand"
                 options={[
                   { value: '', label: 'Semua Brand' },
@@ -192,44 +262,7 @@ const InventoryStokPerlengkapanPage = () => {
               />
             </div>
           }
-          renderCell={(row, key) => {
-            if (key === 'brand_name') {
-              return (
-                <BrandCell
-                  brandName={row.brand_name}
-                  brandLogoUrl={row.brand_logo_url}
-                  brandIconUrl={row.brand_icon_url}
-                />
-              );
-            }
-            if (key === 'nama_item') {
-              return (
-                <span className="font-heading font-medium text-neutral-900 text-sm">
-                  {row.nama_item}
-                </span>
-              );
-            }
-            if (key === 'stok_tersedia') {
-              return (
-                <span className="font-heading font-medium text-neutral-900 text-sm">
-                  {row.stok_tersedia}
-                </span>
-              );
-            }
-            if (key === 'aksi') {
-              return (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => handleOpenModal(row)}
-                  className="text-xs"
-                >
-                  Atur Stok
-                </Button>
-              );
-            }
-            return row[key];
-          }}
+          renderCell={renderCell}
         />
       )}
 

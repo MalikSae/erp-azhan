@@ -29,7 +29,7 @@ func NewRepository(db *sql.DB) *Repository {
 
 func (r *Repository) ListItems(ctx context.Context) ([]PerlengkapanItem, error) {
 	query := `
-		SELECT i.id, i.nama, COALESCE(t.qty, 0) AS qty_per_set, i.created_at
+		SELECT i.id, i.nama, i.photo_url, COALESCE(t.qty, 0) AS qty_per_set, i.created_at
 		FROM perlengkapan_items i
 		LEFT JOIN perlengkapan_set_template t ON i.id = t.perlengkapan_item_id
 		ORDER BY i.nama ASC
@@ -43,7 +43,7 @@ func (r *Repository) ListItems(ctx context.Context) ([]PerlengkapanItem, error) 
 	items := make([]PerlengkapanItem, 0)
 	for rows.Next() {
 		var it PerlengkapanItem
-		if err := rows.Scan(&it.ID, &it.Nama, &it.QtyPerSet, &it.CreatedAt); err != nil {
+		if err := rows.Scan(&it.ID, &it.Nama, &it.PhotoURL, &it.QtyPerSet, &it.CreatedAt); err != nil {
 			return nil, fmt.Errorf("perlengkapan.ListItems scan: %w", err)
 		}
 		items = append(items, it)
@@ -53,13 +53,13 @@ func (r *Repository) ListItems(ctx context.Context) ([]PerlengkapanItem, error) 
 
 func (r *Repository) GetItemByID(ctx context.Context, id uint64) (*PerlengkapanItem, error) {
 	query := `
-		SELECT i.id, i.nama, COALESCE(t.qty, 0) AS qty_per_set, i.created_at
+		SELECT i.id, i.nama, i.photo_url, COALESCE(t.qty, 0) AS qty_per_set, i.created_at
 		FROM perlengkapan_items i
 		LEFT JOIN perlengkapan_set_template t ON i.id = t.perlengkapan_item_id
 		WHERE i.id = ?
 	`
 	var it PerlengkapanItem
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&it.ID, &it.Nama, &it.QtyPerSet, &it.CreatedAt)
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&it.ID, &it.Nama, &it.PhotoURL, &it.QtyPerSet, &it.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -69,15 +69,15 @@ func (r *Repository) GetItemByID(ctx context.Context, id uint64) (*PerlengkapanI
 	return &it, nil
 }
 
-func (r *Repository) CreateItem(ctx context.Context, nama string, qtyPerSet int) (*PerlengkapanItem, error) {
+func (r *Repository) CreateItem(ctx context.Context, nama string, photoURL *string, qtyPerSet int) (*PerlengkapanItem, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("perlengkapan.CreateItem begin tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	queryItem := "INSERT INTO perlengkapan_items (nama) VALUES (?)"
-	res, err := tx.ExecContext(ctx, queryItem, nama)
+	queryItem := "INSERT INTO perlengkapan_items (nama, photo_url) VALUES (?, ?)"
+	res, err := tx.ExecContext(ctx, queryItem, nama, photoURL)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
@@ -112,15 +112,15 @@ func (r *Repository) CreateItem(ctx context.Context, nama string, qtyPerSet int)
 	return r.GetItemByID(ctx, uint64(id))
 }
 
-func (r *Repository) UpdateItem(ctx context.Context, id uint64, nama string, qtyPerSet int) (*PerlengkapanItem, error) {
+func (r *Repository) UpdateItem(ctx context.Context, id uint64, nama string, photoURL *string, qtyPerSet int) (*PerlengkapanItem, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("perlengkapan.UpdateItem begin tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	query := "UPDATE perlengkapan_items SET nama = ? WHERE id = ?"
-	res, err := tx.ExecContext(ctx, query, nama, id)
+	query := "UPDATE perlengkapan_items SET nama = ?, photo_url = ? WHERE id = ?"
+	res, err := tx.ExecContext(ctx, query, nama, photoURL, id)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
@@ -227,6 +227,7 @@ func (r *Repository) ListStokAll(ctx context.Context) ([]PerlengkapanStokAllRow,
 			b.icon_url AS brand_icon_url,
 			s.perlengkapan_item_id, 
 			i.nama AS nama_item, 
+			i.photo_url AS photo_url,
 			COALESCE(t.qty, 0) AS qty_per_set,
 			s.stok_tersedia
 		FROM perlengkapan_stok s
@@ -252,6 +253,7 @@ func (r *Repository) ListStokAll(ctx context.Context) ([]PerlengkapanStokAllRow,
 			&iconURL,
 			&it.PerlengkapanItemID,
 			&it.NamaItem,
+			&it.PhotoURL,
 			&it.QtyPerSet,
 			&it.StokTersedia,
 		); err != nil {
@@ -279,7 +281,7 @@ func (r *Repository) ListStokByBrand(ctx context.Context, brandID uint64) ([]Per
 	_, _ = r.db.ExecContext(ctx, querySync, brandID, brandID)
 
 	query := `
-		SELECT s.perlengkapan_item_id, i.nama, COALESCE(t.qty, 0) AS qty_per_set, s.stok_tersedia
+		SELECT s.perlengkapan_item_id, i.nama, i.photo_url, COALESCE(t.qty, 0) AS qty_per_set, s.stok_tersedia
 		FROM perlengkapan_stok s
 		JOIN perlengkapan_items i ON s.perlengkapan_item_id = i.id
 		LEFT JOIN perlengkapan_set_template t ON t.perlengkapan_item_id = i.id
@@ -295,7 +297,7 @@ func (r *Repository) ListStokByBrand(ctx context.Context, brandID uint64) ([]Per
 	items := make([]PerlengkapanStokItem, 0)
 	for rows.Next() {
 		var it PerlengkapanStokItem
-		if err := rows.Scan(&it.PerlengkapanItemID, &it.Nama, &it.QtyPerSet, &it.StokTersedia); err != nil {
+		if err := rows.Scan(&it.PerlengkapanItemID, &it.Nama, &it.PhotoURL, &it.QtyPerSet, &it.StokTersedia); err != nil {
 			return nil, fmt.Errorf("perlengkapan.ListStokByBrand scan: %w", err)
 		}
 		items = append(items, it)

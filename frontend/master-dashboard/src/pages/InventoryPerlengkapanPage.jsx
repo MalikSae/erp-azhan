@@ -1,21 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import PageHeader from '../components/ui/PageHeader';
-import DataTable from '../components/ui/DataTable';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import FormField from '../components/ui/FormField';
-import Input from '../components/ui/Input';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Boxes, CheckCircle2, Package, Pencil, Trash2 } from 'lucide-react';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import Button from 'shared/ui/Button';
+import Modal from 'shared/ui/Modal';
+import FormField from 'shared/ui/FormField';
+import Input from 'shared/ui/Input';
+import FileInput from 'shared/ui/FileInput';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import StatTile from 'shared/ui/StatTile';
+import ActionMenu from 'shared/ui/ActionMenu';
+import CustomDropdown from 'shared/ui/CustomDropdown';
 import {
   listPerlengkapanItems,
   createPerlengkapanItem,
   updatePerlengkapanItem,
   deletePerlengkapanItem
 } from '../api/perlengkapan';
+import { uploadMedia } from '../api/media';
+import ItemPhoto from '../components/ItemPhoto';
+
 
 const initialItemForm = {
   nama: '',
+  photo_url: '',
   qty_per_set: '0'
 };
 
@@ -23,6 +32,7 @@ const InventoryPerlengkapanPage = () => {
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [filter, setFilter] = useState('');
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -30,6 +40,8 @@ const InventoryPerlengkapanPage = () => {
   const [formData, setFormData] = useState(initialItemForm);
   const [formErrors, setFormErrors] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
 
   // Delete modal state
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -57,12 +69,14 @@ const InventoryPerlengkapanPage = () => {
       setEditingItem(item);
       setFormData({
         nama: item.nama || '',
+        photo_url: item.photo_url || '',
         qty_per_set: String(item.qty_per_set ?? 0)
       });
     } else {
       setEditingItem(null);
       setFormData(initialItemForm);
     }
+    setPhotoPreview(null);
     setFormErrors(null);
     setIsModalOpen(true);
   };
@@ -82,6 +96,23 @@ const InventoryPerlengkapanPage = () => {
       ...prev,
       [name]: value
     }));
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoPreview(URL.createObjectURL(file));
+    setIsUploadingPhoto(true);
+    setFormErrors(null);
+    try {
+      const url = await uploadMedia(file, 'perlengkapan');
+      setFormData(prev => ({ ...prev, photo_url: url }));
+    } catch (error) {
+      setFormErrors(error.response?.data?.error || 'Gagal mengunggah foto item.');
+      setPhotoPreview(null);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
   };
 
   const handleSubmitItem = async (e) => {
@@ -106,11 +137,13 @@ const InventoryPerlengkapanPage = () => {
       if (editingItem) {
         await updatePerlengkapanItem(editingItem.id, {
           nama,
+          photo_url: formData.photo_url || null,
           qty_per_set: qty
         });
       } else {
         await createPerlengkapanItem({
           nama,
+          photo_url: formData.photo_url || null,
           qty_per_set: qty
         });
       }
@@ -139,6 +172,62 @@ const InventoryPerlengkapanPage = () => {
 
   const itemToDelete = items.find(it => it.id === deleteConfirmId);
 
+  const stats = useMemo(() => {
+    const dalamSet = items.filter(i => (i.qty_per_set || 0) > 0);
+    return {
+      total: items.length,
+      dalamSet: dalamSet.length,
+      katalog: items.length - dalamSet.length,
+      isiSet: dalamSet.reduce((sum, i) => sum + i.qty_per_set, 0),
+    };
+  }, [items]);
+
+  const rows = useMemo(() => items.filter(i => {
+    if (filter === 'set') return (i.qty_per_set || 0) > 0;
+    if (filter === 'katalog') return !(i.qty_per_set > 0);
+    return true;
+  }), [items, filter]);
+
+  const columns = [
+    { header: 'Item', key: 'nama', sortable: true },
+    { header: 'Isi Set Standar', key: 'qty_per_set', sortable: true, sortFn: (a, b) => (a.qty_per_set || 0) - (b.qty_per_set || 0) },
+    { header: 'Aksi', key: 'aksi' },
+  ];
+
+  const renderCell = (row, key) => {
+    if (key === 'nama') {
+      return (
+        <div className="flex items-center gap-3 min-w-0">
+          <ItemPhoto url={row.photo_url} name={row.nama} />
+          <button
+            type="button"
+            onClick={() => handleOpenModal(row)}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          >
+            {row.nama}
+          </button>
+        </div>
+      );
+    }
+
+    if (key === 'qty_per_set') {
+      if (!row.qty_per_set || row.qty_per_set === 0) {
+        return <span className="text-xs text-neutral-400 font-body">Hanya katalog</span>;
+      }
+      return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.qty_per_set} pcs / pax</span>;
+    }
+
+    if (key === 'aksi') {
+      const menuItems = [
+        { label: 'Edit', icon: Pencil, tooltip: 'Edit Item', onClick: () => handleOpenModal(row) },
+        { label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus Item', onClick: () => setDeleteConfirmId(row.id) },
+      ];
+      return <ActionMenu items={menuItems} align="right" />;
+    }
+
+    return row[key];
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -148,68 +237,41 @@ const InventoryPerlengkapanPage = () => {
       />
 
       {errorMessage && (
-        <Alert variant="error">{errorMessage}</Alert>
+        <Alert variant="error" onClose={() => setErrorMessage(null)}>{errorMessage}</Alert>
+      )}
+
+      {!isLoading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatTile icon={Boxes} variant="primary" value={stats.total} label="Item" />
+          <StatTile icon={CheckCircle2} variant="success" value={stats.dalamSet} label="Dalam set" />
+          <StatTile icon={Package} variant="info" value={stats.katalog} label="Hanya katalog" />
+          <StatTile icon={Boxes} variant="violet" value={`${stats.isiSet} pcs`} label="Isi set / pax" />
+        </div>
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-pure-white rounded-lg border border-neutral-200 shadow-sm">
-          <LoadingSpinner />
-        </div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
       ) : (
         <DataTable
-          columns={[
-            { header: 'Nama Item', key: 'nama' },
-            { header: 'Set/Pax', key: 'qty_per_set' },
-            { header: 'Aksi', key: 'aksi' },
-          ]}
-          data={items}
+          columns={columns}
+          data={rows}
           itemsPerPage={10}
           emptyMessage='Belum ada item perlengkapan di katalog. Klik "+ Tambah Item" untuk menambahkan.'
           searchPlaceholder="Cari nama item perlengkapan..."
-          renderCell={(row, key) => {
-            if (key === 'nama') {
-              return (
-                <span className="font-heading font-medium text-neutral-900 text-sm">
-                  {row.nama}
-                </span>
-              );
-            }
-            if (key === 'qty_per_set') {
-              if (!row.qty_per_set || row.qty_per_set === 0) {
-                return <span className="text-xs text-neutral-400 font-body">Tidak termasuk set</span>;
-              }
-              return (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary-50 text-primary-700 border border-primary-200 font-body">
-                  {row.qty_per_set} pcs / pax
-                </span>
-              );
-            }
-            if (key === 'aksi') {
-              return (
-                <div className="flex gap-3 items-center">
-                  <button 
-                    onClick={() => handleOpenModal(row)} 
-                    title="Edit"
-                    className="text-neutral-400 hover:text-neutral-700 transition-colors p-1 rounded hover:bg-neutral-100"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
-                  <button 
-                    onClick={() => setDeleteConfirmId(row.id)} 
-                    title="Hapus"
-                    className="text-neutral-400 hover:text-danger-600 transition-colors p-1 rounded hover:bg-danger-50"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              );
-            }
-            return row[key];
-          }}
+          toolbarActions={
+            <CustomDropdown
+              value={filter}
+              onChange={(val) => setFilter(val)}
+              className="!mb-0 w-44"
+              placeholder="Semua Item"
+              options={[
+                { value: '', label: `Semua Item (${stats.total})` },
+                { value: 'set', label: `Dalam set (${stats.dalamSet})` },
+                { value: 'katalog', label: `Hanya katalog (${stats.katalog})` },
+              ]}
+            />
+          }
+          renderCell={renderCell}
         />
       )}
 
@@ -236,9 +298,23 @@ const InventoryPerlengkapanPage = () => {
             />
           </FormField>
 
+          <FileInput
+            label="Foto Item"
+            accept="image/png,image/jpeg,image/webp"
+            value={formData.photo_url}
+            previewUrl={photoPreview}
+            onChange={handlePhotoChange}
+            onRemove={() => {
+              setPhotoPreview(null);
+              setFormData(prev => ({ ...prev, photo_url: '' }));
+            }}
+            isUploading={isUploadingPhoto}
+            uploadingText="Mengunggah foto..."
+            placeholder="Pilih foto item (PNG, JPG, WebP)..."
+          />
+
           <FormField
             label="Jumlah per Set"
-            hint="Isi 0 jika item ini hanya katalog/tambahan dan tidak masuk ke set standar 1 pax jamaah."
           >
             <Input
               type="number"
@@ -264,7 +340,7 @@ const InventoryPerlengkapanPage = () => {
             <Button
               type="submit"
               variant="primary"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingPhoto}
             >
               {isSubmitting ? "Menyimpan..." : "Simpan"}
             </Button>
