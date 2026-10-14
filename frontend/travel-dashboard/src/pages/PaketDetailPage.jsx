@@ -1,26 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getScheduleAdmin } from 'shared';
-import PageHeader from '../components/ui/PageHeader';
-import Card from '../components/ui/Card';
-import Badge from '../components/ui/Badge';
-import Button from '../components/ui/Button';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import PageHeader from 'shared/ui/PageHeader';
+import Button from 'shared/ui/Button';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { 
   ArrowLeft, 
   Plane, 
   Hotel, 
   Users, 
-  Calendar, 
   CheckCircle2, 
   XCircle, 
   Tag, 
-  Clock, 
   MapPin, 
-  Sparkles,
-  TicketCheck,
-  PlusCircle,
   FileText
 } from 'lucide-react';
 
@@ -103,7 +96,7 @@ const PaketDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-20 bg-white rounded-lg border border-neutral-200 shadow-sm">
+      <div className="flex justify-center items-center py-20 bg-white rounded-2xl border border-neutral-200 shadow-card">
         <LoadingSpinner />
       </div>
     );
@@ -154,21 +147,21 @@ const PaketDetailPage = () => {
         <div className="lg:col-span-2 space-y-6">
           
           {/* Card: Jadwal Penerbangan */}
-          <div className="bg-white rounded-lg border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-primary-700 font-semibold font-heading text-sm">
-                <Plane size={17} />
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-neutral-900 font-semibold font-heading text-sm">
+                <Plane size={17} strokeWidth={1.75} className="text-primary-600" />
                 <span>Jadwal & Rute Penerbangan</span>
               </div>
             </div>
 
             <div className="p-5 space-y-5">
               {/* Section 1: Maskapai, Tipe Penerbangan, Status Tiket */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-neutral-50 rounded-xl border border-neutral-200">
                 {/* 1. Maskapai Penerbangan */}
                 <div className="flex items-center gap-3">
                   {schedule.maskapai?.logo_url ? (
-                    <div className="w-12 h-12 rounded-lg bg-white border border-neutral-200 p-1 flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
+                    <div className="w-12 h-12 rounded-xl bg-white border border-neutral-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
                       <img 
                         src={schedule.maskapai.logo_url.startsWith('http') ? schedule.maskapai.logo_url : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${schedule.maskapai.logo_url}`} 
                         alt={schedule.maskapai.name} 
@@ -176,7 +169,7 @@ const PaketDetailPage = () => {
                       />
                     </div>
                   ) : (
-                    <div className="w-12 h-12 rounded-lg bg-primary-50 border border-primary-100 flex items-center justify-center text-primary-700 shrink-0">
+                    <div className="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center text-primary-600 shrink-0">
                       <Plane size={22} />
                     </div>
                   )}
@@ -187,7 +180,7 @@ const PaketDetailPage = () => {
                         {schedule.maskapai?.name || '-'}
                       </span>
                       {schedule.maskapai?.code && (
-                        <span className="text-[11px] text-primary-700 font-mono font-bold bg-primary-50 px-1.5 py-0.2 rounded border border-primary-200">
+                        <span className="text-[11px] text-neutral-500 font-mono font-semibold">
                           {schedule.maskapai.code}
                         </span>
                       )}
@@ -202,28 +195,10 @@ const PaketDetailPage = () => {
                     {schedule.is_direct_flight ? 'Direct Flight' : 'Transit'}
                   </p>
                 </div>
-
-                {/* 3. Status Tiket */}
-                <div className="md:border-l md:border-neutral-200 md:pl-4 flex flex-col justify-center">
-                  <span className="text-xs text-neutral-500 block">Status Tiket</span>
-                  <div className="mt-1">
-                    {schedule.is_ticket_confirmed ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-success-50 text-success-700 border border-success-200">
-                        <CheckCircle2 size={13} />
-                        <span>Tiket Confirmed</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-warning-50 text-warning-800 border border-warning-200">
-                        <Clock size={13} />
-                        <span>Tiket Pending</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+</div>
 
               {/* Section 2: Durasi, Keberangkatan, Kepulangan */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-neutral-50 rounded-xl border border-neutral-200">
                 {/* 1. Durasi */}
                 <div className="flex flex-col justify-center">
                   <span className="text-xs text-neutral-500 block">Durasi Perjalanan</span>
@@ -237,7 +212,7 @@ const PaketDetailPage = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-neutral-500 block">Keberangkatan</span>
                     {schedule.berangkat_kode_penerbangan && (
-                      <span className="font-mono text-[11px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.2 rounded border border-primary-200">
+                      <span className="font-mono text-[11px] font-semibold text-neutral-500">
                         {schedule.berangkat_kode_penerbangan}
                       </span>
                     )}
@@ -272,7 +247,7 @@ const PaketDetailPage = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-neutral-500 block">Kepulangan</span>
                     {schedule.pulang_kode_penerbangan && (
-                      <span className="font-mono text-[11px] font-semibold text-primary-700 bg-primary-50 px-1.5 py-0.2 rounded border border-primary-200">
+                      <span className="font-mono text-[11px] font-semibold text-neutral-500">
                         {schedule.pulang_kode_penerbangan}
                       </span>
                     )}
@@ -306,16 +281,16 @@ const PaketDetailPage = () => {
           </div>
 
           {/* Card: Rincian Harga Kamar */}
-          <div className="bg-white rounded-lg border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-primary-700 font-semibold font-heading text-sm">
-                <Tag size={17} />
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-neutral-900 font-semibold font-heading text-sm">
+                <Tag size={17} strokeWidth={1.75} className="text-primary-600" />
                 <span>Rincian Harga Paket per Tipe Kamar</span>
               </div>
             </div>
 
             <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg text-center shadow-xs">
+              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-xl text-center">
                 <span className="text-xs font-semibold uppercase text-neutral-500 block mb-1">
                   Kamar Quad (4 Orang)
                 </span>
@@ -324,7 +299,7 @@ const PaketDetailPage = () => {
                 </span>
               </div>
 
-              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg text-center shadow-xs">
+              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-xl text-center">
                 <span className="text-xs font-semibold uppercase text-neutral-500 block mb-1">
                   Kamar Triple (3 Orang)
                 </span>
@@ -333,7 +308,7 @@ const PaketDetailPage = () => {
                 </span>
               </div>
 
-              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg text-center shadow-xs">
+              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-xl text-center">
                 <span className="text-xs font-semibold uppercase text-neutral-500 block mb-1">
                   Kamar Double (2 Orang)
                 </span>
@@ -345,8 +320,8 @@ const PaketDetailPage = () => {
           </div>
 
           {/* Card: Fasilitas Include & Exclude */}
-          <div className="bg-white rounded-lg border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50">
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-neutral-100">
               <span className="text-sm font-semibold font-heading text-neutral-900">
                 Fasilitas Paket
               </span>
@@ -397,10 +372,10 @@ const PaketDetailPage = () => {
 
           {/* Card: Itinerary / Rencana Perjalanan (Jika ada) */}
           {schedule.itinerary && (
-            <div className="bg-white rounded-lg border border-neutral-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-primary-700 font-semibold font-heading text-sm">
-                  <FileText size={17} />
+            <div className="bg-white rounded-2xl border border-neutral-200 shadow-card overflow-hidden">
+              <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-neutral-900 font-semibold font-heading text-sm">
+                  <FileText size={17} strokeWidth={1.75} className="text-primary-600" />
                   <span>Itinerary: {schedule.itinerary.nama}</span>
                 </div>
               </div>
@@ -414,7 +389,7 @@ const PaketDetailPage = () => {
                   <div className="space-y-3">
                     {schedule.itinerary.days.map((day, idx) => (
                       <div key={idx} className="flex gap-3 text-xs">
-                        <span className="shrink-0 w-14 font-semibold font-heading text-primary-700 bg-primary-50 px-2 py-1 rounded text-center h-fit border border-primary-200">
+                        <span className="shrink-0 w-14 font-semibold font-heading text-primary-600 py-1 h-fit">
                           Hari {day.hari_ke}
                         </span>
                         <div className="space-y-0.5">
@@ -434,9 +409,9 @@ const PaketDetailPage = () => {
         <div className="space-y-6">
           
           {/* Card: Kuota & Kursi */}
-          <div className="bg-white rounded-lg border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center gap-2 text-primary-700 font-semibold font-heading text-sm">
-              <Users size={17} />
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-neutral-100 flex items-center gap-2 text-neutral-900 font-semibold font-heading text-sm">
+              <Users size={17} strokeWidth={1.75} className="text-primary-600" />
               <span>Status Kuota & Kursi</span>
             </div>
 
@@ -467,15 +442,15 @@ const PaketDetailPage = () => {
           </div>
 
           {/* Card: Hotel & Akomodasi */}
-          <div className="bg-white rounded-lg border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center gap-2 text-primary-700 font-semibold font-heading text-sm">
-              <Hotel size={17} />
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-neutral-100 flex items-center gap-2 text-neutral-900 font-semibold font-heading text-sm">
+              <Hotel size={17} strokeWidth={1.75} className="text-primary-600" />
               <span>Hotel & Akomodasi</span>
             </div>
 
             <div className="p-5 space-y-4">
               {/* Hotel Makkah */}
-              <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-1.5">
+              <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 space-y-1.5">
                 <span className="text-xs font-bold uppercase tracking-wider text-neutral-500 block">
                   Hotel Makkah
                 </span>
@@ -483,7 +458,7 @@ const PaketDetailPage = () => {
                   {schedule.hotel_mekkah?.name || '-'}
                 </p>
                 {schedule.hotel_mekkah?.star_rating > 0 ? (
-                  <p className="text-xs text-amber-500 font-bold tracking-wider">
+                  <p className="text-xs text-warning-500 font-bold tracking-wider">
                     {'★'.repeat(schedule.hotel_mekkah.star_rating)}
                   </p>
                 ) : null}
@@ -496,7 +471,7 @@ const PaketDetailPage = () => {
               </div>
 
               {/* Hotel Madinah */}
-              <div className="p-3.5 bg-neutral-50 rounded-lg border border-neutral-200 space-y-1.5">
+              <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 space-y-1.5">
                 <span className="text-xs font-bold uppercase tracking-wider text-neutral-500 block">
                   Hotel Madinah
                 </span>
@@ -504,7 +479,7 @@ const PaketDetailPage = () => {
                   {schedule.hotel_madinah?.name || '-'}
                 </p>
                 {schedule.hotel_madinah?.star_rating > 0 ? (
-                  <p className="text-xs text-amber-500 font-bold tracking-wider">
+                  <p className="text-xs text-warning-500 font-bold tracking-wider">
                     {'★'.repeat(schedule.hotel_madinah.star_rating)}
                   </p>
                 ) : null}
@@ -517,26 +492,6 @@ const PaketDetailPage = () => {
               </div>
             </div>
           </div>
-
-          {/* Card: Add-On Master (Jika ada) */}
-          {schedule.add_ons && schedule.add_ons.length > 0 && (
-            <div className="bg-white rounded-lg border border-neutral-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center gap-2 text-primary-700 font-semibold font-heading text-sm">
-                <Sparkles size={17} />
-                <span>Add-On Tersedia</span>
-              </div>
-              <div className="p-5 space-y-2">
-                {schedule.add_ons.map((addon, idx) => (
-                  <div key={idx} className="p-2.5 bg-neutral-50 rounded border border-neutral-200 text-xs">
-                    <p className="font-semibold text-neutral-900">{addon.nama || addon.add_on_nama}</p>
-                    {addon.deskripsi && (
-                      <p className="text-neutral-500 text-[11px] mt-0.5">{addon.deskripsi}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

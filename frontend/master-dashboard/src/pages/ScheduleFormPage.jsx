@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import PageHeader from '../components/ui/PageHeader';
-import FormField from '../components/ui/FormField';
-import Input from '../components/ui/Input';
-import Textarea from '../components/ui/Textarea';
-import CustomDropdown from '../components/ui/CustomDropdown';
-import AutocompleteInput from '../components/ui/AutocompleteInput';
-import Button from '../components/ui/Button';
-import Alert from '../components/ui/Alert';
-import MetaBox from '../components/ui/MetaBox';
-import Badge from '../components/ui/Badge';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
-import Toggle from '../components/ui/Toggle';
-import { Plane, Building2, Calendar, Hotel, DollarSign, CheckSquare, MapPin, Save, CheckCircle2, Image as ImageIcon, Tag, Plus, Trash2, X, Info } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import PageHeader from 'shared/ui/PageHeader';
+import FormField from 'shared/ui/FormField';
+import Input from 'shared/ui/Input';
+import Textarea from 'shared/ui/Textarea';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import AutocompleteInput from 'shared/ui/AutocompleteInput';
+import Button from 'shared/ui/Button';
+import FormLayout, { FormSection, SidebarSection, FormAside } from 'shared/ui/FormLayout';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
 
 import { getSchedule, createSchedule, updateSchedule } from '../api/schedules';
 import { listHotels } from '../api/hotels';
@@ -21,13 +19,41 @@ import { listAirports } from '../api/airports';
 import { listCategories } from '../api/categories';
 import { listItineraries } from '../api/itineraries';
 import { listBrands } from '../api/brands';
-import { listAddOns } from '../api/addons';
 import { uploadMediaWithOptions } from '../api/media';
+
+// Nama field yang dipakai backend di awal pesan error ("harga_quad wajib ...").
+const SERVER_ERROR_FIELDS = new Set([
+  'jadwal_nama', 'seat_total', 'brand_id', 'maskapai_id', 'berangkat_tanggal', 'berangkat_jam',
+  'berangkat_kode_penerbangan', 'pulang_tanggal', 'pulang_jam', 'pulang_kode_penerbangan',
+  'hotel_mekkah_id', 'hotel_madinah_id', 'harga_quad', 'harga_triple', 'harga_double',
+  'harga_infant', 'minimal_dp', 'nominal_komisi_langsung',
+  'nominal_bonus_pembinaan',
+]);
+
+const serverErrorField = (msg) => {
+  const m = /^([a-z_]+) /.exec(msg || '');
+  if (m && SERVER_ERROR_FIELDS.has(m[1])) return m[1];
+  if (/nama dan tanggal berangkat/.test(msg || '')) return 'jadwal_nama';
+  return null;
+};
+
+const SECTION_LINKS = [
+  { id: 'sec-dasar', label: 'Dasar' },
+  { id: 'sec-harga', label: 'Harga' },
+  { id: 'sec-penerbangan', label: 'Penerbangan' },
+  { id: 'sec-hotel', label: 'Hotel' },
+  { id: 'sec-fasilitas', label: 'Fasilitas' },
+  { id: 'sec-itinerary', label: 'Itinerary' },
+];
 
 const ScheduleFormPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditMode = !!id;
+  // Duplikat paket: /schedules/new?from=<id> memuat data paket sumber sebagai draft baru.
+  const [searchParams] = useSearchParams();
+  const copyFromId = !isEditMode ? searchParams.get('from') : null;
+  const sourceId = isEditMode ? id : copyFromId;
 
   const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,6 +61,9 @@ const ScheduleFormPage = () => {
   const [formError, setFormError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const errorRef = useRef(null);
+  // Snapshot isian setelah data awal selesai dimuat, untuk peringatan "belum disimpan".
+  const baselineRef = useRef(null);
+  const submittedRef = useRef(false);
   useEffect(() => {
     if (formError) { errorRef.current?.focus(); errorRef.current?.scrollIntoView({ block: 'center' }); }
   }, [formError]);
@@ -48,7 +77,6 @@ const ScheduleFormPage = () => {
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [itineraryOptions, setItineraryOptions] = useState([]);
   const [brandOptions, setBrandOptions] = useState([]);
-  const [addOnOptions, setAddOnOptions] = useState([]);
 
   const [includeItemsText, setIncludeItemsText] = useState('');
   const [excludeItemsText, setExcludeItemsText] = useState('');
@@ -56,13 +84,12 @@ const ScheduleFormPage = () => {
   const [berangkatFlightNo, setBerangkatFlightNo] = useState('');
   const [berangkatIsCustom, setBerangkatIsCustom] = useState(false);
   const [pulangFlightNo, setPulangFlightNo] = useState('');
+  // Baris hotel transit kosong yang baru ditambahkan lewat tombol "+ Tambah Hotel Transit".
+  const [extraTransitHotelSlots, setExtraTransitHotelSlots] = useState(0);
   const [pulangIsCustom, setPulangIsCustom] = useState(false);
 
   const [formData, setFormData] = useState({
     jadwal_nama: '',
-    is_promo: false,
-      promo_until: '',
-    is_ticket_confirmed: false,
     is_direct_flight: false,
     seat_total: '',
     kuota_terisi: '',
@@ -90,11 +117,9 @@ const ScheduleFormPage = () => {
     minimal_dp: '',
     nominal_komisi_langsung: '',
     nominal_bonus_pembinaan: '',
-    harga_coret: '',
     itinerary_id: '',
     include_items: [''],
     exclude_items: [''],
-    add_on_ids: [],
     brosur_url: '',
     brosur_thumb_url: '',
     status: 'draft',
@@ -113,7 +138,6 @@ const ScheduleFormPage = () => {
           listCategories(),
           listItineraries(),
           listBrands(),
-          listAddOns(),
           listAirports()
         ];
 
@@ -123,19 +147,17 @@ const ScheduleFormPage = () => {
         const categories = results[2];
         const itineraries = results[3];
         const brands = results[4] || [];
-        const addons = results[5] || [];
-        const airports = results[6] || [];
+        const airports = results[5] || [];
 
         setHotelOptions(hotels || []);
         setAirlineOptions(airlines || []);
         setCategoryOptions(categories || []);
         setItineraryOptions(itineraries || []);
         setBrandOptions(brands || []);
-        setAddOnOptions(addons || []);
         setAirportOptions(airports || []);
 
-        if (isEditMode) {
-          const scheduleData = await getSchedule(id);
+        if (sourceId) {
+          const scheduleData = await getSchedule(sourceId);
           const safeArray = (arr) => (Array.isArray(arr) && arr.length > 0) ? arr : [''];
 
           const parseTransitData = (raw) => {
@@ -170,7 +192,7 @@ const ScheduleFormPage = () => {
                 const trimmed = seg.trim();
                 if (trimmed.includes(',')) {
                   const p = trimmed.split(',');
-                  return { bandara: p[0].trim(), durasi: p.slice(1).join(',').trim() };
+                  return { bandara: p[0].trim(), durasi: (p.slice(1).join(',').match(/\d+/) || [''])[0] };
                 }
                 return { bandara: trimmed, durasi: '' };
               }).filter(i => i.bandara || i.durasi);
@@ -222,11 +244,8 @@ const ScheduleFormPage = () => {
           const parsedTransit = parseTransitData(scheduleData.transit_bandara);
           const initialTransitHotelIDs = (scheduleData.transit_hotels || []).map(th => th.hotel_id);
 
-          setFormData({
+          const loadedForm = {
             jadwal_nama: scheduleData.jadwal_nama || '',
-            is_promo: scheduleData.is_promo || false,
-              promo_until: scheduleData.promo_until ? scheduleData.promo_until.split('T')[0] : '',
-            is_ticket_confirmed: scheduleData.is_ticket_confirmed || false,
             is_direct_flight: scheduleData.is_direct_flight || false,
             seat_total: scheduleData.seat_total || '',
             expected_seat_total: scheduleData.seat_total,
@@ -255,16 +274,25 @@ const ScheduleFormPage = () => {
             minimal_dp: scheduleData.minimal_dp ?? '',
             nominal_komisi_langsung: scheduleData.nominal_komisi_langsung ?? '',
             nominal_bonus_pembinaan: scheduleData.nominal_bonus_pembinaan ?? '',
-            harga_coret: scheduleData.harga_coret || '',
             itinerary_id: scheduleData.itinerary?.id || scheduleData.itinerary_id || '',
             include_items: safeArray(scheduleData.include_items),
             exclude_items: safeArray(scheduleData.exclude_items),
-            add_on_ids: scheduleData.add_ons ? scheduleData.add_ons.map(a => a.id) : [],
             brosur_url: scheduleData.brosur_url || '',
             brosur_thumb_url: scheduleData.brosur_thumb_url || '',
             status: scheduleData.status || 'draft',
             brand_id: scheduleData.brand_id || '',
             category_id: scheduleData.category_id || (scheduleData.category?.id || '')
+          };
+
+          // Salinan: tanggal diisi ulang, kursi terisi direset, dan selalu mulai sebagai draft.
+          setFormData(isEditMode ? loadedForm : {
+            ...loadedForm,
+            jadwal_nama: `${loadedForm.jadwal_nama} (Salinan)`.trim(),
+            status: 'draft',
+            expected_seat_total: undefined,
+            kuota_terisi: '',
+            berangkat_tanggal: '',
+            pulang_tanggal: '',
           });
 
           setIncludeItemsText(safeArray(scheduleData.include_items).join('\n'));
@@ -282,16 +310,26 @@ const ScheduleFormPage = () => {
     };
 
     fetchInitialData();
-  }, [id, isEditMode]);
+  }, [id, isEditMode, sourceId]);
+
+  useEffect(() => {
+    if (!isLoadingInitial && baselineRef.current === null) baselineRef.current = JSON.stringify(formData);
+  }, [isLoadingInitial, formData]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (e) => {
+      if (submittedRef.current || baselineRef.current === null || JSON.stringify(formData) === baselineRef.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [formData]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => {
-      const updates = { [name]: type === 'checkbox' ? checked : value };
-      if (name === 'is_promo' && !checked) {
-        updates.harga_coret = '';
-      }
-      return { ...prev, ...updates };
+      return { ...prev, [name]: type === 'checkbox' ? checked : value };
     });
   };
 
@@ -366,19 +404,6 @@ const ScheduleFormPage = () => {
   };
 
 
-
-  const handleAddOnCheckboxChange = (id, checked) => {
-    setFormData(prev => {
-      const currentIds = [...prev.add_on_ids];
-      if (checked) {
-        if (!currentIds.includes(id)) currentIds.push(id);
-      } else {
-        const index = currentIds.indexOf(id);
-        if (index > -1) currentIds.splice(index, 1);
-      }
-      return { ...prev, add_on_ids: currentIds };
-    });
-  };
 
   // Handler Transit Keberangkatan
   const handleAddTransitBerangkat = () => {
@@ -461,7 +486,7 @@ const ScheduleFormPage = () => {
         brosur_thumb_url: response.thumb_url || ''
       }));
     } catch (err) {
-      setFormError(err.response?.data?.error || 'Gagal mengupload brosur.');
+      setFormError(err.response?.data?.error || 'Gagal mengupload gambar utama.');
     } finally {
       setIsUploadingBrosur(false);
       e.target.value = ''; // Reset input
@@ -478,6 +503,37 @@ const ScheduleFormPage = () => {
         transit_hotel_ids: [...prev.transit_hotel_ids, idNum]
       };
     });
+  };
+
+  // Pilihan hotel untuk satu baris transit: tidak boleh sama dengan hotel Mekkah/Madinah
+  // maupun hotel transit lain (hotel milik baris itu sendiri tetap boleh muncul).
+  const transitHotelOptionsFor = (currentId) => hotelOptions
+    .filter(h =>
+      h.id !== parseInt(formData.hotel_mekkah_id, 10) &&
+      h.id !== parseInt(formData.hotel_madinah_id, 10) &&
+      (h.id === currentId || !formData.transit_hotel_ids.includes(h.id))
+    )
+    .map(h => ({
+      value: h.id,
+      label: `${h.name} — ${h.city || 'Lainnya'}${h.star_rating ? ` (${'★'.repeat(h.star_rating)})` : ''}`
+    }));
+
+  const handleReplaceTransitHotel = (oldId, newValue) => {
+    const newId = parseInt(newValue, 10);
+    setFormData(prev => ({
+      ...prev,
+      transit_hotel_ids: !newId
+        ? prev.transit_hotel_ids.filter(id => id !== oldId)
+        : prev.transit_hotel_ids
+            .map(id => (id === oldId ? newId : id))
+            .filter((id, i, arr) => arr.indexOf(id) === i)
+    }));
+  };
+
+  const handleFillTransitHotelSlot = (newValue) => {
+    if (!newValue) return;
+    handleAddTransitHotel(newValue);
+    setExtraTransitHotelSlots(count => Math.max(0, count - 1));
   };
 
   const handleRemoveTransitHotel = (hotelId) => {
@@ -540,6 +596,7 @@ const ScheduleFormPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
     setFormError(null);
+    setFieldErrors({});
 
     try {
       const hargaQuad = parseCurrency(formData.harga_quad);
@@ -550,15 +607,13 @@ const ScheduleFormPage = () => {
       // Kosong = jadwal tidak ikut program Syiar (NULL), 0 tetap disimpan sebagai 0.
       const komisiLangsung = formData.nominal_komisi_langsung !== '' ? parseCurrency(formData.nominal_komisi_langsung) : null;
       const bonusPembinaan = formData.nominal_bonus_pembinaan !== '' ? parseCurrency(formData.nominal_bonus_pembinaan) : null;
-      const hargaCoret = formData.is_promo && formData.harga_coret
-        ? parseCurrency(formData.harga_coret)
-        : null;
 
       const errors = {};
-      if (hargaCoret !== null && hargaCoret <= hargaQuad) errors.harga_coret = 'Harga coret harus lebih besar dari harga Quad.';
       if (minimalDP !== null && (minimalDP < 0 || minimalDP > Math.min(hargaQuad, hargaTriple, hargaDouble))) errors.minimal_dp = 'DP harus antara 0 dan harga kamar termurah.';
-      if (!isEditMode && Number(formData.kuota_terisi || 0) > Number(formData.seat_total)) errors.kuota_terisi = 'Kuota terisi tidak boleh melebihi total kuota.';
-      if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal = 'Tanggal pulang harus setelah tanggal berangkat.';
+if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal = 'Tanggal pulang harus setelah tanggal berangkat.';
+      if (hargaInfant === null) errors.harga_infant = 'Harga bayi wajib diisi.';
+      if (hargaTriple < hargaQuad) errors.harga_triple = 'Harga Triple tidak boleh lebih murah dari harga Quad.';
+      if (hargaDouble < hargaTriple) errors.harga_double = 'Harga Double tidak boleh lebih murah dari harga Triple.';
       if (Object.keys(errors).length) {
         setFieldErrors(errors); setFormError('Periksa kembali isian paket berikut.'); return;
       }
@@ -573,43 +628,34 @@ const ScheduleFormPage = () => {
 
       let transitParts = [];
       if (validBerangkat.length > 0) {
-        const strB = validBerangkat.map(t => t.durasi ? `${t.bandara}, ${t.durasi}` : t.bandara).join('; ');
+        const strB = validBerangkat.map(t => t.durasi ? `${t.bandara}, ${t.durasi} Jam` : t.bandara).join('; ');
         transitParts.push(`Berangkat: ${strB}`);
       }
       if (validPulang.length > 0) {
-        const strP = validPulang.map(t => t.durasi ? `${t.bandara}, ${t.durasi}` : t.bandara).join('; ');
+        const strP = validPulang.map(t => t.durasi ? `${t.bandara}, ${t.durasi} Jam` : t.bandara).join('; ');
         transitParts.push(`Pulang: ${strP}`);
       }
 
       const finalTransit = transitParts.join(' | ');
 
       const finalBerangkatKode = (!berangkatIsCustom && currentAirlineCode)
-        ? (currentAirlineCode + berangkatFlightNo)
+        ? (berangkatFlightNo ? currentAirlineCode + berangkatFlightNo : '')
         : (formData.berangkat_kode_penerbangan || '').trim();
 
       const finalPulangKode = (!pulangIsCustom && currentAirlineCode)
-        ? (currentAirlineCode + pulangFlightNo)
+        ? (pulangFlightNo ? currentAirlineCode + pulangFlightNo : '')
         : (formData.pulang_kode_penerbangan || '').trim();
 
-      const promoUntilIso = (formData.is_promo && formData.promo_until)
-        ? new Date(formData.promo_until).toISOString()
-        : null;
-
       const seatTotalNum = parseInt(formData.seat_total, 10);
-      const kuotaTerisiNum = parseInt(formData.kuota_terisi || 0, 10);
-      const seatSisaNum = Math.max(0, seatTotalNum - kuotaTerisiNum);
 
       const payload = {
         jadwal_nama: (formData.jadwal_nama || '').trim(),
         brand_id: parseInt(formData.brand_id, 10),
         category_id: formData.category_id ? parseInt(formData.category_id, 10) : null,
         status: formData.status || 'draft',
-        is_promo: !!formData.is_promo,
-        promo_until: promoUntilIso,
-        is_ticket_confirmed: !!formData.is_ticket_confirmed,
         is_direct_flight: !!formData.is_direct_flight,
         seat_total: seatTotalNum,
-        ...(isEditMode ? { expected_seat_total: formData.expected_seat_total } : { seat_sisa: seatSisaNum }),
+        ...(isEditMode ? { expected_seat_total: formData.expected_seat_total } : {}),
         maskapai_id: parseInt(formData.maskapai_id, 10),
         berangkat_tanggal: formData.berangkat_tanggal,
         berangkat_jam: formData.berangkat_jam || '',
@@ -632,11 +678,9 @@ const ScheduleFormPage = () => {
         minimal_dp: minimalDP,
         nominal_komisi_langsung: komisiLangsung,
         nominal_bonus_pembinaan: bonusPembinaan,
-        harga_coret: hargaCoret,
         itinerary_id: formData.itinerary_id ? parseInt(formData.itinerary_id, 10) : null,
         include_items: includeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
         exclude_items: excludeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
-        add_on_ids: (formData.add_on_ids || []).map(Number),
         brosur_url: formData.brosur_url || '',
         brosur_thumb_url: formData.brosur_thumb_url || ''
       };
@@ -646,9 +690,16 @@ const ScheduleFormPage = () => {
       } else {
         await createSchedule(payload);
       }
-      navigate('/schedules');
+      submittedRef.current = true;
+      const namaPaket = (formData.jadwal_nama || '').trim();
+      navigate('/schedules', {
+        state: { successMessage: `Paket "${namaPaket}" berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
+      });
     } catch (err) {
-      setFormError(err.response?.data?.error || `Gagal ${isEditMode ? 'mengupdate' : 'menyimpan'} paket.`);
+      const message = err.response?.data?.error || `Gagal ${isEditMode ? 'mengupdate' : 'menyimpan'} paket.`;
+      setFormError(message);
+      const field = serverErrorField(message);
+      if (field) setFieldErrors({ [field]: message });
     } finally {
       setIsSubmitting(false);
     }
@@ -670,7 +721,7 @@ const ScheduleFormPage = () => {
 
   if (isLoadingInitial) {
     return (
-      <div className="flex justify-center p-8 bg-white rounded-lg border border-neutral-200 shadow-sm">
+      <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
         <LoadingSpinner />
       </div>
     );
@@ -689,167 +740,158 @@ const ScheduleFormPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isEditMode ? 'Edit Paket Umroh' : 'Tambah Paket Baru'}
-        subtitle={isEditMode ? `Perbarui data jadwal, hotel, penerbangan, dan harga untuk ${formData.jadwal_nama || "paket"}` : "Penyusunan jadwal keberangkatan, rincian hotel, maskapai, dan skema harga kamar"}
+        title={isEditMode ? 'Edit Paket Umroh' : (copyFromId ? 'Duplikat Paket' : 'Tambah Paket Baru')}
         onBack={() => navigate('/schedules')}
       />
 
       <form onSubmit={handleSubmit}>
-        {formError && <div ref={errorRef} tabIndex={-1} role="alert" aria-labelledby="package-errors" className="mb-5 rounded-xl border border-danger-200 bg-danger-50 p-4">
-          <h2 id="package-errors" className="font-bold">{formError}</h2>
-          <ul>{Object.entries(fieldErrors).map(([field, message]) => <li key={field}><a className="underline" href={`#${field}`} onClick={e => { e.preventDefault(); document.getElementById(field)?.focus(); }}>{message}</a></li>)}</ul>
-        </div>}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-
-          {/* Kolom KIRI (Konten Utama) */}
-          <div className="lg:col-span-2 space-y-6">
-
-            {/* 1. SECTION: INFORMASI DASAR & KUOTA */}
-            <MetaBox
-              title="Informasi Dasar & Kuota"
-              subtitle="Nama paket, tipe keberangkatan, dan alokasi total seat"
-              icon={<Tag size={18} className="text-neutral-700" />}
-            >
+        {formError && (
+          <div
+            ref={errorRef}
+            tabIndex={-1}
+            role="alert"
+            aria-labelledby="package-errors"
+            className="mb-5 flex gap-3 rounded-xl border border-danger-200 bg-danger-50 p-4 font-body focus:outline-none"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger-600" strokeWidth={2} aria-hidden="true" />
+            <div className="min-w-0">
+              <h2 id="package-errors" className="font-heading text-sm font-semibold leading-5 text-danger-800">{formError}</h2>
+              {Object.keys(fieldErrors).length > 0 && (
+                <ul className="mt-1.5 space-y-1">
+                  {Object.entries(fieldErrors).map(([field, message]) => (
+                    <li key={field} className="text-[13px] leading-5 text-danger-700">
+                      <a
+                        className="underline decoration-danger-300 underline-offset-2 hover:text-danger-900 hover:decoration-danger-600"
+                        href={`#${field}`}
+                        onClick={e => { e.preventDefault(); document.getElementById(field)?.focus(); }}
+                      >
+                        {message}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+        <FormLayout tabs={SECTION_LINKS}>
+            <FormSection id="sec-dasar" title="Informasi Dasar">
               <div className="space-y-4">
-                {/* Input Nama Paket */}
-                <Input
-                  label="Nama Paket"
-                  type="text"
-                  name="jadwal_nama"
-                    error={fieldErrors.jadwal_nama}
-                  value={formData.jadwal_nama}
-                  onChange={handleChange}
-                  required
-                  placeholder="mis. Umroh Reguler 9 Hari"
-                  prefixIcon={
-                    <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                  }
-                />
-
-                {/* Grid Alokasi Kuota */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Total Kuota */}
+                {/* Nama paket + total kuota dalam satu baris */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
+                  <Input
+                    label="Nama Paket"
+                    className="!mb-0"
+                    type="text"
+                    name="jadwal_nama"
+                      error={fieldErrors.jadwal_nama}
+                    value={formData.jadwal_nama}
+                    onChange={handleChange}
+                    required
+                    placeholder="mis. Umroh Reguler 9 Hari"
+                  />
                   <div>
                     <Input
                       label="Total Kuota"
                       className="!mb-0"
                       type="number"
                       name="seat_total"
-                    error={fieldErrors.seat_total}
+                      error={fieldErrors.seat_total}
                       value={formData.seat_total}
                       onChange={handleChange}
                       required
                       min="1"
                       placeholder="mis. 45"
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                      }
                     />
-                  </div>
-
-                  {/* Kuota Terisi */}
-                  <div>
-                    <Input
-                      label="Kuota Terisi"
-                      className="!mb-0"
-                      type="number"
-                      name="kuota_terisi"
-                    error={fieldErrors.kuota_terisi}
-                      readOnly={isEditMode}
-                      helpText={isEditMode ? "Dihitung dari alokasi kursi terkini; edit konten tidak mengubah alokasi." : undefined}
-                      value={formData.kuota_terisi}
-                      onChange={handleChange}
-                      min="0"
-                      placeholder="mis. 10"
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      }
-                    />
-                    {parseInt(formData.kuota_terisi || 0) > parseInt(formData.seat_total || 0) && (
-                      <p className="text-xs text-danger-600 mt-1">Melebihi total kuota!</p>
+                    {isEditMode && (
+                      <p className="mt-1.5 text-xs text-neutral-500 font-body">
+                        Terisi {formData.kuota_terisi === '' ? 0 : formData.kuota_terisi} · Sisa {formData.seat_total ? Math.max(0, parseInt(formData.seat_total) - (parseInt(formData.kuota_terisi) || 0)) : 0}
+                      </p>
                     )}
-                  </div>
-
-                  {/* Sisa Kuota */}
-                  <div>
-                    <Input
-                      label="Sisa Kuota"
-                      className="!mb-0"
-                      type="text"
-                      value={formData.seat_total ? `${Math.max(0, parseInt(formData.seat_total) - (parseInt(formData.kuota_terisi) || 0))} Kursi` : '-'}
-                      readOnly
-                      placeholder="Otomatis"
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-success-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                      }
-                    />
                   </div>
                 </div>
               </div>
-            </MetaBox>
+            </FormSection>
 
-            {/* 2. SECTION: PENERBANGAN & RUTE */}
-            <MetaBox
-              title="Penerbangan & Maskapai"
-              subtitle="Maskapai penerbangan, jadwal terbang, dan rute transit"
-              icon={<Plane size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-harga" title="Harga per Orang (Rp)">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Input
+                    label="Kamar isi 4 (Quad)"
+                    className="!mb-0"
+                    type="text"
+                    name="harga_quad"
+                    error={fieldErrors.harga_quad}
+                    value={formatCurrency(formData.harga_quad)}
+                    onChange={handleCurrencyChange}
+                    required
+                    placeholder="mis. 25.000.000"
+                  />
+                  <Input
+                    label="Kamar isi 3 (Triple)"
+                    className="!mb-0"
+                    type="text"
+                    name="harga_triple"
+                    error={fieldErrors.harga_triple}
+                    value={formatCurrency(formData.harga_triple)}
+                    onChange={handleCurrencyChange}
+                    required
+                    placeholder="mis. 26.000.000"
+                  />
+                  <Input
+                    label="Kamar isi 2 (Double)"
+                    className="!mb-0"
+                    type="text"
+                    name="harga_double"
+                    error={fieldErrors.harga_double}
+                    value={formatCurrency(formData.harga_double)}
+                    onChange={handleCurrencyChange}
+                    required
+                    placeholder="mis. 28.000.000"
+                  />
+                  <Input
+                    label="Bayi (Infant)"
+                    className="!mb-0"
+                    type="text"
+                    name="harga_infant"
+                    error={fieldErrors.harga_infant}
+                    value={formatCurrency(formData.harga_infant)}
+                    onChange={handleCurrencyChange}
+                    required
+                    placeholder="mis. 5.000.000"
+                  />
+                </div>
+                <p className="text-xs text-neutral-500 font-body">
+                  Harga per orang. Dewasa mengikuti isi kamar; bayi memakai harga sendiri.
+                </p>
+              </div>
+            </FormSection>
+            <FormSection id="sec-penerbangan" title="Penerbangan">
               <div className="space-y-6">
                 {/* Bagian 1: Data Maskapai */}
-                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
-                  <div className="flex-1 min-w-[240px]">
-                    <AutocompleteInput
-                      label="Maskapai"
-                      className="!mb-0"
-                      name="maskapai_id"
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <AutocompleteInput
+                    label="Maskapai"
+                    className="!mb-0"
+                    name="maskapai_id"
                     error={fieldErrors.maskapai_id}
-                      value={formData.maskapai_id}
-                      onChange={(e) => handleMaskapaiChange(e.target.value)}
-                      onSelect={(opt) => handleMaskapaiChange(opt ? opt.value : '')}
-                      required
-                      placeholder="Ketik / cari maskapai..."
-                      options={airlineOptions.map(a => ({ value: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                      }
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-6 pb-1">
-                    <div className="flex items-center gap-2">
-                      <Toggle
-                        id="is_direct_flight"
-                        name="is_direct_flight"
-                        checked={formData.is_direct_flight}
-                        onChange={handleChange}
-                      />
-                      <label htmlFor="is_direct_flight" className="text-sm font-medium text-neutral-700 font-body cursor-pointer select-none">
-                        Penerbangan Direct
-                      </label>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Toggle
-                        id="is_ticket_confirmed"
-                        name="is_ticket_confirmed"
-                        checked={formData.is_ticket_confirmed}
-                        onChange={handleChange}
-                      />
-                      <label htmlFor="is_ticket_confirmed" className="text-sm font-medium text-neutral-700 font-body cursor-pointer select-none">
-                        Tiket Confirmed
-                      </label>
-                    </div>
-                  </div>
+                    value={formData.maskapai_id}
+                    onChange={(e) => handleMaskapaiChange(e.target.value)}
+                    onSelect={(opt) => handleMaskapaiChange(opt ? opt.value : '')}
+                    required
+                    placeholder="Ketik / cari maskapai..."
+                    options={airlineOptions.map(a => ({ value: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
+                  />
+                  <CustomDropdown
+                    label="Jenis Penerbangan"
+                    className="!mb-0"
+                    value={formData.is_direct_flight ? 'direct' : 'transit'}
+                    onChange={(val) => handleChange({ target: { name: 'is_direct_flight', type: 'checkbox', checked: val === 'direct' } })}
+                    options={[
+                      { value: 'direct', label: 'Direct' },
+                      { value: 'transit', label: 'Transit' }
+                    ]}
+                  />
                 </div>
 
                 {/* Divider */}
@@ -857,10 +899,7 @@ const ScheduleFormPage = () => {
 
                 {/* Bagian 2: Penerbangan Berangkat */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-indigo-700 text-xs font-bold font-heading uppercase tracking-wider">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                    </svg>
+                  <div className="flex items-center gap-2 text-neutral-600 text-[13px] font-semibold font-heading">
                     <span>Penerbangan Berangkat</span>
                   </div>
 
@@ -885,19 +924,14 @@ const ScheduleFormPage = () => {
                       value={formData.berangkat_jam}
                       onChange={handleTimeChange}
                       placeholder="mis. 09:00"
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      }
                     />
                     {!berangkatIsCustom && currentAirlineCode ? (
-                      <div className="space-y-1">
-                        <label className="block text-sm font-medium text-neutral-700 font-body">
-                          Kode Penerbangan <span className="text-danger-600">*</span>
+                      <div>
+                        <label className="mb-1.5 block min-h-5 text-[13px] font-medium leading-5 text-neutral-800 font-body">
+                          Kode Penerbangan
                         </label>
-                        <div className="flex rounded-md shadow-sm">
-                          <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-neutral-300 bg-neutral-100 text-neutral-700 font-mono font-bold text-sm select-none">
+                        <div className="flex">
+                          <span className="inline-flex h-10 items-center px-3 rounded-l-lg border border-r-0 border-neutral-200 bg-neutral-50 text-neutral-700 font-mono font-semibold text-[13px] select-none">
                             {currentAirlineCode}
                           </span>
                           <input
@@ -908,8 +942,7 @@ const ScheduleFormPage = () => {
                             placeholder="mis. 822"
                             maxLength={5}
                             inputMode="numeric"
-                            className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-neutral-300 focus:ring-primary-500 focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder-neutral-400"
-                            required
+                            className="h-10 flex-1 min-w-0 block w-full px-3.5 rounded-none rounded-r-lg border border-neutral-200 focus:outline-none focus:border-primary-500 text-[13px] font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
                           />
                         </div>
                       </div>
@@ -922,12 +955,6 @@ const ScheduleFormPage = () => {
                         value={formData.berangkat_kode_penerbangan}
                         onChange={handleChange}
                         placeholder="mis. SV 822"
-                        required
-                        prefixIcon={
-                          <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                          </svg>
-                        }
                       />
                     )}
                   </div>
@@ -943,12 +970,6 @@ const ScheduleFormPage = () => {
                       onSelect={(opt) => setFormData(prev => ({ ...prev, berangkat_bandara_asal: opt?.value || '' }))}
                       placeholder="Ketik kode / kota (mis. CGK / Jakarta)"
                       options={airportDropdownOptions}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      }
                     />
                     <AutocompleteInput
                       label="Bandara Tujuan Akhir"
@@ -959,12 +980,6 @@ const ScheduleFormPage = () => {
                       onSelect={(opt) => setFormData(prev => ({ ...prev, berangkat_bandara_tujuan: opt?.value || '' }))}
                       placeholder="Ketik kode / kota (mis. JED / Jeddah)"
                       options={airportDropdownOptions}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      }
                     />
                   </div>
 
@@ -972,10 +987,7 @@ const ScheduleFormPage = () => {
                   {!formData.is_direct_flight && (
                     <div className="pt-2 space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-800 font-heading flex items-center gap-1.5 uppercase tracking-wider">
-                          <svg className="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                          </svg>
+                        <span className="text-xs font-semibold text-neutral-700 font-heading flex items-center gap-1.5">
                           <span>Transit Keberangkatan</span>
                         </span>
                       </div>
@@ -994,26 +1006,16 @@ const ScheduleFormPage = () => {
                                   onSelect={(opt) => handleTransitBerangkatChange(idx, 'bandara', opt?.value || '')}
                                   placeholder="Ketik kode / kota (mis. KUL / DOH)"
                                   options={airportDropdownOptions}
-                                  prefixIcon={
-                                    <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
-                                  }
                                 />
                               </div>
                               <div>
                                 <Input
-                                  label="Durasi Transit"
+                                  label="Durasi Transit (jam)"
                                   className="!mb-0"
                                   value={item.durasi}
-                                  onChange={(e) => handleTransitBerangkatChange(idx, 'durasi', e.target.value)}
-                                  placeholder="mis. 2 Jam"
-                                  prefixIcon={
-                                    <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                  }
+                                  onChange={(e) => handleTransitBerangkatChange(idx, 'durasi', e.target.value.replace(/\D/g, '').slice(0, 3))}
+                                  inputMode="numeric"
+                                  placeholder="mis. 2"
                                 />
                               </div>
                             </div>
@@ -1054,10 +1056,7 @@ const ScheduleFormPage = () => {
 
                 {/* Bagian 3: Penerbangan Pulang */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-emerald-700 text-xs font-bold font-heading uppercase tracking-wider">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
+                  <div className="flex items-center gap-2 text-neutral-600 text-[13px] font-semibold font-heading">
                     <span>Penerbangan Pulang</span>
                   </div>
 
@@ -1082,19 +1081,14 @@ const ScheduleFormPage = () => {
                       value={formData.pulang_jam}
                       onChange={handleTimeChange}
                       placeholder="mis. 15:30"
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      }
                     />
                     {!pulangIsCustom && currentAirlineCode ? (
-                      <div className="space-y-1">
-                        <label className="block text-sm font-medium text-neutral-700 font-body">
-                          Kode Penerbangan <span className="text-danger-600">*</span>
+                      <div>
+                        <label className="mb-1.5 block min-h-5 text-[13px] font-medium leading-5 text-neutral-800 font-body">
+                          Kode Penerbangan
                         </label>
-                        <div className="flex rounded-md shadow-sm">
-                          <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-neutral-300 bg-neutral-100 text-neutral-700 font-mono font-bold text-sm select-none">
+                        <div className="flex">
+                          <span className="inline-flex h-10 items-center px-3 rounded-l-lg border border-r-0 border-neutral-200 bg-neutral-50 text-neutral-700 font-mono font-semibold text-[13px] select-none">
                             {currentAirlineCode}
                           </span>
                           <input
@@ -1105,8 +1099,7 @@ const ScheduleFormPage = () => {
                             placeholder="mis. 823"
                             maxLength={5}
                             inputMode="numeric"
-                            className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-neutral-300 focus:ring-primary-500 focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder-neutral-400"
-                            required
+                            className="h-10 flex-1 min-w-0 block w-full px-3.5 rounded-none rounded-r-lg border border-neutral-200 focus:outline-none focus:border-primary-500 text-[13px] font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
                           />
                         </div>
                       </div>
@@ -1119,12 +1112,6 @@ const ScheduleFormPage = () => {
                         value={formData.pulang_kode_penerbangan}
                         onChange={handleChange}
                         placeholder="mis. SV 823"
-                        required
-                        prefixIcon={
-                          <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                          </svg>
-                        }
                       />
                     )}
                   </div>
@@ -1140,12 +1127,6 @@ const ScheduleFormPage = () => {
                       onSelect={(opt) => setFormData(prev => ({ ...prev, pulang_bandara_asal: opt?.value || '' }))}
                       placeholder="Ketik kode / kota (mis. MED / Madinah)"
                       options={airportDropdownOptions}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      }
                     />
                     <AutocompleteInput
                       label="Bandara Tujuan Akhir"
@@ -1156,12 +1137,6 @@ const ScheduleFormPage = () => {
                       onSelect={(opt) => setFormData(prev => ({ ...prev, pulang_bandara_tujuan: opt?.value || '' }))}
                       placeholder="Ketik kode / kota (mis. CGK / Jakarta)"
                       options={airportDropdownOptions}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      }
                     />
                   </div>
 
@@ -1169,10 +1144,7 @@ const ScheduleFormPage = () => {
                   {!formData.is_direct_flight && (
                     <div className="pt-2 space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-800 font-heading flex items-center gap-1.5 uppercase tracking-wider">
-                          <svg className="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                          </svg>
+                        <span className="text-xs font-semibold text-neutral-700 font-heading flex items-center gap-1.5">
                           <span>Transit Kepulangan</span>
                         </span>
                       </div>
@@ -1191,26 +1163,16 @@ const ScheduleFormPage = () => {
                                   onSelect={(opt) => handleTransitPulangChange(idx, 'bandara', opt?.value || '')}
                                   placeholder="Ketik kode / kota (mis. DOH / DXB)"
                                   options={airportDropdownOptions}
-                                  prefixIcon={
-                                    <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
-                                  }
                                 />
                               </div>
                               <div>
                                 <Input
-                                  label="Durasi Transit"
+                                  label="Durasi Transit (jam)"
                                   className="!mb-0"
                                   value={item.durasi}
-                                  onChange={(e) => handleTransitPulangChange(idx, 'durasi', e.target.value)}
-                                  placeholder="mis. 3 Jam"
-                                  prefixIcon={
-                                    <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                  }
+                                  onChange={(e) => handleTransitPulangChange(idx, 'durasi', e.target.value.replace(/\D/g, '').slice(0, 3))}
+                                  inputMode="numeric"
+                                  placeholder="mis. 3"
                                 />
                               </div>
                             </div>
@@ -1246,14 +1208,9 @@ const ScheduleFormPage = () => {
                   )}
                 </div>
               </div>
-            </MetaBox>
+            </FormSection>
 
-            {/* 3. SECTION: AKOMODASI HOTEL */}
-            <MetaBox
-              title="Akomodasi Hotel"
-              subtitle="Penginapan hotel Mekkah, Madinah, dan hotel transit"
-              icon={<Hotel size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-hotel" title="Akomodasi Hotel">
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Hotel Mekkah */}
@@ -1269,12 +1226,6 @@ const ScheduleFormPage = () => {
                       required
                       placeholder="Ketik / cari hotel di Mekkah..."
                       options={mekkahHotels.map(h => ({ value: h.id, label: h.star_rating ? `${h.name} (${'★'.repeat(h.star_rating)})` : h.name }))}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      }
                     />
                   </div>
 
@@ -1290,262 +1241,83 @@ const ScheduleFormPage = () => {
                       required
                       placeholder="Ketik / cari hotel di Madinah..."
                       options={madinahHotels.map(h => ({ value: h.id, label: h.star_rating ? `${h.name} (${'★'.repeat(h.star_rating)})` : h.name }))}
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      }
                     />
                   </div>
                 </div>
 
-                {/* Hotel Transit (opsional) */}
-                <div className="border-t border-neutral-200 pt-3 space-y-3">
-                  <label className="block text-xs font-semibold text-neutral-700 font-heading">
-                    Hotel Transit (Opsional)
-                  </label>
+                {/* Hotel Transit (opsional): satu baris per hotel, tambah lewat tombol */}
+                <div className="space-y-3">
+                  <span className="block text-xs font-semibold text-neutral-700 font-heading">Hotel Transit (Opsional)</span>
 
-                  {/* Selector Dropdown */}
-                  <div className="w-full sm:w-2/3">
-                    <AutocompleteInput
-                      className="!mb-0"
-                      name="add_transit_hotel"
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value) handleAddTransitHotel(e.target.value);
-                      }}
-                      onSelect={(opt) => {
-                        if (opt) handleAddTransitHotel(opt.value);
-                      }}
-                      placeholder="Ketik / cari hotel transit..."
-                      options={hotelOptions
-                        .filter(h => 
-                          h.id !== parseInt(formData.hotel_mekkah_id, 10) &&
-                          h.id !== parseInt(formData.hotel_madinah_id, 10) &&
-                          !formData.transit_hotel_ids.includes(h.id)
-                        )
-                        .map(h => ({ 
-                          value: h.id, 
-                          label: `${h.name} — ${h.city || 'Lainnya'}${h.star_rating ? ` (${'★'.repeat(h.star_rating)})` : ''}` 
-                        }))
-                      }
-                      prefixIcon={
-                        <svg className="w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                      }
-                    />
-                  </div>
-
-                  {/* Chips list of selected transit hotels */}
-                  {formData.transit_hotel_ids.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {formData.transit_hotel_ids.map((thId, idx) => {
-                        const hotel = hotelOptions.find(h => h.id === thId);
-                        const hotelName = hotel ? hotel.name : `Hotel #${thId}`;
-                        const hotelCity = hotel ? hotel.city : '';
-                        const hotelStar = hotel?.star_rating ? '★'.repeat(hotel.star_rating) : null;
-
-                        return (
-                          <span
-                            key={thId}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 border border-neutral-200 text-xs font-medium text-neutral-800 shadow-2xs"
-                          >
-                            <span className="w-4 h-4 rounded-full bg-neutral-200 text-[10px] font-bold flex items-center justify-center text-neutral-600">
-                              {idx + 1}
-                            </span>
-                            <span className="font-semibold">{hotelName}</span>
-                            {hotelCity && (
-                              <span className="text-neutral-500">({hotelCity})</span>
-                            )}
-                            {hotelStar && (
-                              <span className="text-amber-500 font-bold">{hotelStar}</span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveTransitHotel(thId)}
-                              className="ml-1 text-neutral-400 hover:text-danger-600 transition-colors cursor-pointer p-0.5 rounded"
-                              title="Hapus hotel transit"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </MetaBox>
-
-            {/* 4. SECTION: HARGA PAKET & PROMO */}
-            <MetaBox
-              title="Harga Paket & Promo"
-              subtitle="Skema harga per tipe kamar dan penawaran diskon coret"
-              icon={<DollarSign size={18} className="text-neutral-700" />}
-            >
-              <div className="space-y-4">
-                {/* 3 Kolom Tipe Kamar Dewasa */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Input
-                    label="Harga Quad (Ber-4)"
-                    className="!mb-0"
-                    type="text"
-                    name="harga_quad"
-                    error={fieldErrors.harga_quad}
-                    value={formatCurrency(formData.harga_quad)}
-                    onChange={handleCurrencyChange}
-                    required
-                    placeholder="mis. 25.000.000"
-                    prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
-                  />
-                  <Input
-                    label="Harga Triple (Ber-3)"
-                    className="!mb-0"
-                    type="text"
-                    name="harga_triple"
-                    error={fieldErrors.harga_triple}
-                    value={formatCurrency(formData.harga_triple)}
-                    onChange={handleCurrencyChange}
-                    required
-                    placeholder="mis. 26.000.000"
-                    prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
-                  />
-                  <Input
-                    label="Harga Double (Ber-2)"
-                    className="!mb-0"
-                    type="text"
-                    name="harga_double"
-                    error={fieldErrors.harga_double}
-                    value={formatCurrency(formData.harga_double)}
-                    onChange={handleCurrencyChange}
-                    required
-                    placeholder="mis. 28.000.000"
-                    prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
-                  />
-                </div>
-
-                {/* 2 Kolom: Infant & Minimal DP */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-neutral-200 pt-4 mt-4">
-                  <Input
-                    label="Harga Infant (Bayi)"
-                    className="!mb-0"
-                    type="text"
-                    name="harga_infant"
-                    error={fieldErrors.harga_infant}
-                    value={formatCurrency(formData.harga_infant)}
-                    onChange={handleCurrencyChange}
-                    placeholder="mis. 5.000.000"
-                    helpText="Kosong berarti infant belum dapat dipesan; isi 0 hanya jika gratis."
-                    prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
-                  />
-                  <Input
-                    label="Minimal DP"
-                    className="!mb-0"
-                    type="text"
-                    name="minimal_dp"
-                    error={fieldErrors.minimal_dp}
-                    value={formatCurrency(formData.minimal_dp)}
-                    onChange={handleCurrencyChange}
-                    placeholder="mis. 5.000.000"
-                    prefixIcon={<span className="text-xs font-bold text-neutral-500">Rp</span>}
-                    helpText="Kosong mengikuti DP brand; isi 0 untuk tanpa DP. Tidak boleh melebihi harga kamar termurah."
-                  />
-                </div>
-
-                {/* 2 Kolom: Komisi Agen Syiar (per pax aktif, dibayar saat booking lunas) */}
-                <div className="border-t border-neutral-200 pt-4 mt-4 space-y-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
-                      label="Komisi Langsung Agen (Rp/pax)"
-                      className="!mb-0"
-                      type="text"
-                      name="nominal_komisi_langsung"
-                    error={fieldErrors.nominal_komisi_langsung}
-                      value={formatCurrency(formData.nominal_komisi_langsung)}
-                      onChange={handleCurrencyChange}
-                      placeholder="mis. 1.000.000"
-                      inputMode="numeric"
-                    />
-                    <Input
-                      label="Bonus Pembinaan Upline (Rp/pax)"
-                      className="!mb-0"
-                      type="text"
-                      name="nominal_bonus_pembinaan"
-                    error={fieldErrors.nominal_bonus_pembinaan}
-                      value={formatCurrency(formData.nominal_bonus_pembinaan)}
-                      onChange={handleCurrencyChange}
-                      placeholder="mis. 300.000"
-                      inputMode="numeric"
-                    />
-                  </div>
-                  <p className="text-xs text-neutral-500 font-body">
-                    Komisi Agen Syiar. Kosongkan komisi langsung jika jadwal ini tidak ikut program. Repeat order &amp; cashback = 50% dari komisi langsung. Perubahan hanya berlaku untuk booking baru.
-                  </p>
-                </div>
-
-                {/* Promo Divider & Row */}
-                <div className="border-t border-neutral-200 pt-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <Toggle
-                        id="is_promo"
-                        name="is_promo"
-                        checked={formData.is_promo}
-                        onChange={handleChange}
-                      />
-                      <label htmlFor="is_promo" className="text-sm font-medium text-neutral-800 font-body cursor-pointer select-none">
-                        Paket Promo
-                      </label>
-                    </div>
-
-                    {formData.is_promo && (
-                      <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                        <div className="w-full sm:w-64">
-                          <Input
-                            label="Harga Coret"
-                            className="!mb-0"
-                            type="text"
-                            name="harga_coret"
-                    error={fieldErrors.harga_coret}
-                            value={formatCurrency(formData.harga_coret)}
-                            onChange={handleCurrencyChange}
-                            placeholder="mis. 27.500.000"
-                            prefixIcon={<span className="text-xs font-bold text-amber-700">Rp</span>}
-                          />
-                        </div>
-                        <div className="w-full sm:w-48">
-                          <Input
-                            label="Batas Promo"
-                            className="!mb-0"
-                            type="date"
-                            name="promo_until"
-                    error={fieldErrors.promo_until}
-                            value={formData.promo_until}
-                            onChange={handleChange}
-                            min={new Date().toLocaleDateString('en-CA')}
-                          />
-                        </div>
+                  {formData.transit_hotel_ids.map((thId, idx) => (
+                    <div key={`th-${thId}`} className="flex items-end gap-3">
+                      <div className="min-w-0 flex-1">
+                        <AutocompleteInput
+                          label={(formData.transit_hotel_ids.length + extraTransitHotelSlots) > 1 ? `Hotel Transit #${idx + 1}` : undefined}
+                          className="!mb-0"
+                          name={`transit_hotel_${idx}`}
+                          value={thId}
+                          onChange={(e) => handleReplaceTransitHotel(thId, e.target.value)}
+                          onSelect={(opt) => handleReplaceTransitHotel(thId, opt ? opt.value : '')}
+                          placeholder="Ketik / cari hotel..."
+                          options={transitHotelOptionsFor(thId)}
+                        />
                       </div>
-                    )}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTransitHotel(thId)}
+                        className="h-10 px-3 inline-flex items-center text-danger-600 hover:text-danger-700 hover:bg-danger-50 rounded-md border border-neutral-200 transition-colors cursor-pointer shrink-0"
+                        title="Hapus hotel transit"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
 
-                  {formData.is_promo && formData.harga_coret && parseCurrency(formData.harga_coret) <= parseCurrency(formData.harga_quad) && (
-                    <p className="text-xs text-danger-600 font-medium mt-2">Harga coret harus lebih tinggi dari Harga Quad.</p>
-                  )}
+                  {Array.from({ length: extraTransitHotelSlots }).map((_, i) => (
+                    <div key={`slot-${i}`} className="flex items-end gap-3">
+                      <div className="min-w-0 flex-1">
+                        <AutocompleteInput
+                          label={(formData.transit_hotel_ids.length + extraTransitHotelSlots) > 1 ? `Hotel Transit #${formData.transit_hotel_ids.length + i + 1}` : undefined}
+                          className="!mb-0"
+                          name={`transit_hotel_new_${i}`}
+                          value=""
+                          onChange={(e) => { if (e.target.value) handleFillTransitHotelSlot(e.target.value); }}
+                          onSelect={(opt) => { if (opt) handleFillTransitHotelSlot(opt.value); }}
+                          placeholder="Ketik / cari hotel..."
+                          options={transitHotelOptionsFor(null)}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setExtraTransitHotelSlots(count => Math.max(0, count - 1))}
+                        className="h-10 px-3 inline-flex items-center text-danger-600 hover:text-danger-700 hover:bg-danger-50 rounded-md border border-neutral-200 transition-colors cursor-pointer shrink-0"
+                        title="Batalkan baris ini"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setExtraTransitHotelSlots(count => count + 1)}
+                    className="w-full py-2 px-4 rounded-md border border-dashed border-neutral-300 hover:border-primary-400 hover:bg-neutral-50 text-neutral-700 hover:text-primary-600 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Tambah Hotel Transit</span>
+                  </button>
                 </div>
               </div>
-            </MetaBox>
+            </FormSection>
 
-            {/* 5. SECTION: FASILITAS INCLUDE & EXCLUDE */}
-            <MetaBox
-              title="Fasilitas Paket"
-              subtitle="Tuliskan 1 item per baris"
-              icon={<CheckSquare size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-fasilitas" title="Fasilitas Paket">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Include */}
                 <div>
@@ -1571,210 +1343,137 @@ const ScheduleFormPage = () => {
                   />
                 </div>
               </div>
-            </MetaBox>
+            </FormSection>
 
-            {/* 6. SECTION: ITINERARY & ADD-ON */}
-            <MetaBox
-              title="Itinerary & Add-On"
-              subtitle="Master susunan kegiatan harian dan layanan tambahan"
-              icon={<MapPin size={18} className="text-neutral-700" />}
-            >
+            <FormSection id="sec-itinerary" title="Itinerary">
               <div className="space-y-4">
                 {/* Itinerary Dropdown */}
-                <div className="w-full sm:w-1/2">
+                <div className="w-full">
                   <CustomDropdown
                     label="Master Itinerary"
                     className="!mb-0"
                     value={formData.itinerary_id}
                     onChange={(val) => handleChange({ target: { name: 'itinerary_id', value: val } })}
                     placeholder="-- Pilih Itinerary --"
-                    options={itineraryOptions.map(it => ({ value: it.id, label: `${it.title} (${it.duration_days || '-'} Hari)` }))}
-                    prefixIcon={
-                      <svg className="w-4 h-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                      </svg>
-                    }
-                  />
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-neutral-200 pt-2" />
-
-                {/* Add-ons Checkbox List */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-neutral-700 font-heading">
-                    Layanan Tambahan (Add-On)
-                  </label>
-                  {addOnOptions.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {addOnOptions.map(addon => {
-                        const isChecked = formData.add_on_ids.includes(addon.id);
-                        return (
-                          <label
-                            key={addon.id}
-                            className="flex items-center gap-2.5 cursor-pointer select-none py-1 group"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => handleAddOnCheckboxChange(addon.id, e.target.checked)}
-                              className="w-4 h-4 text-primary-600 border-neutral-300 rounded focus:ring-primary-500 cursor-pointer"
-                            />
-                            <span className="text-sm text-neutral-700 font-body group-hover:text-neutral-900 transition-colors">
-                              {addon.name}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-neutral-500 italic">Belum ada data add-on.</p>
-                  )}
-                </div>
-              </div>
-            </MetaBox>
-
-
-
-          </div>
-
-          {/* Kolom KANAN (Sidebar Form) */}
-          <div className="space-y-6 lg:sticky lg:top-6">
-
-            {/* MetaBox: Aksi & Simpan */}
-            <MetaBox
-              title="Aksi & Simpan"
-              subtitle="Status publikasi dan penyimpanan"
-              icon={<Save size={18} className="text-neutral-700" />}
-            >
-              <div className="space-y-3.5">
-                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs text-neutral-600 space-y-1.5 font-body">
-                  <div className="flex items-center gap-1.5 text-neutral-900 font-semibold">
-                    <CheckCircle2 size={14} className="text-success-600" />
-                    <span>Verifikasi Jadwal</span>
-                  </div>
-                  <p>Pastikan tanggal keberangkatan, rincian hotel, maskapai, serta kuota kursi telah sesuai alokasi.</p>
-                </div>
-
-                <CustomDropdown
-                  label="Status Publikasi"
-                  value={formData.status}
-                  onChange={(val) => handleChange({ target: { name: 'status', value: val } })}
-                  options={[
-                    { value: 'draft', label: 'Draft' },
-                    { value: 'published', label: 'Published' },
-                    { value: 'archived', label: 'Archived' }
-                  ]}
-                />
-
-                <div className="space-y-2 pt-1">
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    isLoading={isSubmitting}
-                    disabled={isUploadingBrosur}
-                    className="w-full justify-center shadow-sm"
-                  >
-                    {isSubmitting ? 'Menyimpan...' : (isEditMode ? 'Perbarui Data Paket' : 'Simpan Paket Baru')}
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => navigate('/schedules')}
-                    className="w-full justify-center text-neutral-600 hover:text-neutral-900"
-                  >
-                    Batal
-                  </Button>
-                </div>
-              </div>
-            </MetaBox>
-
-            {/* MetaBox: Brand & Kategori */}
-            <MetaBox
-              title="Brand & Kategori"
-              subtitle="Afiliasi biro travel dan pengelompokan"
-              icon={<Building2 size={18} className="text-neutral-700" />}
-            >
-              <div className="space-y-4">
-                {/* Brand */}
-                <div>
-                  <CustomDropdown
-                    label="Brand"
-                    className="!mb-0"
-                    value={formData.brand_id}
-                    onChange={(val) => {
-                      handleChange({ target: { name: 'brand_id', value: val } });
-                      const selectedBid = parseInt(val, 10);
-                      const currentCat = categoryOptions.find(c => String(c.id) === String(formData.category_id));
-                      if (currentCat && currentCat.brands && currentCat.brands.length > 0) {
-                        const brandSupported = currentCat.brands.some(b => b.id === selectedBid);
-                        if (!brandSupported) {
-                          setFormData(prev => ({ ...prev, brand_id: val, category_id: '' }));
-                        }
-                      }
-                    }}
-                    required
-                    placeholder="-- Pilih Brand --"
-                    options={brandOptions.map(b => ({ value: b.id, label: b.name }))}
-                  />
-                </div>
-
-                {/* Kategori */}
-                <div>
-                  <CustomDropdown
-                    label="Kategori"
-                    className="!mb-0"
-                    value={formData.category_id}
-                    onChange={(val) => handleChange({ target: { name: 'category_id', value: val } })}
-                    placeholder="-- Pilih Kategori --"
-                    options={filteredCategories.map(c => ({ value: c.id, label: c.name }))}
+                    options={itineraryOptions
+                      .filter(it => !formData.category_id || !it.category_id || String(it.category_id) === String(formData.category_id) || String(it.id) === String(formData.itinerary_id))
+                      .map(it => ({ value: it.id, label: `${it.title} (${it.day_count || it.duration_days || '-'} Hari)` }))}
                   />
                 </div>
               </div>
-            </MetaBox>
+            </FormSection>
 
-            {/* MetaBox: Brosur Paket (Image) */}
-            <MetaBox
-              title="Brosur Paket"
-              subtitle="Flyer / poster promosi digital"
-              icon={<ImageIcon size={18} className="text-neutral-700" />}
-            >
-              {formData.brosur_url ? (
+
+          <FormAside>
+              <SidebarSection title="Publikasi">
                 <div className="space-y-3">
-                  <div className="border border-neutral-200 rounded-lg p-1 bg-white overflow-hidden flex justify-center shadow-2xs">
-                    <img
-                      src={formData.brosur_url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${formData.brosur_url}` : formData.brosur_url}
-                      alt="Preview Brosur"
-                      className="max-w-full h-auto max-h-52 object-contain rounded"
+                  <CustomDropdown
+                    label="Status"
+                    className="!mb-0"
+                    value={formData.status}
+                    onChange={(val) => handleChange({ target: { name: 'status', value: val } })}
+                    options={[
+                      { value: 'draft', label: 'Draft' },
+                      { value: 'published', label: 'Published' },
+                      { value: 'archived', label: 'Archived' }
+                    ]}
+                  />
+                  <p className="text-xs text-neutral-500 font-body">
+                    Pastikan tanggal, hotel, maskapai, dan kuota sudah sesuai sebelum menyimpan.
+                  </p>
+                  <div className="pt-1">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isLoading={isSubmitting}
+                      disabled={isUploadingBrosur}
+                      className="w-full justify-center"
+                    >
+                      {isSubmitting ? 'Menyimpan...' : (isEditMode ? 'Perbarui Paket' : 'Simpan Paket')}
+                    </Button>
+                  </div>
+                </div>
+              </SidebarSection>
+
+              <SidebarSection title="Brand & Kategori">
+                <div className="space-y-4">
+                  {/* Brand */}
+                  <div>
+                    <CustomDropdown
+                      label="Brand"
+                      className="!mb-0"
+                      value={formData.brand_id}
+                      onChange={(val) => {
+                        handleChange({ target: { name: 'brand_id', value: val } });
+                        const selectedBid = parseInt(val, 10);
+                        const currentCat = categoryOptions.find(c => String(c.id) === String(formData.category_id));
+                        if (currentCat && currentCat.brands && currentCat.brands.length > 0) {
+                          const brandSupported = currentCat.brands.some(b => b.id === selectedBid);
+                          if (!brandSupported) {
+                            setFormData(prev => ({ ...prev, brand_id: val, category_id: '' }));
+                          }
+                        }
+                      }}
+                      required
+                      placeholder="-- Pilih Brand --"
+                      options={brandOptions.map(b => ({ value: b.id, label: b.name }))}
                     />
                   </div>
-                  <label className="flex items-center justify-center gap-2 px-4 py-2 w-full bg-white border border-neutral-300 rounded-lg text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer shadow-2xs transition-colors text-center">
-                    <ImageIcon size={14} className="text-neutral-500" />
-                    <span>{isUploadingBrosur ? 'Mengupload...' : 'Ganti Gambar Brosur'}</span>
-                    <input type="file" className="hidden" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
-                  </label>
-                </div>
-              ) : (
-                <div className="flex justify-center px-4 pt-6 pb-6 border-2 border-neutral-300 border-dashed rounded-xl hover:border-primary-400 transition-colors bg-neutral-50">
-                  <div className="space-y-2 text-center">
-                    <div className="w-10 h-10 mx-auto rounded-full bg-white border border-neutral-200 flex items-center justify-center text-neutral-400 shadow-2xs">
-                      <ImageIcon size={20} />
-                    </div>
-                    <div className="text-xs text-neutral-600">
-                      <label htmlFor="brosur-upload" className="cursor-pointer font-semibold text-primary-600 hover:text-primary-700">
-                        <span>{isUploadingBrosur ? 'Mengupload...' : 'Upload Brosur'}</span>
-                        <input id="brosur-upload" name="brosur-upload" type="file" className="sr-only" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
-                      </label>
-                      <p className="text-[11px] text-neutral-400 mt-0.5">JPG, PNG, WebP</p>
-                    </div>
+
+                  {/* Kategori */}
+                  <div>
+                    <CustomDropdown
+                      label="Kategori"
+                      className="!mb-0"
+                      value={formData.category_id}
+                      onChange={(val) => {
+                        handleChange({ target: { name: 'category_id', value: val } });
+                        // Itinerary yang sudah dipilih dilepas bila tidak cocok dengan kategori baru.
+                        const chosen = itineraryOptions.find(it => String(it.id) === String(formData.itinerary_id));
+                        if (val && chosen && chosen.category_id && String(chosen.category_id) !== String(val)) {
+                          setFormData(prev => ({ ...prev, category_id: val, itinerary_id: '' }));
+                        }
+                      }}
+                      placeholder="-- Pilih Kategori --"
+                      options={filteredCategories.map(c => ({ value: c.id, label: c.name }))}
+                    />
                   </div>
                 </div>
-              )}
-            </MetaBox>
+              </SidebarSection>
 
-          </div>
-        </div>
+              <SidebarSection title="Gambar Utama">
+              <div>
+                {formData.brosur_url ? (
+                  <div className="space-y-3">
+                    <div className="border border-neutral-200 rounded-xl p-1 bg-white overflow-hidden flex justify-center shadow-2xs">
+                      <img
+                        src={formData.brosur_url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${formData.brosur_url}` : formData.brosur_url}
+                        alt="Preview gambar utama"
+                        className="max-w-full h-auto max-h-52 object-contain rounded"
+                      />
+                    </div>
+                    <label className="flex items-center justify-center gap-2 px-4 py-2 w-full bg-white border border-neutral-300 rounded-lg text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer shadow-2xs transition-colors text-center">
+                        <span>{isUploadingBrosur ? 'Mengupload...' : 'Ganti Gambar'}</span>
+                      <input type="file" className="hidden" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="flex justify-center px-4 pt-6 pb-6 border-2 border-neutral-300 border-dashed rounded-xl hover:border-primary-400 transition-colors bg-neutral-50">
+                    <div className="space-y-2 text-center">
+                      <div className="text-xs text-neutral-600">
+                        <label htmlFor="brosur-upload" className="cursor-pointer font-semibold text-primary-600 hover:text-primary-700">
+                          <span>{isUploadingBrosur ? 'Mengupload...' : 'Upload Gambar Utama'}</span>
+                          <input id="brosur-upload" name="brosur-upload" type="file" className="sr-only" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
+                        </label>
+                        <p className="text-[11px] text-neutral-400 mt-0.5">JPG, PNG, WebP</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SidebarSection>
+            </FormAside>
+        </FormLayout>
       </form>
     </div>
   );

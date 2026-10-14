@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"erp-azhan/api/internal/testdb"
@@ -117,5 +118,55 @@ func TestPrepareUpdateKeepsLatestSeatsAndBookingBrand(t *testing.T) {
 	oldTotal = 40
 	if err := prepareScheduleUpdate(ctx, tx, booking.ScheduleID, &inp, nil, brand); !errors.Is(err, ErrConflict) {
 		t.Fatalf("stale capacity: %v", err)
+	}
+}
+
+func TestValidateJam(t *testing.T) {
+	for _, tc := range []struct {
+		jam     string
+		invalid bool
+	}{{"", false}, {"07:30", false}, {"07:30:00", false}, {"23:59", false}, {"24:00", true}, {"25:99", true}, {"7.30", true}, {"abc", true}} {
+		if err := validateJam("berangkat_jam", tc.jam); (err != nil) != tc.invalid {
+			t.Errorf("jam %q: err=%v invalid=%v", tc.jam, err, tc.invalid)
+		}
+	}
+}
+
+func TestValidateMaxLen(t *testing.T) {
+	if err := validateMaxLen("kode", strings.Repeat("A", maxKodePenerbangan), maxKodePenerbangan); err != nil {
+		t.Errorf("tepat di batas harus lolos: %v", err)
+	}
+	if err := validateMaxLen("kode", strings.Repeat("A", maxKodePenerbangan+1), maxKodePenerbangan); err == nil {
+		t.Error("melebihi batas harus ditolak")
+	}
+}
+
+func TestNormalizeKota(t *testing.T) {
+	for in, want := range map[string]string{"Makkah": "makkah", " MEKKAH ": "makkah", "mekkah": "makkah", "Madinah": "madinah"} {
+		if got := normalizeKota(in); got != want {
+			t.Errorf("normalizeKota(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
+func TestSeatSisaForCreate(t *testing.T) {
+	five, ten := 5, 10
+	for _, tc := range []struct {
+		name      string
+		total     int
+		requested *int
+		want      int
+		invalid   bool
+	}{
+		{"tidak dikirim: penuh", 10, nil, 10, false},
+		{"sama dengan total: boleh", 10, &ten, 10, false},
+		{"lebih kecil dari total: ditolak", 10, &five, 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := seatSisaForCreate(tc.total, tc.requested)
+			if (err != nil) != tc.invalid || got != tc.want {
+				t.Fatalf("got %d, %v; want %d invalid=%v", got, err, tc.want, tc.invalid)
+			}
+		})
 	}
 }

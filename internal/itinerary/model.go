@@ -5,7 +5,7 @@ import "time"
 // Activity adalah satu item aktivitas dalam satu hari itinerary.
 // Disimpan sebagai JSON array di kolom activities (itinerary_days.activities).
 type Activity struct {
-	Time string `json:"time"` // boleh kosong string
+	Time string `json:"time"` // warisan format lama (per jam); format baru cukup memakai text
 	Text string `json:"text"` // wajib tidak kosong (divalidasi di handler)
 }
 
@@ -22,16 +22,19 @@ type ItineraryDay struct {
 // Itinerary adalah struct lengkap — dipakai di GetItinerary (Days terisi)
 // dan di Create/Update response.
 type Itinerary struct {
-	ID        int64          `json:"id"`
-	Title     string         `json:"title"`
+	ID         int64          `json:"id"`
+	Title      string         `json:"title"`
+	CategoryID *int64         `json:"category_id"`
 	Days      []ItineraryDay `json:"days"`
 	CreatedAt time.Time      `json:"created_at"`
 }
 
 // ItineraryListItem dipakai di ListItineraries — tanpa Days, hanya DayCount dari COUNT(*).
 type ItineraryListItem struct {
-	ID        int64     `json:"id"`
-	Title     string    `json:"title"`
+	ID           int64     `json:"id"`
+	Title        string    `json:"title"`
+	CategoryID   *int64    `json:"category_id"`
+	CategoryName string    `json:"category_name"`
 	DayCount  int       `json:"day_count"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -48,12 +51,14 @@ type DayRequest struct {
 
 // CreateItineraryRequest adalah payload untuk POST /api/admin/itineraries.
 type CreateItineraryRequest struct {
-	Title string       `json:"title"`
-	Days  []DayRequest `json:"days"`
+	Title      string       `json:"title"`
+	CategoryID *int64       `json:"category_id"`
+	Days       []DayRequest `json:"days"`
 }
 
 // UpdateItineraryRequest adalah payload untuk PUT /api/admin/itineraries/{id}.
 type UpdateItineraryRequest struct {
-	Title string       `json:"title"`
-	Days  []DayRequest `json:"days"`
+	Title      string       `json:"title"`
+	CategoryID *int64       `json:"category_id"`
+	Days       []DayRequest `json:"days"`
 }

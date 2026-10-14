@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import PageHeader from '../components/ui/PageHeader';
-import DataTable from '../components/ui/DataTable';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import Input from '../components/ui/Input';
-import Toggle from '../components/ui/Toggle';
-import Badge from '../components/ui/Badge';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
+import PageHeader from 'shared/ui/PageHeader';
+import DataTable from 'shared/ui/DataTable';
+import Button from 'shared/ui/Button';
+import Modal from 'shared/ui/Modal';
+import Input from 'shared/ui/Input';
+import Toggle from 'shared/ui/Toggle';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import ActionMenu from 'shared/ui/ActionMenu';
 import { listCategories, createCategory, updateCategory, deleteCategory } from '../api/categories';
 import { listBrands } from '../api/brands';
+import { StatusChip } from '../components/penggunaUi';
 
 const initialForm = {
   name: '',
@@ -18,11 +20,20 @@ const initialForm = {
   brand_ids: []
 };
 
+// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
+const BrandChip = ({ name, color }) => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
+    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color || '#9CA3AF' }} />
+    {name}
+  </span>
+);
+
 const CategoriesPage = () => {
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [activeTab, setActiveTab] = useState('all');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -54,6 +65,23 @@ const CategoriesPage = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const counts = useMemo(() => ({
+    all: categories.length,
+    active: categories.filter(c => c.is_active).length,
+    inactive: categories.filter(c => !c.is_active).length,
+  }), [categories]);
+
+  const rows = useMemo(() => categories
+    .filter(c => activeTab === 'all' || (activeTab === 'active' ? c.is_active : !c.is_active))
+    // Kolom bantu pencarian: nama brand ikut bisa dicari.
+    .map(c => ({ ...c, _cari: (c.brands || []).map(b => b.name).join(' ') })), [categories, activeTab]);
+
+  const tabs = [
+    { id: 'all', label: 'Semua', count: counts.all },
+    { id: 'active', label: 'Aktif', count: counts.active },
+    { id: 'inactive', label: 'Nonaktif', count: counts.inactive },
+  ];
 
   const handleOpenModal = (cat = null) => {
     if (cat) {
@@ -153,10 +181,77 @@ const CategoriesPage = () => {
     }
   };
 
+  const columns = [
+    { header: 'Kategori', key: 'name', sortable: true },
+    { header: 'Brand Berlaku', key: 'brands' },
+    { header: 'Jumlah Paket', key: 'package_count', sortable: true },
+    { header: 'Status', key: 'is_active', sortable: true },
+    { header: 'Aksi', key: 'aksi' },
+  ];
+
+  const renderCell = (row, key) => {
+    if (key === 'name') {
+      return (
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={() => handleOpenModal(row)}
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          >
+            {row.name}
+          </button>
+          <div className="text-[11px] font-body text-neutral-400 truncate">/{row.slug}</div>
+        </div>
+      );
+    }
+
+    if (key === 'brands') {
+      if (!row.brands || row.brands.length === 0) {
+        return <span className="text-xs text-neutral-400 font-body">Semua brand</span>;
+      }
+      return (
+        <div className="flex flex-wrap gap-1.5 max-w-sm">
+          {row.brands.map(b => (
+            <BrandChip
+              key={b.id}
+              name={b.name}
+              color={b.primary_color || brands.find(item => item.id === b.id)?.primary_color}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    if (key === 'package_count') {
+      return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.package_count || 0} paket</span>;
+    }
+
+    if (key === 'is_active') return <StatusChip active={row.is_active} />;
+
+    if (key === 'aksi') {
+      const used = (row.package_count || 0) > 0;
+      const menuItems = [
+        { label: 'Edit', icon: Pencil, tooltip: 'Edit Kategori', onClick: () => handleOpenModal(row) },
+        {
+          label: 'Hapus',
+          icon: Trash2,
+          danger: true,
+          tooltip: 'Hapus Kategori',
+          disabled: used,
+          disabledTooltip: `Tidak bisa dihapus, dipakai ${row.package_count} paket`,
+          onClick: () => setDeleteConfirmId(row.id),
+        },
+      ];
+      return <ActionMenu items={menuItems} align="right" />;
+    }
+
+    return row[key];
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Kategori Paket"
+        title="Kelola Kategori"
         actionLabel="+ Tambah Kategori"
         onAction={() => handleOpenModal()}
       />
@@ -168,102 +263,41 @@ const CategoriesPage = () => {
       )}
 
       {isLoading ? (
-        <div className="py-12 flex justify-center bg-white rounded-lg border border-neutral-200 shadow-sm">
-          <LoadingSpinner />
-        </div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
       ) : (
         <DataTable
-          columns={[
-            { header: 'Brand Berlaku', key: 'brands' },
-            { header: 'Kategori', key: 'name', sortable: true },
-            { header: 'Jumlah Paket', key: 'package_count', sortable: true },
-            { header: 'Status', key: 'is_active', sortable: true },
-            { header: 'Aksi', key: 'aksi' },
-          ]}
-          data={categories}
+          columns={columns}
+          data={rows}
+          itemsPerPage={15}
           emptyMessage='Belum ada data kategori paket. Klik "+ Tambah Kategori" untuk menambahkan.'
-          searchPlaceholder="Cari nama atau slug kategori..."
-          renderCell={(row, key) => {
-            if (key === 'name') {
-              return (
-                <div>
-                  <div className="font-semibold text-neutral-900 font-heading text-sm">{row.name}</div>
-                  <div className="text-xs text-neutral-400 font-mono">/{row.slug}</div>
-                </div>
-              );
-            }
-            if (key === 'brands') {
-              return (
-                <div className="flex flex-wrap gap-1.5 max-w-sm">
-                  {row.brands && row.brands.length > 0 ? (
-                    row.brands.map(b => {
-                      const brandColor = b.primary_color || (brands.find(item => item.id === b.id)?.primary_color);
-                      return (
-                        <span
-                          key={b.id}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-2xs"
-                          style={{
-                            backgroundColor: brandColor ? `${brandColor}15` : '#F4F4F5',
-                            color: brandColor || '#27272A',
-                            borderColor: brandColor ? `${brandColor}40` : '#E4E4E7'
-                          }}
-                        >
-                          {brandColor && (
-                            <span
-                              className="w-2 h-2 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: brandColor }}
-                            />
-                          )}
-                          <span>{b.name}</span>
-                        </span>
-                      );
-                    })
-                  ) : (
-                    <span className="text-xs text-neutral-400 italic">Semua Brand</span>
-                  )}
-                </div>
-              );
-            }
-            if (key === 'package_count') {
-              return (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-neutral-100 text-neutral-700">
-                  {row.package_count || 0} Paket
-                </span>
-              );
-            }
-            if (key === 'is_active') {
-              return (
-                <Badge variant={row.is_active ? 'published' : 'archived'}>
-                  {row.is_active ? 'Aktif' : 'Nonaktif'}
-                </Badge>
-              );
-            }
-            if (key === 'aksi') {
-              return (
-                <div className="flex items-center gap-3">
+          searchPlaceholder="Cari nama, slug, atau brand..."
+          toolbarActions={
+            <div className="flex flex-wrap gap-1.5">
+              {tabs.map(tab => {
+                const isActive = activeTab === tab.id;
+                return (
                   <button
-                    onClick={() => handleOpenModal(row)}
-                    title="Edit"
-                    className="text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer"
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium font-body rounded-lg border transition-colors ${
+                      isActive
+                        ? 'bg-primary-500 border-primary-500 text-white'
+                        : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                    }`}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
+                    <span>{tab.label}</span>
+                    <span className={`min-w-[20px] px-1.5 py-0.5 rounded-full text-[11px] leading-none text-center ${
+                      isActive ? 'bg-white/25 text-white' : 'bg-neutral-100 text-neutral-600'
+                    }`}>
+                      {tab.count}
+                    </span>
                   </button>
-                  <button
-                    onClick={() => setDeleteConfirmId(row.id)}
-                    title="Hapus"
-                    className="text-neutral-400 hover:text-danger-600 transition-colors cursor-pointer"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              );
-            }
-            return row[key];
-          }}
+                );
+              })}
+            </div>
+          }
+          renderCell={renderCell}
         />
       )}
 

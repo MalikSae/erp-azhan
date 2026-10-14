@@ -27,10 +27,11 @@ func NewRepository(db *sql.DB) *Repository {
 // DayCount didapat dari COUNT(*) JOIN ke itinerary_days.
 func (r *Repository) List(ctx context.Context) ([]ItineraryListItem, error) {
 	const q = `
-		SELECT i.id, i.title, COUNT(d.id) AS day_count, i.created_at
+		SELECT i.id, i.title, i.category_id, COALESCE(c.name, ''), COUNT(d.id) AS day_count, i.created_at
 		FROM itineraries i
+		LEFT JOIN package_categories c ON c.id = i.category_id
 		LEFT JOIN itinerary_days d ON d.itinerary_id = i.id
-		GROUP BY i.id, i.title, i.created_at
+		GROUP BY i.id, i.title, i.category_id, c.name, i.created_at
 		ORDER BY i.created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, q)
@@ -42,8 +43,12 @@ func (r *Repository) List(ctx context.Context) ([]ItineraryListItem, error) {
 	items := make([]ItineraryListItem, 0)
 	for rows.Next() {
 		var it ItineraryListItem
-		if err := rows.Scan(&it.ID, &it.Title, &it.DayCount, &it.CreatedAt); err != nil {
+		var categoryID sql.NullInt64
+		if err := rows.Scan(&it.ID, &it.Title, &categoryID, &it.CategoryName, &it.DayCount, &it.CreatedAt); err != nil {
 			return nil, fmt.Errorf("itinerary.List scan: %w", err)
+		}
+		if categoryID.Valid {
+			it.CategoryID = &categoryID.Int64
 		}
 		items = append(items, it)
 	}
@@ -80,7 +85,7 @@ func (r *Repository) GetPublishedByID(ctx context.Context, id int64) (*Itinerary
 
 // Create menyisipkan itinerary baru beserta days-nya dalam satu transaction.
 // Jika gagal di tengah, seluruh operasi di-ROLLBACK.
-func (r *Repository) Create(ctx context.Context, title string, days []DayRequest) (*Itinerary, error) {
+func (r *Repository) Create(ctx context.Context, title string, categoryID *int64, days []DayRequest) (*Itinerary, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("itinerary.Create begin tx: %w", err)
@@ -88,7 +93,7 @@ func (r *Repository) Create(ctx context.Context, title string, days []DayRequest
 	defer tx.Rollback() // no-op jika sudah Commit
 
 	// INSERT itinerary
-	res, err := tx.ExecContext(ctx, `INSERT INTO itineraries (title) VALUES (?)`, title)
+	res, err := tx.ExecContext(ctx, `INSERT INTO itineraries (title, category_id) VALUES (?, ?)`, title, categoryID)
 	if err != nil {
 		return nil, fmt.Errorf("itinerary.Create insert itinerary: %w", err)
 	}
@@ -112,7 +117,7 @@ func (r *Repository) Create(ctx context.Context, title string, days []DayRequest
 // ─── Update ───────────────────────────────────────────────────────────────────
 
 // Update memperbarui itinerary dan mengganti semua days-nya (delete+reinsert) dalam satu transaction.
-func (r *Repository) Update(ctx context.Context, id int64, title string, days []DayRequest) (*Itinerary, error) {
+func (r *Repository) Update(ctx context.Context, id int64, title string, categoryID *int64, days []DayRequest) (*Itinerary, error) {
 	// Cek eksistensi dulu (di luar tx, read-only)
 	if err := r.exists(ctx, id); err != nil {
 		return nil, err
@@ -125,7 +130,7 @@ func (r *Repository) Update(ctx context.Context, id int64, title string, days []
 	defer tx.Rollback()
 
 	// UPDATE title
-	if _, err := tx.ExecContext(ctx, `UPDATE itineraries SET title=? WHERE id=?`, title, id); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE itineraries SET title=?, category_id=? WHERE id=?`, title, categoryID, id); err != nil {
 		return nil, fmt.Errorf("itinerary.Update update title: %w", err)
 	}
 
@@ -145,6 +150,13 @@ func (r *Repository) Update(ctx context.Context, id int64, title string, days []
 	}
 
 	return r.fetchFull(ctx, id)
+}
+
+// CategoryExists memeriksa apakah kategori paket dengan id tersebut ada.
+func (r *Repository) CategoryExists(ctx context.Context, id int64) (bool, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories WHERE id=?`, id).Scan(&count)
+	return count > 0, err
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -179,14 +191,18 @@ func (r *Repository) exists(ctx context.Context, id int64) error {
 func (r *Repository) fetchFull(ctx context.Context, id int64) (*Itinerary, error) {
 	// Ambil itinerary header
 	var it Itinerary
+	var categoryID sql.NullInt64
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, title, created_at FROM itineraries WHERE id=?`, id,
-	).Scan(&it.ID, &it.Title, &it.CreatedAt)
+		`SELECT id, title, category_id, created_at FROM itineraries WHERE id=?`, id,
+	).Scan(&it.ID, &it.Title, &categoryID, &it.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("itinerary.fetchFull header: %w", err)
+	}
+	if categoryID.Valid {
+		it.CategoryID = &categoryID.Int64
 	}
 
 	// Ambil days

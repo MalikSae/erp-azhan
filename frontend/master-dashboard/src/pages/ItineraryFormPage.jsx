@@ -1,19 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import PageHeader from '../components/ui/PageHeader';
-import MetaBox from '../components/ui/MetaBox';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import Alert from '../components/ui/Alert';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import PageHeader from 'shared/ui/PageHeader';
+import Button from 'shared/ui/Button';
+import Input from 'shared/ui/Input';
+import Textarea from 'shared/ui/Textarea';
+import CustomDropdown from 'shared/ui/CustomDropdown';
+import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import FormLayout, { FormSection, SidebarSection, FormAside } from 'shared/ui/FormLayout';
 import { getItinerary, createItinerary, updateItinerary } from '../api/itineraries';
-import { Calendar, MapPin, Plus, Trash2, Save, Info, CheckCircle2, Clock, X } from 'lucide-react';
+import { listCategories } from '../api/categories';
 
 const initialForm = {
   title: '',
+  category_id: '',
   days: []
 };
+
+// Format mengikuti dokumen operasional: per hari ada rute dan poin kegiatan (tanpa jam).
+const emptyActivity = () => ({ time: '', text: '' });
+const emptyDay = () => ({ title: '', location: '', activities: [emptyActivity()] });
+
+const AddButton = ({ onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="w-full py-2 px-4 rounded-md border border-dashed border-neutral-300 hover:border-primary-400 hover:bg-neutral-50 text-neutral-700 hover:text-primary-600 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+  >
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+    </svg>
+    <span>{children}</span>
+  </button>
+);
+
+const RemoveButton = ({ onClick, title }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={title}
+    aria-label={title}
+    className="h-10 px-3 inline-flex items-center text-danger-600 hover:text-danger-700 hover:bg-danger-50 rounded-md border border-neutral-200 transition-colors cursor-pointer shrink-0"
+  >
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  </button>
+);
 
 const ItineraryFormPage = () => {
   const { id } = useParams();
@@ -25,6 +58,11 @@ const ItineraryFormPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(isEditMode);
   const [notFound, setNotFound] = useState(false);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    listCategories().then(data => setCategories((data || []).filter(c => c.is_active))).catch(() => setCategories([]));
+  }, []);
 
   useEffect(() => {
     if (isEditMode) {
@@ -36,10 +74,15 @@ const ItineraryFormPage = () => {
           const data = await getItinerary(id);
           setFormData({
             title: data.title || '',
+            category_id: data.category_id ? String(data.category_id) : '',
             days: (data.days || []).map(d => ({
               title: d.title || '',
-              location: d.location || '',
-              activities: d.activities || []
+              location: d.location || d.title || '',
+              // Format lama memakai jam per kegiatan; kini jam (jika ada) menjadi bagian teks.
+              activities: (d.activities || []).map(act => ({
+                time: '',
+                text: [act.time, act.text].filter(Boolean).join(' ').trim()
+              }))
             }))
           });
         } catch (error) {
@@ -58,65 +101,37 @@ const ItineraryFormPage = () => {
     }
   }, [id, isEditMode]);
 
-  const handleTitleChange = (e) => {
-    setFormData(prev => ({ ...prev, title: e.target.value }));
+  const updateDay = (dayIndex, updater) => {
+    setFormData(prev => {
+      const days = [...prev.days];
+      days[dayIndex] = updater(days[dayIndex]);
+      return { ...prev, days };
+    });
   };
 
-  const handleAddDay = () => {
-    setFormData(prev => ({
-      ...prev,
-      days: [
-        ...prev.days,
-        { title: '', location: '', activities: [{ time: '', text: '' }] }
-      ]
-    }));
-  };
+  const handleAddDay = () => setFormData(prev => ({ ...prev, days: [...prev.days, emptyDay()] }));
 
   const handleRemoveDay = (dayIndex) => {
-    setFormData(prev => {
-      const newDays = [...prev.days];
-      newDays.splice(dayIndex, 1);
-      return { ...prev, days: newDays };
-    });
+    setFormData(prev => ({ ...prev, days: prev.days.filter((_, i) => i !== dayIndex) }));
   };
 
   const handleDayChange = (dayIndex, field, value) => {
-    setFormData(prev => {
-      const newDays = [...prev.days];
-      newDays[dayIndex] = { ...newDays[dayIndex], [field]: value };
-      return { ...prev, days: newDays };
-    });
+    updateDay(dayIndex, day => ({ ...day, [field]: value }));
   };
 
   const handleAddActivity = (dayIndex) => {
-    setFormData(prev => {
-      const newDays = [...prev.days];
-      newDays[dayIndex] = {
-        ...newDays[dayIndex],
-        activities: [...newDays[dayIndex].activities, { time: '', text: '' }]
-      };
-      return { ...prev, days: newDays };
-    });
+    updateDay(dayIndex, day => ({ ...day, activities: [...day.activities, emptyActivity()] }));
   };
 
   const handleRemoveActivity = (dayIndex, actIndex) => {
-    setFormData(prev => {
-      const newDays = [...prev.days];
-      const newActivities = [...newDays[dayIndex].activities];
-      newActivities.splice(actIndex, 1);
-      newDays[dayIndex] = { ...newDays[dayIndex], activities: newActivities };
-      return { ...prev, days: newDays };
-    });
+    updateDay(dayIndex, day => ({ ...day, activities: day.activities.filter((_, i) => i !== actIndex) }));
   };
 
   const handleActivityChange = (dayIndex, actIndex, field, value) => {
-    setFormData(prev => {
-      const newDays = [...prev.days];
-      const newActivities = [...newDays[dayIndex].activities];
-      newActivities[actIndex] = { ...newActivities[actIndex], [field]: value };
-      newDays[dayIndex] = { ...newDays[dayIndex], activities: newActivities };
-      return { ...prev, days: newDays };
-    });
+    updateDay(dayIndex, day => ({
+      ...day,
+      activities: day.activities.map((act, i) => (i === actIndex ? { ...act, [field]: value } : act))
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -133,7 +148,14 @@ const ItineraryFormPage = () => {
     try {
       const payload = {
         title: formData.title.trim(),
-        days: formData.days
+        category_id: formData.category_id ? parseInt(formData.category_id, 10) : null,
+        days: formData.days.map(day => ({
+          title: day.title || '',
+          location: (day.location || '').trim(),
+          activities: day.activities
+            .map(act => ({ time: '', text: (act.text || '').trim() }))
+            .filter(act => act.text !== '')
+        }))
       };
 
       if (isEditMode) {
@@ -141,10 +163,11 @@ const ItineraryFormPage = () => {
       } else {
         await createItinerary(payload);
       }
-      navigate('/itineraries');
+      navigate('/itineraries', {
+        state: { successMessage: `Itinerary "${payload.title}" berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
+      });
     } catch (error) {
-      const msg = error.response?.data?.error || "Terjadi kesalahan, coba lagi.";
-      setFormErrors(msg);
+      setFormErrors(error.response?.data?.error || "Terjadi kesalahan, coba lagi.");
     } finally {
       setIsSubmitting(false);
     }
@@ -161,7 +184,7 @@ const ItineraryFormPage = () => {
 
   if (isLoadingDetail) {
     return (
-      <div className="flex justify-center p-12 bg-white rounded-lg border border-neutral-200 shadow-sm">
+      <div className="flex justify-center p-12 bg-white rounded-2xl border border-neutral-200 shadow-card">
         <LoadingSpinner />
       </div>
     );
@@ -171,275 +194,139 @@ const ItineraryFormPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title={isEditMode ? "Edit Master Itinerary" : "Tambah Itinerary Baru"}
-        subtitle={isEditMode ? `Perbarui rangkaian jadwal perjalanan untuk ${formData.title || "itinerary"}` : "Penyusunan jadwal aktivitas perjalanan umroh hari demi hari"}
+      <PageHeader
+        title={isEditMode ? 'Edit Itinerary' : 'Tambah Itinerary'}
         onBack={() => navigate('/itineraries')}
       />
 
-      {formErrors && (
-        <Alert variant="error">{formErrors}</Alert>
-      )}
+      {formErrors && <Alert variant="error" onClose={() => setFormErrors(null)}>{formErrors}</Alert>}
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          
-          {/* KOLOM KIRI: Konten Utama Form */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* MetaBox: Informasi Dasar */}
-            <MetaBox
-              title="Informasi Itinerary"
-              subtitle="Judul dan identitas master itinerary"
-              icon={<Calendar size={18} className="text-neutral-700" />}
-            >
-              <div>
-                <Input 
-                  label="Judul Itinerary"
-                  value={formData.title}
-                  onChange={handleTitleChange}
-                  required
-                  placeholder="Contoh: Paket Umroh Reguler 09 Hari"
-                  className="!mb-0"
-                />
-              </div>
-            </MetaBox>
+        <FormLayout>
+          <FormSection id="sec-dasar" title="Informasi Dasar">
+            <Input
+              label="Judul Itinerary"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              required
+              placeholder="mis. Umroh Reguler 9 Hari"
+              className="!mb-0"
+            />
+          </FormSection>
 
-            {/* MetaBox: Rangkaian Perjalanan Hari demi Hari */}
-            <MetaBox
-              title="Rangkaian Perjalanan (Hari demi Hari)"
-              subtitle="Aktivitas dan lokasi setiap hari dalam paket"
-              icon={<MapPin size={18} className="text-neutral-700" />}
-              headerActions={
-                <Button 
-                  type="button" 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={handleAddDay}
-                  className="flex items-center gap-1.5 text-xs"
-                >
-                  <Plus size={14} />
-                  <span>Tambah Hari</span>
-                </Button>
-              }
-            >
-              {formData.days.length === 0 ? (
-                <div className="text-center py-8 px-4 bg-neutral-50 rounded-xl border border-dashed border-neutral-300">
-                  <Clock size={32} className="mx-auto text-neutral-400 mb-2" />
-                  <p className="text-sm font-medium text-neutral-700 font-heading">Belum ada hari perjalanan</p>
-                  <p className="text-xs text-neutral-500 font-body mt-1">
-                    Klik tombol "Tambah Hari" untuk mulai menyusun jadwal hari pertama perjalanan.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleAddDay}
-                    className="mt-4 inline-flex items-center gap-1.5 text-xs"
-                  >
-                    <Plus size={14} />
-                    <span>Tambah Hari Pertama</span>
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {formData.days.map((day, dayIndex) => (
-                    <div key={dayIndex} className="bg-neutral-50 rounded-xl border border-neutral-200/90 p-5 space-y-4">
-                      <div className="flex items-center justify-between pb-3 border-b border-neutral-200/80">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-full bg-primary-500 text-neutral-900 text-xs font-bold font-mono flex items-center justify-center">
-                            {dayIndex + 1}
-                          </span>
-                          <h4 className="font-semibold text-neutral-900 font-heading text-sm">
-                            Hari ke-{dayIndex + 1}
-                          </h4>
-                        </div>
-                        <button 
-                          type="button" 
-                          onClick={() => handleRemoveDay(dayIndex)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-400 hover:text-danger-600 hover:bg-danger-50 transition-colors cursor-pointer"
-                          title="Hapus Hari"
-                          aria-label={`Hapus Hari ke-${dayIndex + 1}`}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input 
-                          label="Judul Hari"
-                          value={day.title}
-                          onChange={(e) => handleDayChange(dayIndex, 'title', e.target.value)}
-                          placeholder="mis. Keberangkatan & Tiba di Jeddah"
-                          className="!mb-0"
-                        />
-                        <Input 
-                          label="Lokasi / Kota"
-                          value={day.location}
-                          onChange={(e) => handleDayChange(dayIndex, 'location', e.target.value)}
-                          placeholder="mis. Jakarta - Madinah"
-                          className="!mb-0"
-                        />
-                      </div>
-
-                      <div className="pt-2">
-                        <label className="block text-xs font-semibold text-neutral-700 font-heading mb-2.5">
-                          Aktivitas & Rencana Acara
-                        </label>
-                        <div className="space-y-2.5">
-                          {day.activities.map((act, actIndex) => (
-                            <div key={actIndex} className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                              <div className="w-full sm:w-28 shrink-0">
-                                <input
-                                  type="text" 
-                                  value={act.time}
-                                  onChange={(e) => {
-                                    let val = e.target.value.replace(/[^\d:]/g, '');
-                                    let parts = val.split(':');
-                                    if (parts.length > 2) {
-                                      val = parts[0] + ':' + parts.slice(1).join('');
-                                      parts = val.split(':');
-                                    }
-                                    if (parts[0].length > 2) {
-                                      parts[1] = parts[0].substring(2) + (parts[1] || '');
-                                      parts[0] = parts[0].substring(0, 2);
-                                    }
-                                    if (parts[0].length === 2 && parseInt(parts[0], 10) > 23) {
-                                      parts[0] = '23';
-                                    }
-                                    if (parts.length > 1) {
-                                      if (parts[1].length > 2) parts[1] = parts[1].substring(0, 2);
-                                      if (parts[1].length === 2 && parseInt(parts[1], 10) > 59) {
-                                        parts[1] = '59';
-                                      }
-                                    }
-                                    val = parts.length > 1 ? `${parts[0]}:${parts[1]}` : parts[0];
-                                    handleActivityChange(dayIndex, actIndex, 'time', val);
-                                  }}
-                                  placeholder="09:00"
-                                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-mono text-center transition-colors"
-                                />
-                              </div>
-                              <div className="flex-1">
-                                <input 
-                                  type="text"
-                                  value={act.text}
-                                  onChange={(e) => handleActivityChange(dayIndex, actIndex, 'text', e.target.value)}
-                                  placeholder="Deskripsi agenda aktivitas..."
-                                  required
-                                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 font-body transition-colors"
-                                />
-                              </div>
-                              <button 
-                                type="button" 
-                                onClick={() => handleRemoveActivity(dayIndex, actIndex)}
-                                className="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors p-1 shrink-0"
-                                title="Hapus aktivitas"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
-                          ))}
-
-                          <div className="pt-1">
-                            <Button 
-                              type="button" 
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleAddActivity(dayIndex)}
-                              className="text-primary-600 hover:text-primary-700 hover:bg-primary-50 text-xs flex items-center gap-1"
-                            >
-                              <Plus size={13} />
-                              <span>Tambah Baris Aktivitas</span>
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="mt-4 flex justify-center">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleAddDay}
-                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs"
-                    >
-                      <Plus size={14} />
-                      <span>Tambah Hari Berikutnya</span>
-                    </Button>
-                  </div>
-                </div>
+          <FormSection id="sec-hari" title="Rangkaian Perjalanan">
+            <div className="space-y-6">
+              {formData.days.length === 0 && (
+                <p className="text-sm text-neutral-500 font-body">
+                  Belum ada hari perjalanan. Tambahkan hari pertama untuk mulai menyusun jadwal.
+                </p>
               )}
-            </MetaBox>
 
-          </div>
+              {formData.days.map((day, dayIndex) => {
+                return (
+                  <div key={dayIndex} className="space-y-4 border-t border-neutral-200 pt-5 first:border-t-0 first:pt-0">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-heading text-sm font-semibold text-neutral-900">Hari ke-{dayIndex + 1}</h4>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDay(dayIndex)}
+                        className="text-xs font-medium text-neutral-500 hover:text-danger-600 transition-colors cursor-pointer"
+                      >
+                        Hapus hari
+                      </button>
+                    </div>
 
-          {/* KOLOM KANAN: Sidebar Aksi & Informasi */}
-          <div className="space-y-6 lg:sticky lg:top-6">
-            
-            {/* Panel Aksi & Simpan */}
-            <MetaBox 
-              title="Aksi & Simpan" 
-              subtitle="Penyimpanan master itinerary"
-              icon={<Save size={18} className="text-neutral-700" />}
-            >
-              <div className="space-y-3.5">
-                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs text-neutral-600 space-y-1.5 font-body">
-                  <div className="flex items-center gap-1.5 text-neutral-900 font-semibold">
-                    <CheckCircle2 size={14} className="text-success-600" />
-                    <span>Verifikasi Data</span>
+                    <Input
+                      label="Lokasi"
+                      value={day.location}
+                      onChange={(e) => handleDayChange(dayIndex, 'location', e.target.value)}
+                      placeholder="mis. Makkah – Madinah"
+                      required
+                      className="!mb-0"
+                    />
+
+                    <div className="space-y-2">
+                      <span className="block min-h-5 text-[13px] font-medium leading-5 text-neutral-800 font-body">Kegiatan</span>
+                      {day.activities.map((act, actIndex) => (
+                        <div key={actIndex} className="flex items-start gap-3">
+                          <div className="min-w-0 flex-1">
+                            <Textarea
+                              value={act.text}
+                              onChange={(e) => handleActivityChange(dayIndex, actIndex, 'text', e.target.value)}
+                              placeholder="mis. Sarapan pagi lalu berkumpul di lobby"
+                              rows={2}
+                              className="!mb-0"
+                            />
+                          </div>
+                          <RemoveButton
+                            title="Hapus poin kegiatan"
+                            onClick={() => handleRemoveActivity(dayIndex, actIndex)}
+                          />
+                        </div>
+                      ))}
+                      <AddButton onClick={() => handleAddActivity(dayIndex)}>Tambah Poin Kegiatan</AddButton>
+                      <p className="text-xs text-neutral-500 font-body">
+                        Satu poin per kotak. Tebalkan kata dengan **tanda bintang dua**.
+                      </p>
+                    </div>
                   </div>
-                  <p>Master itinerary ini dapat dihubungkan ke berbagai paket jadwal keberangkatan umroh.</p>
-                </div>
+                );
+              })}
 
-                <div className="space-y-2 pt-1">
-                  <Button 
-                    type="submit" 
-                    variant="primary" 
-                    disabled={isSubmitting} 
-                    className="w-full justify-center shadow-sm"
-                  >
-                    {isSubmitting ? "Menyimpan..." : (isEditMode ? "Perbarui Itinerary" : "Simpan Itinerary")}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    onClick={() => navigate('/itineraries')} 
-                    className="w-full justify-center text-neutral-600 hover:text-neutral-900"
-                  >
-                    Batal
-                  </Button>
-                </div>
+              <AddButton onClick={handleAddDay}>
+                {formData.days.length === 0 ? 'Tambah Hari Pertama' : 'Tambah Hari'}
+              </AddButton>
+            </div>
+          </FormSection>
+
+          <FormAside>
+            <SidebarSection title="Simpan">
+              <div className="space-y-3">
+                <p className="text-xs text-neutral-500 font-body">
+                  Itinerary ini bisa dipilih pada banyak paket keberangkatan.
+                </p>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  isLoading={isSubmitting}
+                  disabled={isSubmitting}
+                  className="w-full justify-center"
+                >
+                  {isSubmitting ? 'Menyimpan...' : (isEditMode ? 'Perbarui Itinerary' : 'Simpan Itinerary')}
+                </Button>
               </div>
-            </MetaBox>
+            </SidebarSection>
 
-            {/* Panel Ringkasan */}
-            <MetaBox 
-              title="Ringkasan Perjalanan" 
-              subtitle="Statistik jadwal itinerary"
-              icon={<Info size={18} className="text-neutral-700" />}
-            >
-              <div className="space-y-2.5 text-xs font-body text-neutral-600">
-                <div className="flex items-center justify-between py-1 border-b border-neutral-100">
-                  <span>Total Durasi Hari:</span>
-                  <span className="font-bold text-neutral-900 font-mono text-sm">
-                    {formData.days.length} Hari
-                  </span>
+            <SidebarSection title="Kategori">
+              <CustomDropdown
+                className="!mb-0"
+                value={formData.category_id}
+                onChange={(val) => setFormData(prev => ({ ...prev, category_id: val }))}
+                placeholder="-- Semua kategori --"
+                options={[
+                  { value: '', label: '-- Semua kategori --' },
+                  ...categories.map(c => ({ value: String(c.id), label: c.name })),
+                ]}
+              />
+              <p className="mt-2 text-xs text-neutral-500 font-body">
+                Itinerary muncul sebagai pilihan pada paket dengan kategori ini.
+              </p>
+            </SidebarSection>
+
+            <SidebarSection title="Ringkasan">
+              <dl className="space-y-2 text-xs font-body">
+                <div className="flex items-center justify-between">
+                  <dt className="text-neutral-500">Durasi</dt>
+                  <dd className="text-sm font-semibold text-neutral-900">{formData.days.length} hari</dd>
                 </div>
-                <div className="flex items-center justify-between py-1">
-                  <span>Total Agenda Aktivitas:</span>
-                  <span className="font-bold text-neutral-900 font-mono text-sm">
-                    {totalActivities} Agenda
-                  </span>
+                <div className="flex items-center justify-between">
+                  <dt className="text-neutral-500">Total poin kegiatan</dt>
+                  <dd className="text-sm font-semibold text-neutral-900">{totalActivities}</dd>
                 </div>
-              </div>
-            </MetaBox>
-
-          </div>
-
-        </div>
+              </dl>
+            </SidebarSection>
+          </FormAside>
+        </FormLayout>
       </form>
     </div>
   );

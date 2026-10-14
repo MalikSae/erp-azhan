@@ -12,17 +12,17 @@ SELECT n.name, IF(n.name IN ('Royal Andalus','Andalus As-Salam','Shaza Regency')
  UNION ALL SELECT 'Sofwah Tower' UNION ALL SELECT 'Shaza Regency'
 ) n WHERE @hana IS NOT NULL AND NOT EXISTS (SELECT 1 FROM hotels h WHERE h.name=n.name);
 INSERT INTO schedules (
- brand_id,jadwal_nama,status,is_promo,is_direct_flight,seat_total,seat_sisa,
+ brand_id,jadwal_nama,status,is_direct_flight,seat_total,seat_sisa,
  maskapai_id,berangkat_tanggal,pulang_tanggal,hotel_mekkah_id,hotel_madinah_id,
- harga_quad,harga_triple,harga_double,harga_coret,promo_until,include_items,exclude_items,
+ harga_quad,harga_triple,harga_double,include_items,exclude_items,
  nominal_komisi_langsung,nominal_bonus_pembinaan
 )
-SELECT @hana,n.name,'published',n.promo,1,45,n.remaining,
+SELECT @hana,n.name,'published',1,45,n.remaining,
  (SELECT id FROM airlines WHERE name='SAUDIA' LIMIT 1),n.depart,DATE_ADD(n.depart,INTERVAL n.nights DAY),
  (SELECT id FROM hotels WHERE name=n.mekkah LIMIT 1),(SELECT id FROM hotels WHERE name=n.madinah LIMIT 1),
- n.price,n.price+2000000,n.price+4000000,IF(n.promo,n.price+1000000,NULL),IF(n.promo,'2026-10-20',NULL),
+ n.price,n.price+2000000,n.price+4000000,
  JSON_ARRAY('Manasik','Albaik','City Tour Thaif','Sertifikat Umroh'),
- JSON_ARRAY('DATA TESTING: tanggal pulang, harga kamar, kuota, dan promo merupakan simulasi.'),0,0
+ JSON_ARRAY('DATA TESTING: tanggal pulang, harga kamar, dan kuota merupakan simulasi.'),0,0
 FROM (
  SELECT 'Umroh Milenial Combine Bintang 5' name,DATE('2026-10-20') depart,8 nights,30999000 price,0 promo,45 remaining,'Azka Shafa' mekkah,'Royal Andalus' madinah
  UNION ALL SELECT 'Umroh Milenial Oktober','2026-10-29',8,29999000,1,8,'Olayan Golden','Andalus As-Salam'

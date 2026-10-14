@@ -14,7 +14,6 @@ import (
 type PackageRecord struct {
 	Brand                    string   `json:"brand"`
 	JadwalNama               string   `json:"jadwal_nama"`
-	IsPromo                  bool     `json:"is_promo"`
 	SeatTotal                int      `json:"seat_total"`
 	SeatSisa                 int      `json:"seat_sisa"`
 	Maskapai                 string   `json:"maskapai"`
@@ -34,12 +33,10 @@ type PackageRecord struct {
 	HargaQuad                int      `json:"harga_quad"`
 	HargaTriple              int      `json:"harga_triple"`
 	HargaDouble              int      `json:"harga_double"`
-	HargaCoret               *int     `json:"harga_coret"`
 	ItineraryID              *int     `json:"itinerary_id"`
 	IncludeItems             []string `json:"include_items"`
 	ExcludeItems             []string `json:"exclude_items"`
 	Status                   string   `json:"status"`
-	IsTicketConfirmed        bool     `json:"is_ticket_confirmed"`
 }
 
 func main() {
@@ -184,25 +181,25 @@ func main() {
 		_, err = db.Exec(`
 			INSERT INTO schedules (
 				brand_id, maskapai_id, hotel_mekkah_id, hotel_madinah_id,
-				jadwal_nama, is_promo, seat_total, seat_sisa,
+				jadwal_nama, seat_total, seat_sisa,
 				berangkat_tanggal, berangkat_jam, berangkat_kode_penerbangan, berangkat_bandara_asal, berangkat_bandara_tujuan,
 				pulang_tanggal, pulang_jam, pulang_kode_penerbangan, pulang_bandara_asal, pulang_bandara_tujuan, transit_bandara,
-				harga_quad, harga_triple, harga_double, harga_coret,
-				itinerary_id, include_items, exclude_items, status, is_ticket_confirmed
+				harga_quad, harga_triple, harga_double,
+				itinerary_id, include_items, exclude_items, status
 			) VALUES (
 				?, ?, ?, ?,
 				?, ?, ?, ?,
 				?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?,
-				?, ?, ?, 'draft', false
+				?, ?, ?, 'draft'
 			)
 		`,
 			brandID, airlineID, hotelMekkahID, hotelMadinahID,
-			rec.JadwalNama, rec.IsPromo, rec.SeatTotal, rec.SeatSisa,
+			rec.JadwalNama, rec.SeatTotal, rec.SeatSisa,
 			rec.BerangkatTanggal, bJam, bKode, rec.BerangkatBandaraAsal, rec.BerangkatBandaraTujuan,
 			rec.PulangTanggal, pJam, pKode, rec.PulangBandaraAsal, rec.PulangBandaraTujuan, rec.TransitBandara,
-			rec.HargaQuad, rec.HargaTriple, rec.HargaDouble, rec.HargaCoret,
+			rec.HargaQuad, rec.HargaTriple, rec.HargaDouble,
 			rec.ItineraryID, string(includeJSON), string(excludeJSON),
 		)
 
