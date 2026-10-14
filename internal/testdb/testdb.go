@@ -35,6 +35,10 @@ func Tx(t *testing.T) (*sql.DB, *sql.Tx) {
 	if err != nil {
 		t.Fatalf("koneksi database: %v", err)
 	}
+	// Fixture memakai baris bersama (jadwal pertama, brand-nya); paket uji Go berjalan
+	// paralel, jadi transaksi uji saling mengunci baris itu dan deadlock. Kunci bernama
+	// menyerialkan semua test Tx lintas paket.
+	Serialize(t, db, "erp_test_tx_fixture")
 	tx, err := db.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)

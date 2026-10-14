@@ -94,7 +94,7 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 		case errors.Is(err, ErrNotFound):
 			writeError(w, http.StatusNotFound, err.Error())
-		case errors.Is(err, ErrSeatUnavailable), errors.Is(err, ErrAmbiguousJamaah), errors.Is(err, ErrIdempotencyConflict), errors.Is(err, ErrLeadAlreadyConverted):
+		case errors.Is(err, ErrSeatUnavailable), errors.Is(err, ErrScheduleClosed), errors.Is(err, ErrAmbiguousJamaah), errors.Is(err, ErrIdempotencyConflict), errors.Is(err, ErrLeadAlreadyConverted):
 			writeError(w, http.StatusConflict, err.Error())
 		case errors.Is(err, ErrBrandCodeMissing), errors.Is(err, ErrInvalidPayment):
 			writeError(w, http.StatusUnprocessableEntity, err.Error())
