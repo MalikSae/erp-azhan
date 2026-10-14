@@ -121,7 +121,7 @@ erp-azhan/
 
 ### 3. Setup Frontend Dashboards
 
-#### A. Master Dashboard (Super Admin)
+#### A. Office Dashboard (Super Admin)
 ```powershell
 cd frontend/master-dashboard
 npm install
@@ -145,7 +145,7 @@ Gunakan command seed berikut. Jangan menyimpan password produksi di README atau 
 go run cmd/seed-admin/main.go admin@example.com "password-minimal-8-karakter"
 ```
 
-Super Admin Grup (`brand_id = null`) masuk melalui Master Dashboard. Admin yang terikat ke brand masuk melalui Travel Dashboard.
+Super Admin Grup (`brand_id = null`) masuk melalui Office Dashboard. Admin yang terikat ke brand masuk melalui Travel Dashboard.
 
 ### 5. Verifikasi Build
 
@@ -187,7 +187,7 @@ dashboard menggunakan aset resmi yang memiliki izin penggunaan.
 
 ## Fitur Dashboard Terkini
 
-### Master Dashboard (`:5173`)
+### Office Dashboard (`:5173`)
 
 - Ringkasan jumlah brand, paket terbit, hotel, dan maskapai dari API aktual.
 - Daftar keberangkatan terdekat, kapasitas kursi aktif, serta distribusi status paket.
@@ -348,7 +348,7 @@ go run migrations/run.go
 Contoh domain pada panduan ini:
 
 - API: `api.example.com`
-- Master Dashboard: `admin.example.com`
+- Office Dashboard: `office.example.com`
 - Travel Dashboard: `travel.example.com`
 - Microsite dipasang dari repository `azhan-microsite` secara terpisah.
 
@@ -398,7 +398,7 @@ DB_USER=erp_azhan_app
 DB_PASSWORD=PASSWORD_DATABASE_YANG_KUAT
 DB_NAME=erp_azhan
 APP_PORT=9090
-CORS_ALLOWED_ORIGINS=https://admin.example.com,https://travel.example.com,https://*.example.com
+CORS_ALLOWED_ORIGINS=https://office.example.com,https://travel.example.com,https://*.example.com
 JWT_SECRET=RANDOM_MINIMAL_64_KARAKTER
 JWT_ACCESS_TTL_MINUTES=15
 JWT_REFRESH_TTL_DAYS=7
@@ -476,7 +476,7 @@ npm run build
 ### 5. Buat website dan reverse proxy aaPanel
 
 1. Buat website `api.example.com`; hapus index bawaan lalu atur **Reverse Proxy** ke `http://127.0.0.1:9090`.
-2. Buat website `admin.example.com` dengan document root `/www/wwwroot/erp-azhan/frontend/master-dashboard/dist`.
+2. Buat website `office.example.com` dengan document root `/www/wwwroot/erp-azhan/frontend/master-dashboard/dist`.
 3. Buat website `travel.example.com` dengan document root `/www/wwwroot/erp-azhan/frontend/travel-dashboard/dist`.
 4. Untuk kedua SPA dashboard, tambahkan pada konfigurasi Nginx di dalam blok `server`:
 
@@ -502,7 +502,7 @@ Atur Cron aaPanel untuk backup database dan folder `uploads` setiap hari. Uji de
 
 ```bash
 curl -i https://api.example.com/api/health
-curl -I https://admin.example.com
+curl -I https://office.example.com
 curl -I https://travel.example.com
 journalctl -u erp-azhan-api -n 100 --no-pager
 ```

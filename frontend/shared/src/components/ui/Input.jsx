@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import FormField from './FormField';
 
-const Input = ({ label, type = 'text', value, onChange, error, required, placeholder, className = '', name, disabled, readOnly, ...props }) => {
+const Input = ({ label, type = 'text', value, onChange, error, required, placeholder, className = '', name, disabled, readOnly, id, helpText, prefixIcon, ...props }) => {
+  const generatedId = useId();
+  const inputId = id || name || generatedId;
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordField = type === 'password';
   const inputType = isPasswordField && showPassword ? 'text' : type;
@@ -12,11 +14,13 @@ const Input = ({ label, type = 'text', value, onChange, error, required, placeho
   const paddingRightClass = isPasswordField ? 'pr-10' : '';
 
   return (
-    <FormField label={label} error={error} required={required} className={className}>
+    <FormField htmlFor={inputId} errorId={`${inputId}-error`} helpId={`${inputId}-help`} helpText={helpText} label={label} error={error} required={required} className={className}>
       <div className="relative">
         <input
           type={inputType}
           name={name}
+          id={inputId}
+          aria-describedby={error ? `${inputId}-error` : helpText ? `${inputId}-help` : undefined}
           value={value}
           onChange={onChange}
           required={required}

@@ -4,7 +4,7 @@ trigger: always_on
 
 # Design System — ERP Azhan Grup (Frontend Internal)
 
-> Berlaku untuk Master Dashboard, Travel Dashboard, CRM Dashboard (semua dashboard internal React+Vite+Tailwind). Sumber kebenaran teknis ada di `tailwind.config.js` — dokumen ini adalah penjelasannya dalam bahasa manusia.
+> Berlaku untuk Office Dashboard, Travel Dashboard, CRM Dashboard (semua dashboard internal React+Vite+Tailwind). Sumber kebenaran teknis ada di `tailwind.config.js` — dokumen ini adalah penjelasannya dalam bahasa manusia.
 
 ---
 
@@ -19,7 +19,7 @@ trigger: always_on
 
 ## 2. Warna (Color Tokens)
 
-**Master Dashboard (holding Azhan Grup)** memakai palet **Onyx & Champagne Gold di atas gading**: tombol utama onyx, emas hanya aksen (menu aktif, logo, garis tipis), latar gading hangat. Warna keempat brand (Zahara, Nava, Alsha, Hana) hanya dipakai untuk data (grafik per brand), bukan tombol/navigasi.
+**Office Dashboard (holding Azhan Grup)** memakai palet **Onyx & Champagne Gold di atas gading**: tombol utama onyx, emas hanya aksen (menu aktif, logo, garis tipis), latar gading hangat. Warna keempat brand (Zahara, Nava, Alsha, Hana) hanya dipakai untuk data (grafik per brand), bukan tombol/navigasi.
 
 **Travel Dashboard** mengikuti warna tiap brand saat runtime (`applyBrandTheme` → variabel `--brand-primary*`); token bawaan di `travel-dashboard/tailwind.config.js` hanya fallback.
 
@@ -98,7 +98,17 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 
 **Sidebar**: `hidden md:block` untuk versi fixed desktop + komponen drawer/hamburger terpisah yang HANYA render di mobile (`md:hidden`) — dua rendering berbeda, bukan 1 elemen yang di-resize CSS saja.
 
-**Layout 2 kolom (ScheduleFormPage, dst)**: `flex flex-col md:flex-row` — kolom kanan (sidebar MetaBox) otomatis pindah ke BAWAH kolom kiri saat mobile (`order` CSS boleh dipakai kalau urutan visual perlu beda dari urutan DOM), bukan tetap 2 kolom sempit.
+**Layout form tambah/edit (STANDAR — acuan: Tambah/Edit Paket)**: semua form tambah/edit memakai `shared/ui/FormLayout` (`FormLayout`, `FormSection`, `SidebarSection`, `FormAside`), bukan `MetaBox`/grid manual.
+
+- **Kolom kiri**: SATU box putih (`rounded-xl border`), isinya `FormSection` yang dipisah garis tipis. Judul section di atas isi (`text-base font-bold`), tanpa header band, tanpa subtitle, tanpa ikon dekoratif, tanpa kotak bersarang di dalamnya.
+- **Kolom kanan (320 px, sticky)**: SATU box berisi `SidebarSection`. Bagian pertama selalu aksi simpan (tombol primer selebar penuh; TIDAK ada tombol "Batal" — kembali lewat panah di header). Sisanya data pendukung (status, brand/kategori, ringkasan, berkas).
+- **Tab navigasi**: opsional; pakai prop `tabs` bila form punya ≥ 3 section. Tab mengikuti scroll (scroll-spy) dan klik meluncur ke section.
+- **Responsif**: di bawah `lg` sidebar turun di bawah kolom utama.
+- **Field**: komponen `Input`/`CustomDropdown`/`AutocompleteInput`; label di atas; tinggi seragam (`h-10`); field wajib bertanda `*`; info baca-saja (mis. terisi/sisa) berupa teks keterangan kecil di bawah field, BUKAN field yang tampak bisa diisi. Lebar field mengikuti kolom grid 2 kolom (atau penuh untuk teks panjang); jangan ada field setengah-lebar sendirian dengan ruang kosong di sampingnya.
+- **Tombol tambah baris** (transit, hotel transit, aktivitas, hari): tombol putus-putus selebar penuh "+ Tambah …"; baris dihapus lewat tombol sampah di kanan baris.
+- **Warna**: hanya oranye brand dan warna status; hindari biru/hijau dekoratif. Status/atribut memakai `Badge`.
+- **Setelah simpan**: pindah ke halaman daftar dengan `navigate(path, { state: { successMessage } })`; halaman daftar menampilkan `Alert variant="success"` dan membersihkan state.
+- **Scroll**: pindah halaman mereset scroll area utama (`DashboardLayout`).
 
 **Table**: wrapper `overflow-x-auto` di sekeliling elemen `<table>` sebagai pendekatan default project ini (bukan card-list) — konsisten dipakai di semua halaman Table.
 

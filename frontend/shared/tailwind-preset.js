@@ -71,19 +71,8 @@ export default {
           muted: '#6B7280',
           border: '#E5E7EB',
         },
-        brand: {
-          dark: '#1F2937',
-          ivory: '#F7F7F9', // nama lama dipertahankan agar kelas lama tidak pecah
-        },
         page: {
           bg: '#F7F7F9',
-        },
-        // Nama lama `accent-gold` masih dipakai beberapa halaman — dipetakan
-        // ke oranye supaya tidak ada kelas yang pecah; bersihkan bertahap.
-        accent: {
-          gold: '#F26522',
-          'gold-hover': '#E05510',
-          'gold-light': '#FFE6D9',
         },
       },
       borderRadius: {
