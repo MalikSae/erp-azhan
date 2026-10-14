@@ -8,8 +8,6 @@ import {
   listPayments, 
   createPayment, 
   updatePaymentStatus, 
-  addBookingAddon, 
-  deleteBookingAddon, 
   addBookingDiscount,
   removeBookingDiscount,
   updateBookingProgress,
@@ -21,12 +19,14 @@ import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengk
 import { getJamaah } from "../api/jamaah";
 import { listBrands } from "../api/brands";
 import { uploadMedia, openProtectedMedia } from "../api/media";
-import { getStatusBadgeConfig, getSeatLockIcon } from "../utils/bookingStatus";
+import { getSeatLockIcon } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
-import Card from "../components/ui/Card";
-import MetaBox from "../components/ui/MetaBox";
+import { Surface, Section, TableCard, Field, SummaryItem, PILL_STRONG, BrandBadge } from "../components/ui/DetailLayout";
 import Badge from "../components/ui/Badge";
+import ActionMenu from "../components/ui/ActionMenu";
 import Button from "../components/ui/Button";
+import { printInvoice } from "../utils/printInvoice";
+import client from "../api/client";
 import Alert from "../components/ui/Alert";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Table from "../components/ui/Table";
@@ -39,7 +39,7 @@ import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
 import KreditCashbackPanel from "../components/KreditCashbackPanel";
 import RefundPanel from "../components/RefundPanel";
-import { CheckCircle, ExternalLink, FileText, Upload, X, Shield, Calendar, User, Users, Plane, Check, Plus, Trash2, Tag, Percent, Package, Loader, CircleCheckBig, Building2, CreditCard, Receipt } from "lucide-react";
+import { CheckCircle, ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -58,6 +58,47 @@ const formatTanggal = (dateStr) => {
   } catch (e) {
     return dateStr;
   }
+};
+
+const STATUS_STYLE = {
+  draft: { label: 'Draft', chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' },
+  baru: { label: 'Baru', chip: 'bg-info-50 text-info-700 border-info-200', dot: 'bg-info-500' },
+  dp: { label: 'DP', chip: 'bg-warning-50 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
+  lunas: { label: 'Lunas', chip: 'bg-success-50 text-success-700 border-success-200', dot: 'bg-success-500' },
+  batal: { label: 'Batal', chip: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
+};
+
+const PAYMENT_STATUS_STYLE = {
+  pending: { label: 'Menunggu', chip: 'bg-warning-50 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
+  confirmed: { label: 'Diterima', chip: 'bg-success-50 text-success-700 border-success-200', dot: 'bg-success-500' },
+  rejected: { label: 'Ditolak', chip: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
+};
+
+// Pil status utama: titik berwarna kecil + teks.
+const StatusPill = ({ status, styleMap = STATUS_STYLE }) => {
+  const s = styleMap[status] || { label: status, chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' };
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium font-body border ${s.chip}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+      {s.label}
+    </span>
+  );
+};
+
+// Status ringan: titik + teks tanpa bingkai.
+const DotText = ({ tone, children }) => {
+  const tones = {
+    success: { text: 'text-success-700', dot: 'bg-success-500' },
+    warning: { text: 'text-warning-700', dot: 'bg-warning-500' },
+    neutral: { text: 'text-neutral-500', dot: 'bg-neutral-400' },
+  };
+  const t = tones[tone] || tones.neutral;
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${t.text}`}>
+      <span className={`w-2 h-2 rounded-full ${t.dot}`} />
+      {children}
+    </span>
+  );
 };
 
 const PROGRESS_HEADER_MANUAL_ITEMS = [
@@ -88,11 +129,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [selectedBuktiUrl, setSelectedBuktiUrl] = useState(null);
 
-  // Add-on Modal State
-  const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
-  const [addonForm, setAddonForm] = useState({ nama: "", nominal: "" });
-  const [addonError, setAddonError] = useState(null);
-  const [addonSubmitting, setAddonSubmitting] = useState(false);
 
   // Diskon Modal State
   const [isDiskonModalOpen, setIsDiskonModalOpen] = useState(false);
@@ -323,54 +359,101 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
   // Perhitungan Keuangan
   const hargaDasar = booking?.harga_dasar ? parseFloat(booking.harga_dasar) : (parseFloat(booking?.total_harga) || 0);
-  const addons = booking?.addons || [];
-  const totalAddons = addons.reduce((sum, a) => sum + (parseFloat(a.nominal) || 0), 0);
   const discounts = booking?.discounts || [];
   const totalDiskon = discounts.reduce((sum, d) => sum + (parseFloat(d.nominal) || 0), 0);
-  const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, hargaDasar + totalAddons - totalDiskon);
+  const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, hargaDasar - totalDiskon);
 
   const totalPaid = payments
     .filter((p) => p.status === "confirmed")
     .reduce((sum, p) => sum + (parseFloat(p.jumlah) || 0), 0);
   const sisaTagihan = Math.max(0, totalHarga - totalPaid);
 
-  // ─── Add-on Handlers ──────────────────────────────────────────────────────────
-  const handleAddAddonSubmit = async (e) => {
-    e.preventDefault();
-    const nominalNum = parseFloat(addonForm.nominal) || 0;
-    if (!addonForm.nama.trim()) {
-      setAddonError("Nama add-on wajib diisi");
-      return;
-    }
-    if (nominalNum <= 0) {
-      setAddonError("Nominal add-on harus lebih dari 0");
-      return;
-    }
-
-    setAddonSubmitting(true);
-    setAddonError(null);
+  // ─── Cetak / PDF Invoice ──────────────────────────────────────────────────────
+  const handlePrintInvoice = async () => {
+    const assetSrc = (url) => {
+      if (!url) return "";
+      if (url.startsWith("http")) return url;
+      return `${import.meta.env.VITE_API_BASE_URL || "http://localhost:9090"}${url.startsWith("/") ? "" : "/"}${url}`;
+    };
+    // Rekening tujuan transfer milik brand (gagal diambil → invoice tetap tercetak tanpa bagian ini).
+    let rekening = [];
     try {
-      await addBookingAddon(id, {
-        nama: addonForm.nama.trim(),
-        nominal: nominalNum
-      });
-      setIsAddonModalOpen(false);
-      setAddonForm({ nama: "", nominal: "" });
-      fetchAll();
-    } catch (err) {
-      setAddonError(err.response?.data?.error || "Gagal menambahkan add-on");
-    } finally {
-      setAddonSubmitting(false);
+      const res = await client.get("/api/admin/bank-accounts/", { params: { brand_id: booking.brand_id } });
+      rekening = (Array.isArray(res.data) ? res.data : [])
+        .filter((a) => a.is_active && String(a.brand_id) === String(booking.brand_id))
+        .map((a) => ({
+          bank: a.bank_name,
+          nomor: a.account_number,
+          pemilik: a.account_holder,
+          catatan: a.instructions || "",
+          logoUrl: assetSrc(a.logo_url),
+        }));
+    } catch {
+      rekening = [];
     }
-  };
-
-  const handleDeleteAddon = async (addonId) => {
-    try {
-      await deleteBookingAddon(id, addonId);
-      fetchAll();
-    } catch (err) {
-      setError(err.response?.data?.error || "Gagal menghapus add-on");
+    if (rekening.length === 0 && brand?.bank_name && brand?.bank_account_number) {
+      rekening = [{ bank: brand.bank_name, nomor: brand.bank_account_number, pemilik: brand.bank_account_holder || "", catatan: "", logoUrl: "" }];
     }
+    // Tanggal batas pelunasan = keberangkatan dikurangi batas hari brand.
+    const batasPelunasanTgl = (() => {
+      const hari = Number(brand?.batas_pelunasan_hari) || 0;
+      const d = booking.berangkat_tanggal ? new Date(booking.berangkat_tanggal) : null;
+      if (!hari || !d || Number.isNaN(d.getTime())) return "";
+      d.setDate(d.getDate() - hari);
+      return formatTanggal(d);
+    })();
+    const aktif = (booking.pax || []).filter((p) => p.pax_status === "aktif");
+    const pic = (booking.pax || []).find((p) => Number(p.jamaah_id) === Number(booking.pic_jamaah_id));
+    printInvoice({
+      kode: booking.id_booking || `Booking #${booking.id}`,
+      brandName: brand?.name || "",
+      accentColor: brand?.primary_color || "",
+      logoUrl: brand?.logo_url ? assetSrc(brand.logo_url) : (brand?.icon_url ? assetSrc(brand.icon_url) : ""),
+      kop: {
+        alamat: brand?.address || "",
+        // Alamat brand sering sudah memuat kota/provinsi; jangan ditulis dua kali.
+        kota: brand?.city && !(brand?.address || "").toLowerCase().includes(brand.city.toLowerCase()) ? brand.city : "",
+        provinsi: brand?.province && !(brand?.address || "").toLowerCase().includes(brand.province.toLowerCase()) ? brand.province : "",
+        telepon: brand?.phone || "",
+        whatsapp: brand?.whatsapp_number || "",
+        email: brand?.email || "",
+        website: brand?.domain || "",
+        legalitas: [brand?.ppiu_number && `PPIU ${brand.ppiu_number}`, brand?.pihk_number && `PIHK ${brand.pihk_number}`].filter(Boolean).join("  •  "),
+      },
+      rekening,
+      statusLabel: booking.status === "batal" ? "Dibatalkan" : sisaTagihan <= 0 && totalHarga > 0 ? "Lunas" : totalPaid > 0 ? "Pembayaran Sebagian" : "Belum Dibayar",
+      statusTone: booking.status === "batal" ? "batal" : sisaTagihan <= 0 && totalHarga > 0 ? "lunas" : totalPaid > 0 ? "sebagian" : "belum",
+      kontakHp: jamaah?.no_hp || "",
+      sk: {
+        minimalDp: Number(brand?.minimal_dp) > 0 ? formatRupiah(brand.minimal_dp) : "",
+        pelunasan: Number(brand?.batas_pelunasan_hari) > 0
+          ? `Pelunasan paling lambat H-${brand.batas_pelunasan_hari} sebelum keberangkatan${batasPelunasanTgl ? ` (${batasPelunasanTgl})` : ""}.`
+          : "",
+        pembatalan: String(brand?.ketentuan_pembatalan || "").split(/\r?\n/).map((t) => t.trim()).filter(Boolean),
+      },
+      paket: booking.jadwal_nama || "",
+      berangkat: formatTanggal(booking.berangkat_tanggal),
+      kontak: pic?.nama_jamaah || booking.nama_jamaah || "",
+      tanggalBooking: formatTanggal(booking.created_at),
+      pax: aktif.map((p) => ({
+        nama: p.nama_jamaah || `Jamaah #${p.jamaah_id}`,
+        tipe: p.pax_type === "infant" ? "Infant" : (p.room_type ? `Kamar ${p.room_type.charAt(0).toUpperCase()}${p.room_type.slice(1).toLowerCase()}` : ""),
+        harga: formatRupiah(p.harga_pax),
+      })),
+      hargaDasar: formatRupiah(aktif.reduce((sum, p) => sum + (parseFloat(p.harga_pax) || 0), 0) || hargaDasar),
+      diskon: discounts.map((d) => ({ nama: d.nama, nominal: formatRupiah(d.nominal) })),
+      totalTagihan: formatRupiah(totalHarga),
+      totalDibayar: formatRupiah(totalPaid),
+      sisaTagihan: formatRupiah(sisaTagihan),
+      pembayaran: payments
+        .filter((p) => p.status === "confirmed")
+        .map((p) => ({
+          tanggal: formatTanggal(p.tanggal || p.created_at),
+          metode: (p.metode || "transfer").toUpperCase(),
+          jumlah: formatRupiah(p.jumlah),
+        })),
+      printedAt: formatTanggal(new Date()),
+    });
   };
 
   // ─── Diskon Handlers ─────────────────────────────────────────────────────────
@@ -429,7 +512,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       const progressField = `progress_${key}`;
       const updated = { ...prev, [progressField]: newValue };
 
-      const headerLengkap = Boolean(updated.progress_tiket) && Boolean(updated.progress_hotel) && Boolean(updated.progress_land_arrangement);
+      const headerLengkap = Boolean(updated.progress_hotel)&& Boolean(updated.progress_land_arrangement);
       let activePaxCount = 0;
       let allPaxLengkap = true;
       (updated.pax || []).forEach((p) => {
@@ -467,7 +550,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         return p;
       });
 
-      const headerLengkap = Boolean(prev.progress_tiket) && Boolean(prev.progress_hotel) && Boolean(prev.progress_land_arrangement);
+      const headerLengkap = Boolean(prev.progress_hotel)&& Boolean(prev.progress_land_arrangement);
       let activePaxCount = 0;
       let allPaxLengkap = true;
       updatedPax.forEach((p) => {
@@ -583,7 +666,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   };
 
   // Print Invoice Modal
-  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
 
   if (loading) {
     return (
@@ -602,7 +684,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     );
   }
 
-  const [statusVariant, statusLabel] = getStatusBadgeConfig(booking.status);
   const seatLockInfo = getSeatLockIcon(booking.status, booking.is_seat_blocked);
 
   const paxList = booking.pax || [];
@@ -614,85 +695,87 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     <div className="w-full space-y-6">
       {error && <Alert variant="error">{error}</Alert>}
 
-      {/* Header Info */}
+      {/* Header: judul + status, pil brand / seat, aksi */}
       <PageHeader
-        title={
-          <div className="flex flex-wrap items-center gap-3">
-            <span>{booking.id_booking || `Booking #${booking.id}`}</span>
-            <Badge variant={statusVariant} hideIcon={true} className="text-xs font-semibold px-2.5 py-0.5">
-              Status: {statusLabel}
-            </Badge>
+        title={booking.id_booking || `Booking #${booking.id}`}
+        breadcrumb={false}
+        subtitle={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {showBrandColumn && (brand || booking.brand_id) && (
+              <BrandBadge name={brand?.name || `Brand #${booking.brand_id}`} color={brand?.primary_color} />
+            )}
             {seatLockInfo && (
               <Badge
-                variant={booking.is_seat_blocked ? "success" : "warning"}
-                icon={booking.is_seat_blocked ? <CircleCheckBig size={13} /> : <Loader size={13} className="animate-spin" />}
-                className="text-xs font-medium px-2.5 py-0.5"
+                variant="neutral"
+                hideIcon
+                className={booking.is_seat_blocked
+                  ? "!bg-success-100 !border-success-300 !text-success-800"
+                  : "!bg-warning-100 !border-warning-300 !text-warning-800"}
               >
                 {seatLockInfo.label}
               </Badge>
             )}
-          </div>
+            <span className="text-[11px] font-body text-neutral-500">Dibuat pada {formatTanggal(booking.created_at)}</span>
+          </span>
         }
-        subtitle={`Dibuat pada ${formatTanggal(booking.created_at)}`}
         onBack={() => navigate("/bookings")}
       >
         <div className="flex flex-wrap items-center gap-2">
-          {["baru", "dp", "lunas"].includes(booking.status) && !booking.is_seat_blocked && (
-            <Button size="sm" variant="secondary" onClick={handleOpenBlockSeat}>
-              Block Seat
-            </Button>
-          )}
-          {booking.is_seat_blocked && (
-            <Button 
-              size="sm" 
-              variant="secondary" 
-              className="text-xs" 
-              onClick={() => {
+        <Button variant="secondary" onClick={handlePrintInvoice}>
+          <Printer size={16} strokeWidth={1.75} />
+          <span>Cetak / PDF</span>
+        </Button>
+        {(() => {
+          const headerMenu = [];
+          if (["baru", "dp", "lunas"].includes(booking.status) && !booking.is_seat_blocked) {
+            headerMenu.push({ label: "Block Seat", icon: Lock, onClick: handleOpenBlockSeat });
+          }
+          if (booking.is_seat_blocked) {
+            headerMenu.push({
+              label: "Cancel Block Seat",
+              icon: Unlock,
+              onClick: () => {
                 setCancelSeatBlockError("");
                 setCancelSeatBlockModal(true);
-              }}
-            >
-              Cancel Block Seat
-            </Button>
-          )}
-          {booking.status !== "batal" && (
-            <Button size="sm" variant="danger" className="text-xs shadow-2xs" onClick={() => handleBookingStatus("batal")}>
-              Batalkan Booking
-            </Button>
-          )}
-          <Button size="sm" variant="secondary" onClick={() => setIsInvoiceModalOpen(true)} className="flex items-center gap-1.5 shadow-2xs">
-            <FileText size={15} />
-            <span>Cetak Invoice</span>
-          </Button>
+              },
+            });
+          }
+          if (booking.status !== "batal") {
+            headerMenu.push({ label: "Batalkan Booking", icon: X, danger: true, onClick: () => handleBookingStatus("batal") });
+          }
+          return headerMenu.length > 0 ? <ActionMenu label="Aksi" items={headerMenu} align="right" /> : null;
+        })()}
         </div>
       </PageHeader>
 
+      {/* Ringkasan: satu strip, bukan empat kartu */}
+      <Surface className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-neutral-200">
+        <SummaryItem label="Jamaah aktif" value={activePaxList.length} hint={infantActiveCount > 0 ? `${infantActiveCount} infant` : undefined} />
+        <SummaryItem label="Total tagihan" value={formatRupiah(totalHarga)} />
+        <SummaryItem label="Sudah dibayar" value={formatRupiah(totalPaid)} />
+        <SummaryItem label="Sisa tagihan" value={formatRupiah(sisaTagihan)} hint={sisaTagihan > 0 ? "Belum lunas" : "Lunas"} />
+      </Surface>
+
       {/* Main Grid: Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Kolom Kiri: Detail Paket & Jamaah (2 span) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Kolom kiri: satu card, section dipisah garis tipis */}
         <div className="lg:col-span-2 space-y-6">
           {/* Section: Informasi Paket */}
-          <MetaBox 
-            title="Informasi Paket" 
-            icon={<Plane size={18} className="text-neutral-700" />}
+          <Surface>
+          <Section
+            title="Informasi Paket"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <span className="block text-xs text-neutral-500 font-body">Nama Paket</span>
-                <p className="text-sm font-semibold text-neutral-900 font-body">{booking.jadwal_nama || "-"}</p>
-              </div>
-              <div>
-                <span className="block text-xs text-neutral-500 font-body">Tanggal Keberangkatan</span>
-                <p className="text-sm font-semibold text-neutral-900 font-body">{formatTanggal(booking.berangkat_tanggal)}</p>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+              <Field label="Nama Paket">{booking.jadwal_nama || "-"}</Field>
+              <Field label="Tanggal Keberangkatan">{formatTanggal(booking.berangkat_tanggal)}</Field>
             </div>
-          </MetaBox>
+          </Section>
+          </Surface>
 
           {/* Section: Daftar Jamaah (Pax) */}
-          <MetaBox 
-            title="Daftar Jamaah (Pax)"
-            icon={<Users size={18} className="text-neutral-700" />}
-            headerAction={
+          <TableCard
+            title="Daftar Jamaah"
+            aside={
               <span className="text-xs text-neutral-500 font-body">
                 Total: <span className="font-semibold text-neutral-800">{activePaxList.length} Jamaah</span>
                 {infantActiveCount > 0 && ` (${infantActiveCount} infant)`}
@@ -701,114 +784,102 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             }
           >
             {paxList.length === 0 ? (
-              <p className="text-xs text-neutral-500 font-body">Tidak ada data pax.</p>
+              <p className="p-5 text-xs text-neutral-500 font-body">Tidak ada data pax.</p>
             ) : (
-              <div className="overflow-x-auto -mx-5 -mb-4 sm:mx-0 sm:mb-0">
-                <table className="w-full text-left text-sm font-body">
-                  <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
-                    <tr>
-                      <th className="py-3 px-4">Nama Jamaah</th>
-                      <th className="py-3 px-3">Kamar</th>
-                      <th className="py-3 px-3">Harga</th>
-                      <th className="py-3 px-4 text-right">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-100">
-                    {paxList.map((pax) => {
-                      const isPic = Number(pax.jamaah_id) === Number(booking.pic_jamaah_id);
-                      const isBatal = pax.pax_status === 'batal';
+              <div className="overflow-x-auto">
+              <Table
+                columns={[
+                  { header: "Nama Jamaah", key: "nama" },
+                  { header: "Kamar", key: "kamar" },
+                  { header: "Harga", key: "harga" },
+                  { header: "Aksi", key: "aksi", align: "right" },
+                ]}
+                data={paxList}
+                renderCell={(pax, key) => {
+                  const isPic = Number(pax.jamaah_id) === Number(booking.pic_jamaah_id);
+                  const isBatal = pax.pax_status === 'batal';
 
-                      return (
-                        <tr key={pax.id} className={isBatal ? "bg-neutral-50/70 opacity-60" : "hover:bg-neutral-50/50"}>
-                          <td className="py-3 px-4">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => navigate(`/jamaah/${pax.jamaah_id}`)}
-                                  className={`font-semibold hover:text-primary-600 hover:underline text-left transition-colors font-body ${
-                                    isBatal ? "line-through text-neutral-500" : "text-neutral-900"
-                                  }`}
-                                  title="Lihat Profil Jamaah"
-                                >
-                                  {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
-                                </button>
-                                {isPic && (
-                                  <span className="bg-primary-100 text-brand-dark text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">PIC</span>
-                                )}
-                              </div>
-                              {pax.pax_type === 'infant' && (
-                                <span className="block text-[11px] text-neutral-500 font-normal">
-                                  Infant (Bayi &lt; 2 thn)
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="font-medium text-neutral-800">
-                              {pax.pax_type === 'infant' ? '-' : (pax.room_type || '-')}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 font-semibold text-neutral-900">
-                            {formatRupiah(pax.harga_pax)}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            {pax.pax_status === 'aktif' && (
-                              <div className="flex items-center justify-end gap-1.5">
-                                {pax.pax_type === 'reguler' && (
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    className="text-xs h-7 px-2.5 shadow-none border-neutral-200 text-neutral-700 bg-white"
-                                    onClick={() => handleOpenChangeRoom(pax)}
-                                  >
-                                    Ganti Kamar
-                                  </Button>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="danger-light"
-                                  className="text-xs h-7 px-2.5 shadow-none"
-                                  title="Batalkan Pax"
-                                  onClick={() => handleOpenCancelPax(pax)}
-                                >
-                                  Batalkan
-                                </Button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                  if (key === "nama") {
+                    return (
+                      <div className={`min-w-0 ${isBatal ? "opacity-60" : ""}`}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/jamaah/${pax.jamaah_id}`)}
+                          className={`font-heading font-semibold hover:text-primary-600 hover:underline text-left transition-colors ${
+                            isBatal ? "line-through text-neutral-500" : "text-neutral-900"
+                          }`}
+                          title="Lihat Profil Jamaah"
+                        >
+                          {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
+                        </button>
+                        {(isPic || pax.pax_type === 'infant' || isBatal) && (
+                          <div className="text-[11px] font-body text-neutral-400">
+                            {[
+                              isPic ? "PIC" : null,
+                              pax.pax_type === 'infant' ? "Infant (Bayi < 2 thn)" : null,
+                              isBatal ? "Batal" : null,
+                            ].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (key === "kamar") {
+                    return (
+                      <span className={`font-medium text-neutral-800 ${isBatal ? "opacity-60" : ""}`}>
+                        {pax.pax_type === 'infant' ? '-' : (pax.room_type || '-')}
+                      </span>
+                    );
+                  }
+
+                  if (key === "harga") {
+                    return (
+                      <span className={`font-semibold text-neutral-900 whitespace-nowrap ${isBatal ? "opacity-60" : ""}`}>
+                        {formatRupiah(pax.harga_pax)}
+                      </span>
+                    );
+                  }
+
+                  if (key === "aksi") {
+                    if (pax.pax_status !== 'aktif') return null;
+                    const paxMenu = [];
+                    if (pax.pax_type === 'reguler') {
+                      paxMenu.push({ label: 'Ganti Kamar', icon: BedDouble, onClick: () => handleOpenChangeRoom(pax) });
+                    }
+                    paxMenu.push({ label: 'Batalkan Pax', icon: UserX, danger: true, tooltip: 'Batalkan Pax', onClick: () => handleOpenCancelPax(pax) });
+                    return <ActionMenu items={paxMenu} align="right" />;
+                  }
+
+                  return pax[key];
+                }}
+              />
               </div>
             )}
-          </MetaBox>
+          </TableCard>
 
           {/* Section: Checklist Dokumen & Kesiapan Jamaah */}
-          <MetaBox 
-            title="Kesiapan Dokumen & Operasional Pax"
-            icon={<Shield size={18} className="text-neutral-700" />}
+          <TableCard
+            title="Kesiapan Dokumen & Operasional"
           >
             {activePaxList.length === 0 ? (
-              <p className="text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
+              <p className="p-5 text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
             ) : (
-              <div className="overflow-x-auto -mx-5 -mb-4 sm:mx-0 sm:mb-0">
-                <table className="w-full text-left text-sm font-body">
-                  <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 font-semibold">
-                    <tr className="border-b border-neutral-200/60 text-[11px] uppercase tracking-wider">
-                      <th className="py-2 px-4" rowSpan={2}>Nama Jamaah</th>
-                      <th className="py-1.5 px-3 text-center bg-primary-50/70 text-primary-800 border-x border-neutral-200" colSpan={2}>
-                        Dokumen Jamaah (Upload)
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13px] font-body text-neutral-700 border-collapse">
+                  <thead className="bg-neutral-50 text-neutral-800 font-heading text-[13px] font-semibold border-b border-neutral-200">
+                    <tr className="border-b border-neutral-200/60">
+                      <th className="py-2.5 px-4" rowSpan={2}>Nama Jamaah</th>
+                      <th className="py-2 px-3 text-center border-x border-neutral-200" colSpan={2}>
+                        Dokumen Jamaah
                       </th>
-                      <th className="py-1.5 px-3 text-center bg-neutral-100 text-neutral-700" colSpan={3}>
+                      <th className="py-2 px-3 text-center" colSpan={3}>
                         Operasional Travel
                       </th>
                     </tr>
-                    <tr className="uppercase tracking-wider text-[10px] text-neutral-600">
-                      <th className="py-2 px-3 text-center bg-primary-50/30 border-l border-neutral-200">Paspor</th>
-                      <th className="py-2 px-3 text-center bg-primary-50/30 border-r border-neutral-200">Vaksin</th>
+                    <tr className="text-[12px] text-neutral-500">
+                      <th className="py-2 px-3 text-center border-l border-neutral-200">Paspor</th>
+                      <th className="py-2 px-3 text-center border-r border-neutral-200">Vaksin</th>
                       <th className="py-2 px-3 text-center">Visa</th>
                       <th className="py-2 px-3 text-center">Siskopatuh</th>
                       <th className="py-2 px-3 text-center">Manasik</th>
@@ -818,14 +889,14 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                     {activePaxList.map((pax) => {
                       const isPic = Number(pax.jamaah_id) === Number(booking.pic_jamaah_id);
                       return (
-                        <tr key={pax.id} className="hover:bg-neutral-50/50">
+                        <tr key={pax.id} className="hover:bg-neutral-50/70 transition-colors">
                           <td className="py-3 px-4">
                             <div>
-                              <span className="font-semibold text-neutral-900 font-body block">
+                              <span className="font-heading font-semibold text-neutral-900 block">
                                 {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
                               </span>
                               {pax.pax_type === 'infant' && (
-                                <span className="block text-[11px] text-neutral-500 font-normal">
+                                <span className="block text-[11px] text-neutral-400 font-body">
                                   Infant (Bayi &lt; 2 thn)
                                 </span>
                               )}
@@ -899,169 +970,124 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 </table>
               </div>
             )}
-          </MetaBox>
+          </TableCard>
 
           {/* Section: Distribusi Perlengkapan */}
-          <MetaBox
+          <TableCard
             title="Distribusi Perlengkapan"
-            icon={<Package size={18} className="text-neutral-700" />}
           >
-            {perlengkapanError && <Alert variant="error" className="mb-4">{perlengkapanError}</Alert>}
-            
+            {perlengkapanError && <Alert variant="error" className="m-5 mb-0">{perlengkapanError}</Alert>}
+
             {activePaxList.length === 0 ? (
-              <p className="text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
+              <p className="p-5 text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
             ) : (
-              <div className="overflow-x-auto -mx-5 -mb-4 sm:mx-0 sm:mb-0">
-                <table className="w-full text-left text-sm font-body">
-                  <thead className="bg-neutral-50 border-b border-neutral-200 text-xs text-neutral-500 uppercase tracking-wider font-semibold">
-                    <tr>
-                      <th className="py-3 px-4">Nama Jamaah</th>
-                      <th className="py-3 px-3">Status</th>
-                      <th className="py-3 px-3">Tanggal</th>
-                      <th className="py-3 px-3 text-right">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-100">
-                    {activePaxList.map((pax) => {
-                      return (
-                        <tr key={pax.id} className="hover:bg-neutral-50/50">
-                          <td className="py-3 px-4">
-                            <div>
-                              <span className="font-semibold text-neutral-900 font-body block">
-                                {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
-                              </span>
-                              {pax.pax_type === 'infant' && (
-                                <span className="block text-[11px] text-neutral-500 font-normal">
-                                  Infant (Bayi &lt; 2 thn)
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            {pax.pax_type === 'infant' ? (
-                              <span className="text-xs text-neutral-400 font-semibold font-body">N/A</span>
-                            ) : pax.perlengkapan_status === 'sudah_diberikan' ? (
-                              <Badge variant="success">Selesai</Badge>
-                            ) : (
-                              <Badge variant="neutral" hideIcon={true}>Pending</Badge>
-                            )}
-                          </td>
-                          <td className="py-3 px-3 text-xs text-neutral-600">
-                            {(pax.pax_type !== 'infant' && pax.perlengkapan_tanggal) ? formatTanggal(pax.perlengkapan_tanggal) : '-'}
-                          </td>
-                          <td className="py-3 px-3 text-right">
-                            {pax.pax_type !== 'infant' && (
-                              <div className="flex justify-end">
-                                {pax.perlengkapan_status === 'sudah_diberikan' ? (
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="!py-1.5 !px-3 text-xs text-danger-600 hover:bg-danger-50"
-                                    disabled={perlengkapanLoading}
-                                    onClick={() => {
-                                      setSelectedPaxForCancelPerlengkapan(pax);
-                                      setIsBatalkanModalOpen(true);
-                                    }}
-                                  >
-                                    Batal
-                                  </Button>
-                                ) : (
-                                  <Button 
-                                    size="sm" 
-                                    variant="secondary" 
-                                    className="!py-1.5 !px-3 text-xs"
-                                    disabled={perlengkapanLoading}
-                                    onClick={() => handleDistribusiPerlengkapan(pax.id)}
-                                  >
-                                    {perlengkapanLoading ? "Memproses..." : "Serahkan"}
-                                  </Button>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </MetaBox>
+              <div className="overflow-x-auto">
+              <Table
+                columns={[
+                  { header: "Nama Jamaah", key: "nama" },
+                  { header: "Status", key: "status" },
+                  { header: "Tanggal", key: "tanggal" },
+                  { header: "Aksi", key: "aksi", align: "right" },
+                ]}
+                data={activePaxList}
+                renderCell={(pax, key) => {
+                  if (key === "nama") {
+                    return (
+                      <div className="min-w-0">
+                        <div className="font-heading font-semibold text-neutral-900 leading-snug">
+                          {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
+                        </div>
+                        {pax.pax_type === 'infant' && (
+                          <div className="text-[11px] font-body text-neutral-400">
+                            Infant (Bayi &lt; 2 thn)
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
 
-          {/* Section: Add-on & Biaya Tambahan */}
-          <MetaBox
-            title="Add-on & Biaya Tambahan"
-            icon={<Tag size={18} className="text-neutral-700" />}
-            headerAction={
-              <Button size="sm" variant="secondary" onClick={() => setIsAddonModalOpen(true)} className="text-xs flex items-center gap-1">
-                <Plus size={14} />
-                <span>Tambah Add-on</span>
-              </Button>
-            }
-          >
-            {addons.length === 0 ? (
-              <div className="py-6 flex flex-col items-center justify-center text-center bg-neutral-50/50 rounded-xl border border-neutral-100 border-dashed">
-                <Tag size={24} className="text-neutral-300 mb-2" />
-                <p className="text-sm font-medium text-neutral-700 font-body">Belum ada Add-on</p>
-                <p className="text-xs text-neutral-500 font-body mt-0.5">Tambahkan biaya ekstra jika ada.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-neutral-100">
-                {addons.map((a) => (
-                  <div key={a.id} className="py-2.5 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-neutral-900 font-body">{a.nama}</p>
-                      <span className="text-xs text-neutral-500 font-body">{formatTanggal(a.created_at)}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold text-neutral-900 font-body">{formatRupiah(a.nominal)}</span>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteAddon(a.id)} title="Hapus Add-on">
-                        <Trash2 size={14} className="text-danger-600" />
+                  if (key === "status") {
+                    if (pax.pax_type === 'infant') return <span className="text-xs text-neutral-400 font-body">N/A</span>;
+                    return pax.perlengkapan_status === 'sudah_diberikan'
+                      ? <DotText tone="success">Selesai</DotText>
+                      : <DotText tone="neutral">Pending</DotText>;
+                  }
+
+                  if (key === "tanggal") {
+                    return (
+                      <span className="text-[13px] text-neutral-600 whitespace-nowrap">
+                        {(pax.pax_type !== 'infant' && pax.perlengkapan_tanggal) ? formatTanggal(pax.perlengkapan_tanggal) : '-'}
+                      </span>
+                    );
+                  }
+
+                  if (key === "aksi") {
+                    if (pax.pax_type === 'infant') return null;
+                    return pax.perlengkapan_status === 'sudah_diberikan' ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="!py-1.5 !px-3 text-xs text-danger-600 hover:bg-danger-50"
+                        disabled={perlengkapanLoading}
+                        onClick={() => {
+                          setSelectedPaxForCancelPerlengkapan(pax);
+                          setIsBatalkanModalOpen(true);
+                        }}
+                      >
+                        Batal
                       </Button>
-                    </div>
-                  </div>
-                ))}
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="!py-1.5 !px-3 text-xs"
+                        disabled={perlengkapanLoading}
+                        onClick={() => handleDistribusiPerlengkapan(pax.id)}
+                      >
+                        {perlengkapanLoading ? "Memproses..." : "Serahkan"}
+                      </Button>
+                    );
+                  }
+
+                  return pax[key];
+                }}
+              />
               </div>
             )}
-
-          </MetaBox>
+          </TableCard>
 
           {/* Section: Diskon Khusus */}
-          <MetaBox
+          <TableCard
             title="Program Diskon"
-            icon={<Percent size={18} className="text-neutral-700" />}
-            headerAction={
+            aside={
               <Button size="sm" variant="secondary" onClick={handleOpenDiskonModal} className="text-xs flex items-center gap-1">
-                <Plus size={14} />
+                <Plus size={14} strokeWidth={1.75} />
                 <span>Tambah Diskon</span>
               </Button>
             }
           >
             {discounts.length === 0 ? (
-              <div className="py-6 flex flex-col items-center justify-center text-center bg-neutral-50/50 rounded-xl border border-neutral-100 border-dashed">
-                <Percent size={24} className="text-neutral-300 mb-2" />
-                <p className="text-sm font-medium text-neutral-700 font-body">Belum ada Diskon</p>
-                <p className="text-xs text-neutral-500 font-body mt-0.5">Tambahkan program diskon jika ada.</p>
-              </div>
+              <p className="p-5 text-xs text-neutral-500 font-body">Belum ada diskon. Tambahkan program diskon jika ada.</p>
             ) : (
-              <div className="divide-y divide-neutral-100">
+              <div className="divide-y divide-neutral-200/80">
                 {discounts.map((d) => (
-                  <div key={d.id} className="py-2.5 flex items-center justify-between">
+                  <div key={d.id} className="px-5 py-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-neutral-900 font-body">{d.nama}</p>
-                      <span className="text-xs text-neutral-500 font-body">{formatTanggal(d.created_at)}</span>
+                      <span className="text-[11px] text-neutral-400 font-body">{formatTanggal(d.created_at)}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold text-success-600 font-body">- {formatRupiah(d.nominal)}</span>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteDiscount(d.id)} title="Hapus Diskon">
-                        <Trash2 size={14} className="text-danger-600" />
-                      </Button>
+                      <ActionMenu
+                        align="right"
+                        items={[{ label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus Diskon', onClick: () => handleDeleteDiscount(d.id) }]}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </MetaBox>
+          </TableCard>
 
           {/* Section: Kredit Cashback (B5) — hanya tampil bila ada pax dengan kredit */}
           <KreditCashbackPanel
@@ -1074,25 +1100,21 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           <RefundPanel booking={booking} onRecorded={fetchAll} />
 
           {/* Section: Riwayat Pembayaran */}
-          <MetaBox
+          <TableCard
             title="Riwayat Pembayaran"
-            icon={<CreditCard size={18} className="text-neutral-700" />}
-            headerAction={
+            aside={
               sisaTagihan > 0 && booking.status !== "batal" ? (
                 <Button size="sm" variant="primary" onClick={() => setIsPaymentModalOpen(true)} className="text-xs flex items-center gap-1">
-                  <Plus size={14} />
+                  <Plus size={14} strokeWidth={1.75} />
                   <span>Catat Pembayaran</span>
                 </Button>
               ) : null
             }
           >
             {payments.length === 0 ? (
-              <div className="py-8 flex flex-col items-center justify-center text-center bg-neutral-50/50 rounded-xl border border-neutral-100 border-dashed">
-                <CreditCard size={32} className="text-neutral-300 mb-2" />
-                <p className="text-sm font-medium text-neutral-700 font-body">Belum ada Pembayaran</p>
-                <p className="text-xs text-neutral-500 font-body mt-0.5">Catat pembayaran dari jamaah di sini.</p>
-              </div>
+              <p className="p-5 text-xs text-neutral-500 font-body">Belum ada pembayaran. Catat pembayaran dari jamaah di sini.</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table
                 columns={[
                   { header: "Tanggal", key: "tanggal" },
@@ -1100,22 +1122,22 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   { header: "Jumlah", key: "jumlah" },
                   { header: "Bukti", key: "bukti_url" },
                   { header: "Status", key: "status" },
-                  { header: "Aksi", key: "aksi" },
+                  { header: "Aksi", key: "aksi", align: "right" },
                 ]}
                 data={payments}
                 renderCell={(p, key) => {
-                  if (key === "tanggal") return formatTanggal(p.tanggal || p.created_at);
+                  if (key === "tanggal") return <span className="whitespace-nowrap">{formatTanggal(p.tanggal || p.created_at)}</span>;
                   if (key === "metode") return (p.metode || "transfer").toUpperCase();
-                  if (key === "jumlah") return formatRupiah(p.jumlah);
+                  if (key === "jumlah") return <span className="font-semibold text-neutral-900 whitespace-nowrap">{formatRupiah(p.jumlah)}</span>;
                   if (key === "bukti_url") {
                     return p.bukti_url ? (
                       <button
                         type="button"
                         onClick={() => openProtectedMedia(p.bukti_url)}
-                        className="text-neutral-900 hover:text-primary-700 font-semibold inline-flex items-center gap-1.5 text-xs bg-neutral-100 hover:bg-neutral-200/80 px-2.5 py-1 rounded-lg border border-neutral-200/90 transition-colors cursor-pointer"
+                        className="text-neutral-700 hover:text-primary-700 font-medium inline-flex items-center gap-1.5 text-xs hover:underline transition-colors cursor-pointer whitespace-nowrap"
                         title="Lihat Bukti Pembayaran"
                       >
-                        <FileText size={13} className="text-neutral-500" />
+                        <FileText size={13} strokeWidth={1.75} className="text-neutral-400" />
                         <span>Lihat Bukti</span>
                       </button>
                     ) : (
@@ -1123,15 +1145,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                     );
                   }
                   if (key === "status") {
-                    const statusConfig = {
-                      pending: ["warning", "Menunggu"],
-                      confirmed: ["success", "Diterima"],
-                      rejected: ["danger", "Ditolak"],
-                    };
-                    const [v, label] = statusConfig[p.status] || ["neutral", p.status];
                     return (
                       <div className="flex flex-col items-start gap-1">
-                        <Badge variant={v} hideIcon={true}>{label}</Badge>
+                        <StatusPill status={p.status} styleMap={PAYMENT_STATUS_STYLE} />
                         {p.status === "rejected" && p.rejection_reason && (
                           <span className="text-[11px] text-danger-600 italic font-body max-w-[180px] leading-tight" title={p.rejection_reason}>
                             Alasan: {p.rejection_reason}
@@ -1143,31 +1159,31 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   if (key === "aksi") {
                     if (p.status === "pending") {
                       return (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setSelectedPaymentForConfirm(p);
-                              setConfirmError("");
-                            }}
-                            title="Konfirmasi"
-                          >
-                            <Check size={14} className="text-success-600" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setSelectedPaymentForReject(p);
-                              setRejectionReason("");
-                              setRejectError("");
-                            }}
-                            title="Tolak"
-                          >
-                            <X size={14} className="text-danger-600" />
-                          </Button>
-                        </div>
+                        <ActionMenu
+                          align="right"
+                          items={[
+                            {
+                              label: 'Konfirmasi',
+                              icon: Check,
+                              tooltip: 'Konfirmasi',
+                              onClick: () => {
+                                setSelectedPaymentForConfirm(p);
+                                setConfirmError("");
+                              },
+                            },
+                            {
+                              label: 'Tolak',
+                              icon: X,
+                              danger: true,
+                              tooltip: 'Tolak',
+                              onClick: () => {
+                                setSelectedPaymentForReject(p);
+                                setRejectionReason("");
+                                setRejectError("");
+                              },
+                            },
+                          ]}
+                        />
                       );
                     }
                     return <span className="text-xs text-neutral-400">-</span>;
@@ -1175,47 +1191,29 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   return p[key];
                 }}
               />
+              </div>
             )}
-          </MetaBox>
+          </TableCard>
         </div>
 
-        {/* Kolom Kanan: Afiliasi Travel, Ringkasan Tagihan, Progress, & Perlengkapan (1 span) */}
-        <div className="space-y-6">
-          {/* Afiliasi Biro Travel (Khusus Super Admin / Master Dashboard) */}
-          {showBrandColumn && (brand || booking.brand_id) && (
-            <MetaBox
-              title="Afiliasi Biro Travel"
-              icon={<Building2 size={18} className="text-neutral-700" />}
-            >
-              <div className="pt-1">
-                <BrandCell brand={brand} brandId={booking.brand_id} showText={true} />
-              </div>
-            </MetaBox>
-          )}
-
+        {/* Kolom kanan: satu card, menempel saat halaman digulir */}
+        <Surface className="lg:sticky lg:top-4 divide-y divide-neutral-200/80">
           {/* Ringkasan Finansial Card */}
-          <MetaBox
+          <Section
             title="Ringkasan Pembayaran"
-            icon={<Receipt size={18} className="text-neutral-700" />}
           >
             <div className="space-y-2.5 font-body">
               <div className="flex justify-between text-sm">
                 <span className="text-neutral-500">Harga Paket Dasar:</span>
                 <span className="font-medium text-neutral-900">{formatRupiah(hargaDasar)}</span>
               </div>
-              {totalAddons > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-neutral-500">Total Add-on:</span>
-                  <span className="font-medium text-neutral-900">+ {formatRupiah(totalAddons)}</span>
-                </div>
-              )}
               {totalDiskon > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-neutral-500">Total Diskon:</span>
                   <span className="font-medium text-success-600">- {formatRupiah(totalDiskon)}</span>
                 </div>
               )}
-              <div className="pt-2 border-t border-neutral-200 flex justify-between text-base font-bold">
+              <div className="pt-3 border-t border-neutral-200 flex justify-between text-base font-bold">
                 <span className="text-neutral-900">Total Tagihan:</span>
                 <span className="text-neutral-900">{formatRupiah(totalHarga)}</span>
               </div>
@@ -1223,53 +1221,29 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 <span className="text-neutral-500">Sudah Dibayar:</span>
                 <span className="font-medium text-success-600">{formatRupiah(totalPaid)}</span>
               </div>
-              <div className="pt-2 border-t border-neutral-200 flex justify-between items-center">
+              <div className="pt-3 border-t border-neutral-200 flex justify-between items-center">
                 <span className="text-sm font-semibold text-neutral-700">Sisa Tagihan:</span>
                 <span className={`text-base font-bold ${sisaTagihan > 0 ? "text-danger-600" : "text-success-600"}`}>
                   {formatRupiah(sisaTagihan)}
                 </span>
               </div>
             </div>
-          </MetaBox>
+          </Section>
 
           {/* Progress Paket Card */}
-          <MetaBox
-            title="Fasilitas Paket (Travel)"
-            icon={<Shield size={18} className="text-neutral-700" />}
-            headerAction={
+          <Section
+            title="Fasilitas Paket"
+            aside={
               booking.siap_berangkat ? (
-                <Badge variant="success" className="px-2 py-0.5 text-xs font-semibold">
-                  Siap Berangkat
-                </Badge>
+                <DotText tone="success">Siap Berangkat</DotText>
               ) : (
-                <Badge variant="warning" className="px-2 py-0.5 text-xs font-semibold">
-                  Persiapan Berjalan
-                </Badge>
+                <DotText tone="warning">Persiapan Berjalan</DotText>
               )
             }
           >
-            <div className="space-y-3">
-              {/* 1. Tiket Maskapai Read-only */}
-              <div className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-neutral-200/90">
-                <div>
-                  <span className="text-sm font-medium font-body text-neutral-800 block">Tiket Maskapai</span>
-                  <span className="text-xs text-neutral-500 font-body block">(otomatis dari master paket)</span>
-                </div>
-                {booking.progress_tiket ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-success-50 text-success-700 rounded-lg text-xs font-semibold">
-                    <CheckCircle size={14} />
-                    <span>Selesai</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-100 text-neutral-500 rounded-lg text-xs font-semibold">
-                    <Loader size={14} className="animate-spin" />
-                    <span>Menunggu</span>
-                  </div>
-                )}
-              </div>
-
-              {/* 2. Hotel */}
-              <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-neutral-200/90">
+            <div className="divide-y divide-neutral-100 [&>div]:py-3 first:[&>div]:pt-0 [&>div:last-child]:pb-0">
+              {/* 1. Hotel */}
+              <div className="flex items-center justify-between">
                 <span className="text-sm font-medium font-body text-neutral-800">Hotel</span>
                 <Toggle
                   id="toggle-hotel-detail"
@@ -1278,8 +1252,8 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 />
               </div>
 
-              {/* 3. Land Arrangement */}
-              <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-neutral-200/90">
+              {/* 2. Land Arrangement */}
+              <div className="flex items-center justify-between">
                 <span className="text-sm font-medium font-body text-neutral-800">Land Arrangement</span>
                 <Toggle
                   id="toggle-land_arrangement-detail"
@@ -1288,10 +1262,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 />
               </div>
             </div>
-          </MetaBox>
+          </Section>
 
-          
-        </div>
+        </Surface>
       </div>
 
       {/* Modal: Tambah Pembayaran */}
@@ -1362,7 +1335,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             />
           </div>
 
-          <FormField label="Bukti Pembayaran (Opsional)" helperText="Format JPG, PNG, atau PDF (maks. 5MB)">
+          <FormField label="Bukti Pembayaran (Opsional)">
             {paymentForm.bukti_file ? (
               <div className="flex items-center justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-xl">
                 <div className="flex items-center gap-2.5 overflow-hidden">
@@ -1465,36 +1438,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         </div>
       </Modal>
 
-      {/* Modal: Tambah Add-on */}
-      <Modal
-        isOpen={isAddonModalOpen}
-        onClose={() => setIsAddonModalOpen(false)}
-        title="Tambah Add-on / Biaya Tambahan"
-      >
-        <form onSubmit={handleAddAddonSubmit} className="space-y-4">
-          {addonError && <Alert variant="error">{addonError}</Alert>}
-          <Input
-            label="Nama Add-on"
-            value={addonForm.nama}
-            onChange={(e) => setAddonForm(prev => ({ ...prev, nama: e.target.value }))}
-            placeholder="Misal: Upgrade Kamar Double, Visa Tambahan"
-            required
-          />
-          <CurrencyInput
-            label="Nominal (Rp)"
-            value={addonForm.nominal}
-            onChange={(val) => setAddonForm(prev => ({ ...prev, nominal: val }))}
-            required
-          />
-          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-            <Button type="button" variant="ghost" onClick={() => setIsAddonModalOpen(false)}>Batal</Button>
-            <Button type="submit" variant="primary" disabled={addonSubmitting}>
-              {addonSubmitting ? "Menyimpan..." : "Tambah Add-on"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
       {/* Modal: Ubah Diskon */}
       <Modal
         isOpen={isDiskonModalOpen}
@@ -1522,99 +1465,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </Button>
           </div>
         </form>
-      </Modal>
-
-      {/* Modal: Cetak Invoice */}
-      <Modal
-        isOpen={isInvoiceModalOpen}
-        onClose={() => setIsInvoiceModalOpen(false)}
-        title="Invoice Booking"
-        size="lg"
-      >
-        <div className="space-y-6 font-body text-neutral-900 p-2">
-          {/* Header Invoice */}
-          <div className="flex justify-between items-start pb-4 border-b border-neutral-200">
-            <div>
-              <h2 className="text-xl font-bold font-heading text-neutral-900">
-                {brand?.name || "AZHAN TRAVEL GRUP"}
-              </h2>
-              <p className="text-xs text-neutral-500 mt-1">Invoice Bukti Pemesanan & Pembayaran</p>
-            </div>
-            <div className="text-right">
-              <span className="font-mono text-sm font-bold bg-neutral-100 px-2.5 py-1 rounded border border-neutral-200 block">
-                {booking.id_booking || `ID: ${booking.id}`}
-              </span>
-              <span className="text-xs text-neutral-500 mt-1 block">
-                {formatTanggal(new Date())}
-              </span>
-            </div>
-          </div>
-
-          {/* Jamaah & Paket Info */}
-          <div className="grid grid-cols-2 gap-4 text-xs">
-            <div>
-              <span className="text-neutral-500 font-semibold block">DITAGIHKAN KEPADA:</span>
-              <p className="font-bold text-sm text-neutral-900 mt-0.5">{booking.nama_jamaah || jamaah?.nama_lengkap || "-"}</p>
-              <p className="text-neutral-600">{jamaah?.no_hp || "-"}</p>
-              <p className="text-neutral-600">{jamaah?.alamat || "-"}</p>
-            </div>
-            <div>
-              <span className="text-neutral-500 font-semibold block">RINCIAN PAKET:</span>
-              <p className="font-bold text-sm text-neutral-900 mt-0.5">{booking.jadwal_nama || "-"}</p>
-              <p className="text-neutral-600">Keberangkatan: {formatTanggal(booking.berangkat_tanggal)}</p>
-              <p className="text-neutral-600">Tipe Kamar: {(booking.room_type || "-").toUpperCase()}</p>
-            </div>
-          </div>
-
-          {/* Table Breakdown */}
-          <div className="border border-neutral-200 rounded-md overflow-hidden text-xs">
-            <table className="w-full text-left">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
-                <tr>
-                  <th className="p-2.5 font-semibold text-neutral-700">Deskripsi</th>
-                  <th className="p-2.5 text-right font-semibold text-neutral-700">Nominal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                <tr>
-                  <td className="p-2.5">Harga Dasar Paket ({booking.room_type})</td>
-                  <td className="p-2.5 text-right font-medium">{formatRupiah(hargaDasar)}</td>
-                </tr>
-                {addons.map(a => (
-                  <tr key={a.id}>
-                    <td className="p-2.5">Add-on: {a.nama}</td>
-                    <td className="p-2.5 text-right font-medium">+ {formatRupiah(a.nominal)}</td>
-                  </tr>
-                ))}
-                {discounts.map(d => (
-                  <tr key={d.id}>
-                    <td className="p-2.5 text-success-600">Diskon: {d.nama}</td>
-                    <td className="p-2.5 text-right font-medium text-success-600">- {formatRupiah(d.nominal)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-neutral-50 font-bold">
-                  <td className="p-2.5">TOTAL TAGIHAN</td>
-                  <td className="p-2.5 text-right">{formatRupiah(totalHarga)}</td>
-                </tr>
-                <tr>
-                  <td className="p-2.5 text-neutral-600">Total Pembayaran Diterima</td>
-                  <td className="p-2.5 text-right font-medium text-success-600">{formatRupiah(totalPaid)}</td>
-                </tr>
-                <tr className="bg-neutral-50 font-bold">
-                  <td className="p-2.5 text-neutral-900">SISA TAGIHAN</td>
-                  <td className={`p-2.5 text-right ${sisaTagihan > 0 ? "text-danger-600" : "text-success-600"}`}>
-                    {formatRupiah(sisaTagihan)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="ghost" onClick={() => setIsInvoiceModalOpen(false)}>Tutup</Button>
-            <Button variant="primary" onClick={() => window.print()}>Cetak</Button>
-          </div>
-        </div>
       </Modal>
 
       {/* Modal: Batalkan Perlengkapan */}

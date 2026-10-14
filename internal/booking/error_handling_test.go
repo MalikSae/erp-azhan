@@ -24,7 +24,7 @@ func TestHandleRepoErrorTidakMembocorkanSQL(t *testing.T) {
 		{"bisnis", bizErr("Jamaah %s sudah terdaftar pada booking %s di jadwal ini", "A", "TP1234"), http.StatusBadRequest, "sudah terdaftar pada booking TP1234", ""},
 		{"booking batal", ErrBookingBatal, http.StatusConflict, "sudah dibatalkan", ""},
 		{"sql mentah", fmt.Errorf("booking.ListPax: %w", errors.New("Error 1054 (42S22): Unknown column 'bp.x'")), http.StatusInternalServerError, "kesalahan internal", "Error 1054"},
-		{"overflow", fmt.Errorf("booking.AddAddon insert: %w", errors.New("Error 1264 (22003): Out of range value")), http.StatusInternalServerError, "kesalahan internal", "Error 1264"},
+		{"overflow", fmt.Errorf("booking.AddDiscount insert: %w", errors.New("Error 1264 (22003): Out of range value")), http.StatusInternalServerError, "kesalahan internal", "Error 1264"},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()

@@ -13,6 +13,7 @@ import (
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/payment"
+	"erp-azhan/api/internal/shared"
 )
 
 const idBookingCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -111,7 +112,6 @@ const selectBookingFull = `
 		COALESCE(bp.progress_siskopatuh, FALSE) AS progress_siskopatuh,
 		COALESCE(bp.progress_vaksin_meningitis, FALSE) AS progress_vaksin_meningitis,
 		b.created_by, b.created_at,
-		s.is_ticket_confirmed,
 		b.pic_jamaah_id AS primary_jamaah_id,
 		(SELECT COUNT(*) FROM booking_pax WHERE booking_id = b.id AND pax_status = 'aktif') AS pax_count,
 		(SELECT COUNT(*) FROM booking_pax WHERE booking_id = b.id AND pax_status = 'aktif' AND pax_type = 'reguler') AS regular_pax_count,
@@ -232,12 +232,6 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 	}
 	b.Pax = paxList
 	computeSiapBerangkat(b)
-
-	addons, err := r.ListAddons(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	b.Addons = addons
 
 	discounts, err := r.ListDiscounts(ctx, id)
 	if err != nil {
@@ -441,20 +435,24 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 	// 1. Lock schedule row
 	var brandID int64
 	var seatSisa int
+	var scheduleStatus string
 	var hargaQuad, hargaTriple, hargaDouble float64
 	var hargaInfant sql.NullFloat64
 	var berangkatTanggal sql.NullString
 
 	err = tx.QueryRowContext(ctx, `
-		SELECT brand_id, seat_sisa, harga_quad, harga_triple, harga_double, harga_infant, DATE_FORMAT(berangkat_tanggal, '%Y-%m-%d') 
+		SELECT brand_id, status, seat_sisa, harga_quad, harga_triple, harga_double, harga_infant, DATE_FORMAT(berangkat_tanggal, '%Y-%m-%d') 
 		FROM schedules 
 		WHERE id = ? FOR UPDATE`, req.ScheduleID).
-		Scan(&brandID, &seatSisa, &hargaQuad, &hargaTriple, &hargaDouble, &hargaInfant, &berangkatTanggal)
+		Scan(&brandID, &scheduleStatus, &seatSisa, &hargaQuad, &hargaTriple, &hargaDouble, &hargaInfant, &berangkatTanggal)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("booking.Create find schedule: %w", err)
+	}
+	if reason := shared.ScheduleClosedReason(scheduleStatus, berangkatTanggal.String, shared.TodayWIB()); reason != "" {
+		return nil, bizErr("Booking tidak dapat dibuat: %s", reason)
 	}
 
 	// Jamaah tidak boleh aktif di booking lain pada jadwal yang sama (JB-04).
@@ -978,11 +976,16 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 	// 1. Lock schedule row
 	var brandID int64
 	var seatSisa int
+	var scheduleStatus string
+	var scheduleBerangkat sql.NullString
 	err = tx.QueryRowContext(ctx, `
-		SELECT brand_id, seat_sisa FROM schedules WHERE id = ? FOR UPDATE`, scheduleID).
-		Scan(&brandID, &seatSisa)
+		SELECT brand_id, seat_sisa, status, DATE_FORMAT(berangkat_tanggal, '%Y-%m-%d') FROM schedules WHERE id = ? FOR UPDATE`, scheduleID).
+		Scan(&brandID, &seatSisa, &scheduleStatus, &scheduleBerangkat)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Finalize lock schedule: %w", err)
+	}
+	if reason := shared.ScheduleClosedReason(scheduleStatus, scheduleBerangkat.String, shared.TodayWIB()); reason != "" {
+		return nil, bizErr("Booking tidak dapat difinalisasi: %s", reason)
 	}
 
 	finalizeJamaahIDs := make([]int64, 0, len(seenFinalizeJamaah))
@@ -1137,8 +1140,7 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 
 	// 4. Restore seat if counts_for_seat is true and seat was blocked
 	if countsForSeat && isSeatBlocked {
-		_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa = LEAST(seat_total, seat_sisa + 1) WHERE id = ?`, scheduleID)
-		if err != nil {
+		if err = shared.RestoreSeats(ctx, tx, scheduleID, 1); err != nil {
 			return nil, fmt.Errorf("booking.CancelPax restore seat: %w", err)
 		}
 	}
@@ -1367,12 +1369,8 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 		if seatsToRestore <= 0 {
 			seatsToRestore = seatCount
 		}
-		if seatsToRestore > 0 {
-			_, err = tx.ExecContext(ctx,
-				`UPDATE schedules SET seat_sisa = LEAST(seat_total, seat_sisa + ?) WHERE id=?`, seatsToRestore, scheduleID)
-			if err != nil {
-				return nil, fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
-			}
+		if err = shared.RestoreSeats(ctx, tx, scheduleID, seatsToRestore); err != nil {
+			return nil, fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE,seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID)
 		if err != nil {
@@ -1453,10 +1451,8 @@ func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Boo
 		seatsToRestore = seatCount
 	}
 
-	if seatsToRestore > 0 {
-		if _, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=LEAST(seat_total, seat_sisa + ?) WHERE id=?`, seatsToRestore, scheduleID); err != nil {
-			return nil, fmt.Errorf("booking.CancelSeatBlock restore seat: %w", err)
-		}
+	if err = shared.RestoreSeats(ctx, tx, scheduleID, seatsToRestore); err != nil {
+		return nil, fmt.Errorf("booking.CancelSeatBlock restore seat: %w", err)
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE,seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.CancelSeatBlock update: %w", err)
@@ -1593,92 +1589,15 @@ func (r *Repository) recalculateTotalTx(ctx context.Context, tx *sql.Tx, booking
 		UPDATE bookings
 		SET total_harga = GREATEST(0, (
 			SELECT COALESCE(SUM(harga_pax), 0) FROM booking_pax WHERE booking_id = ?
-		) + (
-			SELECT COALESCE(SUM(nominal), 0) FROM booking_addons WHERE booking_id = ?
 		) - (
 			SELECT COALESCE(SUM(nominal), 0) FROM booking_discounts WHERE booking_id = ?
 		))
 		WHERE id = ?`
-	if _, err := tx.ExecContext(ctx, q, bookingID, bookingID, bookingID, bookingID); err != nil {
+	if _, err := tx.ExecContext(ctx, q, bookingID, bookingID, bookingID); err != nil {
 		return err
 	}
 
 	return payment.SyncBookingStatusTx(ctx, tx, bookingID)
-}
-
-// ListAddons mengambil daftar add-on untuk sebuah booking.
-func (r *Repository) ListAddons(ctx context.Context, bookingID int64) ([]BookingAddon, error) {
-	const q = `SELECT id, booking_id, nama, nominal, created_at FROM booking_addons WHERE booking_id=? ORDER BY id ASC`
-	rows, err := r.db.QueryContext(ctx, q, bookingID)
-	if err != nil {
-		return nil, fmt.Errorf("booking.ListAddons: %w", err)
-	}
-	defer rows.Close()
-
-	items := make([]BookingAddon, 0)
-	for rows.Next() {
-		var a BookingAddon
-		if err := rows.Scan(&a.ID, &a.BookingID, &a.Nama, &a.Nominal, &a.CreatedAt); err != nil {
-			return nil, fmt.Errorf("booking.ListAddons scan: %w", err)
-		}
-		items = append(items, a)
-	}
-	return items, rows.Err()
-}
-
-// AddAddon menambahkan addon baru dan menghitung ulang total_harga.
-func (r *Repository) AddAddon(ctx context.Context, bookingID int64, nama string, nominal float64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if err := lockNotBatalTx(ctx, tx, bookingID); err != nil {
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `INSERT INTO booking_addons (booking_id, nama, nominal) VALUES (?, ?, ?)`, bookingID, nama, nominal)
-	if err != nil {
-		return fmt.Errorf("booking.AddAddon insert: %w", err)
-	}
-
-	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
-		return fmt.Errorf("booking.AddAddon recalc: %w", err)
-	}
-
-	return tx.Commit()
-}
-
-// DeleteAddon menghapus addon dan menghitung ulang total_harga.
-func (r *Repository) DeleteAddon(ctx context.Context, bookingID int64, addonID int64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if err := lockNotBatalTx(ctx, tx, bookingID); err != nil {
-		return err
-	}
-
-	res, err := tx.ExecContext(ctx, `DELETE FROM booking_addons WHERE id=? AND booking_id=?`, addonID, bookingID)
-	if err != nil {
-		return fmt.Errorf("booking.DeleteAddon delete: %w", err)
-	}
-	affected, _ := res.RowsAffected()
-	if affected == 0 {
-		return ErrNotFound
-	}
-
-	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
-		return fmt.Errorf("booking.DeleteAddon recalc: %w", err)
-	}
-	if err := ensureTotalCoversPaidTx(ctx, tx, bookingID); err != nil {
-		return err
-	}
-
-	return tx.Commit()
 }
 
 // ListDiscounts mengambil daftar diskon untuk sebuah booking.
@@ -1915,7 +1834,7 @@ func (r *Repository) checkPasporUploaded(ctx context.Context, jamaahID int64) (b
 }
 
 func computeSiapBerangkat(b *Booking) {
-	headerLengkap := b.ProgressTiket && b.ProgressHotel && b.ProgressLandArrangement
+	headerLengkap := b.ProgressHotel && b.ProgressLandArrangement
 	activePaxCount := 0
 	allPaxLengkap := true
 
@@ -1950,7 +1869,6 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	var hargaDasar sql.NullFloat64
 	var createdBy sql.NullInt64
 	var berangkatTanggal sql.NullString
-	var isTicketConfirmed bool
 	var seatHoldExpiresAt sql.NullTime
 	var roomType sql.NullString
 
@@ -1963,7 +1881,6 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 		&b.ProgressVisa, &b.ProgressHotel, &b.ProgressLandArrangement,
 		&b.ProgressManasik, &b.ProgressSiskopatuh, &b.ProgressVaksinMeningitis,
 		&createdBy, &b.CreatedAt,
-		&isTicketConfirmed,
 		&primaryJamaahID,
 		&b.PaxCount,
 		&b.RegularPaxCount,
@@ -1975,7 +1892,6 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 		return nil, fmt.Errorf("booking.scanRow: %w", err)
 	}
 	b.PerluRefund = b.Status == "batal" && b.TotalDibayar > b.TotalRefund
-	b.ProgressTiket = isTicketConfirmed
 	if roomType.Valid && strings.TrimSpace(roomType.String) != "" {
 		b.RoomType = &roomType.String
 	}
@@ -2011,7 +1927,6 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 		b.CreatedBy = &createdBy.Int64
 	}
 	computeSiapBerangkat(&b)
-	b.Addons = make([]BookingAddon, 0)
 	b.Pax = make([]BookingPax, 0)
 	return &b, nil
 }
