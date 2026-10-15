@@ -11,6 +11,7 @@ import BrandDashboardPage from './pages/BrandDashboardPage';
 import PersetujuanAgenPage from './pages/PersetujuanAgenPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
 import DuplikatJamaahPage from './pages/DuplikatJamaahPage';
+import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import HotelsPage from './pages/HotelsPage';
 import AirlinesPage from './pages/AirlinesPage';
 import ItinerariesPage from './pages/ItinerariesPage';
@@ -45,7 +46,9 @@ import {
 } from 'shared';
 
 function AppRoutes() {
-  const { isHolding } = useContext(AuthContext);
+  const { isHolding, hasPermission } = useContext(AuthContext);
+  // Finance tanpa izin analytics mendarat di dashboard keuangan; peran lain memakai beranda biasa.
+  const financeOnly = hasPermission('report.finance.view') && !hasPermission('report.analytics.view');
   // Holding melihat lintas brand (kolom Brand + filter); admin brand terkunci ke brand-nya.
   const showBrandColumn = isHolding;
 
@@ -55,7 +58,8 @@ function AppRoutes() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
-          <Route path="/" element={isHolding ? <DashboardHome /> : <BrandDashboardPage />} />
+          <Route path="/" element={isHolding ? (financeOnly ? <FinanceDashboardPage /> : <DashboardHome />) : <BrandDashboardPage />} />
+          <Route path="/keuangan" element={<RequireAccess perm="report.finance.view"><FinanceDashboardPage /></RequireAccess>} />
           <Route path="/pengaturan" element={<AccountSettingsPage />} />
 
           {/* Master paket */}
