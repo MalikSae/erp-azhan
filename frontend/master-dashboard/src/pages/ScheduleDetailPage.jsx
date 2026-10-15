@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Plane,
@@ -20,6 +20,7 @@ import { printPackage } from '../utils/printPackage';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import SeatManagement from '../components/SeatManagement';
+import { AuthContext } from '../context/AuthContext';
 import { getSchedule } from '../api/schedules';
 import { getItinerary } from '../api/itineraries';
 import { listBrands } from '../api/brands';
@@ -263,6 +264,8 @@ const FacilityList = ({ title, items, icon: Icon, iconClass }) => (
 const ScheduleDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { hasPermission } = useContext(AuthContext);
+  const canEdit = hasPermission('schedule.edit');
 
   const [schedule, setSchedule] = useState(null);
   const [itinerary, setItinerary] = useState(null);
@@ -458,8 +461,7 @@ const ScheduleDetailPage = () => {
           ) : undefined
         }
         onBack={() => navigate('/schedules')}
-        actionLabel="Edit Paket"
-        onAction={() => navigate(`/schedules/${id}/edit`)}
+        {...(canEdit ? { actionLabel: 'Edit Paket', onAction: () => navigate(`/schedules/${id}/edit`) } : {})}
       >
         <Button variant="secondary" onClick={handlePrintPackage}>
           <Printer size={16} strokeWidth={1.75} />
@@ -654,7 +656,7 @@ const ScheduleDetailPage = () => {
 
           <Surface>
             <Section title="Kuota Seat">
-              <SeatManagement scheduleId={schedule.id} bookingCount={schedule.booking_count} />
+              <SeatManagement scheduleId={schedule.id} bookingCount={schedule.booking_count} canEdit={canEdit} />
             </Section>
           </Surface>
         </div>
