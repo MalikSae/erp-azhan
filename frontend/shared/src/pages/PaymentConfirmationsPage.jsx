@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PAYMENT_STATUS_META } from '../utils/bookingStatus';
 import { SlidersHorizontal, Eye } from 'lucide-react';
 import client from '../api/client';
 import { listAllPayments, verifyPayment } from '../api/bookings';
@@ -14,17 +15,10 @@ import ActionMenu from '../components/ui/ActionMenu';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${String(value).slice(0, 10)}T00:00:00`));
-const statusMeta = {
-  pending: { label: 'Menunggu', variant: 'pending' },
-  confirmed: { label: 'Terkonfirmasi', variant: 'success' },
-  rejected: { label: 'Ditolak', variant: 'danger' },
-};
-// Warna dipertegas agar tetap terbaca di atas latar halaman abu-abu.
-const STATUS_STRONG = {
-  pending: '!bg-warning-100 !border-warning-300 !text-warning-800',
-  confirmed: '!bg-success-100 !border-success-300 !text-success-800',
-  rejected: '!bg-danger-100 !border-danger-200 !text-danger-700',
-};
+const statusMeta = PAYMENT_STATUS_META;
+const STATUS_STRONG = Object.fromEntries(
+  Object.entries(PAYMENT_STATUS_META).map(([key, meta]) => [key, meta.className]),
+);
 const EMPTY_FILTERS = { status: '', brand: '', bank: '', from: '', to: '' };
 // CustomDropdown mengirim nilai langsung atau objek event.
 const valueOf = (v) => (v?.target ? v.target.value : v);
@@ -265,6 +259,17 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       );
     }
     if (key === 'destination_bank_name') {
+      // Tunai tidak punya rekening: tampilkan staff yang menerima uangnya.
+      if (String(row.metode || '').toLowerCase() === 'cash') {
+        return (
+          <div className="min-w-28">
+            <p className="text-[13px] font-body font-medium text-neutral-800">Tunai</p>
+            <p className="mt-0.5 text-[11px] font-body text-neutral-400">
+              {row.received_by ? `Diterima: ${row.received_by}` : 'Penerima belum dicatat'}
+            </p>
+          </div>
+        );
+      }
       return (
         <div className="min-w-28">
           <p className="text-[13px] font-body font-medium text-neutral-800">{row.destination_bank_name || '-'}</p>
@@ -275,6 +280,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
         </div>
       );
     }
+
     if (key === 'jumlah') {
       return <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.jumlah)}</span>;
     }
@@ -378,7 +384,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
         isOpen={Boolean(selectedPayment)}
         onClose={closeDetail}
         title="Detail Pembayaran"
-        size="2xl"
+        size={proofLoading || proofBlobUrl ? 'lg' : 'xl'}
         footer={
           <div className="flex items-center justify-between w-full">
             <div>
@@ -432,153 +438,172 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
           </div>
         }
       >
-        {selectedPayment && (
-          <div className="space-y-4">
-            {actionError && <Alert variant="error" message={actionError} />}
+        {selectedPayment && (() => {
+          const hasProof = proofLoading || Boolean(proofBlobUrl);
+          const row = 'flex items-start justify-between gap-6 py-2.5';
+          const dt = 'shrink-0 text-neutral-500';
+          const dd = 'text-right font-medium text-neutral-900';
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Kolom Kiri: Info Ringkas Pembayaran */}
-              <div className="space-y-3">
-                <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200/80">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Nominal Pembayaran</span>
-                    {selectedMeta && <Badge variant={selectedMeta.variant}>{selectedMeta.label}</Badge>}
-                  </div>
-                  <div className="text-2xl font-black text-neutral-900 tracking-tight mt-1">{money(selectedPayment.jumlah)}</div>
-                  {selectedPayment.status === 'rejected' && selectedPayment.rejection_reason && (
-                    <p className="mt-1.5 text-xs text-danger-700 bg-danger-50 p-2 rounded-lg border border-danger-200/60">
-                      <strong>Alasan ditolak:</strong> {selectedPayment.rejection_reason}
-                    </p>
-                  )}
-                </div>
-
-                <div className="p-3.5 rounded-xl border border-neutral-200/70 space-y-2 text-xs">
-                  {showBrandColumn && (
-                    <div className="flex justify-between border-b border-neutral-100 pb-1.5">
-                      <span className="text-neutral-500">Brand</span>
-                      <span className="font-semibold text-neutral-800">{selectedPayment.brand_name || '-'}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center border-b border-neutral-100 pb-1.5">
-                    <span className="text-neutral-500">Kode Booking</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-neutral-900">#{selectedPayment.invoice}</span>
-                      {selectedPayment.booking_id && (
-                        <a
-                          href={`/bookings/${selectedPayment.booking_id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-700 hover:text-neutral-900 text-xs font-medium transition-colors cursor-pointer"
-                          title="Buka Detail Booking di tab baru"
-                        >
-                          <span>Buka Booking</span>
-                          <svg className="w-3 h-3 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex justify-between border-b border-neutral-100 pb-1.5">
-                    <span className="text-neutral-500">Nama Jamaah</span>
-                    <span className="font-semibold text-neutral-900">{selectedPayment.jamaah_name || '-'}</span>
-                  </div>
-                  <div className="flex justify-between items-start gap-3">
-                    <span className="text-neutral-500 shrink-0">Paket</span>
-                    <div className="text-right">
-                      <span className="font-medium text-neutral-800 block leading-tight">{selectedPayment.schedule_name || '-'}</span>
-                      {selectedPayment.departure_date && (
-                        <span className="text-xs text-neutral-700 font-semibold block mt-1">{dateLabel(selectedPayment.departure_date)}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-xl border border-neutral-200/70 space-y-2 text-xs">
-                  <div className="flex justify-between border-b border-neutral-100 pb-1.5">
-                    <span className="text-neutral-500">Tanggal Transfer</span>
-                    <span className="font-medium text-neutral-800">{dateLabel(selectedPayment.tanggal)}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-neutral-100 pb-1.5">
-                    <span className="text-neutral-500">Pengirim</span>
-                    <span className="font-semibold text-neutral-800">
-                      {selectedPayment.sender_name || 'Belum diisi'}
-                      {selectedPayment.sender_bank ? ` (${selectedPayment.sender_bank})` : ''}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-start">
-                    <span className="text-neutral-500">Rekening Tujuan</span>
-                    <div className="text-right">
-                      <p className="font-semibold text-neutral-800">{selectedPayment.destination_bank_name || '-'}</p>
-                      <p className="font-mono text-xs text-neutral-600">{selectedPayment.destination_account_number || '-'}</p>
-                      {selectedPayment.destination_account_holder && (
-                        <p className="text-xs text-neutral-500">a.n. {selectedPayment.destination_account_holder}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
+          const details = (
+            <div className="min-w-0">
+              <span className="block text-[11px] font-body text-neutral-400">Nominal Pembayaran</span>
+              <div className="mt-0.5 flex items-center justify-between gap-3">
+                <span className="font-heading text-3xl font-bold tracking-tight text-neutral-900">
+                  {money(selectedPayment.jumlah)}
+                </span>
+                {selectedMeta && <Badge variant={selectedMeta.variant} hideIcon className={STATUS_STRONG[selectedPayment.status]}>{selectedMeta.label}</Badge>}
               </div>
 
-              {/* Kolom Kanan: Foto Bukti Transfer */}
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-neutral-700 mb-2 block">Foto Bukti Transfer</span>
+              {selectedPayment.status === 'rejected' && selectedPayment.rejection_reason && (
+                <p className="mt-2 text-xs font-body text-danger-700">
+                  <span className="font-semibold">Alasan ditolak:</span> {selectedPayment.rejection_reason}
+                </p>
+              )}
 
-                <div className="flex-1 min-h-64 max-h-80 rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden flex flex-col items-center justify-center p-2">
-                  {proofLoading ? (
-                    <div className="text-center py-10 space-y-2">
-                      <div className="w-7 h-7 border-2 border-neutral-300 border-t-primary-500 rounded-full animate-spin mx-auto" />
-                      <p className="text-xs text-neutral-500 font-medium">Memuat bukti transfer...</p>
-                    </div>
-                  ) : proofBlobUrl ? (
-                    <div className="relative w-full h-full flex flex-col items-center justify-center">
-                      <img
-                        src={proofBlobUrl}
-                        alt="Bukti Transfer"
-                        className="max-h-72 w-auto max-w-full object-contain rounded-lg shadow-2xs cursor-zoom-in hover:opacity-90 transition-opacity"
-                        onClick={() => window.open(proofBlobUrl, '_blank')}
-                        title="Klik untuk melihat ukuran penuh"
-                      />
-                      <div className="mt-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => window.open(proofBlobUrl, '_blank')}
-                          className="text-xs font-semibold text-neutral-900 hover:underline"
-                        >
-                          Buka Gambar Penuh ↗
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-12 px-4 space-y-1 text-neutral-400">
-                      <svg className="w-10 h-10 mx-auto text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p className="text-xs font-medium text-neutral-500">Tidak Ada Bukti Transfer</p>
-                      <p className="text-xs text-neutral-400">Pembayaran ini dicatat tanpa unggahan bukti transfer.</p>
-                    </div>
-                  )}
+              <dl className="mt-4 divide-y divide-neutral-200/80 border-t border-neutral-200/80 text-[13px] font-body">
+                <div className={row}>
+                  <dt className={dt}>Tanggal Transfer</dt>
+                  <dd className={dd}>{dateLabel(selectedPayment.tanggal)}</dd>
                 </div>
-              </div>
+                {showBrandColumn && (
+                  <div className={row}>
+                    <dt className={dt}>Brand</dt>
+                    <dd className={dd}>{selectedPayment.brand_name || '-'}</dd>
+                  </div>
+                )}
+                <div className={row}>
+                  <dt className={dt}>Kode Booking</dt>
+                  <dd className={dd}>
+                    <span className="font-mono">#{selectedPayment.invoice}</span>
+                    {selectedPayment.booking_id && (
+                      <a
+                        href={`/bookings/${selectedPayment.booking_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ml-2 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
+                        title="Buka Detail Booking di tab baru"
+                      >
+                        Buka ↗
+                      </a>
+                    )}
+                  </dd>
+                </div>
+                <div className={row}>
+                  <dt className={dt}>Nama Jamaah</dt>
+                  <dd className={dd}>{selectedPayment.jamaah_name || '-'}</dd>
+                </div>
+                <div className={row}>
+                  <dt className={dt}>Paket</dt>
+                  <dd className={dd}>
+                    {selectedPayment.schedule_name || '-'}
+                    {selectedPayment.departure_date && (
+                      <span className="block text-xs font-normal text-neutral-500">{dateLabel(selectedPayment.departure_date)}</span>
+                    )}
+                  </dd>
+                </div>
+                {String(selectedPayment.metode || '').toLowerCase() === 'cash' ? (
+                  <>
+                    <div className={row}>
+                      <dt className={dt}>Metode</dt>
+                      <dd className={dd}>Tunai</dd>
+                    </div>
+                    <div className={row}>
+                      <dt className={dt}>Diterima Oleh</dt>
+                      <dd className={dd}>{selectedPayment.received_by || 'Belum dicatat'}</dd>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={row}>
+                      <dt className={dt}>Pengirim</dt>
+                      <dd className={dd}>
+                        {selectedPayment.sender_name || 'Belum diisi'}
+                        {selectedPayment.sender_bank ? ` (${selectedPayment.sender_bank})` : ''}
+                      </dd>
+                    </div>
+                    <div className={row}>
+                      <dt className={dt}>Rekening Tujuan</dt>
+                      <dd className={dd}>
+                        {selectedPayment.destination_bank_name || (selectedPayment.destination_account_number ? '' : '-')}
+                        {selectedPayment.destination_account_number && (
+                          <span className="block font-mono text-xs font-normal text-neutral-600">{selectedPayment.destination_account_number}</span>
+                        )}
+                        {selectedPayment.destination_account_holder && (
+                          <span className="block text-xs font-normal text-neutral-500">a.n. {selectedPayment.destination_account_holder}</span>
+                        )}
+                      </dd>
+                    </div>
+                  </>
+                )}
+              </dl>
             </div>
+          );
 
-            {/* Input Alasan Penolakan Jika Masuk Mode Tolak */}
-            {rejectMode && (
-              <div className="p-3.5 rounded-xl bg-danger-50/70 border border-danger-200/80 space-y-2">
-                <label className="block text-xs font-bold text-danger-900">
-                  Alasan Penolakan <span className="text-danger-600">*</span>
-                </label>
-                <textarea
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  rows={3}
-                  placeholder="Tuliskan alasan mengapa pembayaran ini ditolak (akan dibaca jamaah di portal)..."
-                  className="w-full rounded-lg border border-danger-300 bg-white p-2.5 text-xs text-neutral-800 placeholder-neutral-400 focus:border-danger-500 focus:outline-none focus:ring-1 focus:ring-danger-500"
-                  autoFocus
-                />
-              </div>
-            )}
-          </div>
-        )}
+          return (
+            <div className="space-y-5">
+              {actionError && <Alert variant="error" message={actionError} />}
+
+              {hasProof ? (
+                <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  {/* Bukti transfer jadi fokus verifikasi */}
+                  <div className="min-w-0">
+                    <span className="mb-1.5 block text-[11px] font-body text-neutral-400">Bukti Transfer</span>
+                    <div className="flex min-h-72 items-center justify-center overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 p-2">
+                      {proofLoading ? (
+                        <div className="py-10 text-center space-y-2">
+                          <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-neutral-300 border-t-primary-500" />
+                          <p className="text-xs font-body text-neutral-500">Memuat bukti transfer...</p>
+                        </div>
+                      ) : (
+                        <img
+                          src={proofBlobUrl}
+                          alt="Bukti Transfer"
+                          className="max-h-96 w-auto max-w-full cursor-zoom-in rounded-md object-contain transition-opacity hover:opacity-90"
+                          onClick={() => window.open(proofBlobUrl, '_blank')}
+                          title="Klik untuk melihat ukuran penuh"
+                        />
+                      )}
+                    </div>
+                    {proofBlobUrl && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(proofBlobUrl, '_blank')}
+                        className="mt-2 cursor-pointer text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
+                      >
+                        Buka gambar penuh ↗
+                      </button>
+                    )}
+                  </div>
+                  {details}
+                </div>
+              ) : (
+                <>
+                  {details}
+                  <p className="border-t border-neutral-200/80 pt-3 text-xs font-body text-neutral-500">
+                    Tidak ada bukti transfer. Pembayaran ini dicatat tanpa unggahan bukti.
+                  </p>
+                </>
+              )}
+
+              {/* Alasan penolakan (mode tolak) */}
+              {rejectMode && (
+                <div className="border-t border-neutral-200/80 pt-4">
+                  <label className="mb-1.5 block text-xs font-semibold font-body text-neutral-800">
+                    Alasan Penolakan <span className="text-danger-600">*</span>
+                  </label>
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    rows={3}
+                    placeholder="Tuliskan alasan mengapa pembayaran ini ditolak (akan dibaca jamaah di portal)..."
+                    className="w-full rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-[13px] font-body text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    autoFocus
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

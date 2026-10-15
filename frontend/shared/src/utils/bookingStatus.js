@@ -15,3 +15,15 @@ export function getSeatLockIcon(status, isSeatBlocked) {
     ? { icon: 'CircleCheckBig', colorClass: 'text-success-600', label: 'Seat Terkunci' }
     : { icon: 'Loader', colorClass: 'text-warning-600', label: 'Seat Belum Terkunci' };
 }
+
+// Status pembayaran: satu sumber label & gaya untuk Detail Booking dan daftar Pembayaran.
+// className mempertegas warna agar terbaca di atas latar halaman abu-abu.
+export const PAYMENT_STATUS_META = {
+  pending: { label: 'Menunggu', variant: 'pending', className: '!bg-warning-100 !border-warning-300 !text-warning-800' },
+  confirmed: { label: 'Terkonfirmasi', variant: 'success', className: '!bg-success-100 !border-success-300 !text-success-800' },
+  rejected: { label: 'Ditolak', variant: 'danger', className: '!bg-danger-100 !border-danger-200 !text-danger-700' },
+};
+
+export function getPaymentStatusMeta(status) {
+  return PAYMENT_STATUS_META[status] || { label: status || '-', variant: 'neutral', className: '' };
+}
