@@ -42,6 +42,16 @@ func (h *Handler) ListBrands(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data brands")
 		return
 	}
+	// Admin yang terikat satu brand hanya melihat brand-nya sendiri.
+	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
+		own := make([]Brand, 0, 1)
+		for _, b := range brands {
+			if int64(b.ID) == *scoped {
+				own = append(own, b)
+			}
+		}
+		brands = own
+	}
 	writeJSON(w, http.StatusOK, brands)
 }
 
@@ -49,6 +59,11 @@ func (h *Handler) GetBrand(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "id tidak valid")
+		return
+	}
+
+	if scoped := identity.GetBrandID(r.Context()); scoped != nil && int64(id) != *scoped {
+		writeError(w, http.StatusNotFound, "brand tidak ditemukan")
 		return
 	}
 
@@ -468,6 +483,7 @@ func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 		"id":            b.ID,
 		"name":          b.Name,
 		"logo_url":      b.LogoURL,
+		"icon_url":      b.IconURL,
 		"primary_color": b.PrimaryColor,
 	}
 

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -20,6 +21,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		if id, err := strconv.ParseInt(b, 10, 64); err == nil && id > 0 {
 			brandID = &id
 		}
+	}
+	// Admin yang terikat satu brand hanya boleh melihat rekening brand-nya sendiri,
+	// apa pun nilai brand_id yang dikirim.
+	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
+		own := *scoped
+		brandID = &own
 	}
 	activeOnly := r.URL.Query().Get("active") == "true"
 	items, err := h.repo.List(r.Context(), brandID, activeOnly)
@@ -41,6 +48,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "brand, bank, nomor rekening, dan atas nama wajib diisi")
 		return
 	}
+	if scoped := identity.GetBrandID(r.Context()); scoped != nil && req.BrandID != *scoped {
+		writeError(w, 403, "Anda hanya dapat mengelola rekening brand Anda sendiri")
+		return
+	}
 	item, err := h.repo.Create(r.Context(), req)
 	if err != nil {
 		writeError(w, 400, "rekening gagal disimpan atau nomor sudah digunakan")
@@ -55,6 +66,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "data rekening tidak valid")
 		return
 	}
+	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
+		existing, getErr := h.repo.Get(r.Context(), id)
+		if getErr != nil || existing.BrandID != *scoped || req.BrandID != *scoped {
+			writeError(w, 404, "rekening tidak ditemukan")
+			return
+		}
+	}
 	item, err := h.repo.Update(r.Context(), id, req)
 	if errors.Is(err, ErrNotFound) {
 		writeError(w, 404, "rekening tidak ditemukan")
@@ -68,6 +86,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
+		existing, getErr := h.repo.Get(r.Context(), id)
+		if getErr != nil || existing.BrandID != *scoped {
+			writeError(w, 404, "rekening tidak ditemukan")
+			return
+		}
+	}
 	if err := h.repo.Delete(r.Context(), id); errors.Is(err, ErrNotFound) {
 		writeError(w, 404, "rekening tidak ditemukan")
 		return
