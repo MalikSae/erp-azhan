@@ -15,7 +15,7 @@ import ScheduleDetailPage from './pages/ScheduleDetailPage';
 import ScheduleFormPage from './pages/ScheduleFormPage';
 import CategoriesPage from './pages/CategoriesPage';
 import InventoryPerlengkapanPage from './pages/InventoryPerlengkapanPage';
-import InventoryStokPerlengkapanPage from './pages/InventoryStokPerlengkapanPage';
+import InventoryRiwayatStokPage from './pages/InventoryRiwayatStokPage';
 import StokBrandCabangPage from './pages/StokBrandCabangPage';
 import KomisiReferralPage from './pages/KomisiReferralPage';
 import GantiKaitanAgenPage from './pages/GantiKaitanAgenPage';
@@ -72,7 +72,8 @@ function App() {
               
               {/* Inventory */}
               <Route path="/inventory/perlengkapan" element={<InventoryPerlengkapanPage />} />
-              <Route path="/inventory/stok-perlengkapan" element={<InventoryStokPerlengkapanPage />} />
+              <Route path="/inventory/riwayat-stok" element={<InventoryRiwayatStokPage />} />
+              <Route path="/inventory/stok-perlengkapan" element={<Navigate to="/inventory/perlengkapan" replace />} />
               <Route path="/inventory/stok" element={<StokBrandCabangPage />} />
               
               {/* Komisi Agen */}

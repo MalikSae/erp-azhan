@@ -48,3 +48,42 @@ export async function updatePerlengkapanSetTemplate(items) {
   const response = await client.put('/api/admin/perlengkapan-set-template', items);
   return response.data;
 }
+
+// ─── Isi perlengkapan per kategori & per paket ───────────────────────────────
+
+export async function getCategoryPerlengkapan(categoryId) {
+  const response = await client.get(`/api/admin/categories/${categoryId}/perlengkapan`);
+  return response.data;
+}
+
+export async function putCategoryPerlengkapan(categoryId, items) {
+  const response = await client.put(`/api/admin/categories/${categoryId}/perlengkapan`, { items });
+  return response.data;
+}
+
+export async function getSchedulePerlengkapan(scheduleId) {
+  const response = await client.get(`/api/admin/schedules/${scheduleId}/perlengkapan`);
+  return response.data;
+}
+
+export async function putSchedulePerlengkapan(scheduleId, custom, items = []) {
+  const response = await client.put(`/api/admin/schedules/${scheduleId}/perlengkapan`, { custom, items });
+  return response.data;
+}
+
+// ─── Barang masuk & buku besar stok ──────────────────────────────────────────
+
+export async function createPembelianPerlengkapan(payload) {
+  const response = await client.post('/api/admin/perlengkapan-mutasi/pembelian', payload);
+  return response.data;
+}
+
+export async function createKoreksiPerlengkapan(payload) {
+  const response = await client.post('/api/admin/perlengkapan-mutasi/koreksi', payload);
+  return response.data;
+}
+
+export async function listMutasiPerlengkapan(params = {}) {
+  const response = await client.get('/api/admin/perlengkapan-mutasi', { params });
+  return response.data;
+}

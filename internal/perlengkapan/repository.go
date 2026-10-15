@@ -112,7 +112,7 @@ func (r *Repository) CreateItem(ctx context.Context, nama string, photoURL *stri
 	return r.GetItemByID(ctx, uint64(id))
 }
 
-func (r *Repository) UpdateItem(ctx context.Context, id uint64, nama string, photoURL *string, qtyPerSet int) (*PerlengkapanItem, error) {
+func (r *Repository) UpdateItem(ctx context.Context, id uint64, nama string, photoURL *string, qtyPerSet *int) (*PerlengkapanItem, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("perlengkapan.UpdateItem begin tx: %w", err)
@@ -140,20 +140,23 @@ func (r *Repository) UpdateItem(ctx context.Context, id uint64, nama string, pho
 		}
 	}
 
-	// Upsert atau Delete template set
-	if qtyPerSet > 0 {
-		querySet := `
-			INSERT INTO perlengkapan_set_template (perlengkapan_item_id, qty)
-			VALUES (?, ?)
-			ON DUPLICATE KEY UPDATE qty = VALUES(qty)
-		`
-		if _, err := tx.ExecContext(ctx, querySet, id, qtyPerSet); err != nil {
-			return nil, fmt.Errorf("perlengkapan.UpdateItem upsert set template: %w", err)
-		}
-	} else {
-		queryDelSet := "DELETE FROM perlengkapan_set_template WHERE perlengkapan_item_id = ?"
-		if _, err := tx.ExecContext(ctx, queryDelSet, id); err != nil {
-			return nil, fmt.Errorf("perlengkapan.UpdateItem delete set template: %w", err)
+	// Set global hanya disentuh bila qty_per_set dikirim (nil = biarkan). Isi per kategori/paket
+	// diatur lewat endpoint set, bukan lewat item.
+	if qtyPerSet != nil {
+		if *qtyPerSet > 0 {
+			querySet := `
+				INSERT INTO perlengkapan_set_template (perlengkapan_item_id, qty)
+				VALUES (?, ?)
+				ON DUPLICATE KEY UPDATE qty = VALUES(qty)
+			`
+			if _, err := tx.ExecContext(ctx, querySet, id, *qtyPerSet); err != nil {
+				return nil, fmt.Errorf("perlengkapan.UpdateItem upsert set template: %w", err)
+			}
+		} else {
+			queryDelSet := "DELETE FROM perlengkapan_set_template WHERE perlengkapan_item_id = ?"
+			if _, err := tx.ExecContext(ctx, queryDelSet, id); err != nil {
+				return nil, fmt.Errorf("perlengkapan.UpdateItem delete set template: %w", err)
+			}
 		}
 	}
 
@@ -165,6 +168,16 @@ func (r *Repository) UpdateItem(ctx context.Context, id uint64, nama string, pho
 }
 
 func (r *Repository) DeleteItem(ctx context.Context, id uint64) error {
+	// Item yang masih dipakai di set kategori atau set paket tidak boleh dihapus.
+	var usedByOtherSet int
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT (SELECT COUNT(*) FROM package_category_perlengkapan WHERE perlengkapan_item_id = ?)
+		     + (SELECT COUNT(*) FROM schedule_perlengkapan WHERE perlengkapan_item_id = ?)`, id, id).Scan(&usedByOtherSet); err != nil {
+		return fmt.Errorf("perlengkapan.DeleteItem cek set kategori/paket: %w", err)
+	}
+	if usedByOtherSet > 0 {
+		return ErrInUse
+	}
 	// Cek apakah dipakai di set template
 	var countSet int
 	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM perlengkapan_set_template WHERE perlengkapan_item_id = ?", id).Scan(&countSet)
@@ -305,8 +318,8 @@ func (r *Repository) ListStokByBrand(ctx context.Context, brandID uint64) ([]Per
 	return items, nil
 }
 
-func (r *Repository) UpdateStok(ctx context.Context, brandID, itemID uint64, stok int) (*PerlengkapanStokItem, error) {
-	// Pastikan item ada
+// UpdateStok menyetel stok brand ke angka baru; selisihnya tercatat sebagai koreksi di buku besar.
+func (r *Repository) UpdateStok(ctx context.Context, brandID, itemID uint64, stok int, userID *int64) (*PerlengkapanStokItem, error) {
 	var nama string
 	err := r.db.QueryRowContext(ctx, "SELECT nama FROM perlengkapan_items WHERE id = ?", itemID).Scan(&nama)
 	if err != nil {
@@ -315,20 +328,14 @@ func (r *Repository) UpdateStok(ctx context.Context, brandID, itemID uint64, sto
 		}
 		return nil, fmt.Errorf("perlengkapan.UpdateStok check item: %w", err)
 	}
-
-	query := `
-		INSERT INTO perlengkapan_stok (brand_id, perlengkapan_item_id, stok_tersedia)
-		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE stok_tersedia = VALUES(stok_tersedia)
-	`
-	if _, err := r.db.ExecContext(ctx, query, brandID, itemID, stok); err != nil {
-		return nil, fmt.Errorf("perlengkapan.UpdateStok upsert: %w", err)
+	next, err := r.Koreksi(ctx, userID, itemID, brandID, stok, nil)
+	if err != nil {
+		return nil, fmt.Errorf("perlengkapan.UpdateStok: %w", err)
 	}
-
 	return &PerlengkapanStokItem{
 		PerlengkapanItemID: itemID,
 		Nama:               nama,
-		StokTersedia:       stok,
+		StokTersedia:       next,
 	}, nil
 }
 
