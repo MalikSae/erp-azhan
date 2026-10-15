@@ -142,6 +142,17 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 
 ---
 
+## 5.1 Aturan Tabel (WAJIB)
+
+**Tabel tidak boleh dibungkus dalam kontainer/box lain.** Kartu putih berbingkai *adalah* tabelnya sendiri.
+
+- **Judul** tabel (dan tombol aksinya, mis. "+ Tambah") berada **di luar** kartu, di atasnya. Jangan taruh judul di dalam kartu yang juga berisi tabel.
+- **Dilarang** menaruh `Table`/`DataTable` di dalam `Section`/`Surface`/kartu yang sudah punya padding atau bingkai. Tidak ada "kotak di dalam kotak".
+- Di halaman **detail**, pakai `TableCard` (`shared/ui/DetailLayout`): `<TableCard title="…" aside={…}>…<Table/>…</TableCard>`. Keadaan kosong memakai teks biasa dengan padding sendiri (`p-5`), bukan kotak putus-putus.
+- Di halaman **daftar**, pakai `DataTable`; pencarian/filter/tab ada di toolbar kartu itu sendiri (`toolbarLeading`, `toolbarActions`, `toolbarPanel`).
+- Tabel lebar boleh dibungkus `overflow-x-auto` (bukan kotak berbingkai).
+- Pengecualian: kartu **widget dashboard** (judul + ringkasan + tabel mini dalam satu kartu).
+
 ## 6. Alur Kerja untuk Halaman Baru
 
 1. Cek dulu apakah komponen yang dibutuhkan sudah ada di `components/ui/`
