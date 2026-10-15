@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Eye, Pencil, Trash2, CalendarDays, Copy, Archive, Send, FilePen } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
@@ -12,6 +12,7 @@ import CustomDropdown from 'shared/ui/CustomDropdown';
 import ActionMenu from 'shared/ui/ActionMenu';
 import { listSchedulesAdmin, deleteSchedule, updateScheduleStatus } from '../api/schedules';
 import { listBrands } from '../api/brands';
+import { AuthContext } from '../context/AuthContext';
 
 const STATUS_LABEL = { published: 'Published', draft: 'Draft', archived: 'Archived' };
 
@@ -55,6 +56,9 @@ const generateRandomCode = (length = 6) => {
 
 const SchedulesPage = () => {
   const navigate = useNavigate();
+  const { hasPermission } = useContext(AuthContext);
+  // Admin brand hanya melihat paket; ubah/tambah/status/hapus butuh schedule.edit.
+  const canEdit = hasPermission('schedule.edit');
   const location = useLocation();
   const [successMessage, setSuccessMessage] = useState(null);
   const [schedules, setSchedules] = useState([]);
@@ -155,6 +159,7 @@ const SchedulesPage = () => {
   };
 
   const statusItems = (row) => {
+    if (!canEdit) return [];
     const make = (label, icon, status) => ({ label, icon, tooltip: label, onClick: () => changeStatus(row, status) });
     if (row.status === 'published') return [make('Jadikan Draft', FilePen, 'draft'), make('Arsipkan', Archive, 'archived')];
     if (row.status === 'draft') return [make('Publish', Send, 'published'), make('Arsipkan', Archive, 'archived')];
@@ -366,18 +371,20 @@ const SchedulesPage = () => {
       const hasBookings = (row.booking_count || 0) > 0;
       const menuItems = [
         { label: 'Lihat', icon: Eye, tooltip: 'Lihat Detail Paket', onClick: () => navigate(`/schedules/${row.id}`) },
-        { label: 'Edit', icon: Pencil, tooltip: 'Edit Paket', onClick: () => navigate(`/schedules/${row.id}/edit`) },
-        { label: 'Duplikat', icon: Copy, tooltip: 'Buat paket baru dari paket ini', onClick: () => navigate(`/schedules/new?from=${row.id}`) },
-        ...statusItems(row),
-        {
-          label: 'Hapus',
-          icon: Trash2,
-          danger: true,
-          tooltip: 'Hapus Paket',
-          disabled: hasBookings,
-          disabledTooltip: `Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`,
-          onClick: () => handleDeleteClick(row.id),
-        },
+        ...(canEdit ? [
+          { label: 'Edit', icon: Pencil, tooltip: 'Edit Paket', onClick: () => navigate(`/schedules/${row.id}/edit`) },
+          { label: 'Duplikat', icon: Copy, tooltip: 'Buat paket baru dari paket ini', onClick: () => navigate(`/schedules/new?from=${row.id}`) },
+          ...statusItems(row),
+          {
+            label: 'Hapus',
+            icon: Trash2,
+            danger: true,
+            tooltip: 'Hapus Paket',
+            disabled: hasBookings,
+            disabledTooltip: `Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`,
+            onClick: () => handleDeleteClick(row.id),
+          },
+        ] : []),
       ];
       return <ActionMenu items={menuItems} align="right" />;
     }
@@ -389,8 +396,7 @@ const SchedulesPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Kelola Paket"
-        actionLabel="+ Tambah Paket"
-        onAction={() => navigate('/schedules/new')}
+        {...(canEdit ? { actionLabel: '+ Tambah Paket', onAction: () => navigate('/schedules/new') } : {})}
       />
 
       {successMessage && (
@@ -409,7 +415,7 @@ const SchedulesPage = () => {
           data={rows}
           itemsPerPage={15}
           onRowClick={(row) => navigate(`/schedules/${row.id}`)}
-          emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : 'Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.'}
+          emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : (canEdit ? 'Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.' : 'Belum ada paket untuk brand ini.')}
           searchPlaceholder="Cari nama paket, brand, atau maskapai..."
           toolbarActions={
             <div className="flex flex-wrap items-center gap-2">

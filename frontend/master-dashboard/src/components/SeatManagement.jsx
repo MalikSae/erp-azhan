@@ -10,7 +10,7 @@ const formatWaktu = (iso) => new Date(iso).toLocaleString('id-ID', { dateStyle: 
 
 // Kuota & kursi sebuah paket: ringkasan, selisih terhadap booking, penyesuaian manual
 // dengan alasan wajib, dan riwayatnya (SM-02, SM-03).
-const SeatManagement = ({ scheduleId, bookingCount }) => {
+const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
   const [overview, setOverview] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -122,7 +122,7 @@ const SeatManagement = ({ scheduleId, bookingCount }) => {
         </Alert>
       )}
 
-      <Button variant="secondary" size="sm" onClick={bukaForm}>Sesuaikan Sisa Seat</Button>
+      {canEdit && <Button variant="secondary" size="sm" onClick={bukaForm}>Sesuaikan Sisa Seat</Button>}
 
       {overview.adjustments.length > 0 && (
         <details className="text-xs text-neutral-600">
