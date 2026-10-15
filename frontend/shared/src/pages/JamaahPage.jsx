@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import BrandLabel from '../components/ui/BrandLabel';
 import { useNavigate, useLocation } from "react-router-dom";
 import { Eye, Trash2 } from "lucide-react";
 import { listJamaah, deleteJamaah } from "../api/jamaah";
@@ -14,12 +15,9 @@ import ActionMenu from "../components/ui/ActionMenu";
 
 const terikatAgen = (j) => j.kaitan_status === "terikat_agen" && !!j.direkrut_oleh_nama;
 
-// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
+// Brand: titik warna + nama (gaya sama dengan daftar Paket).
 const BrandChip = ({ brand, brandId }) => (
-  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
-    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: brand?.primary_color || "#9CA3AF" }} />
-    {brand?.name || `Brand #${brandId}`}
-  </span>
+  <BrandLabel name={brand?.name || `Brand #${brandId}`} color={brand?.primary_color} />
 );
 
 const ProgressCell = ({ value, title }) => {
@@ -128,10 +126,12 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
     .map(j => ({ ...j, _cari: brandsMap[j.brand_id]?.name || "" })), [baseData, filterStatus, brandsMap]);
 
   const columns = useMemo(() => {
-    const cols = [{ header: "Jamaah", key: "nama_lengkap", sortable: true }];
+    const cols = [
+      { header: "Jamaah", key: "nama_lengkap", sortable: true },
+      { header: "Total Booking", key: "total_booking", sortable: true, sortFn: (a, b) => (a.total_booking || 0) - (b.total_booking || 0) },
+    ];
     if (showBrandColumn) cols.push({ header: "Brand", key: "brand_id" });
     cols.push(
-      { header: "Kontak", key: "no_hp" },
       { header: "Agen", key: "direkrut_oleh_nama", sortable: true },
       { header: "Data", key: "pct_data", sortable: true, sortFn: (a, b) => (a.pct_data || 0) - (b.pct_data || 0) },
       { header: "Dokumen", key: "pct_dokumen", sortable: true, sortFn: (a, b) => (a.pct_dokumen || 0) - (b.pct_dokumen || 0) },
@@ -161,12 +161,12 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
 
     if (key === "brand_id") return <BrandChip brand={brandsMap[row.brand_id]} brandId={row.brand_id} />;
 
-    if (key === "no_hp") {
+    if (key === "total_booking") {
+      const total = Number(row.total_booking) || 0;
       return (
-        <div className="min-w-0">
-          <div className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.no_hp || "-"}</div>
-          {row.nik && <div className="mt-0.5 text-[11px] font-body text-neutral-400">NIK {row.nik}</div>}
-        </div>
+        <span className={`text-[13px] font-body whitespace-nowrap ${total > 0 ? "font-semibold text-neutral-900" : "text-neutral-400"}`}>
+          {total > 0 ? `${total} booking` : "Belum ada"}
+        </span>
       );
     }
 

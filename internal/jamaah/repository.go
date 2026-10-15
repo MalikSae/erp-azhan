@@ -133,7 +133,10 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([
 		created_at,
 		kaitan_status, direkrut_oleh_jamaah_id,
 		(SELECT a.nama_lengkap FROM jamaah a WHERE a.id = jamaah.direkrut_oleh_jamaah_id) AS direkrut_oleh_nama,
-		status_agen
+		status_agen,
+		(SELECT COUNT(DISTINCT b.id) FROM bookings b
+		   LEFT JOIN booking_pax bp ON bp.booking_id = b.id
+		   WHERE b.pic_jamaah_id = jamaah.id OR bp.jamaah_id = jamaah.id) AS total_booking
 		FROM jamaah WHERE 1=1`
 
 	var args []interface{}
@@ -163,7 +166,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([
 	for rows.Next() {
 		var item JamaahListItem
 		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &item.PctDokumen, &item.CreatedAt,
-			&item.KaitanStatus, &item.DirekrutOlehJamaahID, &item.DirekrutOlehNama, &item.StatusAgen); err != nil {
+			&item.KaitanStatus, &item.DirekrutOlehJamaahID, &item.DirekrutOlehNama, &item.StatusAgen, &item.TotalBooking); err != nil {
 			return nil, fmt.Errorf("jamaah.List scan: %w", err)
 		}
 		items = append(items, item)
