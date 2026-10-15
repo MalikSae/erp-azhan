@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plane, MapPin, Pencil, Trash2 } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import DataTable from 'shared/ui/DataTable';
+import SegmentedTabs from 'shared/ui/SegmentedTabs';
 import Button from 'shared/ui/Button';
 import Modal from 'shared/ui/Modal';
 import Input from 'shared/ui/Input';
@@ -284,32 +285,7 @@ const AirlinesPage = () => {
     { id: 'airports', label: 'Bandara', count: airports.length },
   ];
 
-  const tabSwitcher = (
-    <div className="flex flex-wrap gap-1.5">
-      {tabs.map(tab => {
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium font-body rounded-lg border transition-colors ${
-              isActive
-                ? 'bg-primary-500 border-primary-500 text-white'
-                : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-            }`}
-          >
-            <span>{tab.label}</span>
-            <span className={`min-w-[20px] px-1.5 py-0.5 rounded-full text-[11px] leading-none text-center ${
-              isActive ? 'bg-white/25 text-white' : 'bg-neutral-100 text-neutral-600'
-            }`}>
-              {tab.count}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
+  const tabSwitcher = <SegmentedTabs tabs={tabs} value={activeTab} onChange={setActiveTab} />;
 
   const airlineColumns = [
     { header: 'Maskapai', key: 'name', sortable: true },
@@ -414,7 +390,7 @@ const AirlinesPage = () => {
           itemsPerPage={10}
           searchPlaceholder="Cari maskapai..."
           emptyMessage='Belum ada maskapai. Klik "+ Tambah Maskapai" untuk menambahkan.'
-          toolbarActions={tabSwitcher}
+          toolbarLeading={tabSwitcher}
           renderCell={renderAirlineCell}
         />
       ) : (
@@ -425,7 +401,7 @@ const AirlinesPage = () => {
           itemsPerPage={10}
           searchPlaceholder="Cari bandara (nama, kode, kota)..."
           emptyMessage='Belum ada bandara. Klik "+ Tambah Bandara" untuk menambahkan.'
-          toolbarActions={tabSwitcher}
+          toolbarLeading={tabSwitcher}
           renderCell={renderAirportCell}
         />
       )}

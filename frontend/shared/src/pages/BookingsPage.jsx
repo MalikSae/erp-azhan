@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import BrandLabel from '../components/ui/BrandLabel';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Eye, Pencil, Trash2, SlidersHorizontal } from "lucide-react";
 import { listBookings, deleteDraftBooking } from "../api/bookings";
@@ -58,12 +59,9 @@ const StatusPill = ({ status }) => {
   return <Badge variant={s.variant} hideIcon className={s.cls}>{s.label}</Badge>;
 };
 
-// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
+// Brand: titik warna + nama (gaya sama dengan daftar Paket).
 const BrandChip = ({ brand, brandId }) => (
-  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
-    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: brand?.primary_color || '#9CA3AF' }} />
-    {brand?.name || `Brand #${brandId}`}
-  </span>
+  <BrandLabel name={brand?.name || `Brand #${brandId}`} color={brand?.primary_color} />
 );
 
 export const BookingsPage = ({ showBrandColumn = false }) => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import BrandLabel from '../components/ui/BrandLabel';
 import { useNavigate } from 'react-router-dom';
 import { Network, CheckCircle2, Users, Banknote, Eye } from 'lucide-react';
 import { listAgen } from '../api/agen';
@@ -17,13 +18,8 @@ const STATUS_OPTIONS = [
   { value: 'nonaktif', label: 'Nonaktif' },
 ];
 
-// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
-const BrandChip = ({ name, color }) => (
-  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
-    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color || '#9CA3AF' }} />
-    {name}
-  </span>
-);
+// Brand: titik warna + nama (gaya sama dengan daftar Paket).
+const BrandChip = ({ name, color }) => <BrandLabel name={name} color={color} />;
 
 const StatusDot = ({ status }) => {
   const label = STATUS_AGEN[status]?.label || status || '-';
