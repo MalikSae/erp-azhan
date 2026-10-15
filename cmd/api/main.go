@@ -83,7 +83,7 @@ func main() {
 	allowedOrigins := []string{}
 	if !strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
 		allowedOrigins = append(allowedOrigins,
-			"http://localhost:5173", "http://localhost:5174",
+			"http://localhost:5173",
 			"http://localhost:3000", "https://localhost:3000",
 			"http://*.azhan.test", "http://*.azhan.test:3000",
 			"https://*.azhan.test", "https://*.azhan.test:3000",

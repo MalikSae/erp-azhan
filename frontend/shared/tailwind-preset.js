@@ -4,7 +4,7 @@
  * latar abu terang, kartu putih, sidebar putih, font Inter). Dibangun ulang
  * sebagai token — tidak menyalin kode/aset template.
  *
- * Dipakai master-dashboard & travel-dashboard lewat `presets: [preset]`.
+ * Dipakai master-dashboard lewat `presets: [preset]`.
  * JANGAN duplikasi palet di config masing-masing app lagi.
  */
 export default {

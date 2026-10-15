@@ -53,7 +53,6 @@ erp-azhan/
 │   └── shared/              # Shared config & DB connection helper
 ├── frontend/
 │   ├── master-dashboard/    # Dashboard Super Admin (Multi-Brand, Master Data, Inventory Global, User Mgmt)
-│   └── travel-dashboard/    # Dashboard Travel Partner (Katalog Paket, Jamaah, Booking, Progress, Stok Cabang)
 ├── migrations/              # Script dan file SQL migrasi database (001 - 028)
 ├── uploads/                 # Storage lokal file upload media, foto, & dokumen
 ├── .env.example             # Template konfigurasi environment
@@ -129,14 +128,6 @@ npm run dev
 ```
 > Berjalan di **`http://localhost:5173`**
 
-#### B. Travel Dashboard (Brand / Tenant)
-```powershell
-cd frontend/travel-dashboard
-npm install
-npm run dev
-```
-> Berjalan di **`http://localhost:5174`**
-
 ### 4. Membuat / Mereset Akun Super Admin
 
 Gunakan command seed berikut. Jangan menyimpan password produksi di README atau source code.
@@ -145,7 +136,7 @@ Gunakan command seed berikut. Jangan menyimpan password produksi di README atau 
 go run cmd/seed-admin/main.go admin@example.com "password-minimal-8-karakter"
 ```
 
-Super Admin Grup (`brand_id = null`) masuk melalui Office Dashboard. Admin yang terikat ke brand masuk melalui Travel Dashboard.
+Super Admin Grup (`brand_id = null`) masuk melalui Office Dashboard. Admin yang terikat ke brand juga masuk melalui Office Dashboard; menu dan data otomatis dibatasi ke brand-nya.
 
 ### 5. Verifikasi Build
 
@@ -155,8 +146,6 @@ go test ./...
 cd frontend/master-dashboard
 npm run build
 
-cd ../travel-dashboard
-npm run build
 ```
 
 ### 6. Seeder Hotel dan Maskapai
@@ -195,7 +184,7 @@ dashboard menggunakan aset resmi yang memiliki izin penggunaan.
 - Pengelolaan beberapa rekening transfer resmi per brand dan inbox konfirmasi pembayaran lintas brand.
 - Pengelolaan brand, pengguna, paket, hotel, maskapai, itinerary, add-on, inventory, dan laporan lintas brand.
 
-### Travel Dashboard (`:5174`)
+### Admin Brand di Office Dashboard (`:5173`)
 
 - Dashboard operasional berisi statistik booking, pembayaran, keberangkatan, tindak lanjut, dan kesiapan perlengkapan.
 - Grafik arus pembayaran 30 hari berdasarkan transaksi terkonfirmasi.
@@ -349,7 +338,6 @@ Contoh domain pada panduan ini:
 
 - API: `api.example.com`
 - Office Dashboard: `office.example.com`
-- Travel Dashboard: `travel.example.com`
 - Microsite dipasang dari repository `azhan-microsite` secara terpisah.
 
 Ganti seluruh domain, password, dan path sesuai server produksi. Jangan memakai kredensial contoh secara langsung.
@@ -398,7 +386,7 @@ DB_USER=erp_azhan_app
 DB_PASSWORD=PASSWORD_DATABASE_YANG_KUAT
 DB_NAME=erp_azhan
 APP_PORT=9090
-CORS_ALLOWED_ORIGINS=https://office.example.com,https://travel.example.com,https://*.example.com
+CORS_ALLOWED_ORIGINS=https://office.example.com,https://*.example.com
 JWT_SECRET=RANDOM_MINIMAL_64_KARAKTER
 JWT_ACCESS_TTL_MINUTES=15
 JWT_REFRESH_TTL_DAYS=7
@@ -466,19 +454,13 @@ cd /www/wwwroot/erp-azhan/frontend/master-dashboard
 printf 'VITE_API_BASE_URL=https://api.example.com\n' > .env.production
 npm ci
 npm run build
-
-cd /www/wwwroot/erp-azhan/frontend/travel-dashboard
-printf 'VITE_API_BASE_URL=https://api.example.com\n' > .env.production
-npm ci
-npm run build
 ```
 
 ### 5. Buat website dan reverse proxy aaPanel
 
 1. Buat website `api.example.com`; hapus index bawaan lalu atur **Reverse Proxy** ke `http://127.0.0.1:9090`.
 2. Buat website `office.example.com` dengan document root `/www/wwwroot/erp-azhan/frontend/master-dashboard/dist`.
-3. Buat website `travel.example.com` dengan document root `/www/wwwroot/erp-azhan/frontend/travel-dashboard/dist`.
-4. Untuk kedua SPA dashboard, tambahkan pada konfigurasi Nginx di dalam blok `server`:
+3. Untuk SPA dashboard, tambahkan pada konfigurasi Nginx di dalam blok `server`:
 
 ```nginx
 location / {
@@ -503,7 +485,6 @@ Atur Cron aaPanel untuk backup database dan folder `uploads` setiap hari. Uji de
 ```bash
 curl -i https://api.example.com/api/health
 curl -I https://office.example.com
-curl -I https://travel.example.com
 journalctl -u erp-azhan-api -n 100 --no-pager
 ```
 
@@ -519,7 +500,6 @@ go build -o bin/erp-azhan-api ./cmd/api
 sudo systemctl restart erp-azhan-api
 
 cd frontend/master-dashboard && npm ci && npm run build
-cd ../travel-dashboard && npm ci && npm run build
 ```
 
 Jangan menyimpan `.env`, dump database, private key SSL, atau isi `uploads` ke Git.
