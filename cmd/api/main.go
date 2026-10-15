@@ -384,6 +384,7 @@ func main() {
 		jamaahView := r.With(identity.RequirePermission("jamaah.view"))
 		jamaahEdit := r.With(identity.RequirePermission("jamaah.edit"))
 		jamaahView.Get("/jamaah", jamaahHandler.ListJamaah)
+		jamaahView.Get("/jamaah/duplikat-lintas-brand", jamaahHandler.ListDuplikatLintasBrand)
 		jamaahView.Get("/jamaah/{id}", jamaahHandler.GetJamaah)
 		jamaahEdit.Post("/jamaah", jamaahHandler.CreateJamaah)
 		jamaahEdit.Put("/jamaah/{id}", jamaahHandler.UpdateJamaah)

@@ -10,6 +10,7 @@ import DashboardHome from './pages/DashboardHome';
 import BrandDashboardPage from './pages/BrandDashboardPage';
 import PersetujuanAgenPage from './pages/PersetujuanAgenPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
+import DuplikatJamaahPage from './pages/DuplikatJamaahPage';
 import HotelsPage from './pages/HotelsPage';
 import AirlinesPage from './pages/AirlinesPage';
 import ItinerariesPage from './pages/ItinerariesPage';
@@ -71,6 +72,7 @@ function AppRoutes() {
 
           {/* Jamaah & Booking (halaman bersama) */}
           <Route path="/jamaah" element={<RequireAccess perm="jamaah.view"><JamaahPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
+          <Route path="/jamaah/duplikat" element={<RequireAccess holdingOnly><DuplikatJamaahPage /></RequireAccess>} />
           <Route path="/jamaah/new" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/:id" element={<RequireAccess perm="jamaah.view"><JamaahDetailPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/:id/edit" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />

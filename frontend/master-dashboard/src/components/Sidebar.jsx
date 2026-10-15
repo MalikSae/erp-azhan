@@ -55,6 +55,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'JAMAAH & BOOKING',
       items: [
         { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
+        { name: 'Duplikat Lintas Brand', path: '/jamaah/duplikat', icon: Users, perm: 'jamaah.view', holdingOnly: true },
         { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
         { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
       ],
@@ -96,10 +97,10 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
 
   const menuGroups = useMemo(
     () => allGroups
-      .map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || hasPermission(i.perm)) }))
+      .map((g) => ({ ...g, items: g.items.filter((i) => (!i.holdingOnly || isHolding) && (!i.perm || hasPermission(i.perm))) }))
       .filter((g) => g.items.length > 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hasPermission],
+    [hasPermission, isHolding],
   );
 
   return (
