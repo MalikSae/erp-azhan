@@ -98,8 +98,15 @@ func (r *Repository) GenerateIDJamaah(ctx context.Context, tx *sql.Tx, brandID i
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
+// ListOpts membatasi hasil daftar (opsional). Limit <= 0 berarti tanpa batas;
+// Limit dibatasi maksimal 1000 baris per permintaan.
+type ListOpts struct {
+	Limit  int
+	Offset int
+}
+
 // List mengambil semua jamaah, filter brand kalau scoped admin.
-func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([]JamaahListItem, error) {
+func (r *Repository) List(ctx context.Context, brandID *int64, status string, opts ...ListOpts) ([]JamaahListItem, error) {
 	q := `SELECT id, brand_id, COALESCE(id_jamaah, ''), kode_jamaah, nama_lengkap, jenis_kelamin, nik,
 		DATE_FORMAT(tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
 		no_hp, email, status,
@@ -134,9 +141,11 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([
 		kaitan_status, direkrut_oleh_jamaah_id,
 		(SELECT a.nama_lengkap FROM jamaah a WHERE a.id = jamaah.direkrut_oleh_jamaah_id) AS direkrut_oleh_nama,
 		status_agen,
-		(SELECT COUNT(DISTINCT b.id) FROM bookings b
-		   LEFT JOIN booking_pax bp ON bp.booking_id = b.id
-		   WHERE b.pic_jamaah_id = jamaah.id OR bp.jamaah_id = jamaah.id) AS total_booking
+		(SELECT COUNT(*) FROM (
+			SELECT id AS booking_id FROM bookings WHERE pic_jamaah_id = jamaah.id
+			UNION
+			SELECT booking_id FROM booking_pax WHERE jamaah_id = jamaah.id
+		) bk) AS total_booking
 		FROM jamaah WHERE 1=1`
 
 	var args []interface{}
@@ -154,7 +163,19 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string) ([
 		args = append(args, status)
 	}
 
-	q += " ORDER BY created_at DESC"
+	q += " ORDER BY created_at DESC, id DESC"
+	if len(opts) > 0 && opts[0].Limit > 0 {
+		limit := opts[0].Limit
+		if limit > 1000 {
+			limit = 1000
+		}
+		offset := opts[0].Offset
+		if offset < 0 {
+			offset = 0
+		}
+		q += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -399,4 +420,36 @@ func (r *Repository) exists(ctx context.Context, id int64, brandID *int64) error
 		return ErrNotFound
 	}
 	return nil
+}
+
+// CekPindahBrand menjelaskan mengapa jamaah tidak boleh dipindah ke brand lain
+// (string kosong = boleh). Pindah brand membuat booking, kaitan agen, dan prefiks
+// id_jamaah tidak lagi konsisten, jadi hanya jamaah yang belum terikat yang diizinkan.
+func (r *Repository) CekPindahBrand(ctx context.Context, existing *Jamaah, targetBrandID int64) (string, error) {
+	var brandCount int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM brands WHERE id=?`, targetBrandID).Scan(&brandCount); err != nil {
+		return "", fmt.Errorf("jamaah.CekPindahBrand brand: %w", err)
+	}
+	if brandCount == 0 {
+		return "brand tujuan tidak ditemukan", nil
+	}
+	var bookings int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM (
+		SELECT id FROM bookings WHERE pic_jamaah_id = ?
+		UNION
+		SELECT booking_id FROM booking_pax WHERE jamaah_id = ?
+	) x`, existing.ID, existing.ID).Scan(&bookings); err != nil {
+		return "", fmt.Errorf("jamaah.CekPindahBrand booking: %w", err)
+	}
+	if bookings > 0 {
+		return "jamaah sudah memiliki booking sehingga tidak bisa dipindah ke brand lain", nil
+	}
+	var direkrut int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM jamaah WHERE direkrut_oleh_jamaah_id = ?`, existing.ID).Scan(&direkrut); err != nil {
+		return "", fmt.Errorf("jamaah.CekPindahBrand downline: %w", err)
+	}
+	if existing.DirekrutOlehJamaahID != nil || direkrut > 0 || existing.StatusAgen != "tidak_aktif" {
+		return "jamaah terikat dengan agen atau berstatus agen sehingga tidak bisa dipindah ke brand lain", nil
+	}
+	return "", nil
 }
