@@ -27,7 +27,8 @@ func NewHandler(repo *Repository) *Handler {
 // ListDailyBrandTransactions mengembalikan transaksi terkonfirmasi 30 hari per brand.
 // GET /api/admin/analytics/transactions-30-days
 func (h *Handler) ListDailyBrandTransactions(w http.ResponseWriter, r *http.Request) {
-	items, err := h.repo.ListDailyBrandTransactions(r.Context())
+	// Admin yang terikat brand hanya melihat transaksi brand-nya sendiri.
+	items, err := h.repo.ListDailyBrandTransactions(r.Context(), identity.GetBrandID(r.Context()))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data transaksi")
 		return
@@ -98,6 +99,9 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Endpoint admin: sumber selalu "admin" (langsung terkonfirmasi); nilai dari klien diabaikan.
+	req.Source = "admin"
+
 	if req.Jumlah <= 0 {
 		writeError(w, http.StatusBadRequest, "jumlah pembayaran harus lebih dari 0")
 		return
@@ -133,10 +137,14 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		trimmed := strings.TrimSpace(*req.ReceivedBy)
 		req.ReceivedBy = &trimmed
 		req.BankAccountID = nil // tunai tidak melewati rekening
+	default:
+		writeError(w, http.StatusBadRequest, "metode pembayaran harus transfer atau cash")
+		return
 	}
 	if metode != "cash" {
 		req.ReceivedBy = nil
 	}
+	req.Metode = &metode // simpan nilai efektif (termasuk default transfer)
 
 	brandID := identity.GetBrandID(r.Context())
 
@@ -218,8 +226,13 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Idempotent check
+	// Sudah diputuskan: permintaan yang sama idempoten, yang berbeda ditolak agar klien tahu
+	// tidak ada perubahan.
 	if p.Status != "pending" {
+		if p.Status != req.Status {
+			writeError(w, http.StatusConflict, "pembayaran sudah berstatus "+p.Status+" dan tidak bisa diubah menjadi "+req.Status)
+			return
+		}
 		writeJSON(w, http.StatusOK, p)
 		return
 	}

@@ -34,3 +34,9 @@ export const createActivationLink = async (id) => {
   const { data } = await api.post(`/api/admin/jamaah/${id}/activation-link`);
   return data;
 };
+
+// Khusus holding: kelompok jamaah dengan NIK / nomor HP sama di lebih dari satu brand.
+export const listDuplikatLintasBrand = async () => {
+  const { data } = await api.get('/api/admin/jamaah/duplikat-lintas-brand');
+  return data;
+};

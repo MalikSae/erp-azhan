@@ -33,10 +33,16 @@ func NewRepository(db *sql.DB) *Repository {
 
 // ListDailyBrandTransactions mengambil pembayaran confirmed selama 30 hari,
 // termasuk hari ini, dan mengelompokkannya berdasarkan brand dan tanggal.
-func (r *Repository) ListDailyBrandTransactions(ctx context.Context) ([]DailyBrandTransaction, error) {
+func (r *Repository) ListDailyBrandTransactions(ctx context.Context, brandID *int64) ([]DailyBrandTransaction, error) {
 	// Nilai bersih: pembayaran terkonfirmasi dikurangi pengembalian dana (booking_refunds)
 	// pada tanggal refund dicatat. Count tetap jumlah pembayaran.
-	const q = `
+	brandFilter := ""
+	var args []any
+	if brandID != nil {
+		brandFilter = " AND s.brand_id = ?"
+		args = []any{*brandID, *brandID}
+	}
+	q := `
 		SELECT DATE_FORMAT(t.tgl, '%Y-%m-%d') AS payment_date, t.brand_id,
 			COALESCE(SUM(t.jumlah), 0), SUM(t.is_payment)
 		FROM (
@@ -44,18 +50,19 @@ func (r *Repository) ListDailyBrandTransactions(ctx context.Context) ([]DailyBra
 			FROM payments p
 			JOIN bookings b ON b.id = p.booking_id
 			JOIN schedules s ON s.id = b.schedule_id
-			WHERE p.status = 'confirmed'
+			WHERE p.status = 'confirmed'` + brandFilter + `
 			UNION ALL
 			SELECT rf.tanggal, s.brand_id, -rf.jumlah, 0
 			FROM booking_refunds rf
 			JOIN bookings b ON b.id = rf.booking_id
 			JOIN schedules s ON s.id = b.schedule_id
+			WHERE 1=1` + brandFilter + `
 		) t
 		WHERE t.tgl BETWEEN CURDATE() - INTERVAL 29 DAY AND CURDATE()
 		GROUP BY payment_date, t.brand_id
 		ORDER BY payment_date ASC, t.brand_id ASC`
 
-	rows, err := r.db.QueryContext(ctx, q)
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("payment.ListDailyBrandTransactions: %w", err)
 	}
@@ -323,7 +330,9 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 	if err = tx.QueryRowContext(ctx, `SELECT status,COALESCE(total_harga,0) FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&bookingStatus, &total); err != nil {
 		return nil, err
 	}
-	if bookingStatus == "batal" || bookingStatus == "draft" {
+	// Booking batal/draft tidak boleh menerima konfirmasi, tetapi pembayaran pending yang
+	// tersisa harus tetap bisa ditolak agar tidak menggantung di inbox.
+	if (bookingStatus == "batal" || bookingStatus == "draft") && newStatus != "rejected" {
 		return nil, ErrBookingClosed
 	}
 	var amount float64
@@ -481,23 +490,25 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
-// Delete menghapus payment jika status masih 'pending'.
+// Delete menghapus payment jika status masih 'pending'. Penghapusan bersyarat dalam satu
+// statement agar tidak berlomba dengan konfirmasi yang berjalan bersamaan.
 func (r *Repository) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM payments WHERE id=? AND status='pending'`, id)
+	if err != nil {
+		return fmt.Errorf("payment.Delete: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
 	var status string
-	err := r.db.QueryRowContext(ctx, `SELECT status FROM payments WHERE id=?`, id).Scan(&status)
+	err = r.db.QueryRowContext(ctx, `SELECT status FROM payments WHERE id=?`, id).Scan(&status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("payment.Delete cek status: %w", err)
 	}
-
-	if status != "pending" {
-		return ErrCannotDelete
-	}
-
-	_, err = r.db.ExecContext(ctx, `DELETE FROM payments WHERE id=?`, id)
-	return err
+	return ErrCannotDelete
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

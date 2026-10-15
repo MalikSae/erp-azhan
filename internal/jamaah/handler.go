@@ -34,7 +34,9 @@ func NewHandler(repo *Repository) *Handler {
 func (h *Handler) ListJamaah(w http.ResponseWriter, r *http.Request) {
 	brandID := identity.GetBrandID(r.Context())
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
-	items, err := h.repo.List(r.Context(), brandID, status)
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	items, err := h.repo.List(r.Context(), brandID, status, ListOpts{Limit: limit, Offset: offset})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
 		return
@@ -176,6 +178,17 @@ func (h *Handler) UpdateJamaah(w http.ResponseWriter, r *http.Request) {
 			finalBrandID = *req.BrandID
 		} else {
 			finalBrandID = existing.BrandID
+		}
+	}
+
+	// Pindah brand hanya untuk jamaah yang belum terikat data brand lama.
+	if finalBrandID != existing.BrandID {
+		if msg, err := h.repo.CekPindahBrand(r.Context(), existing, finalBrandID); err != nil {
+			handleRepoError(w, err)
+			return
+		} else if msg != "" {
+			writeError(w, http.StatusConflict, msg)
+			return
 		}
 	}
 

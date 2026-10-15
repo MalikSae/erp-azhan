@@ -146,7 +146,14 @@ func NewRepository(db *sql.DB) *Repository {
 // ─── List ─────────────────────────────────────────────────────────────────────
 
 // List mengambil semua booking, filter brand via schedules.brand_id dan opsional jamaah_id serta status.
-func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64, status string) ([]Booking, error) {
+// ListOpts membatasi hasil daftar (opsional). Limit <= 0 berarti tanpa batas;
+// Limit dibatasi maksimal 1000 baris per permintaan.
+type ListOpts struct {
+	Limit  int
+	Offset int
+}
+
+func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64, status string, opts ...ListOpts) ([]Booking, error) {
 	q := selectBookingFull + " WHERE 1=1"
 	var args []interface{}
 	if brandID != nil {
@@ -167,7 +174,19 @@ func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64, 
 		args = append(args, status)
 	}
 
-	q += " ORDER BY b.created_at DESC"
+	q += " ORDER BY b.created_at DESC, b.id DESC"
+	if len(opts) > 0 && opts[0].Limit > 0 {
+		limit := opts[0].Limit
+		if limit > 1000 {
+			limit = 1000
+		}
+		offset := opts[0].Offset
+		if offset < 0 {
+			offset = 0
+		}
+		q += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -181,16 +200,69 @@ func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64, 
 		if err != nil {
 			return nil, err
 		}
-		if b.JamaahID != nil && *b.JamaahID > 0 {
-			hasPaspor, err := r.checkPasporUploaded(ctx, *b.JamaahID)
-			if err == nil {
-				b.ProgressPaspor = hasPaspor
-			}
-		}
-		computeSiapBerangkat(b)
 		items = append(items, *b)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+
+	// Status paspor dimuat sekali untuk semua jamaah (bukan satu query per booking).
+	ids := make([]int64, 0, len(items))
+	for i := range items {
+		if items[i].JamaahID != nil && *items[i].JamaahID > 0 {
+			ids = append(ids, *items[i].JamaahID)
+		}
+	}
+	withPaspor, err := r.pasporUploadedSet(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		if items[i].JamaahID != nil {
+			items[i].ProgressPaspor = withPaspor[*items[i].JamaahID]
+		}
+		computeSiapBerangkat(&items[i])
+	}
+	return items, nil
+}
+
+// pasporUploadedSet mengembalikan himpunan jamaah_id yang sudah mengunggah dokumen paspor.
+func (r *Repository) pasporUploadedSet(ctx context.Context, jamaahIDs []int64) (map[int64]bool, error) {
+	out := make(map[int64]bool, len(jamaahIDs))
+	const chunk = 1000
+	for start := 0; start < len(jamaahIDs); start += chunk {
+		end := start + chunk
+		if end > len(jamaahIDs) {
+			end = len(jamaahIDs)
+		}
+		part := jamaahIDs[start:end]
+		args := make([]any, len(part))
+		for i, id := range part {
+			args[i] = id
+		}
+		q := `SELECT DISTINCT jamaah_id FROM dokumen_jamaah
+			WHERE jenis = 'paspor' AND file_url IS NOT NULL AND file_url != ''
+			AND jamaah_id IN (?` + strings.Repeat(",?", len(part)-1) + `)`
+		rows, err := r.db.QueryContext(ctx, q, args...)
+		if err != nil {
+			return nil, fmt.Errorf("booking.pasporUploadedSet: %w", err)
+		}
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("booking.pasporUploadedSet scan: %w", err)
+			}
+			out[id] = true
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // ─── GetByID ──────────────────────────────────────────────────────────────────
@@ -1693,6 +1765,19 @@ func (r *Repository) ScheduleExistsForBrand(ctx context.Context, scheduleID int6
 	return count > 0, err
 }
 
+// ScheduleBrandID mengembalikan brand pemilik paket.
+func (r *Repository) ScheduleBrandID(ctx context.Context, scheduleID int64) (int64, error) {
+	var brandID int64
+	err := r.db.QueryRowContext(ctx, `SELECT brand_id FROM schedules WHERE id=?`, scheduleID).Scan(&brandID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("booking.ScheduleBrandID: %w", err)
+	}
+	return brandID, nil
+}
+
 // JamaahExistsForBrand memeriksa apakah jamaah_id ada.
 func (r *Repository) JamaahExistsForBrand(ctx context.Context, jamaahID int64, brandID *int64) (bool, error) {
 	q := `SELECT COUNT(*) FROM jamaah WHERE id=?`
@@ -2226,8 +2311,8 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 }
 
 // ListDailyBrandPax mengambil agregasi pendaftaran pax aktif selama 30 hari terakhir per brand.
-func (r *Repository) ListDailyBrandPax(ctx context.Context) ([]DailyBrandPax, error) {
-	const q = `
+func (r *Repository) ListDailyBrandPax(ctx context.Context, brandID *int64) ([]DailyBrandPax, error) {
+	q := `
 		SELECT DATE_FORMAT(bp.created_at, '%Y-%m-%d') AS reg_date,
 			s.brand_id,
 			COUNT(*) AS pax_count
@@ -2236,11 +2321,17 @@ func (r *Repository) ListDailyBrandPax(ctx context.Context) ([]DailyBrandPax, er
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE bp.pax_status = 'aktif'
 			AND b.status != 'batal'
-			AND DATE(bp.created_at) BETWEEN CURDATE() - INTERVAL 29 DAY AND CURDATE()
+			AND DATE(bp.created_at) BETWEEN CURDATE() - INTERVAL 29 DAY AND CURDATE()`
+	var args []any
+	if brandID != nil {
+		q += " AND s.brand_id = ?"
+		args = append(args, *brandID)
+	}
+	q += `
 		GROUP BY reg_date, s.brand_id
 		ORDER BY reg_date ASC, s.brand_id ASC`
 
-	rows, err := r.db.QueryContext(ctx, q)
+	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("booking.ListDailyBrandPax: %w", err)
 	}
