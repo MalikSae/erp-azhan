@@ -420,16 +420,18 @@ const SchedulesPage = () => {
                 placeholder="Semua Status"
                 options={tabs.map(tab => ({ value: tab.id, label: `${tab.label} (${tab.count})` }))}
               />
-              <CustomDropdown
-                value={filterBrandId}
-                onChange={(val) => setFilterBrandId(val)}
-                className="!mb-0 w-40"
-                placeholder="Semua Brand"
-                options={[
-                  { value: '', label: 'Semua Brand' },
-                  ...brands.map(b => ({ value: b.id.toString(), label: b.name })),
-                ]}
-              />
+              {brands.length > 1 && (
+                <CustomDropdown
+                  value={filterBrandId}
+                  onChange={(val) => setFilterBrandId(val)}
+                  className="!mb-0 w-40"
+                  placeholder="Semua Brand"
+                  options={[
+                    { value: '', label: 'Semua Brand' },
+                    ...brands.map(b => ({ value: b.id.toString(), label: b.name })),
+                  ]}
+                />
+              )}
               <CustomDropdown
                 value={filterMonth}
                 onChange={(val) => setFilterMonth(val)}

@@ -1,9 +1,12 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Search, HelpCircle, Bell, ChevronDown, LogOut, ShieldCheck, Menu } from 'lucide-react';
+import { Search, HelpCircle, Bell, ChevronDown, LogOut, ShieldCheck, Menu, KeyRound } from 'lucide-react';
 
 const Topbar = ({ toggleSidebar }) => {
-  const { logout, user } = useContext(AuthContext);
+  const { logout, user, brandInfo, isHolding } = useContext(AuthContext);
+  const roleText = user?.roleLabel || 'Admin';
+  const subText = isHolding ? roleText : `${roleText}${brandInfo?.name ? ` · ${brandInfo.name}` : ''}`;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -77,7 +80,7 @@ const Topbar = ({ toggleSidebar }) => {
               </span>
               <span className="text-[10px] text-neutral-500 font-medium font-body flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-primary-600 inline" />
-                Super Admin
+                {subText}
               </span>
             </div>
             <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${dropdownOpen ? 'rotate-180 text-neutral-600' : ''}`} />
@@ -89,10 +92,18 @@ const Topbar = ({ toggleSidebar }) => {
                 <p className="text-xs font-bold text-neutral-900 font-heading">{user?.name || 'Admin'}</p>
                 <p className="text-[11px] text-neutral-500 font-body truncate">{user?.email || 'admin@azhan.group'}</p>
                 <span className="inline-block mt-1 text-[10px] font-semibold uppercase tracking-wider bg-neutral-100 text-neutral-700 border border-neutral-200 px-2 py-0.5 rounded-md">
-                  Super Admin
+                  {roleText}
                 </span>
               </div>
               <div className="py-1">
+                <Link
+                  to="/pengaturan"
+                  onClick={() => setDropdownOpen(false)}
+                  className="w-full text-left px-4 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors flex items-center gap-2"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  Pengaturan Akun
+                </Link>
                 <button
                   onClick={() => {
                     setDropdownOpen(false);

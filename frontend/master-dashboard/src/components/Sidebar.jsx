@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -16,10 +16,20 @@ import {
   UserCog,
   ChevronDown,
   Network,
+  UserCheck,
+  Wallet,
 } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
 const Sidebar = ({ isOpen, closeDrawer }) => {
+  const { hasPermission, isHolding, brandInfo } = useContext(AuthContext);
+  // Admin brand: tampilkan ikon/logo brand bila ada, jika tidak pakai ikon Ka'bah bawaan.
+  const [brandIconFailed, setBrandIconFailed] = useState(false);
+  const rawIcon = isHolding ? null : (brandInfo?.icon_url || brandInfo?.logo_url);
+  const brandIconSrc = rawIcon && !brandIconFailed
+    ? (rawIcon.startsWith('http') ? rawIcon : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${rawIcon.startsWith('/') ? '' : '/'}${rawIcon}`)
+    : null;
   // Akordeon: semua grup tertutup secara default dan hanya satu grup yang
   // terbuka pada satu waktu.
   const [openGroup, setOpenGroup] = useState(null);
@@ -38,41 +48,59 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     setOpenGroup((prev) => (prev === groupName ? null : groupName));
   };
 
-  const menuGroups = [
+  // Tiap item punya `perm` (izin yang dibutuhkan); item tanpa izin yang cocok disembunyikan,
+  // dan grup tanpa item tidak ditampilkan. Penegakan sebenarnya ada di API.
+  const allGroups = [
     {
       name: 'JAMAAH & BOOKING',
       items: [
-        { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, status: 'active' },
-        { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, status: 'active' },
-        { name: 'Pembayaran', path: '/payments', icon: CreditCard, status: 'active' },
+        { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
+        { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
+        { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
       ],
     },
     {
-      name: 'MASTER PAKET',
+      name: 'AGEN',
       items: [
-        { name: 'Kelola Paket', path: '/schedules', icon: Package, status: 'active' },
-        { name: 'Kelola Kategori', path: '/categories', icon: FolderTree, status: 'active' },
-        { name: 'Kelola Hotel', path: '/hotels', icon: Hotel, status: 'active' },
-        { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, status: 'active' },
-        { name: 'Kelola Itinerary', path: '/itineraries', icon: MapPin, status: 'active' },
+        { name: 'Daftar Agen', path: '/agen', icon: Users, perm: 'agen.view' },
+        { name: 'Riwayat Komisi', path: '/agen/komisi', icon: Wallet, perm: 'komisi.view' },
+        { name: 'Pengajuan Agen', path: '/agen/pengajuan', icon: UserCheck, perm: 'agen.approve' },
+      ],
+    },
+    {
+      name: 'PAKET',
+      items: [
+        { name: 'Kelola Paket', path: '/schedules', icon: Package, perm: 'schedule.view' },
+        { name: 'Kelola Kategori', path: '/categories', icon: FolderTree, perm: 'masterdata.edit' },
+        { name: 'Kelola Hotel', path: '/hotels', icon: Hotel, perm: 'masterdata.edit' },
+        { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, perm: 'masterdata.edit' },
+        { name: 'Kelola Itinerary', path: '/itineraries', icon: MapPin, perm: 'masterdata.edit' },
       ],
     },
     {
       name: 'INVENTORY',
       items: [
-        { name: 'Perlengkapan', path: '/inventory/perlengkapan', icon: Boxes, status: 'active' },
-        { name: 'Riwayat Stok', path: '/inventory/riwayat-stok', icon: History, status: 'active' },
+        { name: 'Perlengkapan', path: '/inventory/perlengkapan', icon: Boxes, perm: 'perlengkapan.view' },
+        { name: 'Riwayat Stok', path: '/inventory/riwayat-stok', icon: History, perm: 'perlengkapan.view' },
       ],
     },
     {
       name: 'ADMINISTRASI',
       items: [
-        { name: 'Kelola Brand', path: '/brands', icon: Building2, status: 'active' },
-        { name: 'Pengguna', path: '/users', icon: UserCog, status: 'active' },
-        { name: 'Struktur Organisasi', path: '/organisasi', icon: Network, status: 'active' },
+        { name: 'Kelola Brand', path: '/brands', icon: Building2, perm: 'brand.edit' },
+        { name: 'Pengguna', path: '/users', icon: UserCog, perm: 'user.admin' },
+        { name: 'Struktur Organisasi', path: '/organisasi', icon: Network, perm: 'user.admin' },
       ],
     },
   ];
+
+  const menuGroups = useMemo(
+    () => allGroups
+      .map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || hasPermission(i.perm)) }))
+      .filter((g) => g.items.length > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hasPermission],
+  );
 
   return (
     <>
@@ -87,12 +115,21 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         {/* Brand Header */}
         <div className="px-5 h-16 border-b border-sidebar-border shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-sm">
-              <KaabaIcon className="w-5 h-5" />
-            </div>
+            {brandIconSrc ? (
+              <img
+                src={brandIconSrc}
+                alt={brandInfo?.name || ''}
+                onError={() => setBrandIconFailed(true)}
+                className="w-9 h-9 rounded-xl object-contain bg-white border border-neutral-200 shadow-sm"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-sm">
+                <KaabaIcon className="w-5 h-5" />
+              </div>
+            )}
             <div>
-              <h1 className="text-base font-heading font-bold text-neutral-900 tracking-tight leading-none">
-                Azhan Corp
+              <h1 className="text-base font-heading font-bold text-neutral-900 tracking-tight leading-none truncate max-w-36">
+                {isHolding ? 'Azhan Corp' : (brandInfo?.name || 'Azhan Corp')}
               </h1>
               <p className="text-[11px] font-body text-sidebar-muted mt-1 font-medium">Office Dashboard</p>
             </div>

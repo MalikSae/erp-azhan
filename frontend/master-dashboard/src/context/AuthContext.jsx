@@ -1,9 +1,22 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useMemo, useContext, useCallback } from 'react';
 import client from '../api/client';
+import { getMyBrand } from 'shared';
 
 export const AuthContext = createContext();
 
-const PESAN_BUKAN_HOLDING = "Office Dashboard khusus akun dengan Akses Holding. Akun ini terikat ke brand tertentu — gunakan Travel Dashboard (belum tersedia di fase ini).";
+// Nama peran untuk tampilan (slug dari JWT -> label).
+export const ROLE_LABEL = {
+  super_admin_grup: 'Super Admin',
+  direktur: 'Direktur / Owner',
+  cmo: 'CMO',
+  marketing_lead: 'Marketing Lead',
+  marketing_member: 'Marketing Member',
+  product_manager: 'Product Manager',
+  admin_travel: 'Admin Brand',
+  admin_cabang: 'Admin Cabang',
+  cs: 'Customer Service',
+  finance: 'Finance',
+};
 
 function decodeJwtPayload(token) {
   try {
@@ -22,45 +35,54 @@ export const AuthProvider = ({ children }) => {
   const [accessToken, setAccessToken] = useState(
     localStorage.getItem('erp_access_token') || null
   );
-  
-  const [currentBrandId, setCurrentBrandId] = useState(null);
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const [brandInfo, setBrandInfo] = useState(null);
 
+  const payload = useMemo(() => (accessToken ? decodeJwtPayload(accessToken) : null), [accessToken]);
+
+  const currentBrandId = payload ? (payload.brand_id ?? null) : null;
+  const currentUserId = payload?.sub ? Number(payload.sub) : null;
+  const permissions = useMemo(() => (Array.isArray(payload?.perms) ? payload.perms : []), [payload]);
+  const roles = useMemo(() => (Array.isArray(payload?.roles) ? payload.roles : []), [payload]);
+  // Holding = akun tanpa ikatan brand; admin brand hanya melihat data brand-nya.
+  const isHolding = currentBrandId === null;
+
+  const hasPermission = useCallback((code) => permissions.includes(code), [permissions]);
+
+  // Admin brand: ambil identitas brand-nya (nama, logo) untuk header & halaman.
   useEffect(() => {
-    if (accessToken) {
-      const payload = decodeJwtPayload(accessToken);
-      if (payload) {
-        setCurrentBrandId(payload.brand_id);
-        setCurrentUserId(payload.sub ? Number(payload.sub) : null);
-      } else {
-        setCurrentBrandId(null);
-        setCurrentUserId(null);
-      }
-    } else {
-      setCurrentBrandId(null);
-      setCurrentUserId(null);
+    if (!accessToken || isHolding) {
+      setBrandInfo(null);
+      return;
     }
-  }, [accessToken]);
+    let cancelled = false;
+    getMyBrand()
+      .then((b) => { if (!cancelled) setBrandInfo(b); })
+      .catch(() => { if (!cancelled) setBrandInfo(null); });
+    return () => { cancelled = true; };
+  }, [accessToken, isHolding]);
+
+  const user = useMemo(() => {
+    if (!payload) return null;
+    return {
+      id: currentUserId,
+      email: payload.email || '',
+      name: payload.display_name || (payload.email ? payload.email.split('@')[0] : ''),
+      role: roles[0] || payload.role || '',
+      roleLabel: ROLE_LABEL[roles[0]] || (isHolding ? 'Holding' : 'Admin Brand'),
+    };
+  }, [payload, currentUserId, roles, isHolding]);
 
   const login = async (email, password) => {
     try {
       const res = await client.post('/api/auth/login', { email, password });
       const { access_token, refresh_token } = res.data;
-      
-      const payload = decodeJwtPayload(access_token);
-      if (payload && payload.brand_id !== null) {
-        throw new Error(PESAN_BUKAN_HOLDING);
-      }
 
       localStorage.setItem('erp_access_token', access_token);
       localStorage.setItem('erp_refresh_token', refresh_token);
       setAccessToken(access_token);
-      
+
       return true;
     } catch (error) {
-      if (error.message === PESAN_BUKAN_HOLDING) {
-        throw error;
-      }
       if (error.response && error.response.data && error.response.data.error) {
         throw new Error(error.response.data.error);
       }
@@ -84,8 +106,23 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ accessToken, login, logout, currentBrandId, currentUserId }}>
+    <AuthContext.Provider
+      value={{
+        accessToken,
+        login,
+        logout,
+        currentBrandId,
+        currentUserId,
+        isHolding,
+        permissions,
+        hasPermission,
+        brandInfo,
+        user,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
+
+export const useAuth = () => useContext(AuthContext);

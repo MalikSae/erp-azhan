@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 import PageHeader from 'shared/ui/PageHeader';
 import DataTable from 'shared/ui/DataTable';
 import Button from 'shared/ui/Button';
@@ -33,6 +34,7 @@ const valueOf = (v) => (v?.target ? v.target.value : v);
 // Riwayat pergerakan stok perlengkapan (buku besar): pembelian, penyerahan ke jamaah,
 // pembatalan penyerahan, dan koreksi. Dimuat per 100 baris; yang lebih lama bisa dimuat bertahap.
 const InventoryRiwayatStokPage = () => {
+  const { isHolding } = useContext(AuthContext);
   const [searchParams, setSearchParams] = useSearchParams();
   const itemId = searchParams.get('item') || '';
   const brandId = searchParams.get('brand') || '';
@@ -53,10 +55,10 @@ const InventoryRiwayatStokPage = () => {
   };
 
   useEffect(() => {
-    Promise.all([listPerlengkapanItems(), listBrands()])
-      .then(([i, b]) => { setItems(i || []); setBrands(b || []); })
-      .catch(() => {});
-  }, []);
+    listPerlengkapanItems().then((i) => setItems(i || [])).catch(() => {});
+    // Daftar brand hanya relevan (dan hanya boleh dimuat) untuk akun holding.
+    if (isHolding) listBrands().then((b) => setBrands(b || [])).catch(() => {});
+  }, [isHolding]);
 
   const params = useMemo(() => ({
     ...(itemId ? { item_id: itemId } : {}),
@@ -154,12 +156,14 @@ const InventoryRiwayatStokPage = () => {
                   className="!mb-0 w-48"
                   options={[{ value: '', label: 'Semua item' }, ...items.map((i) => ({ value: String(i.id), label: i.nama }))]}
                 />
-                <CustomDropdown
-                  value={brandId}
-                  onChange={(v) => setFilter('brand', valueOf(v))}
-                  className="!mb-0 w-40"
-                  options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
-                />
+                {isHolding && (
+                  <CustomDropdown
+                    value={brandId}
+                    onChange={(v) => setFilter('brand', valueOf(v))}
+                    className="!mb-0 w-40"
+                    options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
+                  />
+                )}
                 <CustomDropdown
                   value={jenis}
                   onChange={(v) => setFilter('jenis', valueOf(v))}
