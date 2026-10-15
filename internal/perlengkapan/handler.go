@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -161,12 +162,23 @@ func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 
 // ListStok: GET /api/admin/perlengkapan-stok?brand_id={id}
 func (h *Handler) ListStok(w http.ResponseWriter, r *http.Request) {
+	// Admin yang terikat satu brand hanya boleh melihat stok brand-nya sendiri.
+	scoped := identity.GetBrandID(r.Context())
 	brandIDStr := r.URL.Query().Get("brand_id")
 	if brandIDStr == "" {
 		items, err := h.repo.ListStokAll(r.Context())
 		if err != nil {
 			h.sendError(w, http.StatusInternalServerError, "Gagal memuat stok perlengkapan seluruh brand")
 			return
+		}
+		if scoped != nil {
+			own := make([]PerlengkapanStokAllRow, 0, len(items))
+			for _, it := range items {
+				if it.BrandID == uint64(*scoped) {
+					own = append(own, it)
+				}
+			}
+			items = own
 		}
 		h.sendJSON(w, http.StatusOK, items)
 		return
@@ -175,6 +187,10 @@ func (h *Handler) ListStok(w http.ResponseWriter, r *http.Request) {
 	brandID, err := strconv.ParseUint(brandIDStr, 10, 64)
 	if err != nil {
 		h.sendError(w, http.StatusBadRequest, "brand_id tidak valid")
+		return
+	}
+	if scoped != nil && brandID != uint64(*scoped) {
+		h.sendError(w, http.StatusForbidden, "Anda hanya dapat melihat stok brand Anda sendiri")
 		return
 	}
 
@@ -205,6 +221,11 @@ func (h *Handler) UpdateStok(w http.ResponseWriter, r *http.Request) {
 	brandID, err := strconv.ParseUint(brandIDStr, 10, 64)
 	if err != nil {
 		h.sendError(w, http.StatusBadRequest, "brand_id tidak valid")
+		return
+	}
+
+	if scoped := identity.GetBrandID(r.Context()); scoped != nil && brandID != uint64(*scoped) {
+		h.sendError(w, http.StatusForbidden, "Anda hanya dapat mengubah stok brand Anda sendiri")
 		return
 	}
 

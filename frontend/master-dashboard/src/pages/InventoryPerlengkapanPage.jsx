@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import { Pencil, Trash2, History, PackagePlus, SlidersHorizontal } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import DataTable from 'shared/ui/DataTable';
@@ -21,7 +23,6 @@ import {
   createPembelianPerlengkapan,
   createKoreksiPerlengkapan,
 } from '../api/perlengkapan';
-import { listBrands } from '../api/brands';
 import { uploadMedia } from '../api/media';
 import ItemPhoto from '../components/ItemPhoto';
 
@@ -49,6 +50,10 @@ const StokValue = ({ value }) => {
 // Isi set per jamaah diatur di Kategori Paket (bawaan) dan Form Paket (khusus paket).
 const InventoryPerlengkapanPage = () => {
   const navigate = useNavigate();
+  const { hasPermission } = useContext(AuthContext);
+  // Katalog item (tambah/ubah/hapus) hanya untuk pengelola master data; stok brand mengikuti izin perlengkapan.
+  const canEditCatalog = hasPermission('masterdata.edit');
+  const canEditStok = hasPermission('perlengkapan.edit');
   const [items, setItems] = useState([]);
   const [stok, setStok] = useState([]);
   const [brands, setBrands] = useState([]);
@@ -82,14 +87,19 @@ const InventoryPerlengkapanPage = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [itemData, stokData, brandData] = await Promise.all([
+      const [itemData, stokData] = await Promise.all([
         listPerlengkapanItems(),
         listPerlengkapanStok(),
-        listBrands(),
       ]);
       setItems(itemData || []);
       setStok(stokData || []);
-      setBrands(brandData || []);
+      // Brand diturunkan dari baris stok: API hanya mengembalikan brand yang boleh dilihat pengguna,
+      // sehingga admin brand otomatis hanya mendapat kolom brand-nya.
+      const seen = new Map();
+      (stokData || []).forEach((r) => {
+        if (!seen.has(r.brand_id)) seen.set(r.brand_id, { id: r.brand_id, name: r.brand_name });
+      });
+      setBrands([...seen.values()].sort((a, b) => String(a.name).localeCompare(String(b.name))));
     } catch (error) {
       setErrorMessage(error.response?.data?.error || 'Gagal memuat data perlengkapan.');
     } finally {
@@ -310,13 +320,17 @@ const InventoryPerlengkapanPage = () => {
       return (
         <div className="flex items-center gap-3 min-w-0">
           <ItemPhoto url={row.photo_url} name={row.nama} />
-          <button
-            type="button"
-            onClick={() => handleOpenModal(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
-          >
-            {row.nama}
-          </button>
+          {canEditCatalog ? (
+            <button
+              type="button"
+              onClick={() => handleOpenModal(row)}
+              className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            >
+              {row.nama}
+            </button>
+          ) : (
+            <span className="font-heading font-semibold text-neutral-900 leading-snug">{row.nama}</span>
+          )}
         </div>
       );
     }
@@ -331,17 +345,16 @@ const InventoryPerlengkapanPage = () => {
     }
 
     if (key === 'aksi') {
-      return (
-        <ActionMenu
-          align="right"
-          items={[
-            { label: 'Atur Stok', icon: SlidersHorizontal, tooltip: 'Kurangi stok (rusak/hilang) atau koreksi hasil hitung', onClick: () => openAtur(row) },
-            { label: 'Riwayat Stok', icon: History, tooltip: 'Lihat pergerakan stok item ini', onClick: () => navigate(`/inventory/riwayat-stok?item=${row.id}`) },
-            { label: 'Edit', icon: Pencil, tooltip: 'Edit item', onClick: () => handleOpenModal(row) },
-            { label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus item', onClick: () => setDeleteConfirmId(row.id) },
-          ]}
-        />
-      );
+      const menu = [];
+      if (canEditStok) {
+        menu.push({ label: 'Atur Stok', icon: SlidersHorizontal, tooltip: 'Kurangi stok (rusak/hilang) atau koreksi hasil hitung', onClick: () => openAtur(row) });
+      }
+      menu.push({ label: 'Riwayat Stok', icon: History, tooltip: 'Lihat pergerakan stok item ini', onClick: () => navigate(`/inventory/riwayat-stok?item=${row.id}`) });
+      if (canEditCatalog) {
+        menu.push({ label: 'Edit', icon: Pencil, tooltip: 'Edit item', onClick: () => handleOpenModal(row) });
+        menu.push({ label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus item', onClick: () => setDeleteConfirmId(row.id) });
+      }
+      return <ActionMenu align="right" items={menu} />;
     }
 
     return row[key];
@@ -351,18 +364,19 @@ const InventoryPerlengkapanPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Perlengkapan"
-        actionLabel="+ Tambah Item"
-        onAction={() => handleOpenModal()}
+        {...(canEditCatalog ? { actionLabel: '+ Tambah Item', onAction: () => handleOpenModal() } : {})}
       >
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={() => navigate('/inventory/riwayat-stok')}>
             <History size={16} strokeWidth={1.75} />
             <span>Riwayat</span>
           </Button>
-          <Button variant="secondary" onClick={openTerima}>
-            <PackagePlus size={16} strokeWidth={1.75} />
-            <span>Terima Barang</span>
-          </Button>
+          {canEditStok && (
+            <Button variant="secondary" onClick={openTerima}>
+              <PackagePlus size={16} strokeWidth={1.75} />
+              <span>Terima Barang</span>
+            </Button>
+          )}
         </div>
       </PageHeader>
 

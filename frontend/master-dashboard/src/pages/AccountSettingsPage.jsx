@@ -76,9 +76,9 @@ export default function AccountSettingsPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5 px-5 py-5 md:px-6 md:py-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <Input label="Nama akun" value={user?.display_name || 'Admin Travel'} disabled readOnly />
+              <Input label="Nama akun" value={user?.name || user?.roleLabel || 'Admin'} disabled readOnly />
               <Input label="Email akun" value={user?.email || ''} disabled readOnly />
-              <Input label="Brand" value={brandInfo?.name || ''} disabled readOnly />
+              <Input label="Brand" value={brandInfo?.name || 'Holding (semua brand)'} disabled readOnly />
               <Input label="Peran" value="Admin Travel" disabled readOnly />
             </div>
 
