@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import BrandLabel from 'shared/ui/BrandLabel';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Coins, Trophy, Users } from 'lucide-react';
 import { getPeringkatAgen, listBrands, money } from 'shared';
@@ -27,13 +28,8 @@ const presetRange = (key) => PRESETS[key].range(new Date()).map(ymd);
 
 const TOP = 3;
 
-// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
-const BrandChip = ({ name, color }) => (
-  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
-    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color || '#9CA3AF' }} />
-    {name}
-  </span>
-);
+// Brand: titik warna + nama (gaya sama dengan daftar Paket).
+const BrandChip = ({ name, color }) => <BrandLabel name={name} color={color} />;
 
 // Peringkat agen per periode (Laporan & Analytics). Sumber: ledger
 // transaksi_komisi, tanggal = saat booking pertama kali lunas.

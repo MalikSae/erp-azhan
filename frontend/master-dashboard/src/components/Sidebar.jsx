@@ -12,6 +12,7 @@ import {
   CreditCard,
   Boxes,
   Building2,
+  History,
   UserCog,
   ChevronDown,
   Network,
@@ -59,8 +60,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     {
       name: 'INVENTORY',
       items: [
-        { name: 'Kelola Perlengkapan', path: '/inventory/perlengkapan', icon: Boxes, status: 'active' },
-        { name: 'Stok per Brand', path: '/inventory/stok-perlengkapan', icon: Building2, status: 'active' },
+        { name: 'Perlengkapan', path: '/inventory/perlengkapan', icon: Boxes, status: 'active' },
+        { name: 'Riwayat Stok', path: '/inventory/riwayat-stok', icon: History, status: 'active' },
       ],
     },
     {

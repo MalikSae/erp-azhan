@@ -12,6 +12,7 @@ const DataTable = ({
   itemsPerPage = 10,
   emptyMessage = "Tidak ada data",
   renderCell,
+  toolbarLeading,
   toolbarActions,
   toolbarPanel,
   onRowClick
@@ -80,8 +81,11 @@ const DataTable = ({
   return (
     <div className="w-full bg-white rounded-2xl border border-neutral-200/80 shadow-card overflow-hidden">
       {/* Header / Toolbar */}
-      {(searchable || toolbarActions) && (
+      {(searchable || toolbarActions || toolbarLeading) && (
         <div className="p-4 border-b border-neutral-200/80 flex flex-col sm:flex-row sm:flex-wrap justify-between items-start sm:items-center bg-white gap-4">
+          {/* Kiri: elemen pembuka (mis. tab) lalu kolom pencarian */}
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:flex-1 min-w-0">
+          {toolbarLeading}
           <div className="w-full max-w-sm relative">
             {searchable && (
               <>
@@ -99,6 +103,7 @@ const DataTable = ({
                 />
               </>
             )}
+          </div>
           </div>
           {toolbarActions && (
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">

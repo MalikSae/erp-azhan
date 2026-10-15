@@ -19,7 +19,7 @@ import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengk
 import { getJamaah } from "../api/jamaah";
 import { listBrands } from "../api/brands";
 import { uploadMedia, openProtectedMedia } from "../api/media";
-import { getSeatLockIcon } from "../utils/bookingStatus";
+import { getSeatLockIcon, getPaymentStatusMeta } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
 import { Surface, Section, TableCard, Field, SummaryItem, PILL_STRONG, BrandBadge } from "../components/ui/DetailLayout";
 import Badge from "../components/ui/Badge";
@@ -68,11 +68,6 @@ const STATUS_STYLE = {
   batal: { label: 'Batal', chip: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
 };
 
-const PAYMENT_STATUS_STYLE = {
-  pending: { label: 'Menunggu', chip: 'bg-warning-50 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
-  confirmed: { label: 'Diterima', chip: 'bg-success-50 text-success-700 border-success-200', dot: 'bg-success-500' },
-  rejected: { label: 'Ditolak', chip: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
-};
 
 // Pil status utama: titik berwarna kecil + teks.
 const StatusPill = ({ status, styleMap = STATUS_STYLE }) => {
@@ -102,6 +97,7 @@ const DotText = ({ tone, children }) => {
 };
 
 const PROGRESS_HEADER_MANUAL_ITEMS = [
+  { key: 'tiket', label: 'Tiket PP' },
   { key: 'hotel', label: 'Hotel' },
   { key: 'land_arrangement', label: 'Land Arrangement' },
 ];
@@ -123,8 +119,13 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     jumlah: "",
     metode: "transfer",
     tanggal: new Date().toISOString().split('T')[0],
+    bank_account_id: "",
+    sender_name: "",
+    received_by: "",
     bukti_file: null,
   });
+  // Rekening tujuan milik brand booking (opsional; dipakai untuk pembayaran transfer).
+  const [bankAccounts, setBankAccounts] = useState([]);
   const [paymentFormError, setPaymentFormError] = useState(null);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [selectedBuktiUrl, setSelectedBuktiUrl] = useState(null);
@@ -512,7 +513,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       const progressField = `progress_${key}`;
       const updated = { ...prev, [progressField]: newValue };
 
-      const headerLengkap = Boolean(updated.progress_hotel)&& Boolean(updated.progress_land_arrangement);
+      const headerLengkap = Boolean(updated.progress_tiket) && Boolean(updated.progress_hotel) && Boolean(updated.progress_land_arrangement);
       let activePaxCount = 0;
       let allPaxLengkap = true;
       (updated.pax || []).forEach((p) => {
@@ -550,7 +551,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         return p;
       });
 
-      const headerLengkap = Boolean(prev.progress_hotel)&& Boolean(prev.progress_land_arrangement);
+      const headerLengkap = Boolean(prev.progress_tiket) && Boolean(prev.progress_hotel) && Boolean(prev.progress_land_arrangement);
       let activePaxCount = 0;
       let allPaxLengkap = true;
       updatedPax.forEach((p) => {
@@ -577,6 +578,22 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     }
   };
 
+  // Rekening tujuan: hanya rekening aktif milik brand booking. Gagal memuat (mis. tanpa izin)
+  // tidak menghalangi pencatatan; pilihan rekening saja yang tidak tampil.
+  useEffect(() => {
+    if (!isPaymentModalOpen || !booking?.brand_id) return;
+    let cancelled = false;
+    client
+      .get("/api/admin/bank-accounts/", { params: { brand_id: booking.brand_id, active: "true" } })
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res.data) ? res.data : [];
+        setBankAccounts(list.filter((a) => String(a.brand_id) === String(booking.brand_id) && a.is_active !== false));
+      })
+      .catch(() => { if (!cancelled) setBankAccounts([]); });
+    return () => { cancelled = true; };
+  }, [isPaymentModalOpen, booking?.brand_id]);
+
   // ─── Payment Handlers ─────────────────────────────────────────────────────────
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
@@ -588,6 +605,14 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     }
     if (jumlahNum > sisaTagihan) {
       setPaymentFormError(`Maks. ${formatRupiah(sisaTagihan)}`);
+      return;
+    }
+    if (paymentForm.metode === "transfer" && !paymentForm.bank_account_id) {
+      setPaymentFormError("Rekening tujuan wajib dipilih untuk pembayaran transfer");
+      return;
+    }
+    if (paymentForm.metode === "cash" && !paymentForm.received_by.trim()) {
+      setPaymentFormError("Nama staff penerima wajib diisi untuk pembayaran tunai");
       return;
     }
 
@@ -604,7 +629,13 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         jumlah: jumlahNum,
         metode: paymentForm.metode,
         tanggal: paymentForm.tanggal,
-        bukti_url: buktiUrl
+        bukti_url: buktiUrl,
+        ...(paymentForm.metode === "transfer"
+          ? {
+              bank_account_id: Number(paymentForm.bank_account_id),
+              ...(paymentForm.sender_name.trim() ? { sender_name: paymentForm.sender_name.trim() } : {}),
+            }
+          : { received_by: paymentForm.received_by.trim() }),
       });
 
       setIsPaymentModalOpen(false);
@@ -612,6 +643,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         jumlah: "",
         metode: "transfer",
         tanggal: new Date().toISOString().split('T')[0],
+        bank_account_id: "",
+        sender_name: "",
+        received_by: "",
         bukti_file: null,
       });
       fetchAll();
@@ -753,7 +787,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         <SummaryItem label="Jamaah aktif" value={activePaxList.length} hint={infantActiveCount > 0 ? `${infantActiveCount} infant` : undefined} />
         <SummaryItem label="Total tagihan" value={formatRupiah(totalHarga)} />
         <SummaryItem label="Sudah dibayar" value={formatRupiah(totalPaid)} />
-        <SummaryItem label="Sisa tagihan" value={formatRupiah(sisaTagihan)} hint={sisaTagihan > 0 ? "Belum lunas" : "Lunas"} />
+        <SummaryItem label="Sisa tagihan" value={formatRupiah(sisaTagihan)} />
       </Surface>
 
       {/* Main Grid: Details */}
@@ -1133,7 +1167,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                     return p.bukti_url ? (
                       <button
                         type="button"
-                        onClick={() => openProtectedMedia(p.bukti_url)}
+                        onClick={() => openProtectedMedia(p.bukti_url, 'Bukti Pembayaran')}
                         className="text-neutral-700 hover:text-primary-700 font-medium inline-flex items-center gap-1.5 text-xs hover:underline transition-colors cursor-pointer whitespace-nowrap"
                         title="Lihat Bukti Pembayaran"
                       >
@@ -1147,7 +1181,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   if (key === "status") {
                     return (
                       <div className="flex flex-col items-start gap-1">
-                        <StatusPill status={p.status} styleMap={PAYMENT_STATUS_STYLE} />
+                        <Badge variant={getPaymentStatusMeta(p.status).variant} hideIcon className={getPaymentStatusMeta(p.status).className}>
+                          {getPaymentStatusMeta(p.status).label}
+                        </Badge>
                         {p.status === "rejected" && p.rejection_reason && (
                           <span className="text-[11px] text-danger-600 italic font-body max-w-[180px] leading-tight" title={p.rejection_reason}>
                             Alasan: {p.rejection_reason}
@@ -1242,7 +1278,17 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             }
           >
             <div className="divide-y divide-neutral-100 [&>div]:py-3 first:[&>div]:pt-0 [&>div:last-child]:pb-0">
-              {/* 1. Hotel */}
+              {/* 1. Tiket PP */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium font-body text-neutral-800">Tiket PP</span>
+                <Toggle
+                  id="toggle-tiket-detail"
+                  checked={Boolean(booking.progress_tiket)}
+                  onChange={() => handleToggleProgress('tiket', Boolean(booking.progress_tiket))}
+                />
+              </div>
+
+              {/* 2. Hotel */}
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium font-body text-neutral-800">Hotel</span>
                 <Toggle
@@ -1252,7 +1298,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 />
               </div>
 
-              {/* 2. Land Arrangement */}
+              {/* 3. Land Arrangement */}
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium font-body text-neutral-800">Land Arrangement</span>
                 <Toggle
@@ -1335,6 +1381,49 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             />
           </div>
 
+          {paymentForm.metode === "transfer" && (
+            <>
+              <CustomDropdown
+                label="Rekening Tujuan"
+                required
+                value={paymentForm.bank_account_id}
+                onChange={(val) => {
+                  setPaymentForm(prev => ({ ...prev, bank_account_id: val?.target ? val.target.value : val }));
+                  if (paymentFormError) setPaymentFormError(null);
+                }}
+                options={[
+                  { value: "", label: bankAccounts.length ? "Pilih rekening tujuan" : "Belum ada rekening aktif untuk brand ini" },
+                  ...bankAccounts.map((a) => ({
+                    value: String(a.id),
+                    label: `${a.bank_name} · ${a.account_number} a.n. ${a.account_holder}`,
+                  })),
+                ]}
+                className="!mb-0"
+              />
+              <Input
+                label="Nama Pengirim (Opsional)"
+                value={paymentForm.sender_name}
+                onChange={(e) => setPaymentForm(prev => ({ ...prev, sender_name: e.target.value }))}
+                placeholder="Nama pemilik rekening pengirim"
+                className="!mb-0"
+              />
+            </>
+          )}
+
+          {paymentForm.metode === "cash" && (
+            <Input
+              label="Nama Staff Penerima"
+              required
+              value={paymentForm.received_by}
+              onChange={(e) => {
+                setPaymentForm(prev => ({ ...prev, received_by: e.target.value }));
+                if (paymentFormError) setPaymentFormError(null);
+              }}
+              placeholder="Nama staff yang menerima uang tunai"
+              className="!mb-0"
+            />
+          )}
+
           <FormField label="Bukti Pembayaran (Opsional)">
             {paymentForm.bukti_file ? (
               <div className="flex items-center justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-xl">
@@ -1388,7 +1477,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               type="submit" 
               variant="primary" 
               isLoading={paymentSubmitting}
-              disabled={paymentSubmitting || (sisaTagihan > 0 && parseFloat(paymentForm.jumlah) > sisaTagihan) || !parseFloat(paymentForm.jumlah)}
+              disabled={paymentSubmitting || (sisaTagihan > 0 && parseFloat(paymentForm.jumlah) > sisaTagihan) || !parseFloat(paymentForm.jumlah) || (paymentForm.metode === "transfer" && !paymentForm.bank_account_id) || (paymentForm.metode === "cash" && !paymentForm.received_by.trim())}
             >
               {paymentSubmitting ? "Menyimpan..." : "Simpan Pembayaran"}
             </Button>

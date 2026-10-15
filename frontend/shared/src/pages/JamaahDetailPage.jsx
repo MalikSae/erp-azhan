@@ -6,7 +6,7 @@ import { uploadMedia, openProtectedMedia } from "../api/media";
 import { listBookings } from "../api/bookings";
 import { listBrands } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
-import { Surface, Section, Field, SummaryItem, PILL_STRONG, BrandBadge } from "../components/ui/DetailLayout";
+import { Surface, Section, Field, SummaryItem, PILL_STRONG, BrandBadge, TableCard } from "../components/ui/DetailLayout";
 import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
@@ -652,12 +652,12 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
         </Surface>
       </div>
 
-      {/* Riwayat Booking */}
-      <Surface>
-        <Section title="Riwayat Booking & Keberangkatan">
+      {/* Riwayat Booking: judul di luar kartu, kartu hanya berisi tabel (aturan tabel) */}
+      <TableCard title="Riwayat Booking & Keberangkatan">
         {bookings.length === 0 ? (
-          <p className="text-sm text-neutral-500 font-body">Belum ada riwayat booking untuk jamaah ini.</p>
+          <p className="p-5 text-sm text-neutral-500 font-body">Belum ada riwayat booking untuk jamaah ini.</p>
         ) : (
+          <div className="overflow-x-auto">
           <Table
             columns={[
               { header: "ID Booking", key: "id_booking" },
@@ -700,9 +700,9 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
               return row[key];
             }}
           />
+          </div>
         )}
-        </Section>
-      </Surface>
+      </TableCard>
 
       {/* Modal Konfirmasi Terbitkan Link Baru (Reset) */}
       <Modal

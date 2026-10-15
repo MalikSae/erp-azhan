@@ -1,4 +1,5 @@
 import React from 'react';
+import BrandLabel from 'shared/ui/BrandLabel';
 
 // Potongan UI bersama halaman Pengguna & Struktur Organisasi (gaya SmartHR).
 
@@ -22,14 +23,14 @@ export const StatusChip = ({ active, activeLabel = 'Aktif', inactiveLabel = 'Non
     </span>
   );
 
-// Chip akses brand: dot warna + teks gelap.
+// Akses brand: gaya sama dengan penanda brand di daftar Paket (dot warna + nama).
 export const AksesChip = ({ brandId, brandName, brandColor }) => {
   const holding = brandId === null || brandId === undefined;
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
-      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: holding ? '#F26522' : (brandColor || '#9CA3AF') }} />
-      {holding ? 'Holding' : (brandName || `Brand #${brandId}`)}
-    </span>
+    <BrandLabel
+      name={holding ? 'Holding' : (brandName || `Brand #${brandId}`)}
+      color={holding ? '#F26522' : brandColor}
+    />
   );
 };
 

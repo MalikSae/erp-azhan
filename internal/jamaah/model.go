@@ -64,6 +64,8 @@ type JamaahListItem struct {
 	DirekrutOlehJamaahID    *int64    `json:"direkrut_oleh_jamaah_id"`
 	DirekrutOlehNama        *string   `json:"direkrut_oleh_nama"`
 	StatusAgen              string    `json:"status_agen"`
+	// Jumlah booking yang melibatkan jamaah ini (sebagai PIC atau peserta), semua status.
+	TotalBooking            int       `json:"total_booking"`
 }
 
 // ─── Request structs ──────────────────────────────────────────────────────────

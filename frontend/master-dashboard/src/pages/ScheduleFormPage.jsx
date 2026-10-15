@@ -13,6 +13,14 @@ import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 
 import { getSchedule, createSchedule, updateSchedule } from '../api/schedules';
+import {
+  listPerlengkapanItems,
+  getCategoryPerlengkapan,
+  getPerlengkapanSetTemplate,
+  getSchedulePerlengkapan,
+  putSchedulePerlengkapan,
+} from '../api/perlengkapan';
+import PerlengkapanSetEditor, { PerlengkapanSetList } from '../components/PerlengkapanSetEditor';
 import { listHotels } from '../api/hotels';
 import { listAirlines } from '../api/airlines';
 import { listAirports } from '../api/airports';
@@ -43,6 +51,7 @@ const SECTION_LINKS = [
   { id: 'sec-penerbangan', label: 'Penerbangan' },
   { id: 'sec-hotel', label: 'Hotel' },
   { id: 'sec-fasilitas', label: 'Fasilitas' },
+  { id: 'sec-perlengkapan', label: 'Perlengkapan' },
   { id: 'sec-itinerary', label: 'Itinerary' },
 ];
 
@@ -79,6 +88,13 @@ const ScheduleFormPage = () => {
   const [brandOptions, setBrandOptions] = useState([]);
 
   const [includeItemsText, setIncludeItemsText] = useState('');
+  // Perlengkapan jamaah: ikuti set kategori, atau set khusus paket ini.
+  const [perlCatalog, setPerlCatalog] = useState([]);
+  const [perlCustom, setPerlCustom] = useState(false);
+  const [perlItems, setPerlItems] = useState([]);
+  const [perlInherited, setPerlInherited] = useState([]);
+  const [perlInheritedLabel, setPerlInheritedLabel] = useState('');
+  const [perlWasCustom, setPerlWasCustom] = useState(false);
   const [excludeItemsText, setExcludeItemsText] = useState('');
 
   const [berangkatFlightNo, setBerangkatFlightNo] = useState('');
@@ -155,6 +171,18 @@ const ScheduleFormPage = () => {
         setItineraryOptions(itineraries || []);
         setBrandOptions(brands || []);
         setAirportOptions(airports || []);
+
+        // Perlengkapan jamaah: katalog item + set tersimpan (gagal memuat tidak menghalangi form).
+        listPerlengkapanItems().then((d) => setPerlCatalog(d || [])).catch(() => setPerlCatalog([]));
+        if (sourceId) {
+          getSchedulePerlengkapan(sourceId)
+            .then((d) => {
+              setPerlCustom(Boolean(d?.custom));
+              setPerlItems(d?.custom ? (d.items || []).map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: r.qty, untuk: r.untuk || 'semua' })) : []);
+              if (isEditMode) setPerlWasCustom(Boolean(d?.custom));
+            })
+            .catch(() => {});
+        }
 
         if (sourceId) {
           const scheduleData = await getSchedule(sourceId);
@@ -311,6 +339,37 @@ const ScheduleFormPage = () => {
 
     fetchInitialData();
   }, [id, isEditMode, sourceId]);
+
+  // Set bawaan yang berlaku bila paket mengikuti kategori: set kategori, atau set standar bila kosong.
+  useEffect(() => {
+    let cancelled = false;
+    const categoryId = formData.category_id;
+    const load = async () => {
+      try {
+        if (categoryId) {
+          const d = await getCategoryPerlengkapan(categoryId);
+          if (!cancelled && (d?.items || []).length > 0) {
+            const nama = categoryOptions.find((c) => String(c.id) === String(categoryId))?.name;
+            setPerlInherited(d.items);
+            setPerlInheritedLabel(nama ? `Set bawaan kategori ${nama}` : 'Set bawaan kategori');
+            return;
+          }
+        }
+        const g = await getPerlengkapanSetTemplate();
+        if (!cancelled) {
+          setPerlInherited((g || []).map((r) => ({ ...r, untuk: 'semua' })));
+          setPerlInheritedLabel('Set standar');
+        }
+      } catch {
+        if (!cancelled) {
+          setPerlInherited([]);
+          setPerlInheritedLabel('');
+        }
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [formData.category_id, categoryOptions]);
 
   useEffect(() => {
     if (!isLoadingInitial && baselineRef.current === null) baselineRef.current = JSON.stringify(formData);
@@ -685,10 +744,22 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         brosur_thumb_url: formData.brosur_thumb_url || ''
       };
 
+      let savedId = id;
       if (isEditMode) {
         await updateSchedule(id, payload);
       } else {
-        await createSchedule(payload);
+        const created = await createSchedule(payload);
+        savedId = created?.id;
+      }
+      // Set perlengkapan khusus paket disimpan terpisah; mengikuti kategori = hapus set khusus.
+      if (savedId && (perlCustom || perlWasCustom)) {
+        await putSchedulePerlengkapan(
+          savedId,
+          perlCustom,
+          perlCustom
+            ? perlItems.map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: Number(r.qty) || 1, untuk: r.untuk || 'semua' }))
+            : [],
+        );
       }
       submittedRef.current = true;
       const namaPaket = (formData.jadwal_nama || '').trim();
@@ -1342,6 +1413,38 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     className="!mb-0"
                   />
                 </div>
+              </div>
+            </FormSection>
+
+            <FormSection id="sec-perlengkapan" title="Perlengkapan Jamaah">
+              <div className="space-y-4">
+                <CustomDropdown
+                  label="Isi perlengkapan"
+                  className="!mb-0"
+                  value={perlCustom ? 'khusus' : 'ikuti'}
+                  onChange={(v) => {
+                    const val = v?.target ? v.target.value : v;
+                    const custom = val === 'khusus';
+                    setPerlCustom(custom);
+                    // Pertama kali memilih set khusus: mulai dari set bawaan agar tinggal disesuaikan.
+                    if (custom && perlItems.length === 0) {
+                      setPerlItems(perlInherited.map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: r.qty, untuk: r.untuk || 'semua' })));
+                    }
+                  }}
+                  options={[
+                    { value: 'ikuti', label: perlInheritedLabel ? `Ikuti ${perlInheritedLabel.charAt(0).toLowerCase()}${perlInheritedLabel.slice(1)}` : 'Ikuti set bawaan' },
+                    { value: 'khusus', label: 'Atur khusus untuk paket ini' },
+                  ]}
+                />
+
+                {perlCustom ? (
+                  <PerlengkapanSetEditor catalog={perlCatalog} value={perlItems} onChange={setPerlItems} />
+                ) : (
+                  <div>
+                    <p className="mb-1 text-[11px] font-body text-neutral-400">{perlInheritedLabel || 'Set bawaan'}</p>
+                    <PerlengkapanSetList items={perlInherited} emptyText="Belum ada set bawaan. Atur di Kelola Kategori atau pilih set khusus." />
+                  </div>
+                )}
               </div>
             </FormSection>
 

@@ -65,6 +65,7 @@ type Booking struct {
 	// ProgressPaspor dihitung dinamis dari dokumen_jamaah
 	ProgressPaspor bool `json:"progress_paspor"`
 	ProgressVisa   bool `json:"progress_visa"`
+	ProgressTiket             bool           `json:"progress_tiket"`
 	ProgressHotel             bool           `json:"progress_hotel"`
 	ProgressLandArrangement   bool           `json:"progress_land_arrangement"`
 	ProgressManasik           bool           `json:"progress_manasik"`

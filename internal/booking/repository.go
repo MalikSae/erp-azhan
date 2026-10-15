@@ -1,6 +1,7 @@
 package booking
 
 import (
+	"erp-azhan/api/internal/perlengkapan"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -85,6 +86,7 @@ var (
 
 // AllowedHeaderProgressFields adalah mapping dari key request header ke nama kolom bookings.
 var AllowedHeaderProgressFields = map[string]string{
+	"tiket":            "progress_tiket",
 	"hotel":            "progress_hotel",
 	"land_arrangement": "progress_land_arrangement",
 }
@@ -106,6 +108,7 @@ const selectBookingFull = `
 		b.seat_count, b.status, b.is_seat_blocked, b.seat_hold_expires_at,
 		b.total_harga,
 		COALESCE(bp.progress_visa, FALSE) AS progress_visa,
+		b.progress_tiket,
 		b.progress_hotel,
 		b.progress_land_arrangement,
 		COALESCE(bp.progress_manasik, FALSE) AS progress_manasik,
@@ -1116,8 +1119,7 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 
 		if bookingStatus == "baru" || bookingStatus == "draft" {
 			for _, l := range logs {
-				_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", l.Qty, scheduleBrandID, l.ItemID)
-				if err != nil {
+				if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), l.ItemID, l.Qty, "retur", "booking_pax", uint64(paxID)); err != nil {
 					return nil, fmt.Errorf("booking.CancelPax restore stok: %w", err)
 				}
 			}
@@ -1183,7 +1185,7 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 					var qty int
 					if err := rowsL.Scan(&itemID, &qty); err == nil {
 						if bookingStatus == "baru" || bookingStatus == "draft" {
-							tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", qty, scheduleBrandID, itemID)
+							_ = perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), itemID, qty, "retur", "booking_pax", uint64(ipid))
 						}
 					}
 				}
@@ -1730,7 +1732,7 @@ func (r *Repository) GetScheduleHarga(ctx context.Context, scheduleID int64, roo
 	return &harga, nil
 }
 
-// UpdateProgress melakukan update terhadap kolom progress header (hotel, land_arrangement).
+// UpdateProgress melakukan update terhadap kolom progress header (tiket, hotel, land_arrangement).
 func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandID *int64, updates map[string]bool) (*Booking, error) {
 	if len(updates) == 0 {
 		return r.GetByID(ctx, bookingID, brandID)
@@ -1834,7 +1836,7 @@ func (r *Repository) checkPasporUploaded(ctx context.Context, jamaahID int64) (b
 }
 
 func computeSiapBerangkat(b *Booking) {
-	headerLengkap := b.ProgressHotel && b.ProgressLandArrangement
+	headerLengkap := b.ProgressTiket && b.ProgressHotel && b.ProgressLandArrangement
 	activePaxCount := 0
 	allPaxLengkap := true
 
@@ -1878,7 +1880,7 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 		&roomType, &hargaDasar,
 		&b.SeatCount, &b.Status, &b.IsSeatBlocked, &seatHoldExpiresAt,
 		&totalHarga,
-		&b.ProgressVisa, &b.ProgressHotel, &b.ProgressLandArrangement,
+		&b.ProgressVisa, &b.ProgressTiket, &b.ProgressHotel, &b.ProgressLandArrangement,
 		&b.ProgressManasik, &b.ProgressSiskopatuh, &b.ProgressVaksinMeningitis,
 		&createdBy, &b.CreatedAt,
 		&primaryJamaahID,
@@ -1984,20 +1986,8 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		return nil, ErrPerlengkapanSudahDiberikan
 	}
 
-	// 3. Ambil template set global & stok untuk brand tersebut dengan row lock FOR UPDATE
-	qSet := `
-		SELECT t.perlengkapan_item_id, t.qty, i.nama, s.stok_tersedia
-		FROM perlengkapan_set_template t
-		JOIN perlengkapan_stok s ON t.perlengkapan_item_id = s.perlengkapan_item_id AND s.brand_id = ?
-		JOIN perlengkapan_items i ON t.perlengkapan_item_id = i.id
-		FOR UPDATE
-	`
-	rows, err := tx.QueryContext(ctx, qSet, scheduleBrandID)
-	if err != nil {
-		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan lock set: %w", err)
-	}
-	defer rows.Close()
-
+	// 3. Isi perlengkapan yang berlaku untuk paket booking ini
+	//    (set khusus paket -> set kategori -> set global), disaring menurut jenis kelamin jamaah.
 	type setItemRow struct {
 		ItemID       uint64
 		Qty          int
@@ -2005,20 +1995,91 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		StokTersedia int
 	}
 
-	var setItems []setItemRow
-	for rows.Next() {
-		var item setItemRow
-		if err := rows.Scan(&item.ItemID, &item.Qty, &item.Nama, &item.StokTersedia); err != nil {
-			return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan scan set: %w", err)
-		}
-		setItems = append(setItems, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan rows: %w", err)
+	var scheduleID int64
+	var perlengkapanCustom bool
+	var categoryID sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT s.id, s.perlengkapan_custom, s.category_id
+		FROM bookings b JOIN schedules s ON s.id = b.schedule_id
+		WHERE b.id = ?`, bookingID).Scan(&scheduleID, &perlengkapanCustom, &categoryID); err != nil {
+		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan paket: %w", err)
 	}
 
+	var gender sql.NullString
+	if err := tx.QueryRowContext(ctx, `
+		SELECT j.jenis_kelamin
+		FROM booking_pax bp JOIN jamaah j ON j.id = bp.jamaah_id
+		WHERE bp.id = ?`, paxID).Scan(&gender); err != nil {
+		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan jenis kelamin: %w", err)
+	}
+
+	type rawSet struct {
+		ItemID uint64
+		Qty    int
+		Untuk  string
+	}
+	loadSet := func(query string, args ...any) ([]rawSet, error) {
+		rs, err := tx.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rs.Close()
+		var out []rawSet
+		for rs.Next() {
+			var x rawSet
+			if err := rs.Scan(&x.ItemID, &x.Qty, &x.Untuk); err != nil {
+				return nil, err
+			}
+			out = append(out, x)
+		}
+		return out, rs.Err()
+	}
+
+	var rawItems []rawSet
+	if perlengkapanCustom {
+		rawItems, err = loadSet(`SELECT perlengkapan_item_id, qty, untuk FROM schedule_perlengkapan WHERE schedule_id = ?`, scheduleID)
+	} else {
+		if categoryID.Valid {
+			rawItems, err = loadSet(`SELECT perlengkapan_item_id, qty, untuk FROM package_category_perlengkapan WHERE category_id = ?`, categoryID.Int64)
+		}
+		if err == nil && len(rawItems) == 0 {
+			rawItems, err = loadSet(`SELECT perlengkapan_item_id, qty, 'semua' FROM perlengkapan_set_template`)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan set: %w", err)
+	}
+
+	var setItems []setItemRow
+	needGender := false
+	for _, it := range rawItems {
+		if it.Untuk != "semua" {
+			if !gender.Valid || gender.String == "" {
+				needGender = true
+				continue
+			}
+			if (it.Untuk == "pria" && gender.String != "L") || (it.Untuk == "wanita" && gender.String != "P") {
+				continue
+			}
+		}
+		setItems = append(setItems, setItemRow{ItemID: it.ItemID, Qty: it.Qty})
+	}
+	if needGender {
+		return nil, bizErr("jenis kelamin jamaah belum diisi; lengkapi dulu karena paket ini punya perlengkapan khusus pria/wanita")
+	}
 	if len(setItems) == 0 {
 		return nil, ErrTemplatePerlengkapanBelumDiatur
+	}
+
+	// Kunci baris stok brand untuk tiap item, lalu cek kecukupan.
+	for i := range setItems {
+		if err := tx.QueryRowContext(ctx, `
+			SELECT i.nama, COALESCE(s.stok_tersedia, 0)
+			FROM perlengkapan_items i
+			LEFT JOIN perlengkapan_stok s ON s.perlengkapan_item_id = i.id AND s.brand_id = ?
+			WHERE i.id = ? FOR UPDATE`, scheduleBrandID, setItems[i].ItemID).Scan(&setItems[i].Nama, &setItems[i].StokTersedia); err != nil {
+			return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan stok: %w", err)
+		}
 	}
 
 	// 4. Cek apakah ada stok yang kurang untuk kebutuhan
@@ -2038,8 +2099,7 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 	// 5. Potong stok dan catat ke logs
 	for _, item := range setItems {
 		butuh := item.Qty
-		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia - ? WHERE brand_id = ? AND perlengkapan_item_id = ?", butuh, scheduleBrandID, item.ItemID)
-		if err != nil {
+		if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), item.ItemID, -butuh, "distribusi", "booking_pax", uint64(paxID)); err != nil {
 			return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan potong stok: %w", err)
 		}
 
@@ -2137,7 +2197,7 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 
 	// 4. Kembalikan stok (karena ini aksi eksplisit pembatalan distribusi/undo)
 	for _, l := range logs {
-		_, err := tx.ExecContext(ctx, "UPDATE perlengkapan_stok SET stok_tersedia = stok_tersedia + ? WHERE brand_id = ? AND perlengkapan_item_id = ?", l.Qty, scheduleBrandID, l.ItemID)
+		err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), l.ItemID, l.Qty, "retur", "booking_pax", uint64(paxID))
 		if err != nil {
 			return nil, fmt.Errorf("booking.BatalkanPerlengkapan restore stok: %w", err)
 		}

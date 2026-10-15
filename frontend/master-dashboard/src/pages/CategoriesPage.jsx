@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import BrandLabel from 'shared/ui/BrandLabel';
 import { Pencil, Trash2 } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import DataTable from 'shared/ui/DataTable';
+import SegmentedTabs from 'shared/ui/SegmentedTabs';
 import Button from 'shared/ui/Button';
 import Modal from 'shared/ui/Modal';
 import Input from 'shared/ui/Input';
@@ -11,6 +13,8 @@ import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import ActionMenu from 'shared/ui/ActionMenu';
 import { listCategories, createCategory, updateCategory, deleteCategory } from '../api/categories';
 import { listBrands } from '../api/brands';
+import { listPerlengkapanItems, getCategoryPerlengkapan, putCategoryPerlengkapan } from '../api/perlengkapan';
+import PerlengkapanSetEditor from '../components/PerlengkapanSetEditor';
 import { StatusChip } from '../components/penggunaUi';
 
 const initialForm = {
@@ -20,13 +24,8 @@ const initialForm = {
   brand_ids: []
 };
 
-// Chip brand: warna brand hanya penanda (dot), bukan warna UI.
-const BrandChip = ({ name, color }) => (
-  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium font-body bg-white border border-neutral-200 text-neutral-700 whitespace-nowrap">
-    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color || '#9CA3AF' }} />
-    {name}
-  </span>
-);
+// Brand: titik warna + nama (gaya sama dengan daftar Paket).
+const BrandChip = ({ name, color }) => <BrandLabel name={name} color={color} />;
 
 const CategoriesPage = () => {
   const [categories, setCategories] = useState([]);
@@ -40,6 +39,9 @@ const CategoriesPage = () => {
   const [formData, setFormData] = useState(initialForm);
   const [formErrors, setFormErrors] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Isi perlengkapan bawaan kategori (dipakai semua paket kategori ini, kecuali ditimpa per paket).
+  const [perlCatalog, setPerlCatalog] = useState([]);
+  const [perlItems, setPerlItems] = useState([]);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -83,7 +85,14 @@ const CategoriesPage = () => {
     { id: 'inactive', label: 'Nonaktif', count: counts.inactive },
   ];
 
+  const toSetRows = (rows) => (rows || []).map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: r.qty, untuk: r.untuk || 'semua' }));
+
   const handleOpenModal = (cat = null) => {
+    setPerlItems([]);
+    listPerlengkapanItems().then((d) => setPerlCatalog(d || [])).catch(() => setPerlCatalog([]));
+    if (cat) {
+      getCategoryPerlengkapan(cat.id).then((d) => setPerlItems(toSetRows(d?.items))).catch(() => setPerlItems([]));
+    }
     if (cat) {
       setEditingCategory(cat);
       setFormData({
@@ -149,10 +158,18 @@ const CategoriesPage = () => {
         brand_ids: formData.brand_ids
       };
 
+      let categoryId = editingCategory?.id;
       if (editingCategory) {
         await updateCategory(editingCategory.id, payload);
       } else {
-        await createCategory(payload);
+        const created = await createCategory(payload);
+        categoryId = created?.id;
+      }
+      if (categoryId) {
+        await putCategoryPerlengkapan(
+          categoryId,
+          perlItems.map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: Number(r.qty) || 1, untuk: r.untuk || 'semua' })),
+        );
       }
 
       handleCloseModal();
@@ -271,32 +288,7 @@ const CategoriesPage = () => {
           itemsPerPage={15}
           emptyMessage='Belum ada data kategori paket. Klik "+ Tambah Kategori" untuk menambahkan.'
           searchPlaceholder="Cari nama, slug, atau brand..."
-          toolbarActions={
-            <div className="flex flex-wrap gap-1.5">
-              {tabs.map(tab => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium font-body rounded-lg border transition-colors ${
-                      isActive
-                        ? 'bg-primary-500 border-primary-500 text-white'
-                        : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-                    }`}
-                  >
-                    <span>{tab.label}</span>
-                    <span className={`min-w-[20px] px-1.5 py-0.5 rounded-full text-[11px] leading-none text-center ${
-                      isActive ? 'bg-white/25 text-white' : 'bg-neutral-100 text-neutral-600'
-                    }`}>
-                      {tab.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          }
+          toolbarLeading={<SegmentedTabs tabs={tabs} value={activeTab} onChange={setActiveTab} />}
           renderCell={renderCell}
         />
       )}
@@ -306,6 +298,7 @@ const CategoriesPage = () => {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         title={editingCategory ? "Edit Kategori" : "Tambah Kategori"}
+        size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {formErrors && <Alert variant="error">{formErrors}</Alert>}
@@ -370,7 +363,18 @@ const CategoriesPage = () => {
             </div>
           </div>
 
-          <div className="pt-2 border-t border-neutral-100 flex items-center justify-between">
+          {/* Isi perlengkapan bawaan */}
+          <div className="space-y-2 pt-3 border-t border-neutral-100">
+            <div>
+              <div className="text-xs font-semibold text-neutral-800 font-heading">Perlengkapan Bawaan</div>
+              <p className="text-[11px] font-body text-neutral-500">
+                Dibagikan ke tiap jamaah pada paket kategori ini. Bisa diubah khusus per paket di form Paket.
+              </p>
+            </div>
+            <PerlengkapanSetEditor catalog={perlCatalog} value={perlItems} onChange={setPerlItems} />
+          </div>
+
+          <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
             <div className="text-xs font-semibold text-neutral-800 font-heading">Status Aktif</div>
             <Toggle
               id="is_active"

@@ -113,6 +113,31 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Aturan catat pembayaran oleh admin: transfer wajib menyebut rekening tujuan,
+	// tunai wajib menyebut nama staff yang menerima uangnya.
+	metode := "transfer"
+	if req.Metode != nil && strings.TrimSpace(*req.Metode) != "" {
+		metode = strings.ToLower(strings.TrimSpace(*req.Metode))
+	}
+	switch metode {
+	case "transfer":
+		if req.BankAccountID == nil || *req.BankAccountID <= 0 {
+			writeError(w, http.StatusBadRequest, "rekening tujuan wajib dipilih untuk pembayaran transfer")
+			return
+		}
+	case "cash":
+		if req.ReceivedBy == nil || strings.TrimSpace(*req.ReceivedBy) == "" {
+			writeError(w, http.StatusBadRequest, "nama staff penerima wajib diisi untuk pembayaran tunai")
+			return
+		}
+		trimmed := strings.TrimSpace(*req.ReceivedBy)
+		req.ReceivedBy = &trimmed
+		req.BankAccountID = nil // tunai tidak melewati rekening
+	}
+	if metode != "cash" {
+		req.ReceivedBy = nil
+	}
+
 	brandID := identity.GetBrandID(r.Context())
 
 	// Verify booking

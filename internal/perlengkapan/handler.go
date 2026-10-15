@@ -105,9 +105,14 @@ func (h *Handler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	qtyPerSet := 0
-	if req.QtyPerSet != nil && *req.QtyPerSet > 0 {
-		qtyPerSet = *req.QtyPerSet
+	// nil = qty_per_set tidak dikirim: set global dibiarkan apa adanya.
+	var qtyPerSet *int
+	if req.QtyPerSet != nil {
+		q := 0
+		if *req.QtyPerSet > 0 {
+			q = *req.QtyPerSet
+		}
+		qtyPerSet = &q
 	}
 
 	item, err := h.repo.UpdateItem(r.Context(), id, nama, cleanPhotoURL(req.PhotoURL), qtyPerSet)
@@ -214,7 +219,7 @@ func (h *Handler) UpdateStok(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := h.repo.UpdateStok(r.Context(), brandID, itemID, *req.StokTersedia)
+	item, err := h.repo.UpdateStok(r.Context(), brandID, itemID, *req.StokTersedia, adminID(r))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan")

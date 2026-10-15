@@ -314,6 +314,8 @@ func main() {
 		masterEdit.Post("/categories", categoryHandler.CreateCategory)
 		masterEdit.Put("/categories/{id}", categoryHandler.UpdateCategory)
 		masterEdit.Delete("/categories/{id}", categoryHandler.DeleteCategory)
+		r.With(identity.RequirePermission("perlengkapan.view")).Get("/categories/{id}/perlengkapan", perlengkapanHandler.GetCategorySet)
+		masterEdit.Put("/categories/{id}/perlengkapan", perlengkapanHandler.PutCategorySet)
 
 
 		r.Route("/brands", func(r chi.Router) {
@@ -375,6 +377,8 @@ func main() {
 		scheduleEdit.Put("/schedules/{id}/status", scheduleHandler.UpdateScheduleStatus)
 		scheduleEdit.Put("/schedules/{id}/seat", scheduleHandler.UpdateScheduleSeat)
 		scheduleEdit.Delete("/schedules/{id}", scheduleHandler.DeleteSchedule)
+		r.With(identity.RequirePermission("perlengkapan.view")).Get("/schedules/{id}/perlengkapan", perlengkapanHandler.GetScheduleSet)
+		scheduleEdit.Put("/schedules/{id}/perlengkapan", perlengkapanHandler.PutScheduleSet)
 
 		// Jamaah
 		jamaahView := r.With(identity.RequirePermission("jamaah.view"))
@@ -428,6 +432,9 @@ func main() {
 		// Perlengkapan Stok (Per Brand)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-stok", perlengkapanHandler.ListStok)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Put("/perlengkapan-stok/{item_id}", perlengkapanHandler.UpdateStok)
+		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-mutasi", perlengkapanHandler.ListMutasi)
+		r.With(identity.RequirePermission("perlengkapan.edit")).Post("/perlengkapan-mutasi/pembelian", perlengkapanHandler.Pembelian)
+		r.With(identity.RequirePermission("perlengkapan.edit")).Post("/perlengkapan-mutasi/koreksi", perlengkapanHandler.Koreksi)
 
 		// Perlengkapan Set Template (Global) — master data holding.
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-set-template", perlengkapanHandler.GetSetTemplate)

@@ -17,6 +17,7 @@ type Payment struct {
 	DestinationAccountHolder *string    `json:"destination_account_holder"`
 	SenderName               *string    `json:"sender_name"`
 	SenderBank               *string    `json:"sender_bank"`
+	ReceivedBy               *string    `json:"received_by"`
 	Notes                    *string    `json:"notes"`
 	Source                   string     `json:"source"`
 	RejectionReason          *string    `json:"rejection_reason"`
@@ -39,6 +40,7 @@ type CreatePaymentRequest struct {
 	BankAccountID *int64  `json:"bank_account_id"`
 	SenderName    *string `json:"sender_name"`
 	SenderBank    *string `json:"sender_bank"`
+	ReceivedBy    *string `json:"received_by"`
 	Notes         *string `json:"notes"`
 	Source        string  `json:"source"`
 }
