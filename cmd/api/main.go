@@ -485,6 +485,7 @@ func main() {
 		})
 
 		// Analytics lintas brand
+		r.With(identity.RequirePermission("report.finance.view")).Get("/finance/ringkasan", paymentHandler.FinanceSummary)
 		r.With(identity.RequirePermission("report.analytics.view")).Get("/analytics/transactions-30-days", paymentHandler.ListDailyBrandTransactions)
 		r.With(identity.RequirePermission("report.analytics.view")).Get("/analytics/pax-30-days", bookingHandler.ListDailyBrandPax)
 	})
