@@ -314,6 +314,18 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 	}
 	b.Discounts = discounts
 
+	var pm Pemesan
+	err = r.db.QueryRowContext(ctx, `
+		SELECT a.nama_lengkap, a.no_hp, a.email,
+			EXISTS(SELECT 1 FROM booking_pax bp WHERE bp.booking_id=b.id AND bp.jamaah_id=a.jamaah_id AND bp.pax_status='aktif')
+		FROM bookings b JOIN customer_accounts a ON a.id=b.customer_account_id
+		WHERE b.id=?`, id).Scan(&pm.Nama, &pm.NoHP, &pm.Email, &pm.Ikut)
+	if err == nil {
+		b.Pemesan = &pm
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("booking.GetByID pemesan: %w", err)
+	}
+
 	return b, nil
 }
 

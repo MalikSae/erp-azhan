@@ -36,6 +36,14 @@ type BookingPax struct {
 }
 
 // Booking adalah response lengkap admin — JOIN nama jamaah + jadwal_nama schedule + primary pax.
+// Pemesan adalah pemilik akun yang membuat booking. Ikut=false: memesankan untuk orang lain.
+type Pemesan struct {
+	Nama string `json:"nama_lengkap"`
+	NoHP string `json:"no_hp"`
+	Email string `json:"email"`
+	Ikut bool   `json:"ikut_berangkat"`
+}
+
 type Booking struct {
 	ID                int64    `json:"id"`
 	IDBooking         *string  `json:"id_booking"`
@@ -74,6 +82,8 @@ type Booking struct {
 	SiapBerangkat             bool           `json:"siap_berangkat"`
 	Pax                       []BookingPax   `json:"pax"`
 	Discounts                 []BookingDiscount `json:"discounts"`
+	// Pemesan: akun pelanggan yang memesan lewat situs publik (nil untuk booking dari ERP/agen).
+	Pemesan                   *Pemesan          `json:"pemesan,omitempty"`
 	CreatedBy                 *int64            `json:"created_by"`
 	CreatedAt                 time.Time      `json:"created_at"`
 }
