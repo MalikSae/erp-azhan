@@ -384,7 +384,6 @@ func main() {
 		jamaahView := r.With(identity.RequirePermission("jamaah.view"))
 		jamaahEdit := r.With(identity.RequirePermission("jamaah.edit"))
 		jamaahView.Get("/jamaah", jamaahHandler.ListJamaah)
-		jamaahView.Get("/jamaah/duplikat-lintas-brand", jamaahHandler.ListDuplikatLintasBrand)
 		jamaahView.Get("/jamaah/{id}", jamaahHandler.GetJamaah)
 		jamaahEdit.Post("/jamaah", jamaahHandler.CreateJamaah)
 		jamaahEdit.Put("/jamaah/{id}", jamaahHandler.UpdateJamaah)
@@ -485,7 +484,6 @@ func main() {
 		})
 
 		// Analytics lintas brand
-		r.With(identity.RequirePermission("report.finance.view")).Get("/finance/ringkasan", paymentHandler.FinanceSummary)
 		r.With(identity.RequirePermission("report.analytics.view")).Get("/analytics/transactions-30-days", paymentHandler.ListDailyBrandTransactions)
 		r.With(identity.RequirePermission("report.analytics.view")).Get("/analytics/pax-30-days", bookingHandler.ListDailyBrandPax)
 	})

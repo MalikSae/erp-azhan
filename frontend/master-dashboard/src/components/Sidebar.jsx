@@ -17,7 +17,6 @@ import {
   ChevronDown,
   Network,
   UserCheck,
-  Banknote,
   Wallet,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
@@ -56,15 +55,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'JAMAAH & BOOKING',
       items: [
         { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
-        { name: 'Duplikat Lintas Brand', path: '/jamaah/duplikat', icon: Users, perm: 'jamaah.view', holdingOnly: true },
         { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
         { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
-      ],
-    },
-    {
-      name: 'KEUANGAN',
-      items: [
-        { name: 'Dashboard Keuangan', path: '/keuangan', icon: Banknote, perm: 'report.finance.view' },
       ],
     },
     {
@@ -185,7 +177,12 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                           to={item.path}
                           end={item.path === '/komisi' || item.path === '/agen'}
                           onClick={closeDrawer}
-                          className={({ isActive }) => {
+                          className={({ isActive: matched }) => {
+                            // Item induk (mis. /jamaah) tidak aktif bila item yang lebih spesifik
+                            // (mis. /jamaah/duplikat) sedang dibuka.
+                            const isActive = matched && !menuGroups.some((g) => g.items.some((o) =>
+                              o.path !== item.path && o.path.startsWith(`${item.path}/`)
+                              && (location.pathname === o.path || location.pathname.startsWith(`${o.path}/`))));
                             if (isInactive) {
                               return 'flex items-center justify-between px-3 py-1.5 text-[13px] transition-all rounded-lg text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
                             }
