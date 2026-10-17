@@ -104,7 +104,7 @@ func TestLateDepartureSnapshotsFullPayment(t *testing.T) {
 
 func TestCheckoutRequiresConsentAndQuote(t *testing.T) {
 	total, dp := 20000000.0, 5000000.0
-	valid := BookingRequest{TermsAccepted: true, TermsVersion: TermsVersion, RequestKey: strings.Repeat("a", 48), ExpectedTotal: &total, ExpectedDP: &dp, PIC: PICInput{NamaLengkap: "Test PIC", NoHP: "081234567890", JenisKelamin: "L", PortalPIN: "123456"}}
+	valid := BookingRequest{TermsAccepted: true, TermsVersion: TermsVersion, RequestKey: strings.Repeat("a", 48), ExpectedTotal: &total, ExpectedDP: &dp, PIC: PICInput{NamaLengkap: "Test PIC", NoHP: "081234567890", JenisKelamin: "L", NIK: &nikUjiValid}}
 	if reason := validateCheckout(&valid, false); reason != "" {
 		t.Fatal(reason)
 	}
@@ -113,7 +113,6 @@ func TestCheckoutRequiresConsentAndQuote(t *testing.T) {
 		func(r *BookingRequest) { r.TermsVersion = "old" },
 		func(r *BookingRequest) { r.ExpectedTotal = nil },
 		func(r *BookingRequest) { r.RequestKey = "short" },
-		func(r *BookingRequest) { r.PIC.PortalPIN = "abcdef" },
 	} {
 		invalid := valid
 		mutate(&invalid)

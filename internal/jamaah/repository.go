@@ -207,8 +207,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		no_hp, email, pekerjaan, pendidikan_terakhir, penjamin_kesehatan, no_asuransi_bpjs,
 		alamat, kota, catatan, status, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat,
 		created_at,
-		IF(portal_pin_hash IS NOT NULL AND portal_pin_hash != '', TRUE, FALSE) AS portal_aktif,
-		(SELECT expires_at FROM jamaah_activation_tokens WHERE jamaah_id = jamaah.id AND used_at IS NULL AND expires_at > NOW() ORDER BY expires_at DESC LIMIT 1) AS link_aktivasi_aktif_sampai,
+		EXISTS(SELECT 1 FROM customer_accounts WHERE jamaah_id = jamaah.id) AS portal_aktif,
 		kaitan_status, direkrut_oleh_jamaah_id,
 		(SELECT a.nama_lengkap FROM jamaah a WHERE a.id = jamaah.direkrut_oleh_jamaah_id) AS direkrut_oleh_nama,
 		status_agen
@@ -222,7 +221,6 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 	}
 
 	var j Jamaah
-	var linkExpiresAt sql.NullTime
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(
 		&j.ID, &j.BrandID, &j.IDJamaah, &j.KodeJamaah, &j.NamaLengkap, &j.JenisKelamin, &j.NamaAyahKandung, &j.NIK, &j.TempatLahir,
 		&j.TanggalLahir,
@@ -232,7 +230,6 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		&j.Alamat, &j.Kota, &j.Catatan, &j.Status, &j.EmergencyNama, &j.EmergencyNIK, &j.EmergencyHP, &j.EmergencyHubungan, &j.EmergencyAlamat,
 		&j.CreatedAt,
 		&j.PortalAktif,
-		&linkExpiresAt,
 		&j.KaitanStatus, &j.DirekrutOlehJamaahID, &j.DirekrutOlehNama, &j.StatusAgen,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -240,10 +237,6 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 	}
 	if err != nil {
 		return nil, fmt.Errorf("jamaah.GetByID: %w", err)
-	}
-	if linkExpiresAt.Valid {
-		formatted := linkExpiresAt.Time.Format(time.RFC3339)
-		j.LinkAktivasiAktifSampai = &formatted
 	}
 	return &j, nil
 }

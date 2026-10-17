@@ -1,4 +1,4 @@
-﻿import api from './client';
+import api from './client';
 
 export const listJamaah = async (params = {}) => {
   const { data } = await api.get('/api/admin/jamaah', { params });
@@ -30,10 +30,7 @@ export const updateCatatan = async (id, catatan) => {
   return data;
 };
 
-export const createActivationLink = async (id) => {
-  const { data } = await api.post(`/api/admin/jamaah/${id}/activation-link`);
-  return data;
-};
+
 
 // Khusus holding: kelompok jamaah dengan NIK / nomor HP sama di lebih dari satu brand.
 export const listDuplikatLintasBrand = async () => {

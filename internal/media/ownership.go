@@ -29,6 +29,28 @@ func protectedPath(raw string) (string, string, bool) {
 	return parts[0], parts[1], true
 }
 
+// ValidateCustomerUpload memastikan berkas (mis. bukti transfer) adalah unggahan akun
+// pelanggan itu sendiri dan masih ada di disk.
+func ValidateCustomerUpload(ctx context.Context, db *sql.DB, raw string, accountID int64) error {
+	category, name, ok := protectedPath(raw)
+	if !ok || category != "dokumen-jamaah" {
+		return errors.New("berkas harus berasal dari unggahan akun Anda")
+	}
+	canonical := "/api/admin/media/" + category + "/" + name
+	var owned bool
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM media_uploads WHERE path=? AND customer_account_id=?)`, canonical, accountID).Scan(&owned); err != nil {
+		return err
+	}
+	if !owned {
+		return errors.New("berkas bukan unggahan akun Anda")
+	}
+	info, err := os.Stat(filepath.Join("uploads", category, name))
+	if err != nil || info.IsDir() {
+		return errors.New("berkas unggahan tidak ditemukan")
+	}
+	return nil
+}
+
 func ValidatePortalUpload(ctx context.Context, db *sql.DB, raw string, id int64) error {
 	category, name, ok := protectedPath(raw)
 	if !ok || category != "dokumen-jamaah" {

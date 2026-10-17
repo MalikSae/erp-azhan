@@ -10,13 +10,12 @@ import (
 	"errors"
 	"net/mail"
 	"regexp"
+	"strconv"
 	"strings"
 
-	"erp-azhan/api/internal/identity"
-	"golang.org/x/crypto/bcrypt"
 )
 
-const TermsVersion = "booking-2026-09-28"
+const TermsVersion = "booking-2026-10-17"
 
 func resolveInvoiceToken(ctx context.Context, q invoiceReader, token string, brandID int64) (string, error) {
 	if len(token) != 64 || brandID <= 0 {
@@ -35,7 +34,6 @@ func resolveInvoiceToken(ctx context.Context, q invoiceReader, token string, bra
 
 var ErrQuoteChanged = errors.New("harga atau DP berubah; muat ulang paket dan periksa kembali ringkasan sebelum memesan")
 var ErrRequestConflict = errors.New("kunci pemesanan telah digunakan untuk data berbeda; mulai pemesanan baru")
-var numericPIN = regexp.MustCompile(`^[0-9]{6}$`)
 var phonePattern = regexp.MustCompile(`^\+?[0-9 () .-]+$`)
 var phoneNonDigits = regexp.MustCompile(`\D`)
 var requestKeyPattern = regexp.MustCompile(`^[a-fA-F0-9-]{32,64}$`)
@@ -59,7 +57,7 @@ func validateCheckout(req *BookingRequest, agent bool) string {
 		if len(strings.TrimSpace(req.PIC.NamaLengkap)) < 2 || len(req.PIC.NamaLengkap) > 255 {
 			return "nama lengkap harus 2–255 karakter"
 		}
-		if !validPhone(req.PIC.NoHP) {
+		if !(req.PemesanTidakIkut && req.PIC.NoHP == "") && !validPhone(req.PIC.NoHP) {
 			return "nomor WhatsApp harus 10–15 digit"
 		}
 		if req.PIC.JenisKelamin != "L" && req.PIC.JenisKelamin != "P" {
@@ -71,8 +69,16 @@ func validateCheckout(req *BookingRequest, agent bool) string {
 			return "email tidak valid"
 		}
 	}
-	if req.PIC.PortalPIN != "" && !numericPIN.MatchString(req.PIC.PortalPIN) {
-		return "PIN portal harus 6 digit angka"
+	if !agent {
+		if !nikValid(nikBersih(req.PIC.NIK)) {
+			return "NIK jamaah 1 harus 16 digit angka"
+		}
+		for i, p := range req.Anggota {
+			nik := nikBersih(p.NIK)
+			if (p.PaxType == "infant" && nik != "" && !nikValid(nik)) || (p.PaxType != "infant" && !nikValid(nik)) {
+				return "NIK jamaah " + strconv.Itoa(i+2) + " harus 16 digit angka"
+			}
+		}
 	}
 	for _, p := range req.Anggota {
 		if !(agent && p.JamaahID != nil) && (len(strings.TrimSpace(p.NamaLengkap)) < 2 || len(p.NamaLengkap) > 255 || (p.JenisKelamin != "L" && p.JenisKelamin != "P")) {
@@ -91,11 +97,11 @@ func hashText(value string) string {
 }
 func requestFingerprint(req BookingRequest, ini inisiator) string {
 	req.CaptchaToken = ""
-	// Store only a digest; never persist plaintext PIN or submitted identity payload.
+	// Store only a digest; never persist the submitted identity payload.
 	data, _ := json.Marshal(struct {
 		Request BookingRequest
 		Actor   inisiatorFingerprint
-	}{req, inisiatorFingerprint{ini.jamaahLogin, ini.agenID}})
+	}{req, inisiatorFingerprint{ini.accountID, ini.agenID}})
 	return hashText(string(data))
 }
 
@@ -127,23 +133,11 @@ func replayCheckout(ctx context.Context, tx *sql.Tx, req BookingRequest, ini ini
 		return nil, ErrRequestConflict
 	}
 	var stored struct {
-		Response   BookingResponse
-		IssueToken bool
+		Response BookingResponse
 	}
 	if err = json.Unmarshal(raw, &stored); err != nil {
 		return nil, err
 	}
-	if stored.IssueToken {
-		// A retry must not restore portal access after the PIC changes their PIN.
-		var currentPIN string
-		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(portal_pin_hash,'') FROM jamaah WHERE id=?`, stored.Response.Jamaah.ID).Scan(&currentPIN); err != nil {
-			return nil, err
-		}
-		if ini.jamaahLogin != stored.Response.Jamaah.ID && bcrypt.CompareHashAndPassword([]byte(currentPIN), []byte(req.PIC.PortalPIN)) != nil {
-			return nil, ErrInvalidPin
-		}
-		stored.Response.PortalToken, err = identity.GenerateAccountPortalToken(ctx, tx, stored.Response.Jamaah.ID)
-	}
 	stored.Response.Replayed = true
-	return &stored.Response, err
+	return &stored.Response, nil
 }
