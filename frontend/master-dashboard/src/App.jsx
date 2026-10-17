@@ -10,8 +10,6 @@ import DashboardHome from './pages/DashboardHome';
 import BrandDashboardPage from './pages/BrandDashboardPage';
 import PersetujuanAgenPage from './pages/PersetujuanAgenPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
-import DuplikatJamaahPage from './pages/DuplikatJamaahPage';
-import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import HotelsPage from './pages/HotelsPage';
 import AirlinesPage from './pages/AirlinesPage';
 import ItinerariesPage from './pages/ItinerariesPage';
@@ -46,9 +44,7 @@ import {
 } from 'shared';
 
 function AppRoutes() {
-  const { isHolding, hasPermission } = useContext(AuthContext);
-  // Finance tanpa izin analytics mendarat di dashboard keuangan; peran lain memakai beranda biasa.
-  const financeOnly = hasPermission('report.finance.view') && !hasPermission('report.analytics.view');
+  const { isHolding } = useContext(AuthContext);
   // Holding melihat lintas brand (kolom Brand + filter); admin brand terkunci ke brand-nya.
   const showBrandColumn = isHolding;
 
@@ -58,8 +54,7 @@ function AppRoutes() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
-          <Route path="/" element={isHolding ? (financeOnly ? <FinanceDashboardPage /> : <DashboardHome />) : <BrandDashboardPage />} />
-          <Route path="/keuangan" element={<RequireAccess perm="report.finance.view"><FinanceDashboardPage /></RequireAccess>} />
+          <Route path="/" element={isHolding ? <DashboardHome /> : <BrandDashboardPage />} />
           <Route path="/pengaturan" element={<AccountSettingsPage />} />
 
           {/* Master paket */}
@@ -76,7 +71,6 @@ function AppRoutes() {
 
           {/* Jamaah & Booking (halaman bersama) */}
           <Route path="/jamaah" element={<RequireAccess perm="jamaah.view"><JamaahPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
-          <Route path="/jamaah/duplikat" element={<RequireAccess holdingOnly><DuplikatJamaahPage /></RequireAccess>} />
           <Route path="/jamaah/new" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/:id" element={<RequireAccess perm="jamaah.view"><JamaahDetailPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/:id/edit" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />

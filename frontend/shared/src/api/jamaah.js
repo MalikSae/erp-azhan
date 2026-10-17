@@ -29,11 +29,3 @@ export const updateCatatan = async (id, catatan) => {
   const { data } = await api.put(`/api/admin/jamaah/${id}/catatan`, { catatan });
   return data;
 };
-
-
-
-// Khusus holding: kelompok jamaah dengan NIK / nomor HP sama di lebih dari satu brand.
-export const listDuplikatLintasBrand = async () => {
-  const { data } = await api.get('/api/admin/jamaah/duplikat-lintas-brand');
-  return data;
-};
