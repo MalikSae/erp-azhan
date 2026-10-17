@@ -41,6 +41,21 @@ func slugify(s string) string {
 	return strings.Trim(s, "-")
 }
 
+// normalizeBadgeColor merapikan warna badge: kosong -> nil (otomatis); selain palet -> tidak valid.
+func normalizeBadgeColor(c *string) (*string, bool) {
+	if c == nil {
+		return nil, true
+	}
+	v := strings.ToLower(strings.TrimSpace(*c))
+	if v == "" {
+		return nil, true
+	}
+	if !ValidBadgeColor(v) {
+		return nil, false
+	}
+	return &v, true
+}
+
 func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
@@ -132,6 +147,13 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	badge, ok := normalizeBadgeColor(req.BadgeColor)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "warna badge tidak valid")
+		return
+	}
+	req.BadgeColor = badge
+
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "nama kategori wajib diisi")
@@ -186,6 +208,13 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
+
+	badge, ok := normalizeBadgeColor(req.BadgeColor)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "warna badge tidak valid")
+		return
+	}
+	req.BadgeColor = badge
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
