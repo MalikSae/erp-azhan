@@ -16,10 +16,13 @@ import { listBrands } from '../api/brands';
 import { listPerlengkapanItems, getCategoryPerlengkapan, putCategoryPerlengkapan } from '../api/perlengkapan';
 import PerlengkapanSetEditor from '../components/PerlengkapanSetEditor';
 import { StatusChip } from '../components/penggunaUi';
+import { isBadgeHex, badgeTextColor } from '../lib/badgeColors';
+import BadgeColorField from '../components/BadgeColorField';
 
 const initialForm = {
   name: '',
   slug: '',
+  badge_color: '',
   is_active: true,
   brand_ids: []
 };
@@ -98,6 +101,7 @@ const CategoriesPage = () => {
       setFormData({
         name: cat.name || '',
         slug: cat.slug || '',
+        badge_color: cat.badge_color || '',
         is_active: cat.is_active !== undefined ? cat.is_active : true,
         brand_ids: cat.brands ? cat.brands.map(b => b.id) : []
       });
@@ -154,6 +158,7 @@ const CategoriesPage = () => {
       const payload = {
         name: formData.name.trim(),
         slug: formData.slug.trim(),
+        badge_color: formData.badge_color || null,
         is_active: formData.is_active,
         brand_ids: formData.brand_ids
       };
@@ -200,6 +205,7 @@ const CategoriesPage = () => {
 
   const columns = [
     { header: 'Kategori', key: 'name', sortable: true },
+    { header: 'Badge', key: 'badge_color' },
     { header: 'Brand Berlaku', key: 'brands' },
     { header: 'Jumlah Paket', key: 'package_count', sortable: true },
     { header: 'Status', key: 'is_active', sortable: true },
@@ -219,6 +225,15 @@ const CategoriesPage = () => {
           </button>
           <div className="text-[11px] font-body text-neutral-400 truncate">/{row.slug}</div>
         </div>
+      );
+    }
+
+    if (key === 'badge_color') {
+      const hex = isBadgeHex(row.badge_color) ? row.badge_color : null;
+      return hex ? (
+        <span className="inline-block rounded px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: hex, color: badgeTextColor(hex) }}>{row.name}</span>
+      ) : (
+        <span className="text-xs text-neutral-400 font-body">Otomatis</span>
       );
     }
 
@@ -319,6 +334,19 @@ const CategoriesPage = () => {
             onChange={handleChange}
             placeholder="otomatis jika kosong"
           />
+
+          {/* Warna badge */}
+          <div className="space-y-2 pt-1 border-t border-neutral-100">
+            <div>
+              <div className="text-xs font-semibold text-neutral-800 font-heading">Warna Badge</div>
+              <p className="text-[11px] font-body text-neutral-500">Warna label kategori di situs booking. Otomatis = dipilihkan sistem.</p>
+            </div>
+            <BadgeColorField
+              value={formData.badge_color}
+              label={formData.name.trim()}
+              onChange={(hex) => setFormData(prev => ({ ...prev, badge_color: hex }))}
+            />
+          </div>
 
           {/* Checklist Brand */}
           <div className="space-y-2 pt-1 border-t border-neutral-100">

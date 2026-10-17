@@ -26,17 +26,18 @@ import (
 	"erp-azhan/api/internal/brand"
 	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/crmdeal"
+	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
-	"erp-azhan/api/internal/orgunit"
-	"erp-azhan/api/internal/rbac"
 	"erp-azhan/api/internal/itinerary"
 	"erp-azhan/api/internal/jamaah"
+	"erp-azhan/api/internal/mailer"
 	"erp-azhan/api/internal/media"
+	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
 	"erp-azhan/api/internal/perlengkapan"
-	"erp-azhan/api/internal/portal"
+	"erp-azhan/api/internal/rbac"
 	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/selfbooking"
 	"erp-azhan/api/internal/shared"
@@ -122,7 +123,6 @@ func main() {
 	categoryRepo := category.NewRepository(db)
 	categoryHandler := category.NewHandler(categoryRepo)
 
-
 	itineraryRepo := itinerary.NewRepository(db)
 	itineraryHandler := itinerary.NewHandler(itineraryRepo)
 
@@ -181,7 +181,9 @@ func main() {
 	adminuserHandler := adminuser.NewHandler(adminuserRepo, identityRepo)
 	orgUnitHandler := orgunit.NewHandler(orgunit.NewRepository(db))
 
-	portalHandler := portal.NewHandler(db, jamaahRepo, bookingRepo, paymentRepo, dokumenRepo)
+	customerRepo := customer.NewRepository(db)
+	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
+	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
 	agenRepo := agen.NewRepository(db)
 	agenHandler := agen.NewHandler(agenRepo)
@@ -204,14 +206,18 @@ func main() {
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
 	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.List)
 
-	// Public: Booking (Self-Service) & Digital Invoice & Jamaah Check
-	r.With(requireDB(db)).Post("/api/public/book", selfBookingHandler.CreateBooking)
-	r.With(requireDB(db)).Post("/api/public/agen/daftar", selfBookingHandler.DaftarAgen)
+	// Public: Digital Invoice (tautan berkode untuk pelanggan lama; pesanan baru lewat /api/account)
 	r.With(requireDB(db)).Get("/api/public/invoice/{code}", selfBookingHandler.GetPublicInvoice)
-	r.With(requireDB(db)).Post("/api/public/jamaah/check", selfBookingHandler.CheckPhone)
-	r.With(requireDB(db)).Post("/api/public/aktivasi/check", portalHandler.CheckActivationToken)
-	r.With(requireDB(db)).Post("/api/public/aktivasi/verify-dob", portalHandler.VerifyActivationDob)
-	r.With(requireDB(db)).Post("/api/public/aktivasi", portalHandler.ActivateAccount)
+
+	// Akun pelanggan (email + password): daftar, masuk, verifikasi email, lupa password
+	r.Route("/api/public/auth", func(r chi.Router) {
+		r.Use(requireDB(db))
+		r.Post("/register", customerHandler.Register)
+		r.Post("/login", customerHandler.Login)
+		r.Post("/forgot-password", customerHandler.ForgotPassword)
+		r.Post("/reset-password", customerHandler.ResetPassword)
+		r.Post("/verify-email", customerHandler.VerifyEmail)
+	})
 
 	// Auth (public)
 	r.Route("/api/auth", func(r chi.Router) {
@@ -221,46 +227,24 @@ func main() {
 		r.Post("/logout", identityHandler.Logout)
 	})
 
-	// Portal Jamaah (login public + scoped portal endpoints)
-	r.Route("/api/portal", func(r chi.Router) {
+	// Area akun pelanggan: butuh sesi (Authorization: Bearer <token sesi>).
+	// Area agen Syiar (/api/portal/agen/*) sengaja belum dipasang: dibangun ulang di atas akun email.
+	r.Route("/api/account", func(r chi.Router) {
 		r.Use(requireDB(db))
-		r.Post("/login", portalHandler.Login)
-
-		r.Group(func(r chi.Router) {
-			r.Use(identity.RequirePortalAuth)
-			r.Use(identity.RequirePortalSession(db))
-			r.Post("/logout", identity.PortalLogout(db))
-			r.Get("/me", portalHandler.GetMe)
-			r.Get("/cashback", portalHandler.GetCashback)
-			r.Get("/bookings", portalHandler.ListBookings)
-			r.Get("/bookings/{id}", portalHandler.GetBookingByID)
-			r.Get("/bookings/{id}/payments", portalHandler.ListPayments)
-			r.Get("/bookings/{id}/invoice-link", selfBookingHandler.InvoiceLink)
-			r.Get("/bank-accounts", portalHandler.ListBankAccounts)
-			r.Post("/bookings/{id}/payments", portalHandler.CreatePayment)
-			r.Get("/dokumen", portalHandler.ListDokumen)
-			r.Get("/dokumen/{id}/file", mediaHandler.ServeDocument)
-			r.Post("/dokumen", portalHandler.UploadDokumen)
-			r.Post("/media/upload", mediaHandler.UploadPortalMedia)
-
-			// Agen Syiar (screen A1–A4)
-			r.Get("/agen", agenHandler.GetStatus)
-			r.Post("/agen/pengajuan", agenHandler.Ajukan)
-			r.Post("/agen/pembayaran/bukti", agenHandler.UploadBukti)
-
-			// Agen Syiar aktif (screen A3, A5, A6)
-			r.Get("/agen/dashboard", agenHandler.Dashboard)
-			r.Get("/agen/komisi", agenHandler.RiwayatKomisiPortal)
-			r.Get("/agen/jamaah", selfBookingHandler.ListJamaahSaya)
-			r.Post("/agen/bookings", selfBookingHandler.CreateBookingAgen)
-
-			// Agen Syiar: tarik saldo (screen A7)
-			r.Get("/agen/pencairan", agenHandler.GetPencairan)
-			r.Post("/agen/pencairan", agenHandler.AjukanPencairan)
-			r.Get("/agen/pencairan/{id}/bukti", agenHandler.BuktiPencairanPortal)
-		})
+		r.Use(customerHandler.RequireCustomer)
+		r.Get("/me", customerHandler.Me)
+		r.Post("/logout", customerHandler.Logout)
+		r.Post("/resend-verification", customerHandler.ResendVerification)
+		r.Get("/bank-accounts", customerOrders.BankAccounts)
+		r.Get("/travelers", customerOrders.Travelers)
+		r.Get("/bookings", customerOrders.List)
+		r.Post("/bookings", selfBookingHandler.CreateBooking)
+		r.Get("/bookings/{id}", customerOrders.Detail)
+		r.Post("/bookings/{id}/cancel", customerOrders.Cancel)
+		r.Get("/bookings/{id}/payments", customerOrders.ListPayments)
+		r.Post("/bookings/{id}/payments", customerOrders.CreatePayment)
+		r.Post("/media/upload", mediaHandler.UploadPortalMedia)
 	})
-
 	r.Route("/api/admin", func(r chi.Router) {
 		// Guard: tolak semua admin request jika DB tidak tersedia, LALU validasi auth token JWT
 		r.Use(requireDB(db))
@@ -269,7 +253,6 @@ func main() {
 
 		r.Get("/my-brand", brandHandler.GetMyBrand)
 		r.With(identity.RequireAdminRole).Put("/account/password", adminuserHandler.ChangeOwnPassword)
-
 
 		// RBAC Fase 1: manajemen role & permission (SPEK-RBAC-2026-10-02.md).
 		r.Route("/roles", func(r chi.Router) {
@@ -316,7 +299,6 @@ func main() {
 		masterEdit.Delete("/categories/{id}", categoryHandler.DeleteCategory)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/categories/{id}/perlengkapan", perlengkapanHandler.GetCategorySet)
 		masterEdit.Put("/categories/{id}/perlengkapan", perlengkapanHandler.PutCategorySet)
-
 
 		r.Route("/brands", func(r chi.Router) {
 			r.With(identity.RequirePermission("brand.view")).Get("/", brandHandler.ListBrands)
@@ -389,8 +371,6 @@ func main() {
 		jamaahEdit.Put("/jamaah/{id}", jamaahHandler.UpdateJamaah)
 		jamaahEdit.Put("/jamaah/{id}/catatan", jamaahHandler.UpdateCatatan)
 		jamaahEdit.Delete("/jamaah/{id}", jamaahHandler.DeleteJamaah)
-		jamaahEdit.Post("/jamaah/{id}/activation-link", portalHandler.GenerateActivationLink)
-
 
 		// Dokumen Jamaah
 		r.With(identity.RequirePermission("dokumen.view")).Get("/jamaah/{jamaah_id}/dokumen", dokumenHandler.ListDokumen)

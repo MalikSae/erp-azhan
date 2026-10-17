@@ -112,8 +112,9 @@ func (h *Handler) GetSchedulePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Paket yang sudah berangkat tidak ditampilkan lagi (MP-04); daftar publik sudah memfilter.
-	if s.Status != "published" || s.BerangkatTanggal < todayWIB() {
+	// Paket yang berangkat kurang dari 30 hari lagi (termasuk yang sudah berangkat) tidak ditampilkan
+	// dan tidak bisa dipesan lagi (MP-04); daftar publik memakai batas yang sama.
+	if s.Status != "published" || s.BerangkatTanggal < batasPublikWIB() {
 		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan atau belum dipublikasikan")
 		return
 	}
@@ -768,6 +769,11 @@ func (h *Handler) checkHotelCity(ctx context.Context, w http.ResponseWriter, id 
 // todayWIB mengembalikan tanggal hari ini (YYYY-MM-DD) zona bisnis.
 func todayWIB() string {
 	return time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
+}
+
+// batasPublikWIB: tanggal berangkat paling awal yang masih tampil dan bisa dipesan di situs publik (hari ini + 30 hari).
+func batasPublikWIB() string {
+	return time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, 30).Format("2006-01-02")
 }
 
 // bolehArsip: sebelum tanggal berangkat lewat, paket dengan booking aktif tidak boleh

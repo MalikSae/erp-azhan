@@ -1,4 +1,4 @@
-﻿import api from './client';
+import api from './client';
 
 export const listJamaah = async (params = {}) => {
   const { data } = await api.get('/api/admin/jamaah', { params });
@@ -27,10 +27,5 @@ export const deleteJamaah = async (id) => {
 
 export const updateCatatan = async (id, catatan) => {
   const { data } = await api.put(`/api/admin/jamaah/${id}/catatan`, { catatan });
-  return data;
-};
-
-export const createActivationLink = async (id) => {
-  const { data } = await api.post(`/api/admin/jamaah/${id}/activation-link`);
   return data;
 };

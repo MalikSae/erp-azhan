@@ -802,6 +802,15 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
               <Field label="Nama Paket">{booking.jadwal_nama || "-"}</Field>
               <Field label="Tanggal Keberangkatan">{formatTanggal(booking.berangkat_tanggal)}</Field>
+              {booking.pemesan && (
+                <Field label="Pemesan (akun situs)">
+                  {booking.pemesan.nama_lengkap}
+                  {!booking.pemesan.ikut_berangkat && <span className="text-neutral-500"> · tidak ikut berangkat</span>}
+                  <span className="block text-xs text-neutral-500">
+                    {[booking.pemesan.no_hp, booking.pemesan.email].filter(Boolean).join(" · ")}
+                  </span>
+                </Field>
+              )}
             </div>
           </Section>
           </Surface>

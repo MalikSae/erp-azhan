@@ -1,6 +1,6 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
-import { getJamaah, updateCatatan, createActivationLink } from "../api/jamaah";
+import { getJamaah, updateCatatan } from "../api/jamaah";
 import { listDokumen, upsertDokumen } from "../api/dokumen";
 import { uploadMedia, openProtectedMedia } from "../api/media";
 import { listBookings } from "../api/bookings";
@@ -13,11 +13,10 @@ import Alert from "../components/ui/Alert";
 import ActionMenu from "../components/ui/ActionMenu";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Table from "../components/ui/Table";
-import Modal from "../components/ui/Modal";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import Textarea from "../components/ui/Textarea";
 import DocumentReview from "../components/DocumentReview";
-import { Eye, Upload, ExternalLink, RefreshCw, Save, Copy, Check, Printer } from "lucide-react";
+import { Eye, Upload, ExternalLink, RefreshCw, Save, Printer } from "lucide-react";
 import { STATUS_AGEN } from "../utils/agen";
 import { printJamaah } from "../utils/printJamaah";
 
@@ -128,12 +127,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
   const [savingCatatan, setSavingCatatan] = useState(false);
   const [catatanSuccess, setCatatanSuccess] = useState(null);
 
-  // Akun Portal Jamaah
-  const [activationUrl, setActivationUrl] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const [generatingLink, setGeneratingLink] = useState(false);
-  const [portalError, setPortalError] = useState(null);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+
 
   const [activeUploadJenis, setActiveUploadJenis] = useState(null);
   const [uploadingJenis, setUploadingJenis] = useState(null);
@@ -206,45 +200,6 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
     } finally {
       setUploadingJenis(null);
       setActiveUploadJenis(null);
-    }
-  };
-
-  // ─── Portal Activation Link Actions ──────────────────────────────────────────
-
-  const handleGenerateLinkClick = () => {
-    if (jamaah?.portal_aktif) {
-      setIsConfirmModalOpen(true);
-    } else {
-      handleExecuteGenerateLink();
-    }
-  };
-
-  const handleExecuteGenerateLink = async () => {
-    try {
-      setGeneratingLink(true);
-      setPortalError(null);
-      setIsConfirmModalOpen(false);
-      const res = await createActivationLink(id);
-      if (res?.activation_url) {
-        setActivationUrl(res.activation_url);
-      }
-      const updatedJamaah = await getJamaah(id);
-      setJamaah(updatedJamaah);
-    } catch (err) {
-      setPortalError(err.response?.data?.error || "Gagal menerbitkan link aktivasi");
-    } finally {
-      setGeneratingLink(false);
-    }
-  };
-
-  const handleCopyLink = async () => {
-    if (!activationUrl) return;
-    try {
-      await navigator.clipboard.writeText(activationUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    } catch (err) {
-      console.error("Clipboard error:", err);
     }
   };
 
@@ -448,94 +403,16 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
 
         {/* Kolom kanan: satu card */}
         <Surface className="divide-y divide-neutral-200/80">
-          <Section title="Akun Portal Jamaah">
-            <div className="space-y-4">
-              {/* Baris Status */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-neutral-500 font-body">Status</span>
-                <StatusDot
-                  label={jamaah.portal_aktif ? "Sudah aktif" : "Belum aktif"}
-                  text={jamaah.portal_aktif ? "text-success-700" : "text-warning-700"}
-                  dot={jamaah.portal_aktif ? "bg-success-500" : "bg-warning-500"}
-                />
-              </div>
-
-              {/* Keterangan Link Aktif jika ada */}
-              {jamaah.link_aktivasi_aktif_sampai && (
-                <p className="text-xs text-neutral-600 font-body bg-neutral-50 p-2.5 rounded-lg border border-neutral-200/80">
-                  Ada link aktif yang belum dipakai, berlaku sampai <span className="font-semibold text-neutral-900">{formatTanggalWaktu(jamaah.link_aktivasi_aktif_sampai)}</span>
-                </p>
-              )}
-
-              {/* Error Alert khusus portal */}
-              {portalError && (
-                <Alert variant="error">
-                  <span>{portalError}</span>
-                  {portalError.includes("Lengkapi tanggal lahir") && (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/jamaah/${id}/edit`)}
-                      className="block mt-1 font-semibold underline hover:text-danger-900 text-xs text-left cursor-pointer"
-                    >
-                      Edit Data Jamaah Sekarang →
-                    </button>
-                  )}
-                </Alert>
-              )}
-
-              {/* Kotak Link Aktivasi Sukses */}
-              {activationUrl && (
-                <div className="space-y-2">
-                  <Alert variant="warning">
-                    Link hanya ditampilkan sekali. Salin dan kirim ke jamaah sekarang. Berlaku 24 jam.
-                  </Alert>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-neutral-600 font-body block">
-                      Link Aktivasi:
-                    </label>
-                    <div className="p-2.5 bg-neutral-50 rounded-lg border border-neutral-200 text-xs font-mono text-neutral-900 break-all select-all">
-                      {activationUrl}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleCopyLink}
-                      className="w-full flex items-center justify-center gap-1.5 text-xs"
-                    >
-                      {copied ? (
-                        <>
-                          <Check size={14} className="text-success-600" />
-                          <span className="text-success-700 font-medium">Tersalin</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} />
-                          <span>Salin Link</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Tombol Terbitkan Link */}
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                isLoading={generatingLink}
-                onClick={handleGenerateLinkClick}
-                className="w-full text-xs"
-              >
-                {jamaah.portal_aktif || jamaah.link_aktivasi_aktif_sampai
-                  ? "Terbitkan Link Baru"
-                  : "Terbitkan Link Aktivasi"}
-              </Button>
+          <Section title="Akun Pelanggan">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-neutral-500 font-body">Status</span>
+              <StatusDot
+                label={jamaah.portal_aktif ? "Punya akun" : "Belum punya akun"}
+                text={jamaah.portal_aktif ? "text-success-700" : "text-warning-700"}
+                dot={jamaah.portal_aktif ? "bg-success-500" : "bg-warning-500"}
+              />
             </div>
           </Section>
-
           <Section title="Agen Syiar">
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -704,39 +581,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
         )}
       </TableCard>
 
-      {/* Modal Konfirmasi Terbitkan Link Baru (Reset) */}
-      <Modal
-        isOpen={isConfirmModalOpen}
-        onClose={() => setIsConfirmModalOpen(false)}
-        title="Terbitkan Link Baru"
-        size="md"
-        footer={
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={generatingLink}
-              onClick={() => setIsConfirmModalOpen(false)}
-            >
-              Batal
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              isLoading={generatingLink}
-              onClick={handleExecuteGenerateLink}
-            >
-              Lanjutkan
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-neutral-700 font-body">
-          Jamaah ini sudah punya akun portal. Link baru akan mengganti PIN lamanya setelah dipakai. Lanjutkan?
-        </p>
-      </Modal>
+
     </div>
   );
 };
