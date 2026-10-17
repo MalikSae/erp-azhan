@@ -13,6 +13,10 @@ import (
 
 func quad() *string { s := "Quad"; return &s }
 
+var nikUjiValid = "3174010101010001"
+
+func nikp(s string) *string { return &s }
+
 // nomorUji menghasilkan nomor HP yang tidak mungkin bentrok dengan data dev.
 func nomorUji(n int) string {
 	return fmt.Sprintf("0819%08d", (time.Now().UnixNano()/1000+int64(n))%100000000)
@@ -31,11 +35,25 @@ func kaitan(t *testing.T, tx *sql.Tx, id int64) (string, int64, bool) {
 	t.Helper()
 	var st string
 	var by sql.NullInt64
-	var pin sql.NullString
-	if err := tx.QueryRow(`SELECT kaitan_status, direkrut_oleh_jamaah_id, portal_pin_hash FROM jamaah WHERE id=?`, id).Scan(&st, &by, &pin); err != nil {
+	var hasAkun bool
+	if err := tx.QueryRow(`SELECT kaitan_status, direkrut_oleh_jamaah_id, EXISTS(SELECT 1 FROM customer_accounts WHERE jamaah_id=jamaah.id) FROM jamaah WHERE id=?`, id).Scan(&st, &by, &hasAkun); err != nil {
 		t.Fatalf("baca jamaah %d: %v", id, err)
 	}
-	return st, by.Int64, pin.Valid && pin.String != ""
+	return st, by.Int64, hasAkun
+}
+
+// akunUji membuat akun pelanggan di transaksi uji. nomor dipakai sebagai no_hp akun,
+// yang menjadi nomor PIC saat booking.
+func akunUji(t *testing.T, tx *sql.Tx, brandID int64, nama, nomor string) int64 {
+	t.Helper()
+	email := fmt.Sprintf("uji-%d@example.com", time.Now().UnixNano())
+	res, err := tx.Exec(`INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash) VALUES (?,?,?,?,?,'x')`,
+		brandID, nama, email, email, nomor)
+	if err != nil {
+		t.Fatalf("buat akun uji: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return id
 }
 
 // Langkah 2 (Jalur 1): agen membuat booking; jamaah baru terikat ke agen,
@@ -58,10 +76,6 @@ func TestBookingAgenJalur1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("booking agen: %v", err)
 	}
-	if resp.PortalToken != "" {
-		t.Fatal("booking agen tidak boleh menerbitkan token portal")
-	}
-
 	var bookingID, pic int64
 	var status string
 	if err := tx.QueryRow(`SELECT id, pic_jamaah_id, status FROM bookings WHERE id_booking=?`, resp.Booking.BookingCode).Scan(&bookingID, &pic, &status); err != nil {
@@ -88,12 +102,12 @@ func TestBookingAgenJalur1(t *testing.T) {
 		if id == agenID {
 			t.Fatal("agen ikut menjadi pax")
 		}
-		st, by, pin := kaitan(t, tx, id)
+		st, by, akun := kaitan(t, tx, id)
 		if st != "terikat_agen" || by != agenID {
 			t.Fatalf("pax %d kaitan %s/%d, want terikat_agen/%d", id, st, by, agenID)
 		}
-		if pin {
-			t.Fatalf("pax %d punya PIN; jamaah baru agen harus aktivasi sendiri", id)
+		if akun {
+			t.Fatalf("pax %d punya akun; jamaah baru agen harus mendaftar sendiri", id)
 		}
 	}
 }
@@ -137,26 +151,31 @@ func TestBookingAgenNonaktifDitolak(t *testing.T) {
 	}
 }
 
-// Regresi refactor inisiator: booking publik tetap membuat PIN PIC dan
-// mengikat pax lewat kode referral (Jalur 2).
-func TestBookingPublikReferralSetelahRefactor(t *testing.T) {
+// Booking publik atas nama akun pelanggan: PIC dibuat dari akun, terikat ke agen lewat
+// kode referral (Jalur 2), dan booking tercatat milik akun itu.
+func TestBookingPublikReferralDenganAkun(t *testing.T) {
 	tx, sched, brand, agenID := setupAgenBooking(t)
 	testdb.Exec(t, tx, `UPDATE jamaah SET kode_referral='UJIJL2' WHERE id=?`, agenID)
+	akun := akunUji(t, tx, brand, "PIC Publik", nomorUji(4))
 	req := BookingRequest{
 		ScheduleID:   sched,
 		KodeReferral: "ujijl2",
-		PIC:          PICInput{NamaLengkap: "PIC Publik", NoHP: nomorUji(4), JenisKelamin: "P", RoomType: "Quad", PortalPIN: "135790"},
+		PIC:          PICInput{NamaLengkap: "PIC Publik", JenisKelamin: "P", RoomType: "Quad"},
 	}
-	resp, err := processBookingTx(context.Background(), tx, brand, req, inisiator{})
+	resp, err := processBookingTx(context.Background(), tx, brand, req, inisiator{accountID: akun})
 	if err != nil {
 		t.Fatalf("booking publik: %v", err)
 	}
-	if resp.PortalToken == "" {
-		t.Fatal("booking publik PIC baru harus menerbitkan token portal")
+	st, by, punyaAkun := kaitan(t, tx, resp.Jamaah.ID)
+	if st != "terikat_agen" || by != agenID || !punyaAkun {
+		t.Fatalf("PIC publik = %s/%d akun=%v, want terikat_agen/%d dengan akun", st, by, punyaAkun, agenID)
 	}
-	st, by, pin := kaitan(t, tx, resp.Jamaah.ID)
-	if st != "terikat_agen" || by != agenID || !pin {
-		t.Fatalf("PIC publik = %s/%d pin=%v, want terikat_agen/%d dengan PIN", st, by, pin, agenID)
+	var owner sql.NullInt64
+	if err := tx.QueryRow(`SELECT customer_account_id FROM bookings WHERE id_booking=?`, resp.Booking.BookingCode).Scan(&owner); err != nil {
+		t.Fatal(err)
+	}
+	if !owner.Valid || owner.Int64 != akun {
+		t.Fatalf("pemilik booking = %v, want akun %d", owner, akun)
 	}
 }
 
@@ -172,12 +191,13 @@ func TestBookingPublikInfantTanggalLahir(t *testing.T) {
 
 	booking := func(tanggalLahir string, n int) (*BookingResponse, error) {
 		tl := tanggalLahir
+		akun := akunUji(t, tx, brand, "PIC Infant", nomorUji(10+n))
 		req := BookingRequest{
 			ScheduleID: sched,
-			PIC:        PICInput{NamaLengkap: "PIC Infant", NoHP: nomorUji(10 + n), JenisKelamin: "P", RoomType: "Quad", PortalPIN: "135790"},
+			PIC:        PICInput{NamaLengkap: "PIC Infant", JenisKelamin: "P", RoomType: "Quad"},
 			Anggota:    []AnggotaInput{{PaxType: "infant", NamaLengkap: "Bayi Uji", JenisKelamin: "L", TanggalLahir: &tl}},
 		}
-		return processBookingTx(ctx, tx, brand, req, inisiator{})
+		return processBookingTx(ctx, tx, brand, req, inisiator{accountID: akun})
 	}
 
 	lahir := hariIni.AddDate(0, -8, 0).Format("2006-01-02")

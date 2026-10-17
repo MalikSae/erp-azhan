@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 )
@@ -20,81 +20,36 @@ type checkAttempt struct {
 }
 
 // Batas endpoint publik. Setiap booking menahan kursi 24 jam, jadi pembuatan
-// booking massal harus dibatasi. Cek nomor HP membocorkan apakah nomor
-// terdaftar (baru / perlu_pin / tanpa_pin), jadi SETIAP pengecekan dihitung,
-// bukan hanya yang hasilnya "baru".
+// booking massal harus dibatasi.
 const (
-	bookingIPAttemptLimit    = 20 // percobaan POST /api/public/book per IP per jam
-	bookingPhoneSuccessLimit = 3  // booking berhasil per nomor HP PIC per 24 jam
-	phoneCheckIPLimit        = 10 // pengecekan POST /api/public/jamaah/check per IP per 15 menit
+	bookingIPAttemptLimit      = 20 // percobaan POST /api/account/bookings per IP per jam
+	bookingAccountSuccessLimit = 3  // booking berhasil per akun per 24 jam
 	// Token invoice acak 256-bit; miss tetap dibatasi untuk menahan scanning.
 	invoiceMissIPLimit = 20 // kode invoice tidak ditemukan per IP per 15 menit
 )
 
 type Handler struct {
-	repo           *Repository
-	captcha        *turnstileVerifier
-	phoneCheckByIP *windowLimiter
-	invoiceMissIP  *windowLimiter
-	bookingByIP    *windowLimiter
-	bookingByPhone *windowLimiter
-	daftarByIP     *windowLimiter
-	bookingByAgen  *windowLimiter
+	repo             *Repository
+	captcha          *turnstileVerifier
+	invoiceMissIP    *windowLimiter
+	bookingByIP      *windowLimiter
+	bookingByAccount *windowLimiter
+	bookingByAgen    *windowLimiter
 }
 
 func NewHandler(repo *Repository) *Handler {
 	return &Handler{
-		repo:           repo,
-		captcha:        newTurnstileVerifier(),
-		phoneCheckByIP: newWindowLimiter(phoneCheckIPLimit, 15*time.Minute),
-		invoiceMissIP:  newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
-		bookingByIP:    newWindowLimiter(bookingIPAttemptLimit, time.Hour),
-		bookingByPhone: newWindowLimiter(bookingPhoneSuccessLimit, 24*time.Hour),
-		daftarByIP:     newWindowLimiter(daftarAgenIPLimit, time.Hour),
-		bookingByAgen:  newWindowLimiter(agenBookingLimit, time.Hour),
+		repo:             repo,
+		captcha:          newTurnstileVerifier(),
+		invoiceMissIP:    newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
+		bookingByIP:      newWindowLimiter(bookingIPAttemptLimit, time.Hour),
+		bookingByAccount: newWindowLimiter(bookingAccountSuccessLimit, 24*time.Hour),
+		bookingByAgen:    newWindowLimiter(agenBookingLimit, time.Hour),
 	}
 }
 
 func getClientIP(r *http.Request) string {
 	return shared.ClientIP(r)
-}
-
-// CheckPhone memeriksa status nomor HP jamaah (POST /api/public/jamaah/check).
-func (h *Handler) CheckPhone(w http.ResponseWriter, r *http.Request) {
-	clientIP := getClientIP(r)
-	if !h.phoneCheckByIP.allow(clientIP) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
-		return
-	}
-	h.phoneCheckByIP.record(clientIP)
-
-	var req CheckPhoneRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
-		return
-	}
-
-	if req.BrandID == nil || *req.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
-		return
-	}
-
-	req.NoHP = strings.TrimSpace(req.NoHP)
-	if !validPhone(req.NoHP) {
-		writeError(w, http.StatusBadRequest, "nomor WhatsApp harus 10–15 digit")
-		return
-	}
-
-	status, err := h.repo.CheckPhone(r.Context(), *req.BrandID, req.NoHP)
-	if err != nil {
-		log.Printf("[ERROR] CheckPhone: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(CheckPhoneResponse{Status: status})
 }
 
 func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +100,7 @@ func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(invoice)
 }
 
+// CreateBooking POST /api/account/bookings (butuh sesi akun pelanggan).
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	clientIP := getClientIP(r)
@@ -154,24 +110,28 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	}
 	h.bookingByIP.record(clientIP)
 
-	// Optional Portal Auth Header
-	var authenticatedJamaahID int64
-	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-	if len(authHeader) > 7 && strings.EqualFold(authHeader[:7], "Bearer ") {
-		tokenStr := strings.TrimSpace(authHeader[7:])
-		if jID, err := identity.ValidateAccountPortalToken(r.Context(), h.repo.db, tokenStr); err == nil && jID > 0 {
-			authenticatedJamaahID = jID
-		} else {
-			writeError(w, 401, "sesi telah berakhir, silakan masuk kembali")
-			return
-		}
+	account := customer.FromContext(r.Context())
+	if account == nil {
+		writeError(w, http.StatusUnauthorized, "sesi berakhir, silakan masuk kembali")
+		return
 	}
 	var req BookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
-
+	// Brand dan identitas pemesan berasal dari akun, bukan dari payload.
+	req.BrandID = account.BrandID
+	if strings.TrimSpace(req.PIC.NamaLengkap) == "" {
+		req.PIC.NamaLengkap = account.NamaLengkap
+	}
+	if req.PemesanTidakIkut {
+		// PIC = jamaah pertama yang diisi pemesan; kontak pemesan tetap di akun.
+		req.PIC.Email = nil
+	} else {
+		req.PIC.NoHP = account.NoHP
+		req.PIC.Email = &account.Email
+	}
 	// Gate 1: Captcha (hanya bila Turnstile aktif, lihat turnstile.go)
 	if h.captcha.enabled() {
 		if strings.TrimSpace(req.CaptchaToken) == "" {
@@ -207,15 +167,9 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	req.PIC.NoHP = strings.TrimSpace(req.PIC.NoHP)
 	req.PIC.JenisKelamin = strings.TrimSpace(req.PIC.JenisKelamin)
 	req.PIC.RoomType = strings.TrimSpace(req.PIC.RoomType)
-	req.PIC.PortalPIN = strings.TrimSpace(req.PIC.PortalPIN)
 
-	if req.PIC.NamaLengkap == "" || req.PIC.NoHP == "" || req.PIC.JenisKelamin == "" || req.PIC.RoomType == "" {
+	if req.PIC.NamaLengkap == "" || (req.PIC.NoHP == "" && !req.PemesanTidakIkut) || req.PIC.JenisKelamin == "" || req.PIC.RoomType == "" {
 		writeError(w, http.StatusBadRequest, "data pendaftar utama tidak lengkap")
-		return
-	}
-
-	if authenticatedJamaahID == 0 && req.PIC.PortalPIN != "" && len(req.PIC.PortalPIN) != 6 {
-		writeError(w, http.StatusBadRequest, "PIN portal harus 6 digit")
 		return
 	}
 
@@ -259,14 +213,10 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gate 8: Batas booking per nomor HP PIC
-	phoneKey, _ := shared.PhoneVariants(req.PIC.NoHP)
-	if phoneKey == "" {
-		phoneKey = req.PIC.NoHP
-	}
-	phoneKey = "brand:" + strconv.FormatInt(req.BrandID, 10) + "|" + phoneKey
-	if !h.bookingByPhone.allow(phoneKey) {
-		writeError(w, http.StatusTooManyRequests, "nomor ini sudah mencapai batas booking hari ini, silakan hubungi admin travel")
+	// Gate 8: Batas booking per akun
+	accountKey := strconv.FormatInt(account.ID, 10)
+	if !h.bookingByAccount.allow(accountKey) {
+		writeError(w, http.StatusTooManyRequests, "akun ini sudah mencapai batas pemesanan hari ini, silakan hubungi admin travel")
 		return
 	}
 
@@ -275,19 +225,15 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	resp, err := h.repo.ProcessBooking(r.Context(), req.BrandID, req, authenticatedJamaahID)
+	resp, err := h.repo.ProcessBooking(r.Context(), req.BrandID, account.ID, req)
 	if err != nil {
 		if errors.Is(err, ErrQuoteChanged) || errors.Is(err, ErrRequestConflict) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
-		if errors.Is(err, ErrInvalidPin) {
-			writeError(w, http.StatusUnauthorized, err.Error())
-			return
-		}
 		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) ||
 			errors.Is(err, ErrAnggotaNameMismatch) || errors.Is(err, ErrDuplicatePaxInBooking) ||
-			errors.Is(err, ErrPinRequired) || errors.Is(err, ErrCutoffBooking) ||
+			errors.Is(err, ErrNomorAtasNamaLain) || errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrAkunTidakValid) || errors.Is(err, ErrCutoffBooking) ||
 			errors.Is(err, ErrTanggalLahirTidakValid) || errors.Is(err, ErrUsiaInfant) || errors.Is(err, ErrInfantUnavailable) || errors.Is(err, ErrInvalidDP) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -301,7 +247,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !resp.Replayed {
-		h.bookingByPhone.record(phoneKey)
+		h.bookingByAccount.record(accountKey)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -313,4 +259,10 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+func writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
 }

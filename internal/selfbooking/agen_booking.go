@@ -229,7 +229,6 @@ func validateAgenBooking(req *BookingRequest) string {
 	req.PIC.NoHP = strings.TrimSpace(req.PIC.NoHP)
 	req.PIC.JenisKelamin = strings.TrimSpace(req.PIC.JenisKelamin)
 	req.PIC.RoomType = strings.TrimSpace(req.PIC.RoomType)
-	req.PIC.PortalPIN = ""
 	req.KodeReferral = ""
 	if req.PIC.JamaahID == nil && (req.PIC.NamaLengkap == "" || req.PIC.NoHP == "" || req.PIC.JenisKelamin == "") {
 		return "data pendaftar utama tidak lengkap"

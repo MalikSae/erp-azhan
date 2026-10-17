@@ -118,27 +118,6 @@ func RequireAdminOrCRMAccess(next http.Handler) http.Handler {
 	})
 }
 
-// RequirePortalAuth middleware memvalidasi portal token di header Authorization
-func RequirePortalAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		jamaahID, err := ValidatePortalToken(tokenString)
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), PortalJamaahIDKey, jamaahID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
 // GetAdminUserID mengambil ID admin dari context
 func GetAdminUserID(ctx context.Context) int64 {
 	if val, ok := ctx.Value(AdminUserIDKey).(int64); ok {
@@ -162,7 +141,8 @@ func GetRole(ctx context.Context) string {
 	return ""
 }
 
-// GetPortalJamaahID mengambil ID jamaah dari context portal
+// GetPortalJamaahID: sisa handler agen Syiar (belum dipasang ke route) masih membacanya.
+// Selalu 0 sampai area agen dibangun ulang di atas akun email.
 func GetPortalJamaahID(ctx context.Context) int64 {
 	if val, ok := ctx.Value(PortalJamaahIDKey).(int64); ok {
 		return val

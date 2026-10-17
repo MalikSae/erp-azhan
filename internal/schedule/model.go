@@ -6,9 +6,10 @@ import (
 
 // CategoryRef menyimpan data relasi kategori paket.
 type CategoryRef struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	ID         int64   `json:"id"`
+	Name       string  `json:"name"`
+	Slug       string  `json:"slug"`
+	BadgeColor *string `json:"badge_color"`
 }
 
 // MaskapaiRef menyimpan data relasi maskapai.

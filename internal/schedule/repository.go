@@ -22,6 +22,7 @@ const selectFull = `
 		s.category_id,
 		COALESCE(cat.name, '') AS category_name,
 		COALESCE(cat.slug, '') AS category_slug,
+		cat.badge_color AS category_badge_color,
 		s.jadwal_nama,
 		s.status,
 		s.views,
@@ -91,7 +92,7 @@ func NewRepository(db *sql.DB) *Repository {
 // List mengambil semua schedule (semua status), ringkas, diurutkan created_at DESC.
 func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListItem, error) {
 	q := `
-		SELECT s.id, s.brand_id, s.category_id, COALESCE(cat.name, ''), COALESCE(cat.slug, ''),
+		SELECT s.id, s.brand_id, s.category_id, COALESCE(cat.name, ''), COALESCE(cat.slug, ''), cat.badge_color,
 			s.jadwal_nama, s.status, s.is_direct_flight,
 			s.maskapai_id, COALESCE(a.name, ''), a.logo_url,
 			DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d') AS berangkat_tanggal,
@@ -124,9 +125,10 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 
 		var categoryID sql.NullInt64
 		var categoryName, categorySlug string
+		var categoryBadge sql.NullString
 		var hargaInfant sql.NullFloat64
 
-		if err := rows.Scan(&item.ID, &item.BrandID, &categoryID, &categoryName, &categorySlug,
+		if err := rows.Scan(&item.ID, &item.BrandID, &categoryID, &categoryName, &categorySlug, &categoryBadge,
 			&item.JadwalNama, &item.Status, &item.IsDirectFlight,
 			&maskapaiID, &maskapaiName, &maskapaiLogo,
 			&item.BerangkatTanggal, &item.SeatTotal, &item.SeatSisa,
@@ -140,6 +142,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 				ID:   categoryID.Int64,
 				Name: categoryName,
 				Slug: categorySlug,
+				BadgeColor: badgeColorPtr(categoryBadge),
 			}
 		}
 
@@ -191,8 +194,9 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 }
 
 // ListPublic mengambil schedule yang published saja untuk brand tertentu, diurutkan berangkat_tanggal ASC.
+// Paket yang berangkat kurang dari 30 hari lagi tidak ditampilkan (pendaftaran online sudah ditutup).
 func (r *Repository) ListPublic(ctx context.Context, brandID int64) ([]*PublicSchedule, error) {
-	q := selectFull + " WHERE s.status = 'published' AND s.brand_id = ? AND s.berangkat_tanggal >= DATE_ADD(CURDATE(), INTERVAL 14 DAY) ORDER BY s.berangkat_tanggal ASC"
+	q := selectFull + " WHERE s.status = 'published' AND s.brand_id = ? AND s.berangkat_tanggal >= DATE_ADD(CURDATE(), INTERVAL 30 DAY) ORDER BY s.berangkat_tanggal ASC"
 	rows, err := r.db.QueryContext(ctx, q, brandID)
 	if err != nil {
 		return nil, fmt.Errorf("schedule.ListPublic: %w", err)
@@ -618,6 +622,15 @@ func (r *Repository) UpdateTransitHotels(ctx context.Context, tx *sql.Tx, schedu
 	return nil
 }
 
+// badgeColorPtr mengubah kolom badge_color (nullable) menjadi pointer; kosong = nil (otomatis).
+func badgeColorPtr(n sql.NullString) *string {
+	if !n.Valid || n.String == "" {
+		return nil
+	}
+	v := n.String
+	return &v
+}
+
 // scanRow mem-scan satu baris dari *sql.Rows (hasil selectFull) ke *Schedule.
 func scanRow(rows *sql.Rows) (*Schedule, error) {
 	var (
@@ -625,6 +638,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		categoryID     sql.NullInt64
 		categoryName   string
 		categorySlug   string
+		categoryBadge  sql.NullString
 		maskapaiID     sql.NullInt64
 		maskapaiName   string
 		maskapaiLogo   sql.NullString
@@ -650,7 +664,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 	)
 
 	err := rows.Scan(
-		&s.ID, &s.BrandID, &categoryID, &categoryName, &categorySlug,
+		&s.ID, &s.BrandID, &categoryID, &categoryName, &categorySlug, &categoryBadge,
 		&s.JadwalNama, &s.Status, &s.Views, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
 		&maskapaiID, &maskapaiName, &maskapaiLogo,
 		&s.BerangkatTanggal, &s.BerangkatJam, &s.BerangkatKodePenerbangan,
@@ -675,6 +689,7 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 			ID:   categoryID.Int64,
 			Name: categoryName,
 			Slug: categorySlug,
+			BadgeColor: badgeColorPtr(categoryBadge),
 		}
 	}
 

@@ -181,8 +181,11 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	if _, ok := protectedCategories[category]; ok {
 		publicURL = fmt.Sprintf("/api/admin/media/%s/%s", category, newFileName)
 		var brandID any = identity.GetBrandID(r.Context())
-		var jamaahID, adminID any
-		if id := identity.GetPortalJamaahID(r.Context()); id > 0 {
+		var jamaahID, adminID, customerID any
+		if id := identity.GetCustomerAccountID(r.Context()); id > 0 {
+			customerID = id
+			brandID = identity.GetCustomerBrandID(r.Context())
+		} else if id := identity.GetPortalJamaahID(r.Context()); id > 0 {
 			jamaahID = id
 			var brand int64
 			if err := h.db.QueryRowContext(r.Context(), `SELECT brand_id FROM jamaah WHERE id=?`, id).Scan(&brand); err != nil {
@@ -194,7 +197,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 		} else {
 			adminID = identity.GetAdminUserID(r.Context())
 		}
-		if _, err := h.db.ExecContext(r.Context(), `INSERT INTO media_uploads(path,brand_id,jamaah_id,admin_user_id) VALUES(?,?,?,?)`, publicURL, brandID, jamaahID, adminID); err != nil {
+		if _, err := h.db.ExecContext(r.Context(), `INSERT INTO media_uploads(path,brand_id,jamaah_id,admin_user_id,customer_account_id) VALUES(?,?,?,?,?)`, publicURL, brandID, jamaahID, adminID, customerID); err != nil {
 			_ = os.Remove(finalPath)
 			writeError(w, 500, "gagal mencatat pemilik berkas")
 			return
