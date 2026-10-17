@@ -128,6 +128,8 @@ func main() {
 
 	scheduleRepo := schedule.NewRepository(db)
 	scheduleHandler := schedule.NewHandler(scheduleRepo)
+	// Paket yang tanggal berangkatnya sudah lewat diarsipkan otomatis: sekali saat API menyala, lalu tiap 24 jam.
+	go schedule.JalankanArsipOtomatis(context.Background(), scheduleRepo, 24*time.Hour)
 
 	identityRepo := identity.NewRepository(db)
 	rbacRepo := rbac.NewRepository(db)
