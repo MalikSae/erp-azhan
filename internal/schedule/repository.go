@@ -194,8 +194,9 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 }
 
 // ListPublic mengambil schedule yang published saja untuk brand tertentu, diurutkan berangkat_tanggal ASC.
+// Paket yang berangkat kurang dari 30 hari lagi tidak ditampilkan (pendaftaran online sudah ditutup).
 func (r *Repository) ListPublic(ctx context.Context, brandID int64) ([]*PublicSchedule, error) {
-	q := selectFull + " WHERE s.status = 'published' AND s.brand_id = ? AND s.berangkat_tanggal >= DATE_ADD(CURDATE(), INTERVAL 14 DAY) ORDER BY s.berangkat_tanggal ASC"
+	q := selectFull + " WHERE s.status = 'published' AND s.brand_id = ? AND s.berangkat_tanggal >= DATE_ADD(CURDATE(), INTERVAL 30 DAY) ORDER BY s.berangkat_tanggal ASC"
 	rows, err := r.db.QueryContext(ctx, q, brandID)
 	if err != nil {
 		return nil, fmt.Errorf("schedule.ListPublic: %w", err)
