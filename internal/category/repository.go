@@ -25,7 +25,7 @@ func NewRepository(db *sql.DB) *Repository {
 func (r *Repository) List(ctx context.Context, brandID *int64, activeOnly bool) ([]CategoryListItem, error) {
 	q := `
 		SELECT 
-			c.id, c.name, c.slug, c.description, c.badge_color, c.is_active,
+			c.id, c.name, c.slug, c.seo_tier, c.description, c.badge_color, c.is_active,
 			c.created_at, c.updated_at,
 			(
 				SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('id', b.id, 'name', b.name, 'primary_color', b.primary_color)), '[]')
@@ -63,7 +63,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, activeOnly bool) 
 		var item CategoryListItem
 		var brandsJSON []byte
 		if err := rows.Scan(
-			&item.ID, &item.Name, &item.Slug, &item.Description, &item.BadgeColor, &item.IsActive,
+			&item.ID, &item.Name, &item.Slug, &item.SEOTier, &item.Description, &item.BadgeColor, &item.IsActive,
 			&item.CreatedAt, &item.UpdatedAt,
 			&brandsJSON, &item.PackageCount,
 		); err != nil {
@@ -84,7 +84,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, activeOnly bool) 
 func (r *Repository) GetByID(ctx context.Context, id int64) (*Category, error) {
 	q := `
 		SELECT 
-			c.id, c.name, c.slug, c.description, c.badge_color, c.is_active,
+			c.id, c.name, c.slug, c.seo_tier, c.description, c.badge_color, c.is_active,
 			c.created_at, c.updated_at,
 			(
 				SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('id', b.id, 'name', b.name, 'primary_color', b.primary_color)), '[]')
@@ -98,7 +98,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (*Category, error) {
 	var cat Category
 	var brandsJSON []byte
 	err := r.db.QueryRowContext(ctx, q, id).Scan(
-		&cat.ID, &cat.Name, &cat.Slug, &cat.Description, &cat.BadgeColor, &cat.IsActive,
+		&cat.ID, &cat.Name, &cat.Slug, &cat.SEOTier, &cat.Description, &cat.BadgeColor, &cat.IsActive,
 		&cat.CreatedAt, &cat.UpdatedAt,
 		&brandsJSON,
 	)
@@ -166,8 +166,8 @@ func (r *Repository) Create(ctx context.Context, req CreateCategoryRequest) (*Ca
 	}
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO package_categories (name, slug, description, badge_color, is_active) VALUES (?, ?, ?, ?, ?)`,
-		req.Name, req.Slug, req.Description, req.BadgeColor, isActive,
+		`INSERT INTO package_categories (name, slug, seo_tier, description, badge_color, is_active) VALUES (?, ?, ?, ?, ?, ?)`,
+		req.Name, req.Slug, req.SEOTier, req.Description, req.BadgeColor, isActive,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("category.Create insert: %w", err)
@@ -218,8 +218,8 @@ func (r *Repository) Update(ctx context.Context, id int64, req UpdateCategoryReq
 	}
 
 	_, err = tx.ExecContext(ctx,
-		`UPDATE package_categories SET name = ?, slug = ?, description = ?, badge_color = ?, is_active = ? WHERE id = ?`,
-		req.Name, req.Slug, req.Description, req.BadgeColor, isActive, id,
+		`UPDATE package_categories SET name = ?, slug = ?, seo_tier = ?, description = ?, badge_color = ?, is_active = ? WHERE id = ?`,
+		req.Name, req.Slug, req.SEOTier, req.Description, req.BadgeColor, isActive, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("category.Update update: %w", err)

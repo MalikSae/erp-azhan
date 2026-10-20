@@ -598,6 +598,30 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		}
 	}
 
+	// Gate 15.3: klasifikasi web publik (journey_type, program_slug, destination_id).
+	// Paket baru tanpa journey_type memakai default umroh; saat edit, tanpa journey_type klasifikasi tidak diubah.
+	journey := req.JourneyType
+	if journey == "" && existing == nil {
+		journey = JourneyUmroh
+	}
+	klasifikasi, err := normalizeKlasifikasi(journey, req.ProgramSlug, req.DestinationID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return nil, false
+	}
+	if klasifikasi != nil && klasifikasi.DestinationID != nil {
+		aktif, err := h.repo.DestinationActive(ctx, *klasifikasi.DestinationID)
+		if err != nil {
+			log.Printf("[ERROR] schedule: cek destinasi: %v", err)
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return nil, false
+		}
+		if !aktif {
+			writeError(w, http.StatusBadRequest, "destination_id tidak valid atau destinasi tidak aktif")
+			return nil, false
+		}
+	}
+
 	// Gate 16: include_items & exclude_items — tidak boleh berisi string kosong
 	includeItems := req.IncludeItems
 	if includeItems == nil {
@@ -692,6 +716,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		ExpectedSeatTotal:        req.ExpectedSeatTotal,
 		BrandID:                  finalBrandID,
 		CategoryID:               req.CategoryID,
+		Klasifikasi:              klasifikasi,
 		JadwalNama:               strings.TrimSpace(req.JadwalNama),
 		Status:                   reqStatus,
 		IsDirectFlight:           req.IsDirectFlight,

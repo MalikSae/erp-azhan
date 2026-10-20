@@ -14,6 +14,15 @@ type BrandRef struct {
 
 var badgeColorRe = regexp.MustCompile(`^#[0-9a-f]{6}$`)
 
+// ValidSEOTier memeriksa tier SEO (vocab spesifikasi SEO) pada kategori.
+func ValidSEOTier(t string) bool {
+	switch t {
+	case "hemat", "reguler", "comfort", "premium":
+		return true
+	}
+	return false
+}
+
 // ValidBadgeColor memeriksa warna badge berformat hex #rrggbb (huruf kecil); string kosong berarti "otomatis".
 func ValidBadgeColor(c string) bool {
 	return c == "" || badgeColorRe.MatchString(c)
@@ -24,6 +33,7 @@ type Category struct {
 	ID          int64      `json:"id"`
 	Name        string     `json:"name"`
 	Slug        string     `json:"slug"`
+	SEOTier     *string    `json:"seo_tier"`
 	Description *string    `json:"description"`
 	BadgeColor  *string    `json:"badge_color"`
 	IsActive    bool       `json:"is_active"`
@@ -37,6 +47,7 @@ type CategoryListItem struct {
 	ID           int64      `json:"id"`
 	Name         string     `json:"name"`
 	Slug         string     `json:"slug"`
+	SEOTier      *string    `json:"seo_tier"`
 	Description  *string    `json:"description"`
 	BadgeColor   *string    `json:"badge_color"`
 	IsActive     bool       `json:"is_active"`
@@ -50,6 +61,7 @@ type CategoryListItem struct {
 type CreateCategoryRequest struct {
 	Name        string  `json:"name"`
 	Slug        string  `json:"slug"`
+	SEOTier     *string `json:"seo_tier"`
 	Description *string `json:"description"`
 	BadgeColor  *string `json:"badge_color"`
 	IsActive    *bool   `json:"is_active"`
@@ -60,6 +72,7 @@ type CreateCategoryRequest struct {
 type UpdateCategoryRequest struct {
 	Name        string  `json:"name"`
 	Slug        string  `json:"slug"`
+	SEOTier     *string `json:"seo_tier"`
 	Description *string `json:"description"`
 	BadgeColor  *string `json:"badge_color"`
 	IsActive    *bool   `json:"is_active"`

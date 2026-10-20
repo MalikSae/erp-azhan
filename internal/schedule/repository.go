@@ -274,6 +274,10 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 		return nil, fmt.Errorf("schedule.Create transit hotels: %w", err)
 	}
 
+	if err := setKlasifikasiTx(ctx, tx, id, inp.Klasifikasi); err != nil {
+		return nil, err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("schedule.Create commit: %w", err)
 	}
@@ -334,6 +338,10 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 
 	if err := r.UpdateTransitHotels(ctx, tx, id, inp.TransitHotelIDs); err != nil {
 		return nil, fmt.Errorf("schedule.Update transit hotels: %w", err)
+	}
+
+	if err := setKlasifikasiTx(ctx, tx, id, inp.Klasifikasi); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -566,6 +574,13 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 	var bCount int
 	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id = ?`, s.ID).Scan(&bCount)
 	s.BookingCount = bCount
+
+	kl, err := r.loadKlasifikasi(ctx, []int64{s.ID})
+	if err != nil {
+		return nil, err
+	}
+	k, ok := kl[s.ID]
+	s.applyKlasifikasi(k, ok)
 
 	return s, nil
 }

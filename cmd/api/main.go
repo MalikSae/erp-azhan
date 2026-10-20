@@ -21,6 +21,7 @@ import (
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/airline"
 	"erp-azhan/api/internal/airport"
+	"erp-azhan/api/internal/destination"
 	"erp-azhan/api/internal/bankaccount"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
@@ -119,6 +120,8 @@ func main() {
 
 	airportRepo := airport.NewRepository(db)
 	airportHandler := airport.NewHandler(airportRepo)
+	destinationRepo := destination.NewRepository(db)
+	destinationHandler := destination.NewHandler(destinationRepo)
 
 	categoryRepo := category.NewRepository(db)
 	categoryHandler := category.NewHandler(categoryRepo)
@@ -201,6 +204,11 @@ func main() {
 	// Public: jadwal yang sudah published (tanpa prefix /admin)
 	r.With(requireDB(db)).Get("/api/schedules", scheduleHandler.ListSchedulesPublic)
 	r.With(requireDB(db)).Get("/api/schedules/{id}", scheduleHandler.GetSchedulePublic)
+	// API publik v1 (read-only, stabil) untuk situs publik dan CMS: SPEK-WEB-PUBLIK-CMS-2026-10-20.md §4.3.
+	r.With(requireDB(db)).Get("/api/public/v1/packages", scheduleHandler.ListPackagesV1)
+	r.With(requireDB(db)).Get("/api/public/v1/packages/{id}", scheduleHandler.GetPackageV1)
+	r.With(requireDB(db)).Get("/api/public/v1/destinations", scheduleHandler.ListDestinationsV1)
+	r.With(requireDB(db)).Get("/api/public/v1/sitemap-feed", scheduleHandler.SitemapFeedV1)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: categories & brand & bank accounts
@@ -292,6 +300,12 @@ func main() {
 		masterEdit.Post("/airports", airportHandler.CreateAirport)
 		masterEdit.Put("/airports/{id}", airportHandler.UpdateAirport)
 		masterEdit.Delete("/airports/{id}", airportHandler.DeleteAirport)
+
+		// ── Destinasi (master untuk hub Umroh Plus di web publik) ──
+		masterView.Get("/destinations", destinationHandler.ListDestinations)
+		masterEdit.Post("/destinations", destinationHandler.CreateDestination)
+		masterEdit.Put("/destinations/{id}", destinationHandler.UpdateDestination)
+		masterEdit.Delete("/destinations/{id}", destinationHandler.DeleteDestination)
 
 		// Categories
 		masterView.Get("/categories", categoryHandler.ListCategories)
