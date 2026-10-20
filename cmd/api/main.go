@@ -261,6 +261,8 @@ func main() {
 		r.Use(identity.RequireAuth)
 		r.Use(identity.RequireAdminOrCRMAccess)
 
+		// Identitas, brand, dan izin dari token yang sudah divalidasi: dipakai CMS (cms.<domain brand>).
+		r.Get("/me", identityHandler.Me)
 		r.Get("/my-brand", brandHandler.GetMyBrand)
 		r.With(identity.RequireAdminRole).Put("/account/password", adminuserHandler.ChangeOwnPassword)
 
