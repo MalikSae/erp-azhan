@@ -80,6 +80,13 @@ type authResponse struct {
 	SessionToken string   `json:"session_token,omitempty"`
 }
 
+// Alamat halaman pelanggan di situs brand (azhan-booking). Seluruh rute akun dan booking berada di bawah
+// prefix /booking; alamat lama tanpa prefix masih dialihkan situs untuk email yang sudah terkirim.
+const (
+	PathVerifikasiEmail   = "/booking/verifikasi-email"
+	PathAturUlangPassword = "/booking/atur-ulang-password"
+)
+
 // siteLink membentuk URL situs brand dari domain di database (bukan dari header request,
 // supaya tautan di email tidak bisa dibelokkan). SITE_URL_TEMPLATE, mis. "http://{domain}:3100".
 func siteLink(domain, path string, q url.Values) string {
@@ -115,7 +122,7 @@ func (h *Handler) sendVerification(ctx context.Context, acc *Account) {
 		log.Printf("[ERROR] customer issue verify token: %v", err)
 		return
 	}
-	link := siteLink(domain, "/verifikasi-email", url.Values{"token": {token}})
+	link := siteLink(domain, PathVerifikasiEmail, url.Values{"token": {token}})
 	subject, text := mailer.VerifyEmail(name, acc.NamaLengkap, link)
 	h.sendAsync(mailer.Message{To: acc.Email, Subject: subject, Text: text})
 }
@@ -314,7 +321,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, generic)
 		return
 	}
-	link := siteLink(domain, "/atur-ulang-password", url.Values{"token": {token}})
+	link := siteLink(domain, PathAturUlangPassword, url.Values{"token": {token}})
 	subject, text := mailer.ResetPassword(name, acc.NamaLengkap, link)
 	h.sendAsync(mailer.Message{To: acc.Email, Subject: subject, Text: text})
 	writeJSON(w, http.StatusOK, generic)
