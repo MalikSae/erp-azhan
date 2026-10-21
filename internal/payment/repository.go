@@ -16,9 +16,9 @@ var (
 	ErrNotFound        = errors.New("data tidak ditemukan")
 	ErrCannotDelete    = errors.New("tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
 	ErrInvalidStatus   = errors.New("status tidak valid")
-	ErrSeatUnavailable = errors.New("kursi tidak mencukupi untuk mengonfirmasi pembayaran")
+	ErrSeatUnavailable = errors.New("seat tidak mencukupi untuk mengonfirmasi pembayaran")
 	ErrOverpayment     = errors.New("pembayaran melebihi sisa tagihan; periksa kemungkinan transfer ganda atau proses pengembalian dana")
-	ErrBookingClosed   = errors.New("reservasi tidak aktif; hubungi admin untuk memastikan kursi sebelum pembayaran")
+	ErrBookingClosed   = errors.New("booking tidak aktif; hubungi admin untuk memastikan seat sebelum pembayaran")
 )
 
 // Repository mengelola semua query ke tabel payments.

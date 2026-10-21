@@ -15,12 +15,12 @@ import (
 )
 
 var (
-	ErrSeatHabis             = errors.New("kursi tidak cukup")
+	ErrSeatHabis             = errors.New("seat tidak cukup")
 	ErrDuplicate             = errors.New("anda sudah memiliki booking aktif di jadwal ini")
 	ErrNotFound              = errors.New("data tidak ditemukan")
 	ErrAnggotaNameMismatch   = errors.New("nomor tidak dapat digunakan, gunakan nomor lain atau kosongkan")
-	ErrDuplicatePaxInBooking = errors.New("jamaah tidak boleh terdaftar lebih dari sekali dalam satu pemesanan")
-	ErrCutoffBooking         = errors.New("pendaftaran untuk jadwal ini telah ditutup (batas cut-off H-30 keberangkatan)")
+	ErrDuplicatePaxInBooking = errors.New("jamaah tidak boleh terdaftar lebih dari sekali dalam satu booking")
+	ErrCutoffBooking         = errors.New("pendaftaran online untuk jadwal ini sudah ditutup (30 hari sebelum keberangkatan)")
 	// Nomor WhatsApp akun sudah dipakai jamaah lain (nama berbeda). Pesan umum agar
 	// tidak membocorkan nama pemilik nomor.
 	ErrNomorAtasNamaLain = errors.New("nomor WhatsApp ini sudah terdaftar atas nama lain, silakan hubungi admin")

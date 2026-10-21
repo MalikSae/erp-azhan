@@ -22,10 +22,10 @@ const idBookingCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 // Sentinel errors
 var (
 	ErrNotFound                        = errors.New("data tidak ditemukan")
-	ErrSeatHabis                       = errors.New("kursi sudah habis, tidak bisa konfirmasi DP")
+	ErrSeatHabis                       = errors.New("seat sudah habis, tidak bisa konfirmasi DP")
 	ErrInvalidStatus                   = errors.New("status tidak valid")
-	ErrSeatBelumDiblokir               = errors.New("kursi booking belum diblokir")
-	ErrSeatSudahDiblokir               = errors.New("kursi booking sudah diblokir oleh permintaan lain")
+	ErrSeatBelumDiblokir               = errors.New("seat booking belum diblokir")
+	ErrSeatSudahDiblokir               = errors.New("seat booking sudah diblokir oleh permintaan lain")
 	ErrTemplatePerlengkapanBelumDiatur = errors.New("template set perlengkapan belum diatur untuk brand ini")
 	ErrPerlengkapanSudahDiberikan      = errors.New("perlengkapan untuk booking ini sudah pernah diberikan")
 	ErrPerlengkapanBelumDiberikan      = errors.New("perlengkapan belum pernah diberikan untuk booking ini")
@@ -579,7 +579,7 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 	// 3. Validasi kuota kursi
 	if seatSisa < regularCount {
 		return nil, &ErrSeatNotEnough{
-			Message: fmt.Sprintf("Kuota kursi tidak mencukupi, sisa %d kursi", seatSisa),
+			Message: fmt.Sprintf("Kuota seat tidak mencukupi, sisa %d seat", seatSisa),
 		}
 	}
 
@@ -1086,7 +1086,7 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 	// 2. Cek kuota kursi
 	if seatSisa < activeRegularPax {
 		return nil, &ErrSeatNotEnough{
-			Message: fmt.Sprintf("Kuota kursi tidak mencukupi, sisa %d kursi", seatSisa),
+			Message: fmt.Sprintf("Kuota seat tidak mencukupi, sisa %d seat", seatSisa),
 		}
 	}
 

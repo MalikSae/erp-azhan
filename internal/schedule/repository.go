@@ -412,7 +412,7 @@ func (r *Repository) UpdateSeat(ctx context.Context, id int64, seatSisa int, exp
 func updateSeatTx(ctx context.Context, tx *sql.Tx, id int64, seatSisa int, expected *int, brandID *int64, reason string, actorID int64) (owner int64, current int, err error) {
 	reason = strings.TrimSpace(reason)
 	if expected == nil || reason == "" {
-		return 0, 0, fmt.Errorf("%w: sisa kursi sebelumnya dan alasan penyesuaian wajib diisi", ErrConflict)
+		return 0, 0, fmt.Errorf("%w: sisa seat sebelumnya dan alasan penyesuaian wajib diisi", ErrConflict)
 	}
 	var total int
 	if err := tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &current, &owner); err != nil {
@@ -422,14 +422,14 @@ func updateSeatTx(ctx context.Context, tx *sql.Tx, id int64, seatSisa int, expec
 		return 0, 0, ErrNotFound
 	}
 	if current != *expected {
-		return 0, 0, fmt.Errorf("%w: kursi berubah, muat ulang paket", ErrConflict)
+		return 0, 0, fmt.Errorf("%w: seat berubah, muat ulang paket", ErrConflict)
 	}
 	var allocated int
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(seat_count),0) FROM bookings WHERE schedule_id=? AND is_seat_blocked=1 AND status <> 'batal'`, id).Scan(&allocated); err != nil {
 		return 0, 0, err
 	}
 	if seatSisa < 0 || seatSisa > total-allocated {
-		return 0, 0, fmt.Errorf("%w: sisa kursi melampaui kapasitas setelah alokasi booking", ErrConflict)
+		return 0, 0, fmt.Errorf("%w: sisa seat melampaui kapasitas setelah alokasi booking", ErrConflict)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, seatSisa, id); err != nil {
 		return 0, 0, err
@@ -437,7 +437,7 @@ func updateSeatTx(ctx context.Context, tx *sql.Tx, id int64, seatSisa int, expec
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO schedule_seat_adjustments (schedule_id, admin_user_id, seat_before, seat_after, reason) VALUES (?,?,?,?,?)`,
 		id, nullInt64(actorID), current, seatSisa, reason); err != nil {
-		return 0, 0, fmt.Errorf("catat riwayat penyesuaian kursi: %w", err)
+		return 0, 0, fmt.Errorf("catat riwayat penyesuaian seat: %w", err)
 	}
 	return owner, current, nil
 }

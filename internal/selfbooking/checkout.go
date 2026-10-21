@@ -32,8 +32,8 @@ func resolveInvoiceToken(ctx context.Context, q invoiceReader, token string, bra
 	return code, err
 }
 
-var ErrQuoteChanged = errors.New("harga atau DP berubah; muat ulang paket dan periksa kembali ringkasan sebelum memesan")
-var ErrRequestConflict = errors.New("kunci pemesanan telah digunakan untuk data berbeda; mulai pemesanan baru")
+var ErrQuoteChanged = errors.New("harga atau DP berubah; muat ulang paket dan periksa kembali ringkasan sebelum booking")
+var ErrRequestConflict = errors.New("kunci booking telah digunakan untuk data berbeda; mulai booking baru")
 var phonePattern = regexp.MustCompile(`^\+?[0-9 () .-]+$`)
 var phoneNonDigits = regexp.MustCompile(`\D`)
 var requestKeyPattern = regexp.MustCompile(`^[a-fA-F0-9-]{32,64}$`)
@@ -45,10 +45,10 @@ func validPhone(value string) bool {
 
 func validateCheckout(req *BookingRequest, agent bool) string {
 	if req.TermsVersion != TermsVersion || !req.TermsAccepted {
-		return "baca dan setujui ketentuan pemesanan terbaru"
+		return "baca dan setujui ketentuan booking terbaru"
 	}
 	if !requestKeyPattern.MatchString(req.RequestKey) {
-		return "kunci pemesanan tidak valid, muat ulang formulir"
+		return "kunci booking tidak valid, muat ulang formulir"
 	}
 	if req.ExpectedTotal == nil || req.ExpectedDP == nil || *req.ExpectedTotal <= 0 || *req.ExpectedDP < 0 {
 		return "ringkasan harga wajib dikonfirmasi"

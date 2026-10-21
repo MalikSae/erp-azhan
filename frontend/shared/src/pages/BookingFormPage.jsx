@@ -996,7 +996,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
     }
 
     if (isOverQuota) {
-      errors.quota = `Jumlah pax reguler (${regularPaxCount}) melebihi sisa kuota kursi (${seatSisa})`;
+      errors.quota = `Jumlah pax reguler (${regularPaxCount}) melebihi sisa kuota seat (${seatSisa})`;
     }
 
     if (Object.keys(errors).length > 0) {
@@ -1670,7 +1670,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
               <div className="space-y-4">
                 {selectedSchedule ? (
                   <>
-                    {/* Status Kuota Kursi */}
+                    {/* Status Kuota Seat */}
                     <div
                       className={`flex items-start gap-2.5 text-xs ${
                         isOverQuota
@@ -1688,14 +1688,14 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                           <div>
                             <span className="font-bold">Melebihi Kuota!</span>
                             <p className="mt-0.5">
-                              Dibutuhkan <strong>{regularPaxCount} kursi</strong>, sisa <strong>{seatSisa} kursi</strong>.
+                              Dibutuhkan <strong>{regularPaxCount} seat</strong>, sisa <strong>{seatSisa} seat</strong>.
                             </p>
                           </div>
                         ) : (
                           <div>
                             <span className="font-bold">Kuota Tersedia</span>
                             <p className="mt-0.5 text-neutral-600">
-                              <strong>{regularPaxCount}</strong> dari <strong>{seatSisa}</strong> kursi akan terpakai.
+                              <strong>{regularPaxCount}</strong> dari <strong>{seatSisa}</strong> seat akan terpakai.
                             </p>
                           </div>
                         )}

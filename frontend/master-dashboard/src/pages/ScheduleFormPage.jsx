@@ -323,7 +323,7 @@ const ScheduleFormPage = () => {
             destination_id: scheduleData.destination_id || scheduleData.destination?.id || ''
           };
 
-          // Salinan: tanggal diisi ulang, kursi terisi direset, dan selalu mulai sebagai draft.
+          // Salinan: tanggal diisi ulang, seat terisi direset, dan selalu mulai sebagai draft.
           setFormData(isEditMode ? loadedForm : {
             ...loadedForm,
             jadwal_nama: `${loadedForm.jadwal_nama} (Salinan)`.trim(),

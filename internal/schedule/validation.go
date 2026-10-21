@@ -13,7 +13,7 @@ var ErrConflict = errors.New("perubahan paket ditolak")
 func remainingAfterCapacityChange(total, remaining, nextTotal int) (int, error) {
 	allocated := total - remaining
 	if remaining < 0 || remaining > total || nextTotal <= 0 || nextTotal < allocated {
-		return 0, fmt.Errorf("%w: kapasitas tidak boleh kurang dari kursi teralokasi", ErrConflict)
+		return 0, fmt.Errorf("%w: kapasitas tidak boleh kurang dari seat teralokasi", ErrConflict)
 	}
 	return nextTotal - allocated, nil
 }
@@ -77,7 +77,7 @@ func normalizeKota(kota string) string {
 // (perubahan kemudian hanya lewat booking atau penyesuaian beralasan).
 func seatSisaForCreate(total int, requested *int) (int, error) {
 	if requested != nil && *requested != total {
-		return 0, errors.New("seat_sisa tidak bisa diisi saat membuat paket: kursi berkurang otomatis lewat booking")
+		return 0, errors.New("seat_sisa tidak bisa diisi saat membuat paket: seat berkurang otomatis lewat booking")
 	}
 	return total, nil
 }

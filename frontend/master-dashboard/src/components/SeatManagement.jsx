@@ -8,7 +8,7 @@ import { getScheduleSeat, updateScheduleSeat } from '../api/schedules';
 
 const formatWaktu = (iso) => new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
 
-// Kuota & kursi sebuah paket: ringkasan, selisih terhadap booking, penyesuaian manual
+// Kuota & seat sebuah paket: ringkasan, selisih terhadap booking, penyesuaian manual
 // dengan alasan wajib, dan riwayatnya (SM-02, SM-03).
 const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
   const [overview, setOverview] = useState(null);
@@ -24,14 +24,14 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
       setOverview(await getScheduleSeat(scheduleId));
       setLoadError(null);
     } catch (err) {
-      setLoadError(err.response?.data?.error || 'Gagal memuat data kursi.');
+      setLoadError(err.response?.data?.error || 'Gagal memuat data seat.');
     }
   }, [scheduleId]);
 
   useEffect(() => { load(); }, [load]);
 
   if (loadError) return <Alert variant="error">{loadError}</Alert>;
-  if (!overview) return <p className="text-xs text-neutral-500 font-body">Memuat data kursi...</p>;
+  if (!overview) return <p className="text-xs text-neutral-500 font-body">Memuat data seat...</p>;
 
   const terisi = Math.max(0, overview.seat_total - overview.seat_sisa);
   const persen = overview.seat_total > 0 ? (terisi / overview.seat_total) * 100 : 0;
@@ -102,7 +102,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
           <span className="font-semibold text-neutral-900">{bookingCount || 0} booking</span>
         </div>
         <div className="flex justify-between">
-          <span>Kursi dipegang booking:</span>
+          <span>Seat dipegang booking:</span>
           <span className="font-semibold text-neutral-900">{overview.seat_dialokasikan} pax</span>
         </div>
         <div className="flex justify-between">
@@ -113,12 +113,12 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
 
       {diLuar > 0 && (
         <p className="text-xs text-neutral-500">
-          {diLuar} kursi terpakai tanpa booking di ERP (impor data atau penjualan di luar sistem). Jika angka ini tidak benar, sesuaikan sisa seat.
+          {diLuar} seat terpakai tanpa booking di ERP (impor data atau penjualan di luar sistem). Jika angka ini tidak benar, sesuaikan sisa seat.
         </p>
       )}
       {diLuar < 0 && (
         <Alert variant="warning">
-          Sisa seat lebih besar {Math.abs(diLuar)} dari seharusnya: ada kursi dipegang booking yang belum dikurangkan. Sesuaikan sisa seat agar tidak terjadi penjualan melebihi kapasitas.
+          Sisa seat lebih besar {Math.abs(diLuar)} dari seharusnya: ada seat dipegang booking yang belum dikurangkan. Sesuaikan sisa seat agar tidak terjadi penjualan melebihi kapasitas.
         </Alert>
       )}
 
@@ -176,7 +176,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
             maxLength={500}
             value={alasan}
             onChange={(e) => setAlasan(e.target.value)}
-            placeholder="mis. 2 kursi terjual langsung tanpa booking"
+            placeholder="mis. 2 seat terjual langsung tanpa booking"
           />
         </div>
       </Modal>

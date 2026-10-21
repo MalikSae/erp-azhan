@@ -847,7 +847,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrSeatHabis):
-		writeError(w, http.StatusConflict, "kursi sudah habis, tidak bisa konfirmasi DP")
+		writeError(w, http.StatusConflict, "seat sudah habis, tidak bisa konfirmasi DP")
 	case errors.As(err, &errSeatNotEnough):
 		writeError(w, http.StatusBadRequest, errSeatNotEnough.Message)
 	case errors.Is(err, ErrPaxAlreadyCancelled):
@@ -859,7 +859,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrInvalidStatus):
 		writeError(w, http.StatusBadRequest, "status tidak valid")
 	case errors.Is(err, ErrSeatBelumDiblokir):
-		writeError(w, http.StatusConflict, "kursi booking ini sudah tidak diblokir")
+		writeError(w, http.StatusConflict, "seat booking ini sudah tidak diblokir")
 	case errors.Is(err, ErrSeatSudahDiblokir):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrTemplatePerlengkapanBelumDiatur):

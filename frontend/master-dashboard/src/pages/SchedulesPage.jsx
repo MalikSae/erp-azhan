@@ -350,12 +350,12 @@ const SchedulesPage = () => {
       const filled = Math.max(0, total - sisa);
       const urgent = isScheduleUrgent(row);
       return (
-        <div className="min-w-[120px]" title={urgent ? 'Mendekati keberangkatan dan masih banyak kursi kosong' : undefined}>
+        <div className="min-w-[120px]" title={urgent ? 'Mendekati keberangkatan dan masih banyak seat kosong' : undefined}>
           <div className="text-[13px] font-body text-neutral-700 leading-snug whitespace-nowrap">
             <span className="font-semibold text-neutral-900">{filled}</span> dari {total} terisi
           </div>
           <div className={`mt-0.5 text-[11px] font-body ${urgent ? 'text-danger-600 font-medium' : 'text-neutral-400'}`}>
-            {urgent ? `Mendesak · ${sisa} kursi kosong` : `${sisa} kursi kosong`}
+            {urgent ? `Mendesak · ${sisa} seat kosong` : `${sisa} seat kosong`}
           </div>
         </div>
       );
