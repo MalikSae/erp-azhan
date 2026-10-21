@@ -435,6 +435,7 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 		"og_image_url":             b.OgImageURL,
 		"google_verification_code": b.GoogleVerificationCode,
 		"minimal_dp":               b.MinimalDP,
+		"ketentuan_pembatalan":     b.KetentuanPembatalan,
 		"social_media":             socialMedia,
 	}
 
