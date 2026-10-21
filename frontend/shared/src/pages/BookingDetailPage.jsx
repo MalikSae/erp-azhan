@@ -1591,7 +1591,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       >
         <p className="text-neutral-600 font-body text-sm mb-6">
           Apakah Anda yakin ingin membatalkan booking ini?
-          Jika kursi sempat terkunci, kuota kursi akan dikembalikan ke paket.
+          Jika seat sempat terkunci, kuota seat akan dikembalikan ke paket.
         </p>
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={() => setCancelConfirmModal(false)}>Batal</Button>
@@ -1641,7 +1641,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         title="Konfirmasi Pembatalan Pax"
       >
         <p className="text-neutral-600 font-body text-sm mb-6 leading-relaxed">
-          Batalkan pax <strong>{selectedPaxForCancel?.nama_jamaah}</strong> dari booking ini? Kuota kursi yang terpakai akan otomatis dikembalikan jika booking masih dalam status kursi terkunci.
+          Batalkan pax <strong>{selectedPaxForCancel?.nama_jamaah}</strong> dari booking ini? Kuota seat yang terpakai akan otomatis dikembalikan jika booking masih dalam status seat terkunci.
         </p>
         {(booking?.status === "dp" || booking?.status === "lunas") && (
           <p className="text-warning-800 bg-warning-50 border border-warning-200 rounded-xl font-body text-sm px-3 py-2 mb-6 leading-relaxed">
@@ -1747,7 +1747,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </div>
 
             <p className="text-neutral-600 text-sm leading-relaxed">
-              Pastikan dana sudah benar-benar masuk ke rekening tujuan. Setelah dikonfirmasi, status booking akan disinkronkan dan alokasi kursi akan dikunci.
+              Pastikan dana sudah benar-benar masuk ke rekening tujuan. Setelah dikonfirmasi, status booking akan disinkronkan dan alokasi seat akan dikunci.
             </p>
 
             <div className="flex justify-end gap-3 pt-2">
@@ -1781,11 +1781,11 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       >
         {cancelSeatBlockError && <Alert variant="error" className="mb-4">{cancelSeatBlockError}</Alert>}
         <p className="text-neutral-600 font-body text-sm mb-6 leading-relaxed">
-          Apakah Anda yakin ingin membatalkan block seat untuk booking ini? Kuota kursi yang terpakai ({regularActiveCount || booking.seat_count || 1} kursi) akan otomatis dikembalikan ke jadwal paket.
+          Apakah Anda yakin ingin membatalkan block seat untuk booking ini? Kuota seat yang terpakai ({regularActiveCount || booking.seat_count || 1} seat) akan otomatis dikembalikan ke jadwal paket.
         </p>
         {Number(booking?.total_dibayar) > 0 && (
           <p className="text-warning-800 bg-warning-50 border border-warning-200 rounded-xl font-body text-sm px-3 py-2 mb-6 leading-relaxed">
-            Booking ini sudah dibayar. Kursi yang dilepas bisa diambil booking lain; jamaah tidak lagi dijamin mendapat kursi sampai kursi dikunci ulang lewat tombol Block Seat.
+            Booking ini sudah dibayar. Seat yang dilepas bisa diambil booking lain; jamaah tidak lagi dijamin mendapat seat sampai seat dikunci ulang lewat tombol Block Seat.
           </p>
         )}
         <div className="flex justify-end gap-3">
@@ -1807,12 +1807,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         {blockSeatError && <Alert variant="error" className="mb-4">{blockSeatError}</Alert>}
         <div className="space-y-4 font-body">
           <p className="text-neutral-600 text-sm leading-relaxed">
-            Kunci kursi untuk booking ini? Kuota kursi ({regularActiveCount || booking.seat_count || 1} kursi) pada jadwal akan ditahan sampai dilepas secara manual.
+            Kunci seat untuk booking ini? Kuota seat ({regularActiveCount || booking.seat_count || 1} seat) pada jadwal akan ditahan sampai dilepas secara manual.
           </p>
           <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-1.5 font-body">
             <div className="flex justify-between items-center">
-              <span className="text-neutral-500 font-medium">Jumlah Kursi:</span>
-              <span className="font-semibold text-neutral-900">{regularActiveCount || booking.seat_count || 1} Kursi</span>
+              <span className="text-neutral-500 font-medium">Jumlah Seat:</span>
+              <span className="font-semibold text-neutral-900">{regularActiveCount || booking.seat_count || 1} Seat</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-neutral-500 font-medium">Status Kunci:</span>
@@ -1821,7 +1821,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             {booking.schedule && booking.schedule.seat_sisa !== undefined && (
               <div className="flex justify-between items-center">
                 <span className="text-neutral-500 font-medium">Sisa Kuota Jadwal:</span>
-                <span className="font-semibold text-neutral-900">{booking.schedule.seat_sisa} Kursi Tersedia</span>
+                <span className="font-semibold text-neutral-900">{booking.schedule.seat_sisa} Seat Tersedia</span>
               </div>
             )}
           </div>

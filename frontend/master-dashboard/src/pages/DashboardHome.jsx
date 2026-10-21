@@ -190,7 +190,7 @@ const DashboardHome = () => {
               ))}
             </div>
             <div className="flex items-center justify-between rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3">
-              <span className="text-xs font-body text-neutral-500">Kapasitas kursi tersedia (published)</span>
+              <span className="text-xs font-body text-neutral-500">Kapasitas seat tersedia (published)</span>
               <span className="text-base font-heading font-bold text-neutral-900">{isLoading ? '—' : summary.seats}</span>
             </div>
           </div>
@@ -308,7 +308,7 @@ const DashboardHome = () => {
                   </div>
                   <div className="hidden sm:block w-40">
                     <div className="flex justify-between text-[11px] font-body text-neutral-500 mb-1">
-                      <span>{terisi}/{total} kursi</span><span>{pct}%</span>
+                      <span>{terisi}/{total} seat</span><span>{pct}%</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
