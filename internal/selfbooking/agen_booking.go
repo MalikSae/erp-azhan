@@ -231,7 +231,7 @@ func validateAgenBooking(req *BookingRequest) string {
 	req.PIC.RoomType = strings.TrimSpace(req.PIC.RoomType)
 	req.KodeReferral = ""
 	if req.PIC.JamaahID == nil && (req.PIC.NamaLengkap == "" || req.PIC.NoHP == "" || req.PIC.JenisKelamin == "") {
-		return "data pendaftar utama tidak lengkap"
+		return "data jamaah utama tidak lengkap"
 	}
 	if req.PIC.RoomType != "Quad" && req.PIC.RoomType != "Triple" && req.PIC.RoomType != "Double" {
 		return "tipe kamar PIC tidak valid"

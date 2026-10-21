@@ -21,7 +21,7 @@ import (
 
 var (
 	ErrNotFound             = errors.New("jadwal atau jamaah tidak ditemukan pada brand aktif")
-	ErrSeatUnavailable      = errors.New("kursi pada jadwal tidak mencukupi")
+	ErrSeatUnavailable      = errors.New("seat pada jadwal tidak mencukupi")
 	ErrScheduleClosed       = errors.New("paket tidak menerima booking baru")
 	ErrAmbiguousJamaah      = errors.New("lebih dari satu jamaah memiliki nomor telepon tersebut")
 	ErrIdempotencyConflict  = errors.New("idempotency key pernah digunakan untuk payload berbeda")

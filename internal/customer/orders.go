@@ -127,7 +127,7 @@ func (o *Orders) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := o.db.QueryContext(r.Context(), orderSelect+` GROUP BY b.id ORDER BY b.id DESC LIMIT 200`, acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] account list bookings: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar pesanan")
+		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar booking")
 		return
 	}
 	defer rows.Close()
@@ -137,7 +137,7 @@ func (o *Orders) List(w http.ResponseWriter, r *http.Request) {
 		it, _, err := scanOrder(rows)
 		if err != nil {
 			log.Printf("[ERROR] account scan booking: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal membaca pesanan")
+			writeError(w, http.StatusInternalServerError, "gagal membaca booking")
 			return
 		}
 		if tab == "" || tab == it.Tab {
@@ -198,7 +198,7 @@ func (o *Orders) owned(ctx context.Context, accountID, bookingID int64) (*orderS
 func bookingIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id pesanan tidak valid")
+		writeError(w, http.StatusBadRequest, "id booking tidak valid")
 		return 0, false
 	}
 	return id, true
@@ -213,12 +213,12 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "pesanan tidak ditemukan")
+		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
 		return
 	}
 	if err != nil {
 		log.Printf("[ERROR] account booking detail: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil pesanan")
+		writeError(w, http.StatusInternalServerError, "gagal mengambil booking")
 		return
 	}
 	pax := []paxView{}
@@ -257,21 +257,21 @@ func (o *Orders) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "pesanan tidak ditemukan")
+		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil pesanan")
+		writeError(w, http.StatusInternalServerError, "gagal mengambil booking")
 		return
 	}
 	if !order.CanCancel {
-		writeError(w, http.StatusConflict, "pesanan ini tidak bisa dibatalkan sendiri, silakan hubungi admin")
+		writeError(w, http.StatusConflict, "booking ini tidak bisa dibatalkan sendiri, silakan hubungi admin")
 		return
 	}
 	// Periksa ulang di dalam UpdateBookingStatus lewat status: hanya 'baru' yang lolos di atas.
 	if _, err = o.bookingRepo.UpdateBookingStatus(r.Context(), id, "batal"); err != nil {
 		log.Printf("[ERROR] account cancel booking %d: %v", id, err)
-		writeError(w, http.StatusInternalServerError, "gagal membatalkan pesanan")
+		writeError(w, http.StatusInternalServerError, "gagal membatalkan booking")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "batal"})
@@ -285,7 +285,7 @@ func (o *Orders) ListPayments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, _, err := o.owned(r.Context(), acc.ID, id); err != nil {
-		writeError(w, http.StatusNotFound, "pesanan tidak ditemukan")
+		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
 		return
 	}
 	payments, err := o.paymentRepo.ListByBookingID(r.Context(), id, nil)
@@ -308,15 +308,15 @@ func (o *Orders) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "pesanan tidak ditemukan")
+		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil pesanan")
+		writeError(w, http.StatusInternalServerError, "gagal mengambil booking")
 		return
 	}
 	if !order.CanPay {
-		writeError(w, http.StatusConflict, "pesanan ini tidak bisa menerima pembayaran, silakan hubungi admin")
+		writeError(w, http.StatusConflict, "booking ini tidak bisa menerima pembayaran, silakan hubungi admin")
 		return
 	}
 	var req payment.CreatePaymentRequest

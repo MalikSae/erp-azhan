@@ -87,7 +87,7 @@ func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			h.invoiceMissIP.record(clientIP)
-			writeError(w, http.StatusNotFound, "invoice pendaftaran tidak ditemukan")
+			writeError(w, http.StatusNotFound, "invoice booking tidak ditemukan")
 			return
 		}
 		log.Printf("[ERROR] GetPublicInvoice: %v", err)
@@ -169,7 +169,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	req.PIC.RoomType = strings.TrimSpace(req.PIC.RoomType)
 
 	if req.PIC.NamaLengkap == "" || (req.PIC.NoHP == "" && !req.PemesanTidakIkut) || req.PIC.JenisKelamin == "" || req.PIC.RoomType == "" {
-		writeError(w, http.StatusBadRequest, "data pendaftar utama tidak lengkap")
+		writeError(w, http.StatusBadRequest, "data jamaah utama tidak lengkap")
 		return
 	}
 
@@ -216,7 +216,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	// Gate 8: Batas booking per akun
 	accountKey := strconv.FormatInt(account.ID, 10)
 	if !h.bookingByAccount.allow(accountKey) {
-		writeError(w, http.StatusTooManyRequests, "akun ini sudah mencapai batas pemesanan hari ini, silakan hubungi admin travel")
+		writeError(w, http.StatusTooManyRequests, "akun ini sudah mencapai batas booking hari ini, silakan hubungi admin travel")
 		return
 	}
 

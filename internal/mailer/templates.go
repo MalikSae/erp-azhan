@@ -9,7 +9,7 @@ func VerifyEmail(brandName, nama, link string) (subject, text string) {
 	subject = "Verifikasi email akun " + brandName
 	text = fmt.Sprintf(`Halo %s,
 
-Terima kasih sudah mendaftar di %s. Buka tautan berikut untuk memverifikasi email Anda (berlaku 24 jam):
+Terima kasih sudah mendaftar akun di %s. Buka tautan berikut untuk memverifikasi email Anda (berlaku 24 jam):
 
 %s
 
@@ -36,7 +36,7 @@ Jika Anda tidak memintanya, abaikan email ini. Password Anda tidak berubah.
 type BankInfo struct{ Bank, Nomor, AtasNama string }
 
 func OrderCreated(brandName, nama, kodeBooking, paket, tglBerangkat, total, dp, batasBayar, link string, banks []BankInfo) (subject, text string) {
-	subject = fmt.Sprintf("Pesanan %s dibuat (%s)", paket, kodeBooking)
+	subject = fmt.Sprintf("Booking %s berhasil dibuat (%s)", paket, kodeBooking)
 	var b strings.Builder
 	for _, k := range banks {
 		fmt.Fprintf(&b, "  - %s %s a.n. %s\n", k.Bank, k.Nomor, k.AtasNama)
@@ -46,7 +46,7 @@ func OrderCreated(brandName, nama, kodeBooking, paket, tglBerangkat, total, dp, 
 	}
 	text = fmt.Sprintf(`Halo %s,
 
-Pesanan Anda di %s sudah dibuat.
+Booking seat Anda di %s sudah dibuat.
 
 Kode booking : %s
 Paket        : %s
@@ -57,7 +57,7 @@ Batas bayar  : %s
 
 Transfer ke:
 %s
-Setelah transfer, unggah bukti pembayaran lewat halaman pesanan:
+Setelah transfer, unggah bukti pembayaran lewat halaman Booking Saya:
 %s
 
 %s`, nama, brandName, kodeBooking, paket, tglBerangkat, total, dp, batasBayar, b.String(), link, brandName)
