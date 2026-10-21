@@ -56,6 +56,21 @@ func normalizeBadgeColor(c *string) (*string, bool) {
 	return &v, true
 }
 
+// normalizeSEOTier merapikan tier SEO: kosong -> nil (belum dipetakan); selain vocab -> tidak valid.
+func normalizeSEOTier(t *string) (*string, bool) {
+	if t == nil {
+		return nil, true
+	}
+	v := strings.ToLower(strings.TrimSpace(*t))
+	if v == "" {
+		return nil, true
+	}
+	if !ValidSEOTier(v) {
+		return nil, false
+	}
+	return &v, true
+}
+
 func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
@@ -154,6 +169,13 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	req.BadgeColor = badge
 
+	tier, ok := normalizeSEOTier(req.SEOTier)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "seo_tier harus salah satu dari hemat, reguler, comfort, premium")
+		return
+	}
+	req.SEOTier = tier
+
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "nama kategori wajib diisi")
@@ -215,6 +237,13 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.BadgeColor = badge
+
+	tier, ok := normalizeSEOTier(req.SEOTier)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "seo_tier harus salah satu dari hemat, reguler, comfort, premium")
+		return
+	}
+	req.SEOTier = tier
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {

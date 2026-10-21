@@ -261,6 +261,13 @@ const FacilityList = ({ title, items, icon: Icon, iconClass }) => (
   </div>
 );
 
+
+const JOURNEY_LABELS = { umroh: 'Umroh', haji: 'Haji', wisata_halal: 'Wisata Halal' };
+const programLabel = (slug) => {
+  if (!slug) return 'Tanpa program';
+  return { plus: 'Plus', ramadhan: 'Ramadhan' }[slug] || slug;
+};
+
 const ScheduleDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -627,6 +634,21 @@ const ScheduleDetailPage = () => {
                   ))}
                 </dl>
               </div>
+            </Section>
+
+            <Section title="Klasifikasi Web Publik">
+              <dl className="divide-y divide-neutral-100 text-xs font-body">
+                {[
+                  ['Jenis perjalanan', JOURNEY_LABELS[schedule.journey_type] || schedule.journey_type || '-'],
+                  ['Program', programLabel(schedule.program_slug)],
+                  ['Destinasi', schedule.destination?.name || '-'],
+                ].map(([label, value]) => (
+                  <div key={label} className="py-2.5 flex justify-between items-center first:pt-0 last:pb-0">
+                    <dt className="text-neutral-600">{label}</dt>
+                    <dd className="text-sm font-semibold font-heading text-neutral-900">{value}</dd>
+                  </div>
+                ))}
+              </dl>
             </Section>
 
             <Section title="Gambar Utama">

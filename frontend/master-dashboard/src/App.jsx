@@ -18,6 +18,7 @@ import SchedulesPage from './pages/SchedulesPage';
 import ScheduleDetailPage from './pages/ScheduleDetailPage';
 import ScheduleFormPage from './pages/ScheduleFormPage';
 import CategoriesPage from './pages/CategoriesPage';
+import DestinationsPage from './pages/DestinationsPage';
 import InventoryPerlengkapanPage from './pages/InventoryPerlengkapanPage';
 import InventoryRiwayatStokPage from './pages/InventoryRiwayatStokPage';
 import StokBrandCabangPage from './pages/StokBrandCabangPage';
@@ -61,6 +62,7 @@ function AppRoutes() {
           <Route path="/hotels" element={<RequireAccess perm="masterdata.edit"><HotelsPage /></RequireAccess>} />
           <Route path="/airlines" element={<RequireAccess perm="masterdata.edit"><AirlinesPage /></RequireAccess>} />
           <Route path="/categories" element={<RequireAccess perm="masterdata.edit"><CategoriesPage /></RequireAccess>} />
+          <Route path="/destinations" element={<RequireAccess perm="masterdata.view"><DestinationsPage /></RequireAccess>} />
           <Route path="/itineraries" element={<RequireAccess perm="masterdata.edit"><ItinerariesPage /></RequireAccess>} />
           <Route path="/itineraries/new" element={<RequireAccess perm="masterdata.edit"><ItineraryFormPage /></RequireAccess>} />
           <Route path="/itineraries/:id/edit" element={<RequireAccess perm="masterdata.edit"><ItineraryFormPage /></RequireAccess>} />

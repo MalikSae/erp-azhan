@@ -25,6 +25,7 @@ import { listHotels } from '../api/hotels';
 import { listAirlines } from '../api/airlines';
 import { listAirports } from '../api/airports';
 import { listCategories } from '../api/categories';
+import { listDestinations } from '../api/destinations';
 import { listItineraries } from '../api/itineraries';
 import { listBrands } from '../api/brands';
 import { uploadMediaWithOptions } from '../api/media';
@@ -84,6 +85,7 @@ const ScheduleFormPage = () => {
   const [airlineOptions, setAirlineOptions] = useState([]);
   const [airportOptions, setAirportOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
+  const [destinationOptions, setDestinationOptions] = useState([]);
   const [itineraryOptions, setItineraryOptions] = useState([]);
   const [brandOptions, setBrandOptions] = useState([]);
 
@@ -140,7 +142,10 @@ const ScheduleFormPage = () => {
     brosur_thumb_url: '',
     status: 'draft',
     brand_id: '',
-    category_id: ''
+    category_id: '',
+    journey_type: 'umroh',
+    program_slug: '',
+    destination_id: ''
   });
 
   useEffect(() => {
@@ -154,7 +159,8 @@ const ScheduleFormPage = () => {
           listCategories(),
           listItineraries(),
           listBrands(),
-          listAirports()
+          listAirports(),
+          listDestinations().catch(() => [])
         ];
 
         const results = await Promise.all(promises);
@@ -164,6 +170,7 @@ const ScheduleFormPage = () => {
         const itineraries = results[3];
         const brands = results[4] || [];
         const airports = results[5] || [];
+        const destinations = results[6] || [];
 
         setHotelOptions(hotels || []);
         setAirlineOptions(airlines || []);
@@ -171,6 +178,7 @@ const ScheduleFormPage = () => {
         setItineraryOptions(itineraries || []);
         setBrandOptions(brands || []);
         setAirportOptions(airports || []);
+        setDestinationOptions(destinations);
 
         // Perlengkapan jamaah: katalog item + set tersimpan (gagal memuat tidak menghalangi form).
         listPerlengkapanItems().then((d) => setPerlCatalog(d || [])).catch(() => setPerlCatalog([]));
@@ -309,7 +317,10 @@ const ScheduleFormPage = () => {
             brosur_thumb_url: scheduleData.brosur_thumb_url || '',
             status: scheduleData.status || 'draft',
             brand_id: scheduleData.brand_id || '',
-            category_id: scheduleData.category_id || (scheduleData.category?.id || '')
+            category_id: scheduleData.category_id || (scheduleData.category?.id || ''),
+            journey_type: scheduleData.journey_type || 'umroh',
+            program_slug: scheduleData.program_slug || '',
+            destination_id: scheduleData.destination_id || scheduleData.destination?.id || ''
           };
 
           // Salinan: tanggal diisi ulang, kursi terisi direset, dan selalu mulai sebagai draft.
@@ -644,6 +655,24 @@ const ScheduleFormPage = () => {
     }));
   };
 
+  const programOptions = useMemo(() => {
+    const base = [
+      { value: '', label: 'Tanpa program' },
+      { value: 'plus', label: 'Plus' },
+      { value: 'ramadhan', label: 'Ramadhan' },
+    ];
+    const cur = formData.program_slug;
+    if (cur && !base.some((o) => o.value === cur)) base.push({ value: cur, label: cur });
+    return base;
+  }, [formData.program_slug]);
+
+  const destinationDropdownOptions = useMemo(() => {
+    const opts = destinationOptions
+      .filter((d) => d.is_active || String(d.id) === String(formData.destination_id))
+      .map((d) => ({ value: d.id, label: d.is_active ? d.name : `${d.name} (nonaktif)` }));
+    return [{ value: '', label: '-- Tanpa destinasi --' }, ...opts];
+  }, [destinationOptions, formData.destination_id]);
+
   const airportDropdownOptions = useMemo(() => {
     return airportOptions.map(a => ({
       value: a.code,
@@ -670,6 +699,7 @@ const ScheduleFormPage = () => {
       const errors = {};
       if (minimalDP !== null && (minimalDP < 0 || minimalDP > Math.min(hargaQuad, hargaTriple, hargaDouble))) errors.minimal_dp = 'DP harus antara 0 dan harga kamar termurah.';
 if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal = 'Tanggal pulang harus setelah tanggal berangkat.';
+      if (formData.program_slug === 'plus' && !formData.destination_id) errors.destination_id = 'Program Plus wajib memilih Destinasi.';
       if (hargaInfant === null) errors.harga_infant = 'Harga bayi wajib diisi.';
       if (hargaTriple < hargaQuad) errors.harga_triple = 'Harga Triple tidak boleh lebih murah dari harga Quad.';
       if (hargaDouble < hargaTriple) errors.harga_double = 'Harga Double tidak boleh lebih murah dari harga Triple.';
@@ -712,6 +742,9 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         brand_id: parseInt(formData.brand_id, 10),
         category_id: formData.category_id ? parseInt(formData.category_id, 10) : null,
         status: formData.status || 'draft',
+        journey_type: formData.journey_type || 'umroh',
+        program_slug: formData.program_slug || null,
+        destination_id: formData.destination_id ? parseInt(formData.destination_id, 10) : null,
         is_direct_flight: !!formData.is_direct_flight,
         seat_total: seatTotalNum,
         ...(isEditMode ? { expected_seat_total: formData.expected_seat_total } : {}),
@@ -1540,6 +1573,47 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       placeholder="-- Pilih Kategori --"
                       options={filteredCategories.map(c => ({ value: c.id, label: c.name }))}
                     />
+                  </div>
+                </div>
+              </SidebarSection>
+
+              <SidebarSection title="Klasifikasi Web Publik">
+                <div className="space-y-4">
+                  {formData.journey_type && formData.journey_type !== 'umroh' ? (
+                    <div>
+                      <span className="block text-xs font-semibold text-neutral-700 font-body mb-1.5">Jenis Perjalanan</span>
+                      <div className="h-10 flex items-center rounded-lg border border-neutral-200 bg-neutral-50 px-3 text-[13px] text-neutral-500 font-body">
+                        {({ haji: 'Haji', wisata_halal: 'Wisata Halal' })[formData.journey_type] || formData.journey_type}
+                      </div>
+                    </div>
+                  ) : (
+                    <CustomDropdown
+                      label="Jenis Perjalanan"
+                      className="!mb-0"
+                      value={formData.journey_type}
+                      onChange={(val) => handleChange({ target: { name: 'journey_type', value: val } })}
+                      options={[{ value: 'umroh', label: 'Umroh' }]}
+                    />
+                  )}
+                  <CustomDropdown
+                    label="Program"
+                    className="!mb-0"
+                    value={formData.program_slug}
+                    onChange={(val) => handleChange({ target: { name: 'program_slug', value: val } })}
+                    options={programOptions}
+                  />
+                  <div>
+                    <CustomDropdown
+                      label="Destinasi"
+                      className="!mb-0"
+                      value={formData.destination_id}
+                      error={fieldErrors.destination_id}
+                      required={formData.program_slug === 'plus'}
+                      onChange={(val) => handleChange({ target: { name: 'destination_id', value: val } })}
+                      placeholder="-- Tanpa destinasi --"
+                      options={destinationDropdownOptions}
+                    />
+                    <p className="mt-1.5 text-xs text-neutral-500 font-body">Dipakai untuk hub URL Umroh Plus di web publik.</p>
                   </div>
                 </div>
               </SidebarSection>

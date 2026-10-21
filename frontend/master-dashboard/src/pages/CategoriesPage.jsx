@@ -8,6 +8,7 @@ import Button from 'shared/ui/Button';
 import Modal from 'shared/ui/Modal';
 import Input from 'shared/ui/Input';
 import Toggle from 'shared/ui/Toggle';
+import Select from 'shared/ui/Select';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import ActionMenu from 'shared/ui/ActionMenu';
@@ -23,9 +24,12 @@ const initialForm = {
   name: '',
   slug: '',
   badge_color: '',
+  seo_tier: '',
   is_active: true,
   brand_ids: []
 };
+
+const SEO_TIER_LABELS = { hemat: 'Hemat', reguler: 'Reguler', comfort: 'Comfort', premium: 'Premium' };
 
 // Brand: titik warna + nama (gaya sama dengan daftar Paket).
 const BrandChip = ({ name, color }) => <BrandLabel name={name} color={color} />;
@@ -102,6 +106,7 @@ const CategoriesPage = () => {
         name: cat.name || '',
         slug: cat.slug || '',
         badge_color: cat.badge_color || '',
+        seo_tier: cat.seo_tier || '',
         is_active: cat.is_active !== undefined ? cat.is_active : true,
         brand_ids: cat.brands ? cat.brands.map(b => b.id) : []
       });
@@ -159,6 +164,7 @@ const CategoriesPage = () => {
         name: formData.name.trim(),
         slug: formData.slug.trim(),
         badge_color: formData.badge_color || null,
+        seo_tier: formData.seo_tier || null,
         is_active: formData.is_active,
         brand_ids: formData.brand_ids
       };
@@ -206,6 +212,7 @@ const CategoriesPage = () => {
   const columns = [
     { header: 'Kategori', key: 'name', sortable: true },
     { header: 'Badge', key: 'badge_color' },
+    { header: 'Tier SEO', key: 'seo_tier' },
     { header: 'Brand Berlaku', key: 'brands' },
     { header: 'Jumlah Paket', key: 'package_count', sortable: true },
     { header: 'Status', key: 'is_active', sortable: true },
@@ -235,6 +242,12 @@ const CategoriesPage = () => {
       ) : (
         <span className="text-xs text-neutral-400 font-body">Otomatis</span>
       );
+    }
+
+    if (key === 'seo_tier') {
+      return row.seo_tier
+        ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium font-body border bg-primary-50 text-primary-700 border-primary-200">{SEO_TIER_LABELS[row.seo_tier] || row.seo_tier}</span>
+        : <span className="text-xs text-neutral-400 font-body">Belum dipetakan</span>;
     }
 
     if (key === 'brands') {
@@ -334,6 +347,24 @@ const CategoriesPage = () => {
             onChange={handleChange}
             placeholder="otomatis jika kosong"
           />
+
+          <div>
+            <Select
+              label="Tier SEO"
+              className="!mb-0"
+              name="seo_tier"
+              value={formData.seo_tier}
+              onChange={handleChange}
+              placeholder={null}
+            >
+              <option value="">Belum dipetakan</option>
+              <option value="hemat">Hemat</option>
+              <option value="reguler">Reguler</option>
+              <option value="comfort">Comfort</option>
+              <option value="premium">Premium</option>
+            </Select>
+            <p className="mt-1.5 text-[11px] font-body text-neutral-500">Dipakai untuk URL tier di web publik. Kosongkan bila belum diputuskan.</p>
+          </div>
 
           {/* Warna badge */}
           <div className="space-y-2 pt-1 border-t border-neutral-100">
