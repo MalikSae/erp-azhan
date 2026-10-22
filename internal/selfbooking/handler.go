@@ -1,15 +1,18 @@
 package selfbooking
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"erp-azhan/api/internal/customer"
+	"erp-azhan/api/internal/mailer"
 	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 )
@@ -35,11 +38,18 @@ type Handler struct {
 	bookingByIP      *windowLimiter
 	bookingByAccount *windowLimiter
 	bookingByAgen    *windowLimiter
+	// Email konfirmasi "Booking berhasil dibuat" (hanya booking mandiri pelanggan).
+	mail     mailer.Sender
+	mailWG   sync.WaitGroup
+	loadInfo func(ctx context.Context, brandID, scheduleID int64) (*mailInfo, error)
+	// book dapat diganti di tes; bawaannya repo.ProcessBooking.
+	book func(ctx context.Context, brandID, accountID int64, req BookingRequest) (*BookingResponse, error)
 }
 
-func NewHandler(repo *Repository) *Handler {
+func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 	return &Handler{
 		repo:             repo,
+		mail:             m,
 		captcha:          newTurnstileVerifier(),
 		invoiceMissIP:    newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
 		bookingByIP:      newWindowLimiter(bookingIPAttemptLimit, time.Hour),
@@ -225,7 +235,11 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	resp, err := h.repo.ProcessBooking(r.Context(), req.BrandID, account.ID, req)
+	book := h.book
+	if book == nil {
+		book = h.repo.ProcessBooking
+	}
+	resp, err := book(r.Context(), req.BrandID, account.ID, req)
 	if err != nil {
 		if errors.Is(err, ErrQuoteChanged) || errors.Is(err, ErrRequestConflict) {
 			writeError(w, http.StatusConflict, err.Error())
@@ -248,6 +262,8 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	}
 	if !resp.Replayed {
 		h.bookingByAccount.record(accountKey)
+		// Email hanya untuk booking baru; jawaban ulang (retry idempoten) tidak mengirim ulang.
+		h.notifyBookingCreated(account, req.ScheduleID, resp)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

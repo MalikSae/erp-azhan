@@ -101,6 +101,10 @@ func siteLink(domain, path string, q url.Values) string {
 	return base + path
 }
 
+// SiteLink membentuk URL situs brand untuk paket lain (mis. email booking) dengan aturan yang sama
+// seperti email verifikasi.
+func SiteLink(domain, path string, q url.Values) string { return siteLink(domain, path, q) }
+
 func (h *Handler) sendAsync(msg mailer.Message) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
