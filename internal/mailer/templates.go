@@ -42,7 +42,7 @@ func OrderCreated(brandName, nama, kodeBooking, paket, tglBerangkat, total, dp, 
 		fmt.Fprintf(&b, "  - %s %s a.n. %s\n", k.Bank, k.Nomor, k.AtasNama)
 	}
 	if b.Len() == 0 {
-		b.WriteString("  (hubungi kami untuk rekening tujuan)\n")
+		b.WriteString("  (hubungi kami untuk informasi rekening tujuan)\n")
 	}
 	text = fmt.Sprintf(`Halo %s,
 
@@ -55,9 +55,11 @@ Total        : %s
 Pembayaran   : %s
 Batas bayar  : %s
 
+Seat ditahan sampai batas bayar. Lewat dari waktu itu, seat dilepas.
+
 Transfer ke:
 %s
-Setelah transfer, unggah bukti pembayaran lewat halaman Booking Saya:
+Setelah transfer, unggah bukti pembayaran lewat halaman detail booking:
 %s
 
 %s`, nama, brandName, kodeBooking, paket, tglBerangkat, total, dp, batasBayar, b.String(), link, brandName)

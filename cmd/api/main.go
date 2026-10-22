@@ -170,7 +170,7 @@ func main() {
 	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
 
 	selfBookingRepo := selfbooking.NewRepository(db)
-	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo)
+	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo, mailer.NewFromEnv())
 
 	if db != nil {
 		go runSeatHoldExpiry(crmDealRepo)

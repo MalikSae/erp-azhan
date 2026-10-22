@@ -1,6 +1,6 @@
 # SPEK — Web Publik, CMS SEO, dan Kontrak Data ERP (Hana & Alsha)
 
-> **Status:** DRAFT untuk review. **Tahap 1 (ERP) dan Tahap 2 (`azhan-booking`, fondasi SEO) sudah dikerjakan, belum di-commit** (lihat §15). Tahap 3 (CMS) dan halaman publik sesuai Figma belum dimulai.
+> **Status:** Rancangan awal 20 Okt 2026, kini sebagian besar terimplementasi dan ter-merge (Tahap 1, Tahap 2, Tahap 3 CMS, dan Fase 2 sampai gelombang 2E-1). Keadaan terbaru dan hal yang belum ada: §15; keputusan yang masih terbuka: §12.
 > **Tanggal:** 20 Oktober 2026
 > **Sumber keputusan:** sesi diskusi 20 Okt 2026 (grilling Q1–Q35), dokumen SEO di Drive (Spec CMS v2.3-A, Launch Plan v2.3, Mockup Reference Pack v2.3, Kebijakan Partner v1.0), desain Figma Hana & Alsha, memori keputusan arsitektur 2 Okt 2026.
 > **Prinsip utama:** *CMS memiliki kata-kata, ERP memiliki angka.* Dokumen SEO adalah acuan struktur web; ERP/booking dibangun relevan dengannya.
@@ -212,16 +212,22 @@ Tahap 2 dan 3 berjalan beriringan. Sebelum CMS ada, slug dibangkitkan dari pola 
 
 ## 12. Hal yang masih perlu konfirmasi
 
-1. **Alamat kantor:** Figma Hana menampilkan Depok (halaman Kontak) dan Jakarta Barat (beranda). Alamat Alsha belum ada.
-2. **Path detail non-Plus** (`/paket/umroh/{tier}/{tanggal}-{durasi}-hari/`) — spek SEO tidak menuliskannya; perlu persetujuan tim SEO sebelum dikunci.
-3. **Format tanggal pada slug** (nama bulan Indonesia, ada/tidaknya nol di depan hari) — spek hanya memberi contoh `20-desember-2026`.
-4. **Pemetaan kategori ke tier:** kategori ERP saat ini tampak "Low Cost, Reguler, Plus, VIP" (komentar migrasi 098) sedangkan vocab SEO "Hemat, Reguler, Comfort, Premium"; "Plus" di ERP bisa bentrok dengan program "Plus" di spek.
-5. **Domain Hana di spek:** contoh memakai `www.hanatours.com`, produksi adalah `hanatours.co.id`.
-6. **Konflik internal spek:** landing lokasi masih tergambar di sebagian mockup tetapi dinyatakan dihapus di v2.3 (mengikuti v2.3).
-7. **Rating "4.8 (2200 reviews)"** di Figma: sumbernya belum jelas (editorial atau agregat).
-8. **Batas panggilan Figma MCP paket Starter** membatasi pembacaan desain; sebagian halaman Alsha belum dilihat satu per satu.
-9. ~~Spek v2.3-B belum dibaca~~ — sudah dicek: isinya sama dengan v2.3-A kecuali varian penyimpanan media (A: tanpa CDN; B: CDN dengan host `media.hanatours.com`). Lihat §14.
-10. **Konten legal/regulasi** (nomor PPIU/PIHK, dokumen legalitas) tidak ada di desain; harus dari data brand/legal.
+Status per 22 Okt 2026. "Sementara" berarti diputuskan pemilik proyek tanpa menunggu tim SEO dan dapat dikoreksi kemudian; perubahan slug lewat CMS menulis URL History dan redirect satu hop, jadi koreksi tidak memutus URL yang sudah terindeks (rujukan: `azhan-booking/docs/deploy.md` bagian 7b).
+
+| # | Hal | Status |
+|---|---|---|
+| 1 | **Alamat kantor.** Figma Hana menampilkan Depok (halaman Kontak) dan Jakarta Barat (beranda). | **Terbuka.** Alamat dibaca dari profil brand ERP; pemilik proyek harus memastikan alamat Hana. Alamat Alsha juga belum ada. |
+| 2 | **Path detail non-Plus** `/paket/umroh/{tier}/{tanggal}-{durasi}-hari`. | **Diputuskan sementara** oleh pemilik proyek: indexable, mengikuti pola Plus. Tim SEO dapat meninjau setelah live. |
+| 3 | **Format tanggal pada slug.** | **Diputuskan sementara:** hari tanpa nol di depan, bulan Indonesia, tahun (`9-desember-2026`); jangan diubah lagi. |
+| 4 | **Pemetaan kategori ke tier SEO.** | **Diputuskan sementara** (Low Cost: hemat, Reguler: reguler, Plus: comfort, VIP: premium), **tetapi belum diisi di data**: DB dev belum memiliki nilai `seo_tier`. Skrip `UPDATE` ada di `azhan-booking/docs/deploy.md` bagian 7b; harus dijalankan di ERP produksi sebelum paket terlihat mesin pencari. Kategori "Plus" tetap hanya label harga; program Plus ditentukan per paket. |
+| 5 | **Domain Hana.** | **Selesai.** Produksi `hanatours.co.id`; `www.hanatours.com` di spek hanya contoh. Domain Alsha dalam panduan deploy: `alsha.travel`. |
+| 6 | **Konflik internal spek** (landing lokasi). | **Selesai:** mengikuti v2.3, tanpa landing lokasi. |
+| 7 | **Rating "4.8 (2200 reviews)"** di Figma. | **Terbuka:** sumbernya belum jelas; tidak dipakai sebagai data. |
+| 8 | **Pembacaan Figma terbatas** (paket Starter, resolusi rendah). | **Dicatat:** hex warna dan font Alsha adalah perkiraan (lihat §15.2). Butuh aset resmi dari tim desain. |
+| 9 | Spek v2.3-B. | **Selesai** (lihat §14). |
+| 10 | **Konten legal/regulasi** (nomor PPIU/PIHK, dokumen legalitas, teks Kebijakan Privasi). | **Terbuka.** Nomor PPIU/PIHK dari profil brand ERP; dokumen legalitas dan teks Kebijakan Privasi harus datang dari tim legal. Tidak ada teks bawaan. |
+| 11 | **Konfirmasi tim SEO** atas keputusan sementara no. 2, 3, dan 4. | **Terbuka.** |
+| 12 | **Profil Alsha** (tentang, tim, legalitas) dan aset desain resmi. | **Terbuka.** |
 
 ## 13. Referensi
 
@@ -271,43 +277,95 @@ Sumber: `Hana_Tours_Website_CMS_Business_Technical_Specification_v2.3-A_FINAL.pd
 
 ## 15. Status implementasi
 
-### Tahap 1 — ERP (dikerjakan 20 Okt 2026, belum di-commit)
+Per 22 Okt 2026. Yang disebut "ter-merge" sudah ada di cabang `main` masing-masing repo. Hal yang belum ada dicatat di §15.7.
+
+### 15.1 ERP — Tahap 1 (repo `erp-azhan`, ter-merge)
 
 | Butir spek | Hasil | Berkas utama |
 |---|---|---|
-| §4.1 skema | Migrasi **108** (tabel `destinations`; `schedules.journey_type/program_slug/destination_id`; `package_categories.seo_tier`) dan **109** (izin `cms.view/edit/publish` + pemetaan ke role). Keduanya sudah diterapkan ke DB dev lokal `erp_azhan_dev` (cadangan sebelum migrasi disimpan di scratchpad sesi). | `migrations/108_*.sql`, `migrations/109_*.sql` |
-| Master destinasi | CRUD `/api/admin/destinations` (izin `masterdata.view/edit`); slug unik huruf kecil; destinasi yang dipakai paket tidak bisa dihapus (409). | `internal/destination/` |
-| Klasifikasi paket | Tersimpan dalam transaksi yang sama dengan paket; dibaca kembali di `GET /api/admin/schedules/{id}`. Aturan: program `plus` wajib `destination_id`; destinasi harus aktif; paket baru default `umroh`; saat edit tanpa `journey_type` klasifikasi tidak diubah. | `internal/schedule/klasifikasi.go` |
-| §4.2 status registrasi | `OPEN/ALMOST_FULL/CLOSED/SOLD_OUT` diturunkan (ambang `max(5, 20%)`, batas 30 hari memakai `batasPublikWIB`). | `internal/schedule/registration.go` |
-| §4.3 API v1 | `GET /api/public/v1/packages` (filter `periode, destinasi, tier, program, durasi, hotel_bintang, harga_maks, registrasi, updated_since`, paginasi), `/packages/{id}` (`visible` / `gone` untuk arsip atau berangkat < 30 hari / 404 untuk draft), `/destinations`, `/sitemap-feed`. Endpoint lama tidak berubah. | `internal/schedule/public_v1.go`, `cmd/api/main.go` |
-| Kategori sebagai tier | `seo_tier` pada kategori (API + form). **Belum diisi:** DB dev berisi kategori "Low Cost, Reguler, Plus, VIP"; pemetaan ke tier SEO menunggu keputusan (§12.4). | `internal/category/` |
-| §4.4 izin | `cms.view` (direktur, product manager), `cms.view/edit` (marketing member), `cms.view/edit/publish` (marketing lead, CMO, super admin). | `migrations/109_*.sql` |
-| Dashboard ERP | Halaman "Kelola Destinasi"; bagian "Klasifikasi Web Publik" di form dan detail paket; kolom/isian "Tier SEO" di Kategori. | `frontend/master-dashboard/src/...` |
+| §4.1 skema | Migrasi **108** (tabel `destinations`; `schedules.journey_type/program_slug/destination_id`; `package_categories.seo_tier`). | `migrations/108_*.sql` |
+| §4.4 izin | Migrasi **109** (`cms.view/edit/publish` dan pemetaan ke role) dan **110** (izin Fase 2: `cms.blog.write`, `cms.blog.publish`, `cms.schema.approve`, `cms.tracking.manage`; PR #10). Izin baru masuk token setelah pengguna masuk ulang. Semua role `cms.*` saat ini berstatus Holding. | `migrations/109_*.sql`, `migrations/110_*.sql` |
+| Master destinasi | CRUD `/api/admin/destinations` (izin `masterdata.view/edit`); slug unik; destinasi yang dipakai paket tidak bisa dihapus (409). | `internal/destination/` |
+| Klasifikasi paket | Disimpan dalam transaksi yang sama dengan paket. Program `plus` wajib `destination_id`; paket baru default `umroh`. | `internal/schedule/klasifikasi.go` |
+| §4.2 status registrasi | `OPEN/ALMOST_FULL/CLOSED/SOLD_OUT` diturunkan (ambang `max(5, 20%)`, batas 30 hari). | `internal/schedule/registration.go` |
+| §4.3 API publik v1 | `GET /api/public/v1/packages` (filter dan paginasi), `/packages/{id}` (`visible` / `gone` / 404 untuk draft), `/destinations`, `/sitemap-feed`; `GET /api/admin/me` untuk identitas dan izin (PR #7); `ketentuan_pembatalan` di profil publik brand (PR #8). | `internal/schedule/public_v1.go`, `internal/identity/`, `internal/brand/` |
+| Tier kategori | Kolom dan isian `seo_tier` ada di API dan form Kategori. **Belum diisi di data dev** (§12.4). | `internal/category/` |
+| Dashboard ERP | Halaman "Kelola Destinasi"; "Klasifikasi Web Publik" di form dan detail paket; isian "Tier SEO" di Kategori. | `frontend/master-dashboard/` |
+| Istilah | Seragam "booking" dan "seat" di email, galat API, dan dashboard (PR #9; panduan lengkap di `azhan-booking/docs/copy-guide.md`). | `internal/mailer/`, dashboard |
+| Email booking | Email "Booking berhasil dibuat" dikirim setelah booking mandiri pelanggan baru dibuat (asinkron; kegagalan kirim hanya dicatat; tidak dikirim untuk retry idempoten maupun booking agen). Sebelumnya fungsi templatenya tidak dipanggil di mana pun. Belum ter-merge saat dokumen ini ditulis (cabang `fix/email-booking-dibuat`). | `internal/selfbooking/notify.go` |
 
-**Pengujian:** unit (registrasi, durasi, filter, paginasi, bentuk JSON v1, normalisasi klasifikasi, slug destinasi, tier kategori), integrasi DB (`TestKlasifikasiDisimpanDanDibaca`, memulihkan data dev), dan uji HTTP manual end-to-end pada instance API sementara (buat paket uji, terbit, filter, arsip, hapus — semua dipulihkan). Seluruh suite `ERP_TEST_DB=1 go test ./...` lulus. Build `vite build` master-dashboard berhasil; belum diuji di browser.
+PR ERP ter-merge yang relevan: #7 (API v1 dan `/api/admin/me`), #8 (ketentuan pembatalan brand), #9 (istilah booking/seat), #10 (izin CMS Fase 2). Pratinjau URL read-only di form paket (opsional, §14.3) belum dibuat.
 
-**Yang belum ada dari Tahap 1:** pratinjau URL read-only di form paket (opsional, §14.3); tidak ada pengisian data nyata (destinasi, program, pemetaan tier) — itu keputusan operasional.
+### 15.2 `azhan-booking` — Tahap 2: halaman publik Fase 1 (ter-merge)
 
-**Catatan operasional:** API perlu di-restart agar rute baru aktif; migrasi 108 dan 109 harus dijalankan di setiap lingkungan (`go run migrations/run.go migrations/108_web_publik_atribut.sql`, lalu 109). Izin baru masuk token setelah pengguna masuk ulang atau token diperbarui.
+- Prefix `/booking` untuk masuk, daftar, akun, checkout, dan detail booking (`noindex`); alamat lama dialihkan 308. Rute detail booking tetap `/booking/pesanan/{id}` (hanya teks tampilan yang memakai istilah "booking").
+- Rute paket `/paket/...` bergaya spek dari API v1, hub program dan destinasi, `sitemap.xml` dan `robots.txt` dinamis per host, JSON-LD (TravelAgency, Product+Offer, BreadcrumbList, FAQPage bila ada data).
+- Halaman publik sesuai Figma: beranda, daftar paket, hub, detail paket, kontak, dan `/jadwal-umroh`; tema per brand: **Hana marun, Alsha navy**. Figma terbaca dalam resolusi rendah, jadi **hex warna dan font Alsha adalah perkiraan** (judul Alsha memakai Lora; pita footer Alsha polos) dan harus diganti dengan aset resmi di `src/lib/theme.js` dan `src/app/globals.css`.
+- Keputusan URL dan SEO untuk go-live dirangkum di `azhan-booking/docs/deploy.md` bagian 7b (lastmod jujur, robots, meta unik, `priceValidUntil`).
 
-### Tahap 2 — `azhan-booking` (fondasi SEO; dikerjakan 20 Okt 2026, belum di-commit)
+### 15.3 `azhan-booking` — Tahap 3: CMS (ter-merge)
 
-Repo `C:\laragon\wwwzhan-booking`. Dikerjakan dalam tiga langkah; sisi ERP: tautan email verifikasi dan reset password kini menunjuk ke `/booking/...` (`internal/customer/handler.go`, konstanta `PathVerifikasiEmail` dan `PathAturUlangPassword`, dengan tes).
+Admin CMS tinggal di aplikasi yang sama pada host `cms.<domain brand>`, dengan database MySQL per brand (hanya kata-kata: slug, SEO, halaman, redirect) dan login memakai akun ERP. Dokumentasi teknis: `azhan-booking/docs/cms.md`.
 
-| Langkah | Hasil |
+| Tahap | Isi |
 |---|---|
-| 2A — prefix `/booking` | Masuk, daftar, lupa/atur-ulang password, verifikasi email, akun, checkout, dan pesanan dipindah ke `src/app/booking/` dengan layout `noindex, nofollow`. Redirect permanen 308 dari alamat lama (`/masuk`, `/daftar`, `/lupa-password`, `/atur-ulang-password`, `/verifikasi-email`, `/akun`, `/checkout`, `/pesanan[/:id]`) menjaga email dan bookmark lama. |
-| 2B — rute paket | `src/app/paket/[...slug]` menggantikan `/paket/[id]`. Data dari API v1 (`getPackages`, `getPackageV1`, `getDestinations`, revalidate 5 menit); `/api/schedules/{id}` tetap dipakai checkout agar seat dan harga langsung dari ERP. Resolusi: `/paket/{id}` lama → 308 ke slug; paket gone → 308 ke hub terdekat; slug cocok → detail (dua tombol "Pesan sekarang" dan "Tanya via WhatsApp" tetap); hub `/paket/umroh`, `/paket/umroh/plus`, `/paket/umroh/plus/{destinasi}`; selain itu 404 (hub tier dan `/paket/umroh/bulan/...` sengaja 404). Pustaka murni dengan tes: `paketUrl.js` (slug standar, tabrakan diberi akhiran `-{id}` sementara), `paketRoute.js`, `origin.js`. |
-| 2C — SEO | `sitemap.xml` dan `robots.txt` dinamis per host (tanpa `/booking`, hub kosong tidak masuk; host `cms.*` disallow semua); JSON-LD: TravelAgency (beranda), Product+Offer dan BreadcrumbList (detail), BreadcrumbList (hub), FAQPage hanya bila data FAQ ada; canonical untuk `/`, `/paket`, detail, dan hub; hub kosong `noindex, follow`. |
+| 3A | Fondasi: database per brand dengan penjaga brand, sinkronisasi paket dari ERP (cron dengan kunci), login ERP, admin shell. |
+| 3B | Editor paket (lima tab): slug, meta, canonical, robots, Open Graph; daftar paket dengan pencarian. |
+| 3C | Redirects, URL History (tanpa chain), monitor sitemap dan indexing. |
+| 3D | Manajer halaman dan editor slot konten (SEO hanya mengedit slot yang disediakan, tanpa page builder bebas). |
+| 3E | SEO Landing bulan dan Search Router. |
 
-**Pengujian:** 46 tes unit Node (`npm test`), `npm run check:design` bersih, `npm run build` berhasil; uji nyata dengan `next start` di port 3100 terhadap API ERP sementara di port 9191 (Host `hana.azhan.test:3100`): sitemap valid (9 URL, 0 `/booking`), robots, JSON-LD dapat di-parse, redirect lama, 404 yang dimaksud, dan meta `noindex` pada `/booking/masuk`. Data uji sementara sudah dihapus; DB dev kembali ke 12 paket terbit, 1 draft, 0 destinasi.
+### 15.4 `azhan-booking` — Fase 2 (ter-merge; migrasi CMS 001–010)
 
-**Belum dikerjakan dari Tahap 2:** halaman publik sesuai desain Figma Hana/Alsha (tampilan beranda, daftar, hub, detail baru, token per brand, layout cetak A4 sederhana untuk `/jadwal-umroh/`, halaman kontak); pembaruan `BottomNav` yang masih menyembunyikan dirinya di `/paket/*`; filter pada hub; `/jadwal-umroh/`; `metadataBase` di root layout; data FAQ (menunggu CMS).
+| Gelombang | Isi |
+|---|---|
+| 2A | Global SEO dan Tracking terstruktur (GTM, GA4, Meta Pixel; ID saja, tanpa kode bebas); kode verifikasi Search Console dari profil brand ERP. |
+| 2B | Media library, Tentang kami, Legalitas, Tour Leader, Testimoni (tayang hanya bila Published dan terisi). |
+| 2C | Blog: artikel, tag terkelola, primary cluster, alat regex dan ekspor GSC; izin terpisah `cms.blog.write` dan `cms.blog.publish`. |
+| 2D-1 | Perbandingan paket (`/bandingkan`, utilitas noindex), template A4 untuk `/jadwal-umroh/cetak` (`PRINT-001`), override slug terkontrol (butuh alasan; slug lama 308 satu hop). |
+| 2D-2 | Haji Plus, Kalkulator Umroh, Biaya Umroh, Cabang (halaman tambahan Alsha), dan layar Pengaturan berisi saklar fitur per brand (semua mati secara bawaan; halaman 404 bila saklar mati atau konten belum Published). |
+| 2E-1 | Persetujuan cookie (skrip Tracking tidak dimuat sebelum izin; pilihan Terima semua, Tolak, Atur setara), halaman Kebijakan Privasi dari CMS (tanpa teks bawaan), hapus dan redirect item, halaman daftar terkelola. |
 
-**Risiko dan keputusan terbuka dari Tahap 2:**
-1. Kategori ERP bernama "Plus" menghasilkan path detail `/paket/umroh/plus/{tanggal}-{durasi}-hari` yang berbentuk seperti hub program Plus (kategori bukan program). Selama `seo_tier` belum dipetakan, path non-Plus memakai slug kategori. Perlu keputusan pemetaan kategori ke tier (§12.4).
-2. Slug masih dibangkitkan di `azhan-booking` dan belum disimpan; ia baru stabil setelah CMS menyimpannya (Tahap 3). Mengubah tanggal atau tier paket sekarang mengubah URL tanpa riwayat redirect.
-3. Cache data 5 menit berarti pengalihan paket yang baru diarsipkan bisa tertunda sampai 5 menit.
-4. `/paket/...` memberi 500 (bukan 404 palsu) bila API v1 gagal; sitemap juga 500 bila data tidak bisa diambil.
-5. Hub destinasi belum diuji dengan data destinasi nyata (DB dev tidak punya destinasi); pada pengujian Tahap 2B hub itu diuji dengan data sementara.
-6. Perubahan git di `azhan-booking` terlihat sebagai penghapusan path lama dan berkas baru (`src/app/booking/`) karena belum di-stage.
+Migrasi CMS: 001 inti, 002 manajer halaman, 003 landing dan router, 004 meta otomatis, 005 Global SEO dan Tracking, 006 media/Tour Leader/Testimoni/halaman info, 007 Blog, 008 Template A4 dan override slug, 009 saklar fitur dan Cabang, 010 pengerasan 2E-1.
+
+### 15.5 Pengujian
+
+- ERP: unit dan integrasi DB (`ERP_TEST_DB=1 go test ./...`) untuk registrasi, filter dan paginasi API v1, klasifikasi, tier kategori, izin, serta alur akun dan booking mandiri (termasuk idempotensi checkout dan email booking).
+- `azhan-booking`: tes unit Node (`npm test`), `npm run check:design`, dan `npm run build`.
+- **Uji e2e penuh terhadap ERP asli (22 Okt 2026, setelah Fase 1 dan 2 selesai): 504 pemeriksaan, 492 lulus, 11 gagal, 1 tidak teruji.** Dari 11 yang gagal, 3 adalah temuan produk dan 8 artefak uji atau perilaku yang sudah didokumentasikan. Cakupan: crawl 71 URL Hana dan 58 URL Alsha (uji) tanpa 404/5xx tak disengaja, canonical dan JSON-LD valid tanpa Review, tidak ada overflow di 375 px, sitemap sama dengan Monitor di empat keadaan data, 34 layar CMS, sembilan siklus hidup konten, matriks izin sekitar 170 sel dengan akun role nyata (aksi tulis tanpa izin ditolak server), XSS di 15 halaman, ERP mati/hang dan DB CMS mati (degradasi anggun), alur booking pelanggan sampai Booking Saya, dan dry-run `docs/deploy.md` dari database kosong (migrasi 001-010).
+- **Temuan dan penanganannya:** (a) Next.js 16.3.1 punya kerentanan kritis (`npm audit`), dinaikkan ke 16.4.2 dengan 0 kerentanan tersisa; (b) email "Booking berhasil dibuat" tidak pernah terkirim, diperbaiki di ERP (§15.1); (c) `cms.blog.write` dapat menyetel jadwal terbit, ditolak di server; (d) URL ber-encoding rusak menjawab 500, kini 404; (e) editor paket memakai data basi untuk pola standar, kini data fresh; (f) tidak ada `prefers-reduced-motion`, urutan heading, meta judul menerima tag, `CMS_MEDIA_DIR` dibuat diam-diam, label "Password": semuanya diperbaiki; (g) dokumen deploy dilengkapi (env saat build, `SITE_URL_TEMPLATE`/`SMTP_*`, kode 502 sinkronisasi, header keamanan reverse proxy). **Belum ditangani (bukan kode):** deskripsi meta identik di beberapa hub (diisi tim SEO di menu Halaman), header HSTS/CSP/Referrer-Policy (reverse proxy), `x-middleware-rewrite` terlihat di host cms (dihapus di reverse proxy), `/api/cms/sync` terjangkau dari host publik (batasi ke IP cron bila perlu), `/promo` yatim.
+- Belum diuji: tampilan di perangkat nyata dan semua peramban, pengiriman SMTP sungguhan, banner cookie dengan CDN di depannya, dan beban.
+
+### 15.6 Keputusan sadar dan penyimpangan
+
+D1–D5 (§14.2) tetap berlaku, dengan pembaruan: D2 kini terpenuhi (template A4 khusus, 2D-1); D4 diperluas dengan izin halus Fase 2 (migrasi 110); D5 sebagian terpenuhi (Blog, Tracking, Testimoni, Tour Leader, Global SEO sudah ada, §15.4); D1 dipertahankan (butir 6). Penyimpangan baru:
+
+1. **Cabang disimpan di CMS.** ERP tidak punya model cabang, sehingga cabang adalah satu-satunya data fakta baru di database CMS (dicadangkan bersama database).
+2. **Redirect memakai 308**, bukan 301 maupun 410. Google menyamakan 308 dengan 301; paket kedaluwarsa dialihkan ke hub terdekat yang berisi paket (terakhir `/jadwal-umroh`), bukan 410.
+3. **"ISR" sebenarnya dinamis.** Halaman dirender dinamis dengan cache data 5 menit untuk API ERP (30 detik untuk data CMS, per proses), bukan ISR statis; perubahan di ERP bisa tertunda sampai 5 menit.
+4. **Tombol "Booking sekarang"** menggantikan "Pesan sekarang" (panduan istilah: Booking, seat, jamaah; bukan pesanan/pemesanan/kursi/reservasi).
+5. **Tracking terstruktur tanpa kode bebas.** Hanya ID GTM/GA4/Meta Pixel yang dapat diisi.
+6. **Media di disk** (`CMS_MEDIA_DIR`, WebP hasil proses ulang, disk persisten dan dicadangkan bersama database), bukan Shared Media Service; konsisten dengan D1.
+7. **Path non-Plus, format tanggal, dan pemetaan tier** adalah keputusan sementara pemilik proyek (§12).
+
+### 15.7 Belum ada atau di luar rilis ini
+
+- Produk **Wisata Halal** dan **Haji** (Haji Plus sebagai halaman informasi sudah ada di 2D-2; produk Haji dan template khusus belum, menunggu TBD-010).
+- Form lead dan integrasi CRM; Marketing Hub.
+- Pemetaan `seo_tier` di data ERP (skrip siap, belum dijalankan).
+- Konfirmasi tim SEO atas path non-Plus dan format tanggal.
+- Alamat Hana yang pasti, profil dan aset desain resmi Alsha (hex dan font), serta teks Kebijakan Privasi dan dokumen legal dari tim legal.
+- Header keamanan di reverse proxy (HSTS, CSP, dan sejenisnya) belum diatur; itu bagian konfigurasi deploy.
+- Pratinjau URL di form paket ERP, halaman paket evergreen (Fase 1.5), dan Shared Media Service (D1).
+- Banner cookie sudah ada (2E-1); yang belum adalah teks Kebijakan Privasi yang ditautkannya.
+
+### 15.8 Urutan peluncuran dan prasyarat deploy
+
+Rincian langkah dan perintah ada di `azhan-booking/docs/deploy.md`; ringkasannya:
+
+1. **ERP:** terapkan migrasi 108, 109, 110; deploy kode ERP terbaru; isi profil brand (domain persis sama dengan host publik, kontak, PPIU/PIHK, ketentuan pembatalan); isi master destinasi, klasifikasi paket, dan `seo_tier` kategori; beri role `cms.*` ke tim SEO (mereka harus masuk ulang). Atur `SITE_URL_TEMPLATE` dan SMTP agar tautan dan email transaksional (verifikasi, reset password, booking) benar.
+2. **Database CMS per brand:** buat, lalu `npm run db:migrate` (001–010). Siapkan direktori media persisten (`CMS_MEDIA_DIR`).
+3. **Deploy `azhan-booking`:** variabel lingkungan, build, reverse proxy (teruskan `Host` dan `X-Forwarded-Host`, `client_max_body_size` minimal 4 MB untuk host `cms.*`, tanpa cache HTML publik lintas pengunjung), DNS, TLS.
+4. **Cron sinkronisasi** paket tiap beberapa menit, lalu verifikasi pasca-deploy (bagian 7 panduan deploy, termasuk uji ERP mati).
+5. **Konten dan legal:** tim legal mengisi dan menerbitkan Kebijakan Privasi, periksa banner cookie di staging, baru publikasikan Tracking.
+6. **Go-live ke mesin pencari** hanya setelah butir di atas lulus dan §12 butir 1, 4, dan 10 beres; daftarkan `sitemap.xml` di Search Console. Jaga domain tidak terindeks lebih awal selama persiapan.
