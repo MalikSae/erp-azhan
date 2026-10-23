@@ -4,6 +4,7 @@ import (
 	"net/mail"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -39,7 +40,18 @@ func ValidPassword(s string) (ok bool, msg string) {
 	return true, ""
 }
 
+// namePattern: huruf (semua aksara, termasuk tanda diakritik), spasi biasa, titik, koma, apostrof
+// (' atau ’), dan tanda hubung. Angka, newline/karakter kontrol, '@', ':', '/', dan URL ditolak
+// karena nama disisipkan ke isi email (cegah injeksi konten / phishing lewat nama).
+var namePattern = regexp.MustCompile(`^[\p{L}\p{M} .,'’-]+$`)
+
+// ValidName: 2–100 karakter setelah dipangkas, hanya karakter nama (lihat namePattern), dan
+// wajib memuat minimal satu huruf.
 func ValidName(s string) bool {
-	n := utf8.RuneCountInString(strings.TrimSpace(s))
-	return n >= 2 && n <= 150
+	s = strings.TrimSpace(s)
+	n := utf8.RuneCountInString(s)
+	if n < 2 || n > 100 || !namePattern.MatchString(s) {
+		return false
+	}
+	return strings.IndexFunc(s, unicode.IsLetter) >= 0
 }

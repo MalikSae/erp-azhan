@@ -13,12 +13,13 @@ import (
 )
 
 var (
-	ErrNotFound          = errors.New("data tidak ditemukan")
-	ErrAmbiguousJamaah   = errors.New("lebih dari satu jamaah memiliki nomor telepon tersebut")
-	ErrBrandCodeMissing  = errors.New("kode_brand belum diatur")
+	ErrNotFound         = errors.New("data tidak ditemukan")
+	ErrAmbiguousJamaah  = errors.New("lebih dari satu jamaah memiliki nomor telepon tersebut")
+	ErrBrandCodeMissing = errors.New("kode_brand belum diatur")
 )
 
 const codeCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
 var nonDigit = regexp.MustCompile(`[^0-9]+`)
 
 // JamaahInput berisi data jamaah untuk proses resolusi.
@@ -82,7 +83,13 @@ func ResolveJamaah(ctx context.Context, tx *sql.Tx, brandID int64, input JamaahI
 	if len(matches) == 1 {
 		return matches[0], nil
 	}
+	return CreateJamaah(ctx, tx, brandID, input)
+}
 
+// CreateJamaah selalu menyisipkan baris jamaah baru tanpa mencari baris lama yang cocok nomor HP.
+// Dipakai jalur yang tidak boleh menggabungkan data hanya karena nomor HP sama (mis. PIC akun
+// pelanggan: nomor akun belum terverifikasi sehingga tidak membuktikan identitas).
+func CreateJamaah(ctx context.Context, tx *sql.Tx, brandID int64, input JamaahInput) (int64, error) {
 	var brandCode sql.NullString
 	var counter uint64
 	if err := tx.QueryRowContext(ctx, `SELECT kode_brand,jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter); err != nil {
@@ -100,10 +107,15 @@ func ResolveJamaah(ctx context.Context, tx *sql.Tx, brandID int64, input JamaahI
 	if err != nil {
 		return 0, err
 	}
-	
+
+	// Nomor kosong disimpan NULL (bukan ''), agar tidak bentrok dengan kunci unik nomor per brand.
+	var noHP any
+	if strings.TrimSpace(input.NoHP) != "" {
+		noHP = input.NoHP
+	}
 	result, err := tx.ExecContext(ctx,
 		`INSERT INTO jamaah (brand_id,id_jamaah,kode_jamaah,nama_lengkap,no_hp,email,alamat,jenis_kelamin) VALUES (?,?,?,?,?,?,?,?)`,
-		brandID, idJamaah, kodeJamaah, input.NamaLengkap, input.NoHP, input.Email, input.Alamat, input.JenisKelamin,
+		brandID, idJamaah, kodeJamaah, input.NamaLengkap, noHP, input.Email, input.Alamat, input.JenisKelamin,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("create jamaah: %w", err)

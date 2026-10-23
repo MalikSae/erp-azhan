@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"erp-azhan/api/internal/mailer"
 	"erp-azhan/api/internal/shared"
@@ -27,18 +28,24 @@ const (
 	loginIPLimit       = 30 // gagal per 15 menit per IP
 	forgotKeyLimit     = 5  // per jam per IP+email
 	resendAccountLimit = 3  // per jam per akun
+	// Lupa password tidak memakai captcha (frontend tidak mengirim token), jadi dibatasi lebih
+	// ketat: per email (lintas IP) dan per IP (lintas email), selain per IP+email di atas.
+	forgotEmailLimit = 3  // per jam per brand+email
+	forgotIPLimit    = 20 // per jam per IP
 )
 
 type Handler struct {
-	repo      *Repository
-	mail      mailer.Sender
-	captcha   *shared.Turnstile
-	regIP     *shared.WindowLimiter
-	loginKey  *shared.WindowLimiter
-	loginIP   *shared.WindowLimiter
-	forgot    *shared.WindowLimiter
-	resend    *shared.WindowLimiter
-	dummyHash []byte
+	repo        *Repository
+	mail        mailer.Sender
+	captcha     *shared.Turnstile
+	regIP       *shared.WindowLimiter
+	loginKey    *shared.WindowLimiter
+	loginIP     *shared.WindowLimiter
+	forgot      *shared.WindowLimiter
+	forgotEmail *shared.WindowLimiter
+	forgotIP    *shared.WindowLimiter
+	resend      *shared.WindowLimiter
+	dummyHash   []byte
 }
 
 func NewHandler(repo *Repository, m mailer.Sender) *Handler {
@@ -46,12 +53,14 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 	dummy, _ := bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), bcryptCost)
 	return &Handler{
 		repo: repo, mail: m, captcha: shared.NewTurnstile(),
-		regIP:     shared.NewWindowLimiter(registerIPLimit, time.Hour),
-		loginKey:  shared.NewWindowLimiter(loginKeyLimit, 15*time.Minute),
-		loginIP:   shared.NewWindowLimiter(loginIPLimit, 15*time.Minute),
-		forgot:    shared.NewWindowLimiter(forgotKeyLimit, time.Hour),
-		resend:    shared.NewWindowLimiter(resendAccountLimit, time.Hour),
-		dummyHash: dummy,
+		regIP:       shared.NewWindowLimiter(registerIPLimit, time.Hour),
+		loginKey:    shared.NewWindowLimiter(loginKeyLimit, 15*time.Minute),
+		loginIP:     shared.NewWindowLimiter(loginIPLimit, 15*time.Minute),
+		forgot:      shared.NewWindowLimiter(forgotKeyLimit, time.Hour),
+		forgotEmail: shared.NewWindowLimiter(forgotEmailLimit, time.Hour),
+		forgotIP:    shared.NewWindowLimiter(forgotIPLimit, time.Hour),
+		resend:      shared.NewWindowLimiter(resendAccountLimit, time.Hour),
+		dummyHash:   dummy,
 	}
 }
 
@@ -153,16 +162,18 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	h.regIP.Record(ip)
 
-	if h.captcha.Enabled() {
-		ok, err := h.captcha.Verify(r.Context(), strings.TrimSpace(req.CaptchaToken), ip)
-		if err != nil {
-			writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, coba lagi")
-			return
+	// Fail closed: tanpa TURNSTILE_SECRET_KEY Verify mengembalikan error (kecuali bypass dev eksplisit).
+	ok, err := h.captcha.Verify(r.Context(), strings.TrimSpace(req.CaptchaToken), ip)
+	if err != nil {
+		if !errors.Is(err, shared.ErrCaptchaNotConfigured) {
+			log.Printf("[ERROR] customer captcha: %v", err)
 		}
-		if !ok {
-			writeError(w, http.StatusBadRequest, "verifikasi keamanan gagal, silakan coba lagi")
-			return
-		}
+		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, coba lagi")
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusBadRequest, "verifikasi keamanan gagal, silakan coba lagi")
+		return
 	}
 	if req.BrandID <= 0 {
 		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
@@ -173,7 +184,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	req.NoHP = strings.TrimSpace(req.NoHP)
 	switch {
 	case !ValidName(req.NamaLengkap):
-		writeError(w, http.StatusBadRequest, "nama lengkap wajib diisi (2–150 karakter)")
+		writeError(w, http.StatusBadRequest, "nama lengkap wajib diisi (2–100 karakter; hanya huruf, spasi, titik, koma, apostrof, dan tanda hubung)")
 		return
 	case !ValidEmail(req.Email):
 		writeError(w, http.StatusBadRequest, "format email tidak valid")
@@ -194,7 +205,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash))
 	if errors.Is(err, ErrEmailTaken) {
-		writeError(w, http.StatusConflict, "email sudah terdaftar, silakan masuk")
+		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
+		// Penebakan email tetap dibatasi captcha + registerIPLimit.
+		writeError(w, http.StatusConflict, "pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, silakan masuk atau gunakan Lupa password")
 		return
 	}
 	if err != nil {
@@ -269,23 +282,51 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// meView adalah isi "account" pada GET /api/account/me. NIK TIDAK pernah dikirim utuh (tinjauan
+// keamanan 2026-10-22): hanya nik_masked (4 digit terakhir). Field "nik" lama dihapus; frontend
+// memakai `account.nik || ”` sehingga isian NIK checkout cukup kosong dan diisi ulang pelanggan.
+type meView struct {
+	*Account
+	JenisKelamin string `json:"jenis_kelamin"`
+	NIKMasked    string `json:"nik_masked"`
+}
+
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// MaskNIK menyisakan 4 digit terakhir, sisanya "•". Kosong tetap kosong.
+func MaskNIK(nik string) string {
+	nik = strings.TrimSpace(nik)
+	n := utf8.RuneCountInString(nik)
+	if n == 0 {
+		return ""
+	}
+	if n <= 4 {
+		return strings.Repeat("•", n)
+	}
+	r := []rune(nik)
+	return strings.Repeat("•", n-4) + string(r[n-4:])
+}
+
+// buildMeView melengkapi akun dengan jenis kelamin dan NIK tersamar dari jamaah akun (bila ada).
+func buildMeView(ctx context.Context, q rowQuerier, a *Account) meView {
+	view := meView{Account: a}
+	if a != nil && a.JamaahID != nil {
+		var jk, nik sql.NullString
+		if err := q.QueryRowContext(ctx, `SELECT jenis_kelamin, nik FROM jamaah WHERE id=?`, *a.JamaahID).Scan(&jk, &nik); err == nil {
+			view.JenisKelamin = jk.String
+			view.NIKMasked = MaskNIK(nik.String)
+		}
+	}
+	return view
+}
+
 // Me GET /api/account/me
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	a := FromContext(r.Context())
 	// Jenis kelamin diambil dari data jamaah akun (bila sudah pernah memesan) untuk mengisi checkout otomatis.
-	view := struct {
-		*Account
-		JenisKelamin string `json:"jenis_kelamin"`
-		NIK          string `json:"nik"`
-	}{Account: a}
-	if a != nil && a.JamaahID != nil {
-		var jk, nik sql.NullString
-		if err := h.repo.db.QueryRowContext(r.Context(), `SELECT jenis_kelamin, nik FROM jamaah WHERE id=?`, *a.JamaahID).Scan(&jk, &nik); err == nil {
-			view.JenisKelamin = jk.String
-			view.NIK = nik.String
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"account": view})
+	writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, a)})
 }
 
 type forgotRequest struct {
@@ -302,12 +343,20 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	generic := map[string]string{"status": "ok", "message": "Jika email terdaftar, tautan atur ulang password sudah dikirim."}
-	key := ip + "|" + strconv.FormatInt(req.BrandID, 10) + "|" + NormalizeEmail(req.Email)
-	if !h.forgot.Allow(key) {
+	emailKey := strconv.FormatInt(req.BrandID, 10) + "|" + NormalizeEmail(req.Email)
+	key := ip + "|" + emailKey
+	if !h.forgot.Allow(key) || !h.forgotIP.Allow(ip) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan, coba lagi dalam 1 jam")
 		return
 	}
 	h.forgot.Record(key)
+	h.forgotIP.Record(ip)
+	// Batas per email: jawaban tetap generik (200) agar tidak menjadi oracle, tetapi email tidak dikirim.
+	if !h.forgotEmail.Allow(emailKey) {
+		writeJSON(w, http.StatusOK, generic)
+		return
+	}
+	h.forgotEmail.Record(emailKey)
 	acc, err := h.repo.GetByEmail(r.Context(), req.BrandID, req.Email)
 	if err != nil {
 		writeJSON(w, http.StatusOK, generic)

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	_ "time/tzdata" // zona waktu tersedia tanpa bergantung pada OS server
@@ -21,13 +22,13 @@ import (
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/airline"
 	"erp-azhan/api/internal/airport"
-	"erp-azhan/api/internal/destination"
 	"erp-azhan/api/internal/bankaccount"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
 	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/crmdeal"
 	"erp-azhan/api/internal/customer"
+	"erp-azhan/api/internal/destination"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
@@ -55,10 +56,19 @@ func main() {
 	// Zona waktu bisnis untuk time.Now(), JSON, dan koneksi DB (lihat shared.Config.DSN).
 	time.Local = cfg.Location()
 	log.Printf("[INFO] zona waktu aplikasi: %s", time.Local)
-	if strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
-		if err := identity.ValidateJWTSecret(); err != nil {
-			log.Fatalf("[ERROR] konfigurasi JWT tidak aman: %v", err)
-		}
+	// JWT_SECRET divalidasi SELALU (semua APP_ENV): kosong, < 32 karakter, atau placeholder = gagal start.
+	if err := identity.ValidateJWTSecret(); err != nil {
+		log.Fatalf("[ERROR] konfigurasi JWT tidak aman: %v", err)
+	}
+	if mins, _ := strconv.Atoi(strings.TrimSpace(os.Getenv("JWT_ACCESS_TTL_MINUTES"))); mins > 60 {
+		log.Printf("[WARN] JWT_ACCESS_TTL_MINUTES=%d dibatasi menjadi 60 menit", mins)
+	}
+	// Captcha fail closed: produksi tanpa TURNSTILE_SECRET_KEY gagal start.
+	if err := shared.ValidateCaptchaConfig(); err != nil {
+		log.Fatalf("[ERROR] konfigurasi captcha: %v", err)
+	}
+	if !shared.IsProduction() {
+		log.Printf("[WARN] APP_ENV=%q (bukan production): origin CORS pengembangan aktif. Server publik WAJIB APP_ENV=production.", shared.AppEnv())
 	}
 
 	// ─── Database ─────────────────────────────────────────────────────────────
@@ -82,23 +92,7 @@ func main() {
 	// diakali. IP client untuk rate limit diambil lewat shared.ClientIP.
 	r.Use(securityHeaders)
 
-	allowedOrigins := []string{}
-	if !strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
-		allowedOrigins = append(allowedOrigins,
-			"http://localhost:5173",
-			"http://localhost:3000", "https://localhost:3000",
-			"http://*.azhan.test", "http://*.azhan.test:3000",
-			"https://*.azhan.test", "https://*.azhan.test:3000",
-			"http://*.test", "https://*.test",
-		)
-	}
-	if configured := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")); configured != "" {
-		for _, origin := range strings.Split(configured, ",") {
-			if origin = strings.TrimSpace(origin); origin != "" {
-				allowedOrigins = append(allowedOrigins, origin)
-			}
-		}
-	}
+	allowedOrigins := corsOrigins(shared.IsProduction(), os.Getenv("CORS_ALLOWED_ORIGINS"))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -108,7 +102,8 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	r.Use(middleware.Logger)
+	// Logger akses dengan token invoice/token query disamarkan (shared.RedactURI).
+	r.Use(shared.RedactingLogger(&middleware.DefaultLogFormatter{Logger: log.New(os.Stdout, "", log.LstdFlags), NoColor: false}))
 	r.Use(middleware.Recoverer)
 
 	// ─── Handlers ─────────────────────────────────────────────────────────────
@@ -150,6 +145,10 @@ func main() {
 		}, nil
 	}
 	identityHandler := identity.NewHandler(identityRepo, accessLoader)
+	if db != nil {
+		// RequireAuth memeriksa is_active/perm_version (cache 30 detik) agar pencabutan akses cepat berlaku.
+		identity.SetUserStatusLoader(identityRepo.UserStatus)
+	}
 
 	brandRepo := brand.NewRepository(db)
 	brandHandler := brand.NewHandler(brandRepo)
@@ -205,16 +204,19 @@ func main() {
 	r.With(requireDB(db)).Get("/api/schedules", scheduleHandler.ListSchedulesPublic)
 	r.With(requireDB(db)).Get("/api/schedules/{id}", scheduleHandler.GetSchedulePublic)
 	// API publik v1 (read-only, stabil) untuk situs publik dan CMS: SPEK-WEB-PUBLIK-CMS-2026-10-20.md §4.3.
-	r.With(requireDB(db)).Get("/api/public/v1/packages", scheduleHandler.ListPackagesV1)
-	r.With(requireDB(db)).Get("/api/public/v1/packages/{id}", scheduleHandler.GetPackageV1)
-	r.With(requireDB(db)).Get("/api/public/v1/destinations", scheduleHandler.ListDestinationsV1)
-	r.With(requireDB(db)).Get("/api/public/v1/sitemap-feed", scheduleHandler.SitemapFeedV1)
+	// Tidak berisi data per pengguna: boleh di-cache publik 60 detik (hanya jawaban 200).
+	publicV1 := r.With(requireDB(db), shared.PublicCache(60))
+	publicV1.Get("/api/public/v1/packages", scheduleHandler.ListPackagesV1)
+	publicV1.Get("/api/public/v1/packages/{id}", scheduleHandler.GetPackageV1)
+	publicV1.Get("/api/public/v1/destinations", scheduleHandler.ListDestinationsV1)
+	publicV1.Get("/api/public/v1/sitemap-feed", scheduleHandler.SitemapFeedV1)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: categories & brand & bank accounts
 	r.With(requireDB(db)).Get("/api/public/categories", categoryHandler.ListPublicCategories)
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
-	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.List)
+	// Publik: wajib brand, hanya rekening aktif dan field untuk pelanggan (handler admin terpisah).
+	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.ListPublic)
 
 	// Public: Digital Invoice (tautan berkode untuk pelanggan lama; pesanan baru lewat /api/account)
 	r.With(requireDB(db)).Get("/api/public/invoice/{code}", selfBookingHandler.GetPublicInvoice)
@@ -507,6 +509,27 @@ func main() {
 		log.Fatalf("[ERROR] Server gagal berjalan: %v", err)
 		os.Exit(1)
 	}
+}
+
+// corsOrigins: origin pengembangan (localhost, *.test) hanya bila BUKAN produksi; di produksi
+// hanya CORS_ALLOWED_ORIGINS.
+func corsOrigins(production bool, configured string) []string {
+	allowedOrigins := []string{}
+	if !production {
+		allowedOrigins = append(allowedOrigins,
+			"http://localhost:5173",
+			"http://localhost:3000", "https://localhost:3000",
+			"http://*.azhan.test", "http://*.azhan.test:3000",
+			"https://*.azhan.test", "https://*.azhan.test:3000",
+			"http://*.test", "https://*.test",
+		)
+	}
+	for _, origin := range strings.Split(configured, ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			allowedOrigins = append(allowedOrigins, origin)
+		}
+	}
+	return allowedOrigins
 }
 
 // securityHeaders applies conservative browser protections to every response.

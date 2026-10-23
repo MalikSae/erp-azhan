@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,13 +15,18 @@ import (
 
 const turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
-// Turnstile memverifikasi token Cloudflare Turnstile di server. Opsional: aktif
-// hanya jika TURNSTILE_SECRET_KEY diisi; bila kosong verifikasi dilewati dan
-// endpoint tetap dibatasi rate limit.
+// ErrCaptchaNotConfigured: TURNSTILE_SECRET_KEY kosong di luar mode pengembangan eksplisit.
+// Pemanggil menolak request (fail closed).
+var ErrCaptchaNotConfigured = errors.New("captcha belum dikonfigurasi (TURNSTILE_SECRET_KEY kosong)")
+
+// Turnstile memverifikasi token Cloudflare Turnstile di server. Fail closed (tinjauan keamanan
+// 2026-10-22): tanpa TURNSTILE_SECRET_KEY verifikasi gagal, kecuali APP_ENV=development dan
+// ALLOW_DEV_CAPTCHA=true. Di produksi startup gagal bila secret kosong (ValidateCaptchaConfig).
 type Turnstile struct {
 	secret    string
 	verifyURL string
 	client    *http.Client
+	devBypass bool
 }
 
 func NewTurnstile() *Turnstile {
@@ -30,18 +36,39 @@ func NewTurnstile() *Turnstile {
 		client:    &http.Client{Timeout: 5 * time.Second},
 	}
 	if t.secret == "" {
-		log.Println("[INFO] TURNSTILE_SECRET_KEY kosong: verifikasi Turnstile nonaktif (rate limit tetap berlaku)")
+		t.devBypass = DevCaptchaBypass()
 	}
 	return t
 }
 
-func (t *Turnstile) Enabled() bool { return t.secret != "" }
+// ValidateCaptchaConfig dipanggil saat startup. Produksi tanpa secret: error (startup gagal).
+// Di luar produksi tanpa secret: peringatan keras; request bercaptcha ditolak kecuali bypass dev.
+func ValidateCaptchaConfig() error {
+	if strings.TrimSpace(os.Getenv("TURNSTILE_SECRET_KEY")) != "" {
+		return nil
+	}
+	if IsProduction() {
+		return errors.New("TURNSTILE_SECRET_KEY wajib diisi saat APP_ENV=production")
+	}
+	if DevCaptchaBypass() {
+		log.Println("[WARN] TURNSTILE_SECRET_KEY kosong: captcha DILEWATI (APP_ENV=development, ALLOW_DEV_CAPTCHA=true). Jangan dipakai di server publik.")
+		return nil
+	}
+	log.Println("[WARN] TURNSTILE_SECRET_KEY kosong: pendaftaran akun dan booking mandiri DITOLAK. Isi secret, atau untuk pengembangan lokal set APP_ENV=development dan ALLOW_DEV_CAPTCHA=true.")
+	return nil
+}
 
-// Verify mengembalikan true jika token valid atau Turnstile nonaktif. Error berarti
-// Cloudflare tidak bisa dihubungi saat aktif; pemanggil harus menolak (fail closed).
+// Enabled true bila captcha wajib dikirim klien (semua mode kecuali bypass pengembangan).
+func (t *Turnstile) Enabled() bool { return !(t.secret == "" && t.devBypass) }
+
+// Verify mengembalikan true hanya jika token valid, atau bypass pengembangan aktif. Error berarti
+// captcha belum dikonfigurasi atau Cloudflare tidak bisa dihubungi; pemanggil harus menolak.
 func (t *Turnstile) Verify(ctx context.Context, token, remoteIP string) (bool, error) {
-	if !t.Enabled() {
-		return true, nil
+	if t.secret == "" {
+		if t.devBypass {
+			return true, nil
+		}
+		return false, ErrCaptchaNotConfigured
 	}
 	form := url.Values{}
 	form.Set("secret", t.secret)

@@ -35,6 +35,17 @@ func RequireAuth(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
+		// Cek ringan status user (cache 30 detik): akun nonaktif atau izin yang berubah tidak
+		// menunggu access token kedaluwarsa. 401 membuat klien me-refresh token.
+		ok, err := statusCache.allow(r.Context(), claims)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "layanan sementara tidak tersedia, coba lagi")
+			return
+		}
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
 
 		ctx := context.WithValue(r.Context(), AdminUserIDKey, claims.AdminUserID)
 		ctx = context.WithValue(ctx, BrandIDKey, claims.BrandID)

@@ -50,30 +50,76 @@ func TestAuditSelfBookingTanpaAkun(t *testing.T) {
 	}
 }
 
-// Nomor akun yang sudah dimiliki jamaah lain (nama berbeda) tidak boleh diambil alih; nama sama dipakai ulang.
+// K1 (tinjauan keamanan 2026-10-22): nomor HP akun belum terverifikasi, jadi akun TIDAK boleh
+// ditautkan ke jamaah lama hanya karena HP (dan nama) cocok. Setiap akun tanpa jamaah mendapat
+// jamaah PIC baru; jawaban sama untuk nama cocok maupun beda (tidak ada oracle), dan data jamaah
+// lama (termasuk NIK) tidak tersentuh.
 func TestAuditSelfBookingNomorMilikOrangLain(t *testing.T) {
 	tx, scheduleID, brandID, _ := setupAgenBooking(t)
+	ctx := context.Background()
 	nomor := nomorUji(902)
-	testdb.Exec(t, tx, `INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp) VALUES (?,?,?,?,?)`,
-		brandID, "TST-NOMOR-902", "TN902", "Pemilik Asli", nomor)
-
-	akunPenyusup := akunUji(t, tx, brandID, "Penyusup", nomor)
-	req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Penyusup", JenisKelamin: "L", RoomType: "Quad"}}
-	if _, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{accountID: akunPenyusup}); !errors.Is(err, ErrNomorAtasNamaLain) {
-		t.Fatalf("nomor milik orang lain: %v", err)
-	}
-
-	req.PIC.NamaLengkap = "  pemilik   ASLI "
-	resp, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{accountID: akunPenyusup})
-	if err != nil {
-		t.Fatalf("nama cocok harus dipakai ulang: %v", err)
-	}
-	var linked, jamaahNama = int64(0), ""
-	if err = tx.QueryRow(`SELECT a.jamaah_id, j.nama_lengkap FROM customer_accounts a JOIN jamaah j ON j.id=a.jamaah_id WHERE a.id=?`, akunPenyusup).Scan(&linked, &jamaahNama); err != nil {
+	nikLama := "3174010101015555"
+	testdb.Exec(t, tx, `INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, nik) VALUES (?,?,?,?,?,?)`,
+		brandID, "TST-NOMOR-902", "TN902", "Pemilik Asli", nomor, nikLama)
+	var lamaID int64
+	if err := tx.QueryRow(`SELECT id FROM jamaah WHERE id_jamaah='TST-NOMOR-902'`).Scan(&lamaID); err != nil {
 		t.Fatal(err)
 	}
-	if linked != resp.Jamaah.ID || jamaahNama != "Pemilik Asli" {
-		t.Fatalf("akun tertaut ke jamaah %d (%s), want %d (Pemilik Asli)", linked, jamaahNama, resp.Jamaah.ID)
+
+	for i, nama := range []string{"Penyusup", "  pemilik   ASLI "} {
+		akun := akunUji(t, tx, brandID, nama, nomor)
+		nik := []string{"3174010101014444", "3174010101013333"}[i]
+		req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: nama, JenisKelamin: "L", RoomType: "Quad", NIK: &nik}}
+		resp, err := processBookingTx(ctx, tx, brandID, req, inisiator{accountID: akun})
+		if err != nil {
+			t.Fatalf("akun %q: booking harus berhasil tanpa membuka data jamaah lama: %v", nama, err)
+		}
+		if resp.Jamaah.ID == lamaID {
+			t.Fatalf("akun %q tertaut ke jamaah lama %d lewat nomor HP", nama, lamaID)
+		}
+		var linked int64
+		var jamaahNama string
+		var hpPIC sql.NullString
+		if err = tx.QueryRow(`SELECT a.jamaah_id, j.nama_lengkap, j.no_hp FROM customer_accounts a JOIN jamaah j ON j.id=a.jamaah_id WHERE a.id=?`, akun).Scan(&linked, &jamaahNama, &hpPIC); err != nil {
+			t.Fatal(err)
+		}
+		if linked != resp.Jamaah.ID || normalizeName(jamaahNama) != normalizeName(nama) {
+			t.Fatalf("akun %q tertaut ke jamaah %d (%s), want jamaah PIC baru %d", nama, linked, jamaahNama, resp.Jamaah.ID)
+		}
+		// Satu nomor = satu jamaah per brand (migrasi 060): PIC baru dibuat tanpa nomor yang bentrok.
+		if hpPIC.Valid {
+			t.Fatalf("PIC baru memakai nomor jamaah lama: %q", hpPIC.String)
+		}
+	}
+
+	var namaLama, nikTersimpan string
+	if err := tx.QueryRow(`SELECT nama_lengkap, nik FROM jamaah WHERE id=?`, lamaID).Scan(&namaLama, &nikTersimpan); err != nil {
+		t.Fatal(err)
+	}
+	if namaLama != "Pemilik Asli" || nikTersimpan != nikLama {
+		t.Fatalf("jamaah lama berubah: %q %q", namaLama, nikTersimpan)
+	}
+}
+
+// NIK PIC yang sudah dimiliki jamaah lain tidak menolak booking (tidak menjadi oracle) dan tidak
+// menautkan akun ke jamaah itu; NIK tidak dipasang ke jamaah PIC baru (admin menggabungkan manual).
+func TestBookingAkunNIKPICMilikJamaahLain(t *testing.T) {
+	tx, scheduleID, brandID, _ := setupAgenBooking(t)
+	nik := "3174010101016666"
+	testdb.Exec(t, tx, `INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, nik) VALUES (?,?,?,?,?)`,
+		brandID, "TST-NIK-905", "TK905", "Pemilik NIK", nik)
+	akun := akunUji(t, tx, brandID, "Orang Lain", nomorUji(905))
+	req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Orang Lain", JenisKelamin: "L", RoomType: "Quad", NIK: &nik}}
+	resp, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{accountID: akun})
+	if err != nil {
+		t.Fatalf("NIK bentrok harus tetap diproses tanpa membuka data: %v", err)
+	}
+	var nikPIC sql.NullString
+	if err = tx.QueryRow(`SELECT nik FROM jamaah WHERE id=?`, resp.Jamaah.ID).Scan(&nikPIC); err != nil {
+		t.Fatal(err)
+	}
+	if nikPIC.Valid && nikPIC.String != "" {
+		t.Fatalf("NIK milik jamaah lain terpasang ke PIC baru: %q", nikPIC.String)
 	}
 }
 

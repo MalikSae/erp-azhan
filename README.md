@@ -95,10 +95,17 @@ erp-azhan/
    DB_PASSWORD=
    DB_NAME=erp_azhan_dev
    APP_PORT=9090
+   APP_ENV=development
 
-   JWT_SECRET=your_super_secret_jwt_key_here_minimum_32_chars
+   # WAJIB diganti: API menolak start bila kosong, < 32 karakter, atau masih nilai contoh.
+   # Buat dengan: openssl rand -hex 32
+   JWT_SECRET=
    JWT_ACCESS_TTL_MINUTES=15
    JWT_REFRESH_TTL_DAYS=7
+
+   # Captcha fail closed: tanpa TURNSTILE_SECRET_KEY, daftar akun dan booking mandiri ditolak.
+   # Untuk pengembangan lokal saja, lewati captcha secara eksplisit:
+   ALLOW_DEV_CAPTCHA=true
    ```
 
 3. **Buat Database MySQL:**
@@ -386,10 +393,23 @@ DB_USER=erp_azhan_app
 DB_PASSWORD=PASSWORD_DATABASE_YANG_KUAT
 DB_NAME=erp_azhan
 APP_PORT=9090
+# WAJIB di produksi: mematikan origin CORS pengembangan (localhost, *.test), mewajibkan
+# TURNSTILE_SECRET_KEY saat start, dan mencegah isi email (token) ditulis ke log.
+APP_ENV=production
 CORS_ALLOWED_ORIGINS=https://office.example.com,https://*.example.com
+# Acak, minimal 32 karakter (disarankan 64 heks: openssl rand -hex 32). Placeholder ditolak saat start.
 JWT_SECRET=RANDOM_MINIMAL_64_KARAKTER
+# Maksimal 60 (nilai lebih besar dibatasi 60 menit).
 JWT_ACCESS_TTL_MINUTES=15
 JWT_REFRESH_TTL_DAYS=7
+# Wajib di produksi (API gagal start bila kosong). Jangan set ALLOW_DEV_CAPTCHA di produksi.
+TURNSTILE_SECRET_KEY=SECRET_TURNSTILE_DARI_CLOUDFLARE
+# Wajib agar email verifikasi/reset/booking terkirim; tanpa SMTP di produksi email TIDAK dikirim.
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=noreply@example.com
+SMTP_PASSWORD=PASSWORD_SMTP
+SMTP_FROM=noreply@example.com
 ```
 
 Jalankan seluruh migrasi **sekali pada database baru**, berurutan berdasarkan nama file:
@@ -431,6 +451,8 @@ ExecStart=/www/wwwroot/erp-azhan/bin/erp-azhan-api
 Restart=always
 RestartSec=5
 EnvironmentFile=/www/wwwroot/erp-azhan/.env
+# Jaga-jaga bila .env tidak memuat APP_ENV (nilai di EnvironmentFile tetap menang; pastikan .env juga production).
+Environment=APP_ENV=production
 
 [Install]
 WantedBy=multi-user.target

@@ -3,9 +3,44 @@ package mailer
 import (
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
+// Batas panjang nilai yang disisipkan ke email (pertahanan berlapis; validasi utama ada di
+// customer.ValidName). Nilai dari pengguna tidak boleh membawa baris baru sehingga tidak bisa
+// menyusun paragraf/tautan palsu di tengah email.
+const (
+	maxInlineNama   = 100
+	maxInlineTeks   = 200
+	maxInlineTautan = 2048
+)
+
+// inline menormalkan nilai satu baris: karakter kontrol (termasuk CR/LF/tab dan pemisah baris
+// Unicode) menjadi spasi, spasi beruntun dirapatkan, lalu dipotong ke max rune.
+func inline(s string, max int) string {
+	var b strings.Builder
+	spasi := false
+	for _, r := range s {
+		if unicode.IsControl(r) || r == ' ' || r == ' ' || unicode.IsSpace(r) {
+			if !spasi && b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			spasi = true
+			continue
+		}
+		spasi = false
+		b.WriteRune(r)
+	}
+	out := strings.TrimSpace(b.String())
+	if utf8.RuneCountInString(out) > max {
+		out = strings.TrimSpace(string([]rune(out)[:max]))
+	}
+	return out
+}
+
 func VerifyEmail(brandName, nama, link string) (subject, text string) {
+	brandName, nama, link = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(link, maxInlineTautan)
 	subject = "Verifikasi email akun " + brandName
 	text = fmt.Sprintf(`Halo %s,
 
@@ -20,6 +55,7 @@ Jika Anda tidak merasa mendaftar, abaikan email ini.
 }
 
 func ResetPassword(brandName, nama, link string) (subject, text string) {
+	brandName, nama, link = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(link, maxInlineTautan)
 	subject = "Atur ulang password " + brandName
 	text = fmt.Sprintf(`Halo %s,
 
@@ -36,10 +72,14 @@ Jika Anda tidak memintanya, abaikan email ini. Password Anda tidak berubah.
 type BankInfo struct{ Bank, Nomor, AtasNama string }
 
 func OrderCreated(brandName, nama, kodeBooking, paket, tglBerangkat, total, dp, batasBayar, link string, banks []BankInfo) (subject, text string) {
+	brandName, nama = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama)
+	kodeBooking, paket = inline(kodeBooking, maxInlineTeks), inline(paket, maxInlineTeks)
+	tglBerangkat, total, dp, batasBayar = inline(tglBerangkat, maxInlineTeks), inline(total, maxInlineTeks), inline(dp, maxInlineTeks), inline(batasBayar, maxInlineTeks)
+	link = inline(link, maxInlineTautan)
 	subject = fmt.Sprintf("Booking %s berhasil dibuat (%s)", paket, kodeBooking)
 	var b strings.Builder
 	for _, k := range banks {
-		fmt.Fprintf(&b, "  - %s %s a.n. %s\n", k.Bank, k.Nomor, k.AtasNama)
+		fmt.Fprintf(&b, "  - %s %s a.n. %s\n", inline(k.Bank, maxInlineTeks), inline(k.Nomor, maxInlineTeks), inline(k.AtasNama, maxInlineTeks))
 	}
 	if b.Len() == 0 {
 		b.WriteString("  (hubungi kami untuk informasi rekening tujuan)\n")

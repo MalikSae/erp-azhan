@@ -228,6 +228,7 @@ Status per 22 Okt 2026. "Sementara" berarti diputuskan pemilik proyek tanpa menu
 | 10 | **Konten legal/regulasi** (nomor PPIU/PIHK, dokumen legalitas, teks Kebijakan Privasi). | **Terbuka.** Nomor PPIU/PIHK dari profil brand ERP; dokumen legalitas dan teks Kebijakan Privasi harus datang dari tim legal. Tidak ada teks bawaan. |
 | 11 | **Konfirmasi tim SEO** atas keputusan sementara no. 2, 3, dan 4. | **Terbuka.** |
 | 12 | **Profil Alsha** (tentang, tim, legalitas) dan aset desain resmi. | **Terbuka.** |
+| 13 | **Cakupan brand role CMS `marketing_*`** (temuan tinjauan keamanan 22 Okt 2026, keputusan K3): izin `cms.*` pada role Marketing Lead/Member memungkinkan pengelolaan CMS lintas brand. | **Diputuskan sadar, sementara:** akses CMS lintas brand oleh tim SEO diterima untuk saat ini; scope tidak diubah. Ubah scope (batasi per brand lewat Akses Brand atau role khusus per brand) bila tim SEO dipisah per brand atau ada kebutuhan audit. Migrasi 109 kini memberi Marketing Lead daftar izin eksplisit (`cms.view`, `cms.edit`, `cms.publish`), bukan `LIKE 'cms.%'`. |
 
 ## 13. Referensi
 

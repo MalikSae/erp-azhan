@@ -10,18 +10,21 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"erp-azhan/api/internal/shared"
 )
 
 const turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 // turnstileVerifier memverifikasi token Cloudflare Turnstile di server.
-// Keputusan produk: Turnstile opsional. Aktif hanya jika TURNSTILE_SECRET_KEY
-// diisi (dipasang bila terbukti ada banyak bot). Jika kosong, verifikasi
-// dilewati; booking publik tetap dibatasi rate limit per IP dan per nomor HP.
+// Fail closed (tinjauan keamanan 2026-10-22): tanpa TURNSTILE_SECRET_KEY verifikasi GAGAL,
+// kecuali mode pengembangan eksplisit (APP_ENV=development dan ALLOW_DEV_CAPTCHA=true)
+// yang melewatinya. Di produksi startup gagal bila secret kosong (shared.ValidateCaptchaConfig).
 type turnstileVerifier struct {
 	secret    string
 	verifyURL string
 	client    *http.Client
+	devBypass bool // hanya dari shared.DevCaptchaBypass(); tes mengisinya langsung
 }
 
 func newTurnstileVerifier() *turnstileVerifier {
@@ -31,21 +34,25 @@ func newTurnstileVerifier() *turnstileVerifier {
 		client:    &http.Client{Timeout: 5 * time.Second},
 	}
 	if v.secret == "" {
-		log.Println("[INFO] TURNSTILE_SECRET_KEY kosong: verifikasi Turnstile nonaktif (rate limit per IP dan nomor HP tetap berlaku)")
+		v.devBypass = shared.DevCaptchaBypass()
 	}
 	return v
 }
 
-func (v *turnstileVerifier) enabled() bool {
-	return v.secret != ""
+// required: token captcha wajib dikirim (semua mode kecuali bypass pengembangan).
+func (v *turnstileVerifier) required() bool {
+	return !(v.secret == "" && v.devBypass)
 }
 
-// verify mengembalikan true jika token valid, atau jika Turnstile nonaktif.
-// Error berarti Cloudflare tidak bisa dihubungi saat Turnstile aktif;
-// pemanggil harus menolak request (fail closed).
+// verify mengembalikan true hanya bila token valid, atau bypass pengembangan aktif. Error berarti
+// Turnstile belum dikonfigurasi atau Cloudflare tidak bisa dihubungi; pemanggil harus menolak
+// request (fail closed).
 func (v *turnstileVerifier) verify(ctx context.Context, token, remoteIP string) (bool, error) {
-	if !v.enabled() {
-		return true, nil
+	if v.secret == "" {
+		if v.devBypass {
+			return true, nil
+		}
+		return false, shared.ErrCaptchaNotConfigured
 	}
 
 	form := url.Values{}
