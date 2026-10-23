@@ -36,6 +36,44 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, items)
 }
+
+// PublicBankAccount hanya memuat field yang ditampilkan ke pelanggan (situs brand, microsite).
+type PublicBankAccount struct {
+	ID            int64   `json:"id"`
+	BankName      string  `json:"bank_name"`
+	LogoURL       *string `json:"logo_url"`
+	AccountNumber string  `json:"account_number"`
+	AccountHolder string  `json:"account_holder"`
+}
+
+// ListPublic GET /api/public/bank-accounts?brand_id=ID (atau ?brand=ID). Brand wajib; selalu
+// hanya rekening aktif, tanpa field internal (brand, urutan, waktu dibuat). Handler admin (List)
+// tidak berubah.
+func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("brand_id"))
+	if raw == "" {
+		raw = strings.TrimSpace(r.URL.Query().Get("brand"))
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "parameter brand_id wajib diisi")
+		return
+	}
+	items, err := h.repo.List(r.Context(), &id, true)
+	if err != nil {
+		writeError(w, 500, "gagal mengambil rekening")
+		return
+	}
+	out := make([]PublicBankAccount, 0, len(items))
+	for _, a := range items {
+		if !a.IsActive || a.BrandID != id {
+			continue
+		}
+		out = append(out, PublicBankAccount{ID: a.ID, BankName: a.BankName, LogoURL: a.LogoURL, AccountNumber: a.AccountNumber, AccountHolder: a.AccountHolder})
+	}
+	writeJSON(w, 200, out)
+}
+
 func validate(req *UpsertRequest) bool {
 	req.BankName = strings.TrimSpace(req.BankName)
 	req.AccountNumber = strings.TrimSpace(req.AccountNumber)

@@ -139,9 +139,9 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 		if categoryID.Valid {
 			item.CategoryID = &categoryID.Int64
 			item.Category = &CategoryRef{
-				ID:   categoryID.Int64,
-				Name: categoryName,
-				Slug: categorySlug,
+				ID:         categoryID.Int64,
+				Name:       categoryName,
+				Slug:       categorySlug,
 				BadgeColor: badgeColorPtr(categoryBadge),
 			}
 		}
@@ -203,17 +203,82 @@ func (r *Repository) ListPublic(ctx context.Context, brandID int64) ([]*PublicSc
 	}
 	defer rows.Close()
 
-	items := make([]*PublicSchedule, 0)
+	var list []*Schedule
 	for rows.Next() {
 		s, err := scanRow(rows)
 		if err != nil {
 			return nil, err
 		}
-		th, _ := r.GetTransitHotelsByScheduleID(ctx, s.ID)
-		s.TransitHotels = th
+		list = append(list, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	// Hotel transit seluruh paket diambil dalam satu query (sebelumnya satu query per paket).
+	ids := make([]int64, len(list))
+	for i, s := range list {
+		ids[i] = s.ID
+	}
+	transit, err := transitHotelsBySchedule(ctx, r.db, ids)
+	if err != nil {
+		// Sama dengan perilaku lama: kegagalan hotel transit tidak menggagalkan daftar paket.
+		log.Printf("[WARN] schedule.ListPublic hotel transit: %v", err)
+		transit = map[int64][]TransitHotel{}
+	}
+	items := make([]*PublicSchedule, 0, len(list))
+	for _, s := range list {
+		s.TransitHotels = transit[s.ID]
+		if s.TransitHotels == nil {
+			s.TransitHotels = []TransitHotel{}
+		}
 		items = append(items, s.ToPublic())
 	}
-	return items, rows.Err()
+	return items, nil
+}
+
+type rowsQuerier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+// transitHotelsBySchedule mengambil hotel transit beberapa jadwal sekaligus, terurut per jadwal.
+func transitHotelsBySchedule(ctx context.Context, q rowsQuerier, scheduleIDs []int64) (map[int64][]TransitHotel, error) {
+	out := make(map[int64][]TransitHotel, len(scheduleIDs))
+	if len(scheduleIDs) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(scheduleIDs))
+	ph := make([]string, len(scheduleIDs))
+	for i, id := range scheduleIDs {
+		args[i] = id
+		ph[i] = "?"
+	}
+	rows, err := q.QueryContext(ctx, `
+		SELECT sth.schedule_id, sth.hotel_id, h.name, COALESCE(h.city, ''), COALESCE(h.star_rating, 0), h.photo_url, h.video_url
+		FROM schedule_transit_hotels sth
+		JOIN hotels h ON h.id = sth.hotel_id
+		WHERE sth.schedule_id IN (`+strings.Join(ph, ",")+`)
+		ORDER BY sth.schedule_id, sth.urutan ASC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("schedule.transitHotelsBySchedule: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid int64
+		var th TransitHotel
+		var photoURL, videoURL sql.NullString
+		if err := rows.Scan(&sid, &th.HotelID, &th.Nama, &th.Kota, &th.StarRating, &photoURL, &videoURL); err != nil {
+			return nil, fmt.Errorf("schedule.transitHotelsBySchedule scan: %w", err)
+		}
+		if photoURL.Valid && photoURL.String != "" {
+			th.PhotoURL = &photoURL.String
+		}
+		if videoURL.Valid && videoURL.String != "" {
+			th.VideoURL = &videoURL.String
+		}
+		out[sid] = append(out[sid], th)
+	}
+	return out, rows.Err()
 }
 
 // ─── Get Detail ───────────────────────────────────────────────────────────────
@@ -701,9 +766,9 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 	if categoryID.Valid {
 		s.CategoryID = &categoryID.Int64
 		s.Category = &CategoryRef{
-			ID:   categoryID.Int64,
-			Name: categoryName,
-			Slug: categorySlug,
+			ID:         categoryID.Int64,
+			Name:       categoryName,
+			Slug:       categorySlug,
 			BadgeColor: badgeColorPtr(categoryBadge),
 		}
 	}

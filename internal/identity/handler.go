@@ -24,6 +24,10 @@ type loginAttempt struct {
 const (
 	loginAttemptLimit  = 10
 	loginAttemptWindow = 15 * time.Minute
+	// Gagal login per IP lintas email (menahan password spraying dari satu IP).
+	loginIPAttemptLimit = 30
+	// Body /api/auth/* hanya JSON kecil (email, password, refresh token).
+	authMaxBodyBytes = 16 << 10
 )
 
 // UserAccess hasil resolusi RBAC untuk satu user (lihat internal/rbac).
@@ -42,12 +46,20 @@ type Handler struct {
 	loadAccess    AccessLoader
 	failedLogins  map[string]*loginAttempt
 	failedLoginMu sync.Mutex
+	lastPrune     time.Time
+	loginIP       *shared.WindowLimiter
+	// dummyHash dibandingkan untuk email tak dikenal / akun nonaktif agar waktu jawab sama
+	// dengan akun aktif (tanpa timing oracle keberadaan email admin).
+	dummyHash []byte
 }
 
 func NewHandler(repo *Repository, loaders ...AccessLoader) *Handler {
+	dummy, _ := bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), bcrypt.DefaultCost)
 	h := &Handler{
 		repo:         repo,
 		failedLogins: make(map[string]*loginAttempt),
+		loginIP:      shared.NewWindowLimiter(loginIPAttemptLimit, loginAttemptWindow),
+		dummyHash:    dummy,
 	}
 	if len(loaders) > 0 {
 		h.loadAccess = loaders[0]
@@ -97,6 +109,16 @@ func (h *Handler) recordFailedLogin(key string) {
 	h.failedLoginMu.Lock()
 	defer h.failedLoginMu.Unlock()
 
+	// Bersihkan entri kedaluwarsa berkala agar map tidak tumbuh tanpa batas.
+	if now := time.Now(); now.Sub(h.lastPrune) >= time.Minute {
+		h.lastPrune = now
+		for k, a := range h.failedLogins {
+			if now.Sub(a.FirstFail) >= loginAttemptWindow {
+				delete(h.failedLogins, k)
+			}
+		}
+	}
+
 	attempt, exists := h.failedLogins[key]
 	if !exists || time.Since(attempt.FirstFail) >= loginAttemptWindow {
 		h.failedLogins[key] = &loginAttempt{
@@ -137,9 +159,15 @@ func writeRateLimitError(w http.ResponseWriter, retryAfter time.Duration) {
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
+// decodeAuthBody membaca body JSON /api/auth/* dengan batas ukuran authMaxBodyBytes.
+func decodeAuthBody(w http.ResponseWriter, r *http.Request, v any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, authMaxBodyBytes)
+	return json.NewDecoder(r.Body).Decode(v)
+}
+
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeAuthBody(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
@@ -155,35 +183,51 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Pisahkan limit berdasarkan client dan akun. Ini mencegah kegagalan satu
 	// pengguna di balik Nginx/Cloudflare memblokir seluruh admin lainnya.
 	rateLimitKey := loginRateLimitKey(r, req.Email)
+	clientIP := getClientIP(r)
 	if allowed, retryAfter := h.checkRateLimit(rateLimitKey); !allowed {
-		log.Printf("[AUDIT] login_rate_limited ip=%s email=%s", getClientIP(r), maskEmail(req.Email))
+		log.Printf("[AUDIT] login_rate_limited ip=%s email=%s", clientIP, maskEmail(req.Email))
 		writeRateLimitError(w, retryAfter)
+		return
+	}
+	if h.loginIP != nil && !h.loginIP.Allow(clientIP) {
+		log.Printf("[AUDIT] login_rate_limited ip=%s scope=ip", clientIP)
+		writeRateLimitError(w, loginAttemptWindow)
+		return
+	}
+	fail := func(reason string) {
+		h.recordFailedLogin(rateLimitKey)
+		if h.loginIP != nil {
+			h.loginIP.Record(clientIP)
+		}
+		log.Printf("[AUDIT] login_failed ip=%s email=%s reason=%s", clientIP, maskEmail(req.Email), reason)
+		writeError(w, http.StatusUnauthorized, "email atau password salah")
+	}
+	if len(req.Password) > 72 { // batas bcrypt; jangan biarkan input panjang membuang CPU
+		fail("bad_password")
 		return
 	}
 
 	user, err := h.repo.GetByEmail(r.Context(), req.Email)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			h.recordFailedLogin(rateLimitKey)
-			log.Printf("[AUDIT] login_failed ip=%s email=%s reason=unknown_account", getClientIP(r), maskEmail(req.Email))
-			writeError(w, http.StatusUnauthorized, "email atau password salah")
-			return
-		}
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		log.Printf("[ERROR] identity.Login GetByEmail: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 		return
 	}
-	if !user.IsActive {
-		h.recordFailedLogin(rateLimitKey)
-		log.Printf("[AUDIT] login_failed ip=%s email=%s reason=inactive", getClientIP(r), maskEmail(req.Email))
-		writeError(w, http.StatusUnauthorized, "email atau password salah")
-		return
+	// Selalu jalankan bcrypt (hash tiruan untuk email tak dikenal/nonaktif) agar waktu jawab sama.
+	hash := h.dummyHash
+	if user != nil && user.IsActive {
+		hash = []byte(user.PasswordHash)
 	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		h.recordFailedLogin(rateLimitKey)
-		log.Printf("[AUDIT] login_failed ip=%s email=%s reason=bad_password", getClientIP(r), maskEmail(req.Email))
-		writeError(w, http.StatusUnauthorized, "email atau password salah")
+	cmpErr := bcrypt.CompareHashAndPassword(hash, []byte(req.Password))
+	switch {
+	case user == nil:
+		fail("unknown_account")
+		return
+	case !user.IsActive:
+		fail("inactive")
+		return
+	case cmpErr != nil:
+		fail("bad_password")
 		return
 	}
 
@@ -246,7 +290,7 @@ func maskEmail(email string) string {
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeAuthBody(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
@@ -320,7 +364,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 // Access token yang sudah terbit tetap berlaku sampai habis (maks. 15 menit).
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	_ = decodeAuthBody(w, r, &req)
 
 	if token := strings.TrimSpace(req.RefreshToken); token != "" {
 		if _, jti, err := ParseRefreshToken(token); err == nil {

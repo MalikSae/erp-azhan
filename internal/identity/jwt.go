@@ -16,22 +16,72 @@ func getJWTSecret() []byte {
 	return []byte(os.Getenv("JWT_SECRET"))
 }
 
-// ValidateJWTSecret enforces a cryptographically meaningful secret in
-// production. It is intentionally separate from token generation so startup
-// can fail fast before serving requests.
+// jwtIssuer diisi pada setiap token baru. Token lama tanpa "iss" tetap diterima sampai
+// kedaluwarsa (access maks. 60 menit, refresh maks. JWT_REFRESH_TTL_DAYS); token dengan "iss"
+// lain ditolak. Setelah seluruh token lama habis, "iss" dapat diwajibkan.
+const jwtIssuer = "erp-azhan-api"
+
+// Placeholder yang dikenal (dibandingkan setelah dipangkas, tanpa membedakan huruf besar/kecil).
+var placeholderJWTSecrets = []string{
+	"your_super_secret_jwt_key_here_minimum_32_chars",
+	"changeme", "change_me", "change-me", "secret", "jwt_secret", "your_jwt_secret",
+	"supersecret", "super_secret", "please_change_me", "replace_me",
+}
+
+// ValidateJWTSecret dijalankan SELALU saat startup (semua APP_ENV): JWT_SECRET wajib terisi,
+// minimal 32 karakter, dan bukan placeholder/contoh. Tes mengatur secret sendiri lewat t.Setenv.
 func ValidateJWTSecret() error {
-	if len(strings.TrimSpace(os.Getenv("JWT_SECRET"))) < 32 {
+	s := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+	if s == "" {
+		return errors.New("JWT_SECRET wajib diisi")
+	}
+	if len(s) < 32 {
 		return errors.New("JWT_SECRET harus berisi minimal 32 karakter")
+	}
+	lower := strings.ToLower(s)
+	for _, p := range placeholderJWTSecrets {
+		if lower == p {
+			return errors.New("JWT_SECRET masih berisi nilai contoh; buat secret acak (mis. openssl rand -hex 32)")
+		}
+	}
+	if strings.HasPrefix(lower, "your_") || strings.HasPrefix(lower, "changeme") || strings.Contains(lower, "your_super_secret") {
+		return errors.New("JWT_SECRET masih berisi nilai contoh; buat secret acak (mis. openssl rand -hex 32)")
 	}
 	return nil
 }
+
+// maxAccessTTLMinutes membatasi umur access token: pencabutan akses yang tidak tertangkap cek
+// status RequireAuth tetap berakhir paling lambat dalam rentang ini.
+const maxAccessTTLMinutes = 60
 
 func getAccessTTL() time.Duration {
 	mins, _ := strconv.Atoi(os.Getenv("JWT_ACCESS_TTL_MINUTES"))
 	if mins <= 0 {
 		mins = 15 // fallback
 	}
+	if mins > maxAccessTTLMinutes {
+		mins = maxAccessTTLMinutes
+	}
 	return time.Duration(mins) * time.Minute
+}
+
+// parseHS256 memverifikasi token hanya dengan algoritma HS256 (alg lain, termasuk "none" dan
+// HS384/HS512, ditolak) dan menolak "iss" yang bukan milik API ini.
+func parseHS256(tokenString string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return getJWTSecret(), nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	if err != nil {
+		return nil, fmt.Errorf("token tidak valid atau kedaluwarsa: %w", err)
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, errors.New("token tidak valid")
+	}
+	if iss, ada := claims["iss"]; ada && iss != jwtIssuer {
+		return nil, errors.New("issuer token tidak valid")
+	}
+	return claims, nil
 }
 
 func getRefreshTTL() time.Duration {
@@ -73,6 +123,7 @@ func GenerateAccessTokenWithAccess(adminUserID int64, brandID *int64, role, emai
 		"brand_id": brandID,
 		"role":     role,
 		"type":     "access",
+		"iss":      jwtIssuer,
 		"jti":      uuid.New().String(),
 		"exp":      now.Add(ttl).Unix(),
 		"iat":      now.Unix(),
@@ -102,6 +153,7 @@ func GenerateRefreshToken(adminUserID int64) (token string, jti string, expiresA
 	claims := jwt.MapClaims{
 		"sub":  adminUserID,
 		"type": "refresh",
+		"iss":  jwtIssuer,
 		"jti":  jti,
 		"exp":  expiresAt.Unix(),
 		"iat":  now.Unix(),
@@ -117,8 +169,8 @@ func ParseRefreshToken(tokenString string) (int64, string, error) {
 	if err != nil {
 		return 0, "", err
 	}
-	claims := jwt.MapClaims{}
-	if _, _, err := jwt.NewParser().ParseUnverified(tokenString, claims); err != nil {
+	claims, err := parseHS256(tokenString)
+	if err != nil {
 		return 0, "", fmt.Errorf("refresh token tidak valid: %w", err)
 	}
 	jti, _ := claims["jti"].(string)
@@ -130,20 +182,9 @@ func ParseRefreshToken(tokenString string) (int64, string, error) {
 
 // ValidateToken memvalidasi signature, exp, dan type token.
 func ValidateToken(tokenString string, expectedType string) (int64, *int64, string, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("metode signing tidak valid: %v", token.Header["alg"])
-		}
-		return getJWTSecret(), nil
-	})
-
+	claims, err := parseHS256(tokenString)
 	if err != nil {
-		return 0, nil, "", fmt.Errorf("token tidak valid atau kedaluwarsa: %w", err)
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return 0, nil, "", errors.New("token tidak valid")
+		return 0, nil, "", err
 	}
 
 	tokenType, ok := claims["type"].(string)
@@ -171,19 +212,9 @@ func ValidateToken(tokenString string, expectedType string) (int64, *int64, stri
 // ValidateAccessClaims memvalidasi access token dan mengembalikan seluruh
 // klaimnya, termasuk klaim RBAC. Token lama tanpa roles/perms tetap valid.
 func ValidateAccessClaims(tokenString string) (*AccessClaims, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("metode signing tidak valid: %v", token.Header["alg"])
-		}
-		return getJWTSecret(), nil
-	})
+	claims, err := parseHS256(tokenString)
 	if err != nil {
-		return nil, fmt.Errorf("token tidak valid atau kedaluwarsa: %w", err)
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return nil, errors.New("token tidak valid")
+		return nil, err
 	}
 	if tokenType, ok := claims["type"].(string); !ok || tokenType != "access" {
 		return nil, errors.New("tipe token salah")

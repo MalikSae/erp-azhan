@@ -69,8 +69,12 @@ func TestResolveAnggotaPublikNIK(t *testing.T) {
 	if !errors.Is(err, ErrNIKAtasNamaLain) {
 		t.Fatalf("nama beda: err=%v, want ErrNIKAtasNamaLain", err)
 	}
-	if got := err.Error(); !strings.HasPrefix(got, "NIK Jamaah 2 sudah terdaftar.") || strings.Contains(got, "Pemilik NIK") {
-		t.Fatalf("pesan = %q: harus menyebut Jamaah 2 dan tidak membuka nama yang terdaftar", got)
+	// Pesan generik: menyebut nomor jamaah di form, tidak membuka nama terdaftar maupun keberadaan NIK.
+	if got := err.Error(); !strings.Contains(got, "Jamaah 2") || strings.Contains(got, "Pemilik NIK") || strings.Contains(strings.ToLower(got), "terdaftar") {
+		t.Fatalf("pesan = %q: harus menyebut Jamaah 2 tanpa membuka keberadaan data jamaah lain", got)
+	}
+	if ErrAnggotaNameMismatch.Error() == "" || strings.Contains(strings.ToLower(ErrAnggotaNameMismatch.Error()), "terdaftar") {
+		t.Fatalf("pesan nomor anggota tidak generik: %q", ErrAnggotaNameMismatch.Error())
 	}
 
 	// Jamaah lama (dikenali lewat nomor) tanpa NIK: NIK diisikan, tidak menimpa NIK yang ada.

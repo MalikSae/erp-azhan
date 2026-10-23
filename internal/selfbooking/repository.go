@@ -15,16 +15,15 @@ import (
 )
 
 var (
-	ErrSeatHabis             = errors.New("seat tidak cukup")
-	ErrDuplicate             = errors.New("anda sudah memiliki booking aktif di jadwal ini")
-	ErrNotFound              = errors.New("data tidak ditemukan")
-	ErrAnggotaNameMismatch   = errors.New("nomor tidak dapat digunakan, gunakan nomor lain atau kosongkan")
+	ErrSeatHabis = errors.New("seat tidak cukup")
+	ErrDuplicate = errors.New("anda sudah memiliki booking aktif di jadwal ini")
+	ErrNotFound  = errors.New("data tidak ditemukan")
+	// Nomor WhatsApp anggota dipakai jamaah lain dengan nama berbeda. Pesan generik (sama gayanya
+	// dengan pesan NIK) agar tidak membuka keberadaan data pihak lain; percobaan dibatasi per akun.
+	ErrAnggotaNameMismatch   = errors.New("data jamaah belum dapat diproses. Periksa kembali nama dan nomor WhatsApp anggota, kosongkan nomornya, atau hubungi kami via WhatsApp")
 	ErrDuplicatePaxInBooking = errors.New("jamaah tidak boleh terdaftar lebih dari sekali dalam satu booking")
 	ErrCutoffBooking         = errors.New("pendaftaran online untuk jadwal ini sudah ditutup (30 hari sebelum keberangkatan)")
-	// Nomor WhatsApp akun sudah dipakai jamaah lain (nama berbeda). Pesan umum agar
-	// tidak membocorkan nama pemilik nomor.
-	ErrNomorAtasNamaLain = errors.New("nomor WhatsApp ini sudah terdaftar atas nama lain, silakan hubungi admin")
-	ErrAkunTidakValid    = errors.New("akun tidak valid untuk brand ini")
+	ErrAkunTidakValid        = errors.New("akun tidak valid untuk brand ini")
 	// Booking agen (Jalur 1). Pesan sengaja umum: tidak membocorkan data
 	// pemilik nomor yang sudah terdaftar (D8).
 	ErrBukanAgenAktif   = errors.New("akun agen tidak aktif")
@@ -120,6 +119,17 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	}
 	if scheduleStatus != "published" {
 		return nil, ErrNotFound
+	}
+	if ini.accountID > 0 {
+		butuh := 1 // PIC
+		for _, a := range req.Anggota {
+			if a.PaxType == "reguler" {
+				butuh++
+			}
+		}
+		if err := cekBatasAkun(ctx, tx, ini.accountID, req.ScheduleID, butuh, batasAkunDefault); err != nil {
+			return nil, err
+		}
 	}
 
 	for _, pax := range req.Anggota {
@@ -802,7 +812,6 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-
 // resolveAnggotaPublik mencari atau membuat jamaah untuk anggota booking publik.
 // Nomor WhatsApp yang sudah terdaftar dipakai ulang hanya bila namanya cocok.
 func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID int64, a AnggotaInput) (int64, error) {
@@ -834,54 +843,13 @@ func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID int64, a Angg
 
 func resolveAnggotaTanpaNIK(ctx context.Context, tx *sql.Tx, brandID int64, a AnggotaInput) (int64, error) {
 	var err error
-var rawPhone string
-if a.NoHP != nil {
-	rawPhone = strings.TrimSpace(*a.NoHP)
-}
-
-if rawPhone == "" {
-	// No HP kosong (NULL) -> Selalu INSERT baru dengan no_hp NULL
-	var brandCode string
-	var counter uint64
-	err = tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter)
-	if err != nil {
-		return 0, fmt.Errorf("lock brand: %w", err)
-	}
-	counter++
-	_, err = tx.ExecContext(ctx, `UPDATE brands SET jamaah_counter=? WHERE id=?`, counter, brandID)
-	if err != nil {
-		return 0, fmt.Errorf("update counter: %w", err)
-	}
-	idJamaah := fmt.Sprintf("%s-%02d%02d%06d", strings.ToUpper(strings.TrimSpace(brandCode)), time.Now().Year()%100, int(time.Now().Month()), counter)
-	kodeJamaah, err := shared.UniqueCode(ctx, tx, "jamaah", "kode_jamaah", "", 6)
-	if err != nil {
-		return 0, fmt.Errorf("kode jamaah: %w", err)
+	var rawPhone string
+	if a.NoHP != nil {
+		rawPhone = strings.TrimSpace(*a.NoHP)
 	}
 
-	res, err := tx.ExecContext(ctx, `
-		INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir)
-		VALUES (?, ?, ?, ?, NULL, ?, ?)
-	`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.JenisKelamin, tanggalLahirOrNil(a.TanggalLahir))
-	if err != nil {
-		return 0, fmt.Errorf("insert anggota jamaah: %w", err)
-	}
-	anggotaID, _ := res.LastInsertId()
-	return anggotaID, nil
-} else {
-	// No HP terisi -> Cari apakah sudah terdaftar
-	canonicalAnggota, localAnggota := shared.PhoneVariants(rawPhone)
-	var existingAnggotaID int64
-	var existingAnggotaNama string
-
-	err = tx.QueryRowContext(ctx, `
-		SELECT id, nama_lengkap 
-		FROM jamaah 
-		WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?) 
-		ORDER BY id LIMIT 1 FOR UPDATE
-	`, brandID, canonicalAnggota, localAnggota).Scan(&existingAnggotaID, &existingAnggotaNama)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		// Belum terdaftar -> INSERT baru dengan no_hp
+	if rawPhone == "" {
+		// No HP kosong (NULL) -> Selalu INSERT baru dengan no_hp NULL
 		var brandCode string
 		var counter uint64
 		err = tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter)
@@ -900,26 +868,68 @@ if rawPhone == "" {
 		}
 
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, rawPhone, a.JenisKelamin, tanggalLahirOrNil(a.TanggalLahir))
+		INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir)
+		VALUES (?, ?, ?, ?, NULL, ?, ?)
+	`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.JenisKelamin, tanggalLahirOrNil(a.TanggalLahir))
 		if err != nil {
 			return 0, fmt.Errorf("insert anggota jamaah: %w", err)
 		}
 		anggotaID, _ := res.LastInsertId()
 		return anggotaID, nil
-	} else if err != nil {
-		return 0, fmt.Errorf("find anggota: %w", err)
 	} else {
-		// Sudah terdaftar -> Verifikasi Nama
-		if normalizeName(a.NamaLengkap) != normalizeName(existingAnggotaNama) {
-			return 0, ErrAnggotaNameMismatch
+		// No HP terisi -> Cari apakah sudah terdaftar
+		canonicalAnggota, localAnggota := shared.PhoneVariants(rawPhone)
+		var existingAnggotaID int64
+		var existingAnggotaNama string
+
+		err = tx.QueryRowContext(ctx, `
+		SELECT id, nama_lengkap 
+		FROM jamaah 
+		WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?) 
+		ORDER BY id LIMIT 1 FOR UPDATE
+	`, brandID, canonicalAnggota, localAnggota).Scan(&existingAnggotaID, &existingAnggotaNama)
+
+		if errors.Is(err, sql.ErrNoRows) {
+			// Belum terdaftar -> INSERT baru dengan no_hp
+			var brandCode string
+			var counter uint64
+			err = tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter)
+			if err != nil {
+				return 0, fmt.Errorf("lock brand: %w", err)
+			}
+			counter++
+			_, err = tx.ExecContext(ctx, `UPDATE brands SET jamaah_counter=? WHERE id=?`, counter, brandID)
+			if err != nil {
+				return 0, fmt.Errorf("update counter: %w", err)
+			}
+			idJamaah := fmt.Sprintf("%s-%02d%02d%06d", strings.ToUpper(strings.TrimSpace(brandCode)), time.Now().Year()%100, int(time.Now().Month()), counter)
+			kodeJamaah, err := shared.UniqueCode(ctx, tx, "jamaah", "kode_jamaah", "", 6)
+			if err != nil {
+				return 0, fmt.Errorf("kode jamaah: %w", err)
+			}
+
+			res, err := tx.ExecContext(ctx, `
+			INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, rawPhone, a.JenisKelamin, tanggalLahirOrNil(a.TanggalLahir))
+			if err != nil {
+				return 0, fmt.Errorf("insert anggota jamaah: %w", err)
+			}
+			anggotaID, _ := res.LastInsertId()
+			return anggotaID, nil
+		} else if err != nil {
+			return 0, fmt.Errorf("find anggota: %w", err)
+		} else {
+			// Sudah terdaftar -> Verifikasi Nama
+			if normalizeName(a.NamaLengkap) != normalizeName(existingAnggotaNama) {
+				return 0, ErrAnggotaNameMismatch
+			}
+			// Cocok -> pakai ulang baris jamaah itu, JANGAN UPDATE field apa pun
+			return existingAnggotaID, nil
 		}
-		// Cocok -> pakai ulang baris jamaah itu, JANGAN UPDATE field apa pun
-		return existingAnggotaID, nil
 	}
 }
-}
+
 // travelersUntukSimpan: bila pemesan tidak ikut, jamaah pertama (di data "pic") juga disimpan.
 func travelersUntukSimpan(req BookingRequest) []AnggotaInput {
 	if !req.PemesanTidakIkut {

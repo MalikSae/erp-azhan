@@ -6,6 +6,7 @@ package mailer
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"mime"
@@ -32,7 +33,15 @@ type Sender interface {
 func NewFromEnv() Sender {
 	host := strings.TrimSpace(os.Getenv("SMTP_HOST"))
 	if host == "" {
-		log.Println("[INFO] mailer: SMTP_HOST kosong, email hanya ditulis ke log")
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
+			// Produksi: LogSender dilarang (isi email memuat token verifikasi/reset sekali pakai).
+			log.Println("[WARN] ================================================================")
+			log.Println("[WARN] mailer: SMTP_HOST KOSONG DI PRODUKSI. Email verifikasi, reset password, dan booking TIDAK DIKIRIM.")
+			log.Println("[WARN] mailer: isi SMTP_HOST/SMTP_USER/SMTP_PASSWORD/SMTP_FROM lalu restart API.")
+			log.Println("[WARN] ================================================================")
+			return DisabledSender{}
+		}
+		log.Println("[INFO] mailer: SMTP_HOST kosong, email hanya ditulis ke log (khusus non-produksi)")
 		return LogSender{}
 	}
 	port := strings.TrimSpace(os.Getenv("SMTP_PORT"))
@@ -55,9 +64,22 @@ func NewFromEnv() Sender {
 type LogSender struct{}
 
 func (LogSender) Send(_ context.Context, m Message) error {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
+		// Pertahanan berlapis: isi email (token sekali pakai) tidak pernah ditulis ke log produksi.
+		log.Printf("[WARN] mailer: LogSender di produksi, email %q tidak dikirim dan isinya tidak dicatat", clean(m.Subject))
+		return ErrMailerDisabled
+	}
 	log.Printf("[MAIL-DEV] to=%s subject=%q\n%s", clean(m.To), clean(m.Subject), m.Text)
 	return nil
 }
+
+// ErrMailerDisabled: SMTP belum dikonfigurasi di produksi; email tidak dikirim.
+var ErrMailerDisabled = errors.New("mailer: SMTP belum dikonfigurasi, email tidak dikirim")
+
+// DisabledSender dipakai di produksi tanpa SMTP: tidak menulis isi email (token) ke mana pun.
+type DisabledSender struct{}
+
+func (DisabledSender) Send(context.Context, Message) error { return ErrMailerDisabled }
 
 type SMTPSender struct {
 	Host, Port, User, Password, From string

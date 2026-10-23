@@ -21,9 +21,13 @@ INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p
 WHERE r.slug = 'cmo' AND p.code LIKE 'cms.%';
 
+-- Daftar eksplisit (tinjauan keamanan 2026-10-22), bukan LIKE 'cms.%': bila 109 dijalankan ulang
+-- setelah 110, LIKE ikut memberi marketing_lead izin Fase 2 di luar rancangan (mis.
+-- cms.tracking.manage). Untuk database yang sudah menjalankan 109 sebelum 110, hasil akhirnya
+-- sama persis (saat itu hanya ada tiga izin ini; INSERT IGNORE, idempoten).
 INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p
-WHERE r.slug = 'marketing_lead' AND p.code LIKE 'cms.%';
+WHERE r.slug = 'marketing_lead' AND p.code IN ('cms.view', 'cms.edit', 'cms.publish');
 
 INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p

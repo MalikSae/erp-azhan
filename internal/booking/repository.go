@@ -1,10 +1,10 @@
 package booking
 
 import (
-	"erp-azhan/api/internal/perlengkapan"
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"erp-azhan/api/internal/perlengkapan"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1408,25 +1408,49 @@ func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, pax
 
 // UpdateBookingStatus mengubah status booking + logika seat_sisa.
 func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, newStatus string) (*Booking, error) {
+	return r.UpdateBookingStatusGuarded(ctx, bookingID, newStatus, nil)
+}
+
+// StatusGuard dijalankan di dalam transaksi SETELAH baris booking dikunci (FOR UPDATE); error
+// darinya membatalkan perubahan. Dipakai pembatalan oleh pelanggan agar syarat (status, belum ada
+// pembayaran) diperiksa ulang secara atomik (tanpa celah TOCTOU).
+type StatusGuard func(ctx context.Context, tx *sql.Tx) error
+
+// UpdateBookingStatusGuarded sama dengan UpdateBookingStatus dengan pemeriksaan tambahan guard.
+func (r *Repository) UpdateBookingStatusGuarded(ctx context.Context, bookingID int64, newStatus string, guard StatusGuard) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.UpdateStatus tx: %w", err)
 	}
 	defer tx.Rollback()
+	if err := updateBookingStatusTx(ctx, tx, bookingID, newStatus, guard); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("booking.UpdateStatus commit: %w", err)
+	}
+	return r.GetByID(ctx, bookingID, nil)
+}
 
+func updateBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64, newStatus string, guard StatusGuard) error {
 	// 1. Ambil booking existing (status lama + schedule_id)
 	var oldStatus string
 	var isSeatBlocked bool
 	var scheduleID int64
 	var seatCount int
-	err = tx.QueryRowContext(ctx,
+	err := tx.QueryRowContext(ctx,
 		`SELECT status, schedule_id, is_seat_blocked, seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID,
 	).Scan(&oldStatus, &scheduleID, &isSeatBlocked, &seatCount)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
+		return ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("booking.UpdateStatus get old: %w", err)
+		return fmt.Errorf("booking.UpdateStatus get old: %w", err)
+	}
+	if guard != nil {
+		if err := guard(ctx, tx); err != nil {
+			return err
+		}
 	}
 
 	// 2. Hitung jumlah pax reguler aktif
@@ -1435,7 +1459,7 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 		SELECT COUNT(*) FROM booking_pax 
 		WHERE booking_id = ? AND counts_for_seat = TRUE AND pax_status = 'aktif'`, bookingID).Scan(&activeRegularPax)
 	if err != nil {
-		return nil, fmt.Errorf("booking.UpdateStatus count regular pax: %w", err)
+		return fmt.Errorf("booking.UpdateStatus count regular pax: %w", err)
 	}
 
 	// 3. Lock schedule row untuk cek/ubah seat_sisa
@@ -1444,7 +1468,7 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 		`SELECT seat_sisa FROM schedules WHERE id=? FOR UPDATE`, scheduleID,
 	).Scan(&seatSisa)
 	if err != nil {
-		return nil, fmt.Errorf("booking.UpdateStatus lock schedule: %w", err)
+		return fmt.Errorf("booking.UpdateStatus lock schedule: %w", err)
 	}
 
 	// 4. Logic seat_sisa
@@ -1456,36 +1480,36 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 			seatsToRestore = seatCount
 		}
 		if err = shared.RestoreSeats(ctx, tx, scheduleID, seatsToRestore); err != nil {
-			return nil, fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
+			return fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE,seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID)
 		if err != nil {
-			return nil, fmt.Errorf("booking.UpdateStatus clear seat block: %w", err)
+			return fmt.Errorf("booking.UpdateStatus clear seat block: %w", err)
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status='batal' WHERE booking_id=?`, bookingID)
 		if err != nil {
-			return nil, fmt.Errorf("booking.UpdateStatus cancel pax: %w", err)
+			return fmt.Errorf("booking.UpdateStatus cancel pax: %w", err)
 		}
 	} else if newIsLocked && oldStatus == "baru" && !isSeatBlocked {
 		if seatSisa < activeRegularPax {
-			return nil, ErrSeatHabis
+			return ErrSeatHabis
 		}
 		if activeRegularPax > 0 {
 			_, err = tx.ExecContext(ctx,
 				`UPDATE schedules SET seat_sisa = seat_sisa - ? WHERE id=?`, activeRegularPax, scheduleID)
 			if err != nil {
-				return nil, fmt.Errorf("booking.UpdateStatus decrement seat: %w", err)
+				return fmt.Errorf("booking.UpdateStatus decrement seat: %w", err)
 			}
 			_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=TRUE WHERE id=?`, bookingID)
 			if err != nil {
-				return nil, fmt.Errorf("booking.UpdateStatus mark seat block: %w", err)
+				return fmt.Errorf("booking.UpdateStatus mark seat block: %w", err)
 			}
 		}
 	}
 	// DP/Lunas mengubah hold sementara menjadi reservasi tanpa kedaluwarsa.
 	if newIsLocked {
 		if _, err = tx.ExecContext(ctx, `UPDATE bookings SET seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID); err != nil {
-			return nil, fmt.Errorf("booking.UpdateStatus clear seat expiry: %w", err)
+			return fmt.Errorf("booking.UpdateStatus clear seat expiry: %w", err)
 		}
 	}
 
@@ -1493,14 +1517,10 @@ func (r *Repository) UpdateBookingStatus(ctx context.Context, bookingID int64, n
 	_, err = tx.ExecContext(ctx,
 		`UPDATE bookings SET status=? WHERE id=?`, newStatus, bookingID)
 	if err != nil {
-		return nil, fmt.Errorf("booking.UpdateStatus update: %w", err)
+		return fmt.Errorf("booking.UpdateStatus update: %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("booking.UpdateStatus commit: %w", err)
-	}
-
-	return r.GetByID(ctx, bookingID, nil)
+	return nil
 }
 
 // CancelSeatBlock melepaskan kursi tanpa mengubah status maupun data booking.

@@ -26,9 +26,21 @@ type checkAttempt struct {
 // booking massal harus dibatasi.
 const (
 	bookingIPAttemptLimit      = 20 // percobaan POST /api/account/bookings per IP per jam
-	bookingAccountSuccessLimit = 3  // booking berhasil per akun per 24 jam
+	bookingAccountSuccessLimit = 3  // booking berhasil per akun per 24 jam (ditegakkan juga di DB, lihat cekBatasAkun)
+	// Validasi NIK/nomor anggota yang gagal (data milik jamaah lain) per akun per jendela; menahan
+	// penebakan NIK/nomor lewat pesan galat.
+	identitasGagalAccountLimit  = 5
+	identitasGagalAccountWindow = 10 * time.Minute
 	// Token invoice acak 256-bit; miss tetap dibatasi untuk menahan scanning.
 	invoiceMissIPLimit = 20 // kode invoice tidak ditemukan per IP per 15 menit
+)
+
+// Kode galat yang dikenali frontend (azhan-booking) di samping pesan "error".
+const (
+	KodeEmailBelumTerverifikasi = "email_belum_terverifikasi"
+	KodeBatasSeatAkun           = "batas_seat_akun"
+	KodeBatasBookingHarian      = "batas_booking_harian"
+	KodeIdentitasTerlaluSering  = "percobaan_data_jamaah_terlalu_sering"
 )
 
 type Handler struct {
@@ -38,6 +50,7 @@ type Handler struct {
 	bookingByIP      *windowLimiter
 	bookingByAccount *windowLimiter
 	bookingByAgen    *windowLimiter
+	identitasGagal   *windowLimiter
 	// Email konfirmasi "Booking berhasil dibuat" (hanya booking mandiri pelanggan).
 	mail     mailer.Sender
 	mailWG   sync.WaitGroup
@@ -55,6 +68,7 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 		bookingByIP:      newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingByAccount: newWindowLimiter(bookingAccountSuccessLimit, 24*time.Hour),
 		bookingByAgen:    newWindowLimiter(agenBookingLimit, time.Hour),
+		identitasGagal:   newWindowLimiter(identitasGagalAccountLimit, identitasGagalAccountWindow),
 	}
 }
 
@@ -125,6 +139,11 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "sesi berakhir, silakan masuk kembali")
 		return
 	}
+	// K2: booking mandiri hanya untuk akun yang emailnya sudah terverifikasi.
+	if account.EmailVerifiedAt == nil {
+		writeErrorCode(w, http.StatusForbidden, "Verifikasi email Anda terlebih dahulu sebelum membuat booking. Buka tautan verifikasi di email Anda atau kirim ulang dari halaman akun.", KodeEmailBelumTerverifikasi)
+		return
+	}
 	var req BookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
@@ -142,22 +161,21 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		req.PIC.NoHP = account.NoHP
 		req.PIC.Email = &account.Email
 	}
-	// Gate 1: Captcha (hanya bila Turnstile aktif, lihat turnstile.go)
-	if h.captcha.enabled() {
-		if strings.TrimSpace(req.CaptchaToken) == "" {
-			writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
-			return
-		}
-		valid, err := h.captcha.verify(r.Context(), strings.TrimSpace(req.CaptchaToken), clientIP)
-		if err != nil {
-			log.Printf("[ERROR] selfbooking captcha: %v", err)
-			writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
-			return
-		}
-		if !valid {
-			writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
-			return
-		}
+	// Gate 1: Captcha. Fail closed: tanpa TURNSTILE_SECRET_KEY request ditolak, kecuali mode
+	// pengembangan eksplisit (APP_ENV=development dan ALLOW_DEV_CAPTCHA=true), lihat turnstile.go.
+	if h.captcha.required() && strings.TrimSpace(req.CaptchaToken) == "" {
+		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+		return
+	}
+	valid, err := h.captcha.verify(r.Context(), strings.TrimSpace(req.CaptchaToken), clientIP)
+	if err != nil {
+		log.Printf("[ERROR] selfbooking captcha: %v", err)
+		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
+		return
+	}
+	if !valid {
+		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+		return
 	}
 
 	// Gate 2: Brand ID
@@ -226,7 +244,11 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	// Gate 8: Batas booking per akun
 	accountKey := strconv.FormatInt(account.ID, 10)
 	if !h.bookingByAccount.allow(accountKey) {
-		writeError(w, http.StatusTooManyRequests, "akun ini sudah mencapai batas booking hari ini, silakan hubungi admin travel")
+		writeErrorCode(w, http.StatusTooManyRequests, ErrBatasBookingHarian.Error(), KodeBatasBookingHarian)
+		return
+	}
+	if h.identitasGagal != nil && !h.identitasGagal.allow(accountKey) {
+		writeErrorCode(w, http.StatusTooManyRequests, "Terlalu banyak percobaan dengan data jamaah yang belum dapat diproses. Coba lagi dalam 10 menit atau hubungi kami via WhatsApp.", KodeIdentitasTerlaluSering)
 		return
 	}
 
@@ -245,9 +267,22 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
+		if errors.Is(err, ErrBatasSeatAkun) {
+			writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasSeatAkun)
+			return
+		}
+		if errors.Is(err, ErrBatasBookingHarian) {
+			writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasBookingHarian)
+			return
+		}
+		if errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrAnggotaNameMismatch) {
+			if h.identitasGagal != nil {
+				h.identitasGagal.record(accountKey)
+			}
+		}
 		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) ||
 			errors.Is(err, ErrAnggotaNameMismatch) || errors.Is(err, ErrDuplicatePaxInBooking) ||
-			errors.Is(err, ErrNomorAtasNamaLain) || errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrAkunTidakValid) || errors.Is(err, ErrCutoffBooking) ||
+			errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrAkunTidakValid) || errors.Is(err, ErrCutoffBooking) ||
 			errors.Is(err, ErrTanggalLahirTidakValid) || errors.Is(err, ErrUsiaInfant) || errors.Is(err, ErrInfantUnavailable) || errors.Is(err, ErrInvalidDP) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -275,6 +310,11 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// writeErrorCode menambahkan "code" yang stabil agar frontend dapat menampilkan aksi yang sesuai.
+func writeErrorCode(w http.ResponseWriter, status int, msg, code string) {
+	writeJSON(w, status, map[string]string{"error": msg, "code": code})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

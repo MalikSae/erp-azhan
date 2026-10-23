@@ -268,13 +268,42 @@ func (o *Orders) Cancel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "booking ini tidak bisa dibatalkan sendiri, silakan hubungi admin")
 		return
 	}
-	// Periksa ulang di dalam UpdateBookingStatus lewat status: hanya 'baru' yang lolos di atas.
-	if _, err = o.bookingRepo.UpdateBookingStatus(r.Context(), id, "batal"); err != nil {
+	// Syarat diperiksa ulang di dalam transaksi setelah baris booking dikunci (FOR UPDATE): pembayaran
+	// yang masuk di antara pengecekan di atas dan pembatalan tidak bisa terlewat (TOCTOU).
+	if _, err = o.bookingRepo.UpdateBookingStatusGuarded(r.Context(), id, "batal", cancelGuard(acc.ID, id)); err != nil {
+		if errors.Is(err, errTidakBisaBatal) {
+			writeError(w, http.StatusConflict, "booking ini tidak bisa dibatalkan sendiri, silakan hubungi admin")
+			return
+		}
 		log.Printf("[ERROR] account cancel booking %d: %v", id, err)
 		writeError(w, http.StatusInternalServerError, "gagal membatalkan booking")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "batal"})
+}
+
+var errTidakBisaBatal = errors.New("booking tidak memenuhi syarat batal mandiri")
+
+// cancelGuard: booking milik akun, masih 'baru' dengan seat tertahan yang belum lewat batas, dan
+// belum ada pembayaran apa pun. Dijalankan di dalam transaksi pembatalan.
+func cancelGuard(accountID, bookingID int64) booking.StatusGuard {
+	return func(ctx context.Context, tx *sql.Tx) error {
+		var ok bool
+		err := tx.QueryRowContext(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM bookings b
+				WHERE b.id=? AND b.customer_account_id=? AND b.status='baru' AND b.is_seat_blocked=TRUE
+				  AND (b.seat_hold_expires_at IS NULL OR b.seat_hold_expires_at > ?)
+				  AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.booking_id=b.id)
+			)`, bookingID, accountID, time.Now()).Scan(&ok)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errTidakBisaBatal
+		}
+		return nil
+	}
 }
 
 // ListPayments GET /api/account/bookings/{id}/payments
