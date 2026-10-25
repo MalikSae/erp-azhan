@@ -17,7 +17,7 @@ Spesifikasi `agen-azhan.md` tidak ada di repo. Aturan acuan diambil dari komenta
 - alasan wajib dan tercatat di log;
 - tidak berdampak ke jamaah lain dan tidak menghitung ulang komisi.
 
-Bukti mentah ada di `audit/evidence-kaitan.log` (label K*, R*, L*, U*). Semua data uji dibuat sementara lalu dipulihkan. Baseline akhir: 38 jamaah `jalur3/tanpa_agen/tidak_aktif`, `jamaah_kaitan_log` = 0, `transaksi_komisi` = 0.
+Bukti mentah ada di `docs/arsip/evidence-kaitan.log` (label K*, R*, L*, U*). Semua data uji dibuat sementara lalu dipulihkan. Baseline akhir: 38 jamaah `jalur3/tanpa_agen/tidak_aktif`, `jamaah_kaitan_log` = 0, `transaksi_komisi` = 0.
 
 ## Yang sudah benar (terverifikasi)
 
