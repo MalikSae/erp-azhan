@@ -31,15 +31,25 @@ export async function uploadMediaWithOptions(file, category, options = {}) {
   return response.data;
 }
 
+// Path berkas terlindungi yang aman dimuat lewat klien berautentikasi (null bila tidak sah). Klien menempelkan token admin pada
+// setiap permintaan, dan axios mengabaikan baseURL untuk URL absolut, jadi URL luar (https://..., //host) TIDAK boleh sampai ke
+// client.get: token admin akan terkirim ke host itu. Hanya path relatif ke endpoint media admin yang diterima; bentuk lama
+// /uploads/{kategori}/{berkas} dipetakan ke endpoint itu.
+export function protectedMediaPath(url) {
+  const path = String(url || '').trim().replace(
+    /^\/uploads\/(dokumen-jamaah|payment-proofs)\/(.+)$/,
+    '/api/admin/media/$1/$2',
+  );
+  return /^\/api\/admin\/media\/[a-z0-9-]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(path) ? path : null;
+}
+
 // Tampilkan berkas media terlindungi (bukti transfer, paspor, KTP, dst.) lewat klien API
 // berautentikasi, di lapisan pratinjau dalam halaman. Tidak memakai window.open karena pop-up
 // sering diblokir (browser maupun panel tertanam), sehingga tab kosong / tidak terjadi apa-apa.
 // Berkas tidak pernah diakses lewat URL publik.
 export async function openProtectedMedia(url, title_) {
-  const normalizedUrl = String(url || '').replace(
-    /^\/uploads\/(dokumen-jamaah|payment-proofs)\/(.+)$/,
-    '/api/admin/media/$1/$2',
-  );
+  const normalizedUrl = protectedMediaPath(url);
+  if (!normalizedUrl) throw new Error('Alamat berkas tidak sah.');
   const response = await client.get(normalizedUrl, { responseType: 'blob' });
   const blob = response.data;
   const objectUrl = URL.createObjectURL(blob);

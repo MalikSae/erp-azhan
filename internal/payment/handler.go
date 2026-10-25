@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/media"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -147,6 +148,26 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	req.Metode = &metode // simpan nilai efektif (termasuk default transfer)
 
 	brandID := identity.GetBrandID(r.Context())
+
+	// Bukti pembayaran wajib unggahan admin resmi di brand ini, bukan URL bebas: URL luar yang dibuka di dashboard
+	// akan menerima token admin saat berkas dimuat.
+	if req.BuktiURL != nil {
+		trimmed := strings.TrimSpace(*req.BuktiURL)
+		if trimmed == "" {
+			req.BuktiURL = nil
+		} else if err := media.ValidateAdminPaymentProof(r.Context(), h.repo.db, trimmed, brandID); err != nil {
+			var uploadErr *media.UploadError
+			if errors.As(err, &uploadErr) {
+				writeError(w, http.StatusBadRequest, uploadErr.Message)
+				return
+			}
+			log.Printf("[ERROR] payment: %v", err)
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return
+		} else {
+			req.BuktiURL = &trimmed
+		}
+	}
 
 	// Verify booking
 	exists, err := h.repo.BookingExistsForBrand(r.Context(), bookingID, brandID)

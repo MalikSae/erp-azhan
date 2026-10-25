@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { PAYMENT_STATUS_META } from '../utils/bookingStatus';
 import { SlidersHorizontal, Eye } from 'lucide-react';
 import client from '../api/client';
+import { protectedMediaPath } from '../api/media';
 import { listAllPayments, verifyPayment } from '../api/bookings';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
@@ -65,11 +66,14 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     let objectUrl = null;
 
     if (selectedPayment?.bukti_url) {
+      const normalizedUrl = protectedMediaPath(selectedPayment.bukti_url);
+      if (!normalizedUrl) {
+        // Bukan berkas media admin (mis. URL luar): tidak dimuat, supaya token admin tidak ikut terkirim ke host lain.
+        setProofBlobUrl(null);
+        setProofLoading(false);
+        return undefined;
+      }
       setProofLoading(true);
-      const normalizedUrl = String(selectedPayment.bukti_url || '').replace(
-        /^\/uploads\/(dokumen-jamaah|payment-proofs)\/(.+)$/,
-        '/api/admin/media/$1/$2',
-      );
 
       client
         .get(normalizedUrl, { responseType: 'blob' })

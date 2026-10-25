@@ -1,6 +1,7 @@
 package jamaah
 
 import (
+	"erp-azhan/api/internal/shared"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -164,18 +165,21 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 	}
 
 	q += " ORDER BY created_at DESC, id DESC"
-	if len(opts) > 0 && opts[0].Limit > 0 {
-		limit := opts[0].Limit
-		if limit > 1000 {
-			limit = 1000
+	// Tanpa limit eksplisit tetap ada batas (shared.DefaultListCap); limit eksplisit dibatasi 1000 per permintaan.
+	limit, offset := shared.DefaultListCap, 0
+	if len(opts) > 0 {
+		if opts[0].Limit > 0 {
+			limit = opts[0].Limit
+			if limit > 1000 {
+				limit = 1000
+			}
 		}
-		offset := opts[0].Offset
-		if offset < 0 {
-			offset = 0
+		if opts[0].Offset > 0 {
+			offset = opts[0].Offset
 		}
-		q += " LIMIT ? OFFSET ?"
-		args = append(args, limit, offset)
 	}
+	q += " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {

@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"erp-azhan/api/internal/shared"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -108,7 +109,8 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 		args = append(args, *brandID)
 	}
 
-	q += " ORDER BY s.created_at DESC"
+	q += " ORDER BY s.created_at DESC LIMIT ?"
+	args = append(args, shared.DefaultListCap)
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {

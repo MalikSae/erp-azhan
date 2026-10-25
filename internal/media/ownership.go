@@ -128,3 +128,34 @@ func (h *Handler) canReadAdminFile(r *http.Request, category, name string) bool 
 	err := h.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM media_uploads WHERE path=? AND brand_id=?) OR EXISTS(SELECT 1 FROM dokumen_jamaah d JOIN jamaah j ON j.id=d.jamaah_id WHERE d.file_url IN (?,?) AND j.brand_id=?) OR EXISTS(SELECT 1 FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN schedules s ON s.id=b.schedule_id WHERE p.bukti_url IN (?,?) AND s.brand_id=?)`, canonical, *brand, canonical, legacy, *brand, canonical, legacy, *brand).Scan(&allowed)
 	return err == nil && allowed
 }
+
+// ValidateAdminPaymentProof memastikan bukti pembayaran yang dicatat admin menunjuk ke berkas
+// unggahan admin resmi (kategori payment-proofs), bukan URL bebas. Admin brand hanya boleh memakai
+// berkas yang tercatat untuk brand-nya; super admin (brandID nil) boleh memakai unggahan admin mana pun.
+// URL eksternal (https://...), path buatan, dan berkas yang tidak ada ditolak.
+func ValidateAdminPaymentProof(ctx context.Context, db *sql.DB, raw string, brandID *int64) error {
+	category, name, ok := protectedPath(raw)
+	if !ok || category != "payment-proofs" {
+		return &UploadError{"bukti pembayaran harus diunggah melalui formulir pembayaran"}
+	}
+	canonical := "/api/admin/media/" + category + "/" + name
+	query := `SELECT EXISTS(SELECT 1 FROM media_uploads WHERE path=? AND admin_user_id IS NOT NULL`
+	args := []any{canonical}
+	if brandID != nil {
+		query += ` AND brand_id=?`
+		args = append(args, *brandID)
+	}
+	query += `)`
+	var owned bool
+	if err := db.QueryRowContext(ctx, query, args...).Scan(&owned); err != nil {
+		return fmt.Errorf("media.ValidateAdminPaymentProof: %w", err)
+	}
+	if !owned {
+		return &UploadError{"bukti pembayaran bukan unggahan resmi brand ini"}
+	}
+	info, err := os.Stat(filepath.Join("uploads", category, name))
+	if err != nil || info.IsDir() {
+		return &UploadError{"berkas bukti pembayaran tidak ditemukan"}
+	}
+	return nil
+}
