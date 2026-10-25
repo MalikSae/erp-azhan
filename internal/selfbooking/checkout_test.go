@@ -62,23 +62,7 @@ func TestCheckoutSnapshotsDP(t *testing.T) {
 	if snapshot != 1000000 {
 		t.Fatalf("snapshot changed: %v", snapshot)
 	}
-	code, err := resolveInvoiceToken(context.Background(), tx, response.Booking.InvoiceToken, brandID)
-	if err != nil || code != response.Booking.BookingCode {
-		t.Fatalf("invoice token resolution: %s %v", code, err)
-	}
-	if _, err := resolveInvoiceToken(context.Background(), tx, response.Booking.InvoiceToken, brandID+1); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("cross-brand invoice exposed: %v", err)
-	}
-	if _, err := resolveInvoiceToken(context.Background(), tx, code, brandID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("short booking code accepted: %v", err)
-	}
-	invoice, err := getInvoiceByCode(context.Background(), tx, code)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if invoice.Financial.MinimalDP != 1000000 {
-		t.Fatalf("invoice ignored snapshot: %v", invoice.Financial.MinimalDP)
-	}
+
 }
 
 func TestLateDepartureSnapshotsFullPayment(t *testing.T) {

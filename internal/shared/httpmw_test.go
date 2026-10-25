@@ -11,24 +11,24 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// Butir 7h: token invoice di path dan token di query tidak tertulis ke log akses.
+// Butir 7h: token di query tidak tertulis ke log akses.
 func TestRedactingLoggerMenyamarkanToken(t *testing.T) {
-	token := strings.Repeat("ab", 32)
+	token := "rahasia-verifikasi"
 	var buf bytes.Buffer
 	mw := RedactingLogger(&middleware.DefaultLogFormatter{Logger: log.New(&buf, "", 0), NoColor: true})
 	h := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.URL.Path, token) {
-			t.Error("handler harus tetap menerima path asli")
+		if r.URL.Query().Get("token") != token {
+			t.Error("handler harus tetap menerima query asli")
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/api/public/invoice/"+token+"?brand=1&token=rahasia-verifikasi", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/public/auth/verify-email?brand=1&token="+token, nil)
 	h.ServeHTTP(httptest.NewRecorder(), req)
 	out := buf.String()
-	if strings.Contains(out, token) || strings.Contains(out, "rahasia-verifikasi") {
+	if strings.Contains(out, token) {
 		t.Fatalf("log memuat token: %s", out)
 	}
-	if !strings.Contains(out, "/api/public/invoice/[disamarkan]") || !strings.Contains(out, "brand=1") {
+	if !strings.Contains(out, "brand=1") {
 		t.Fatalf("log tidak informatif: %s", out)
 	}
 	if got := RedactURI("/api/schedules?brand=2"); got != "/api/schedules?brand=2" {

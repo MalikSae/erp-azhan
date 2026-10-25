@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client';
+import { protectedMediaPath } from '../api/media';
 
 // Memuat file dari endpoint media terproteksi sebagai blob URL (foto agen).
 export default function useProtectedImage(url) {
@@ -8,8 +9,9 @@ export default function useProtectedImage(url) {
     let alive = true;
     let objectUrl = null;
     setSrc(null);
-    if (!url) return undefined;
-    client.get(url, { responseType: 'blob' })
+    const path = protectedMediaPath(url);
+    if (!path) return undefined;
+    client.get(path, { responseType: 'blob' })
       .then((res) => {
         if (!alive) return;
         objectUrl = URL.createObjectURL(res.data);

@@ -161,7 +161,8 @@ func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string)
 		q += " AND p.status=?"
 		args = append(args, status)
 	}
-	q += " ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END,p.created_at DESC"
+	q += " ORDER BY CASE p.status WHEN 'pending' THEN 0 ELSE 1 END,p.created_at DESC LIMIT ?"
+	args = append(args, shared.DefaultListCap)
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err

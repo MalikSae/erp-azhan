@@ -1,4 +1,4 @@
-# ERP Azhan — Sistem ERP & Microsite Umroh Multi-Brand
+# ERP Azhan — Sistem ERP Umroh Multi-Brand
 
 Backend API dan Frontend Dashboard untuk ekosistem ERP Umroh Azhan Grup. Dibangun dengan Go (net/http + chi router) native, MySQL 8+, serta React + Vite untuk dashboard admin dan portal layanan.
 
@@ -345,7 +345,7 @@ Contoh domain pada panduan ini:
 
 - API: `api.example.com`
 - Office Dashboard: `office.example.com`
-- Microsite dipasang dari repository `azhan-microsite` secara terpisah.
+- Web publik dan CMS dipasang dari repository `azhan-booking` secara terpisah (lihat `docs/deploy.md` di repo itu).
 
 Ganti seluruh domain, password, dan path sesuai server produksi. Jangan memakai kredensial contoh secara langsung.
 

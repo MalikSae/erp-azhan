@@ -204,22 +204,6 @@ func TestCreateBookingAccountLimitBeforeProcessing(t *testing.T) {
 	}
 }
 
-func TestGetPublicInvoiceBlockedAfterMisses(t *testing.T) {
-	// IP yang sudah mencapai batas kode salah diblokir sebelum query ke
-	// repository (repo nil akan panic jika tersentuh).
-	h := newTestHandler(t, "", 0)
-	for i := 0; i < invoiceMissIPLimit; i++ {
-		h.invoiceMissIP.record("198.51.100.9")
-	}
-	req := httptest.NewRequest(http.MethodGet, "/api/public/invoice/HNABCD", nil)
-	req.RemoteAddr = "198.51.100.9:5555"
-	rec := httptest.NewRecorder()
-	h.GetPublicInvoice(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("got %d %s, want 429", rec.Code, rec.Body.String())
-	}
-}
-
 func TestWindowLimiterResetsAfterWindow(t *testing.T) {
 	l := newWindowLimiter(2, 50*time.Millisecond)
 	l.record("k")
