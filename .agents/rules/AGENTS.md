@@ -15,13 +15,13 @@ Lihat juga `.agents/rules/design-system.md` untuk aturan khusus frontend UI (pel
 - **Nama**: ERP Azhan — ERP internal holding Azhan Grup untuk brand umrohnya sendiri
 - **Tipe**: Web app — backend API + beberapa frontend dashboard; web publik ada di repo terpisah `azhan-booking`
 - **Tahap**: MVP / Fase 1
-- **Dokumen acuan**: skema DB ada di `migrations/`, kontrak API di `README.md` dan handler `internal/*/handler.go`. Keputusan & temuan per modul tercatat di file `AUDIT-*.md` / `PERBAIKAN-*.md` di root repo.
+- **Dokumen acuan**: skema DB ada di `migrations/`, kontrak API di `README.md` dan handler `internal/*/handler.go`. Keputusan & temuan per modul tercatat di `docs/spek/` (spek berlaku) dan `docs/arsip/` (audit yang masih jadi acuan); audit lain ada di riwayat git.
 
 ---
 
 ## Ekosistem Project — Repo Terkait (WAJIB dipahami sebelum ubah endpoint publik)
 
-Ada project TERPISAH yang konsumsi API ini: **`azhan-booking`** (`C:\laragon\www\azhan-booking`, Next.js; web publik, booking, akun pelanggan, dan CMS SEO per brand, database CMS sendiri). Endpoint publik `GET /api/public/v1/*`, `GET /api/public/brand?domain={hostname}`, `GET /api/public/auth/*`, dan `/api/account/*` adalah KONTRAK dengan repo itu (rinci di `SPEK-WEB-PUBLIK-CMS-2026-10-20.md`) — ubah nama field/struktur nested (BUKAN nambah field baru) di endpoint ini bisa mematahkan web publik secara diam-diam. Kalau prompt minta ubah salah satu endpoint itu secara breaking, STOP dan laporkan dulu.
+Ada project TERPISAH yang konsumsi API ini: **`azhan-booking`** (`C:\laragon\www\azhan-booking`, Next.js; web publik, booking, akun pelanggan, dan CMS SEO per brand, database CMS sendiri). Endpoint publik `GET /api/public/v1/*`, `GET /api/public/brand?domain={hostname}`, `GET /api/public/auth/*`, dan `/api/account/*` adalah KONTRAK dengan repo itu (rinci di `docs/spek/SPEK-WEB-PUBLIK-CMS-2026-10-20.md`) — ubah nama field/struktur nested (BUKAN nambah field baru) di endpoint ini bisa mematahkan web publik secara diam-diam. Kalau prompt minta ubah salah satu endpoint itu secara breaking, STOP dan laporkan dulu.
 
 `azhan-booking` punya `AGENTS.md` sendiri — baca itu kalau kerja di repo itu, TIDAK otomatis mewarisi file ini. Repo `azhan-microsite` sudah dihapus (diganti `azhan-booking`); riwayatnya masih ada di GitHub.
 
@@ -70,7 +70,7 @@ Ada project TERPISAH yang konsumsi API ini: **`azhan-booking`** (`C:\laragon\www
 
 ## Modul Booking & Jamaah — Catatan Skema Kritis
 
-Catatan di bawah ini adalah acuan modul booking & jamaah. Keputusan kebijakan terbaru (kursi, PIC, infant, diskon, booking batal) ada di `AUDIT-JAMAAH-BOOKING-2026-09-30.md` — WAJIB baca sebelum sentuh modul ini. Poin paling penting:
+Catatan di bawah ini adalah acuan modul booking & jamaah. Keputusan kebijakan terbaru (kursi, PIC, infant, diskon, booking batal) ada di `docs/arsip/AUDIT-JAMAAH-BOOKING-2026-09-30.md` — WAJIB baca sebelum sentuh modul ini. Poin paling penting:
 
 - **2 konsep "Add-On" BEDA, jangan tertukar**: `add_ons`+`schedule_add_ons` (master paket, TANPA harga) vs `booking_addons` (per transaksi booking, ADA `nominal`). Kalau prompt sebut "add-on" tanpa konteks jelas, TANYA dulu.
 - `bookings.harga_dasar` = snapshot harga kamar saat dibuat (bukan referensi live ke `schedules`)

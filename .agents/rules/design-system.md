@@ -4,7 +4,7 @@ trigger: always_on
 
 # Design System — ERP Azhan Grup (Frontend Internal)
 
-> Berlaku untuk Office Dashboard, Travel Dashboard, CRM Dashboard (semua dashboard internal React+Vite+Tailwind). Sumber kebenaran teknis ada di `tailwind.config.js` — dokumen ini adalah penjelasannya dalam bahasa manusia.
+> Berlaku untuk Office Dashboard, CRM Dashboard (semua dashboard internal React+Vite+Tailwind). Sumber kebenaran teknis ada di `tailwind.config.js` — dokumen ini adalah penjelasannya dalam bahasa manusia.
 
 ---
 
@@ -20,8 +20,6 @@ trigger: always_on
 ## 2. Warna (Color Tokens)
 
 **Office Dashboard (holding Azhan Grup)** memakai palet **Onyx & Champagne Gold di atas gading**: tombol utama onyx, emas hanya aksen (menu aktif, logo, garis tipis), latar gading hangat. Warna keempat brand (Zahara, Nava, Alsha, Hana) hanya dipakai untuk data (grafik per brand), bukan tombol/navigasi.
-
-**Travel Dashboard** mengikuti warna tiap brand saat runtime (`applyBrandTheme` → variabel `--brand-primary*`); token bawaan di `travel-dashboard/tailwind.config.js` hanya fallback.
 
 Aturan kontras: teks/ikon di latar terang memakai `primary-600` ke atas (≥ 4.5:1 vs putih); `primary-50`–`500` hanya untuk latar/isi dengan teks onyx di atasnya.
 
