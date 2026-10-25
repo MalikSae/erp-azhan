@@ -17,21 +17,6 @@ import (
 
 const TermsVersion = "booking-2026-10-17"
 
-func resolveInvoiceToken(ctx context.Context, q invoiceReader, token string, brandID int64) (string, error) {
-	if len(token) != 64 || brandID <= 0 {
-		return "", ErrNotFound
-	}
-	if _, err := hex.DecodeString(token); err != nil {
-		return "", ErrNotFound
-	}
-	var code string
-	err := q.QueryRowContext(ctx, `SELECT b.id_booking FROM booking_checkout c JOIN bookings b ON b.id=c.booking_id JOIN schedules s ON s.id=b.schedule_id WHERE c.invoice_token=? AND s.brand_id=?`, token, brandID).Scan(&code)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	return code, err
-}
-
 var ErrQuoteChanged = errors.New("harga atau DP berubah; muat ulang paket dan periksa kembali ringkasan sebelum booking")
 var ErrRequestConflict = errors.New("kunci booking telah digunakan untuk data berbeda; mulai booking baru")
 var phonePattern = regexp.MustCompile(`^\+?[0-9 () .-]+$`)

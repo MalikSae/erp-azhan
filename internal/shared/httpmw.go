@@ -3,15 +3,11 @@ package shared
 import (
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5/middleware"
 )
-
-// invoiceTokenPath: token invoice (64 heks) berada di path; log tidak boleh memuatnya.
-var invoiceTokenPath = regexp.MustCompile(`^(/api/public/invoice/)[^/?#]+`)
 
 // sensitiveQueryKeys disamarkan bila muncul di query string yang tercatat di log.
 var sensitiveQueryKeys = []string{"token", "invoice_token", "refresh_token", "access_token", "code"}
@@ -19,7 +15,6 @@ var sensitiveQueryKeys = []string{"token", "invoice_token", "refresh_token", "ac
 // RedactURI menyamarkan token pada path/query sebelum dicatat ke log akses.
 func RedactURI(uri string) string {
 	path, query, hasQuery := strings.Cut(uri, "?")
-	path = invoiceTokenPath.ReplaceAllString(path, "${1}[disamarkan]")
 	if !hasQuery {
 		return path
 	}
@@ -44,7 +39,6 @@ func (f redactingFormatter) NewLogEntry(r *http.Request) middleware.LogEntry {
 	r2.RequestURI = RedactURI(r.RequestURI)
 	if r.URL != nil {
 		u := *r.URL
-		u.Path = invoiceTokenPath.ReplaceAllString(u.Path, "${1}[disamarkan]")
 		u.RawPath = ""
 		if u.RawQuery != "" {
 			_, q, _ := strings.Cut(RedactURI("/?"+u.RawQuery), "?")

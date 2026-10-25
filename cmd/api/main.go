@@ -218,9 +218,6 @@ func main() {
 	// Publik: wajib brand, hanya rekening aktif dan field untuk pelanggan (handler admin terpisah).
 	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.ListPublic)
 
-	// Public: Digital Invoice (tautan berkode untuk pelanggan lama; pesanan baru lewat /api/account)
-	r.With(requireDB(db)).Get("/api/public/invoice/{code}", selfBookingHandler.GetPublicInvoice)
-
 	// Akun pelanggan (email + password): daftar, masuk, verifikasi email, lupa password
 	r.Route("/api/public/auth", func(r chi.Router) {
 		r.Use(requireDB(db))

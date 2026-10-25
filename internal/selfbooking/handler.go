@@ -14,7 +14,6 @@ import (
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/mailer"
 	"erp-azhan/api/internal/shared"
-	"github.com/go-chi/chi/v5"
 )
 
 type checkAttempt struct {
@@ -74,54 +73,6 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 
 func getClientIP(r *http.Request) string {
 	return shared.ClientIP(r)
-}
-
-func (h *Handler) GetPublicInvoice(w http.ResponseWriter, r *http.Request) {
-	clientIP := getClientIP(r)
-	if !h.invoiceMissIP.allow(clientIP) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
-		return
-	}
-
-	code := chi.URLParam(r, "code")
-	if strings.TrimSpace(code) == "" {
-		writeError(w, http.StatusBadRequest, "kode booking wajib diisi")
-		return
-	}
-
-	brandID, parseErr := strconv.ParseInt(r.URL.Query().Get("brand"), 10, 64)
-	if parseErr != nil || brandID <= 0 || len(code) != 64 {
-		writeError(w, http.StatusNotFound, "invoice tidak ditemukan")
-		return
-	}
-	bookingCode, err := resolveInvoiceToken(r.Context(), h.repo.db, code, brandID)
-	if err != nil {
-		if !errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusServiceUnavailable, "invoice sementara tidak tersedia")
-			return
-		}
-		h.invoiceMissIP.record(clientIP)
-		writeError(w, http.StatusNotFound, "invoice tidak ditemukan")
-		return
-	}
-	w.Header().Set("Cache-Control", "private, no-store")
-	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
-	w.Header().Set("Referrer-Policy", "no-referrer")
-	invoice, err := h.repo.GetInvoiceByCode(r.Context(), bookingCode)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			h.invoiceMissIP.record(clientIP)
-			writeError(w, http.StatusNotFound, "invoice booking tidak ditemukan")
-			return
-		}
-		log.Printf("[ERROR] GetPublicInvoice: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memuat data invoice")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(invoice)
 }
 
 // CreateBooking POST /api/account/bookings (butuh sesi akun pelanggan).

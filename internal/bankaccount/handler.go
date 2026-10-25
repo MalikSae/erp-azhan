@@ -37,7 +37,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, items)
 }
 
-// PublicBankAccount hanya memuat field yang ditampilkan ke pelanggan (situs brand, microsite).
+// PublicBankAccount hanya memuat field yang ditampilkan ke pelanggan (situs brand).
 type PublicBankAccount struct {
 	ID            int64   `json:"id"`
 	BankName      string  `json:"bank_name"`

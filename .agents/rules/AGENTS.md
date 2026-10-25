@@ -12,8 +12,8 @@ Lihat juga `.agents/rules/design-system.md` untuk aturan khusus frontend UI (pel
 
 ## Project Overview
 
-- **Nama**: ERP Azhan — dimulai sebagai microsite umroh single-travel, dirancang untuk tumbuh jadi ERP multi-brand Azhan Grup
-- **Tipe**: Web app — backend API + beberapa frontend dashboard + microsite publik (menyusul)
+- **Nama**: ERP Azhan — ERP internal holding Azhan Grup untuk brand umrohnya sendiri
+- **Tipe**: Web app — backend API + beberapa frontend dashboard; web publik ada di repo terpisah `azhan-booking`
 - **Tahap**: MVP / Fase 1
 - **Dokumen acuan**: skema DB ada di `migrations/`, kontrak API di `README.md` dan handler `internal/*/handler.go`. Keputusan & temuan per modul tercatat di file `AUDIT-*.md` / `PERBAIKAN-*.md` di root repo.
 
@@ -21,9 +21,9 @@ Lihat juga `.agents/rules/design-system.md` untuk aturan khusus frontend UI (pel
 
 ## Ekosistem Project — Repo Terkait (WAJIB dipahami sebelum ubah endpoint publik)
 
-Ada project TERPISAH yang konsumsi API ini: **`azhan-microsite`** (`C:\laragon\www\azhan-microsite`, Next.js, tanpa database sendiri). Endpoint publik `GET /api/schedules?brand={id}`, `GET /api/public/brand?domain={hostname}`, `GET /api/itinerary/{id}` adalah KONTRAK dengan repo itu — ubah nama field/struktur nested (BUKAN nambah field baru) di endpoint ini bisa mematahkan microsite secara diam-diam. Kalau prompt minta ubah salah satu endpoint itu secara breaking, STOP dan laporkan dulu.
+Ada project TERPISAH yang konsumsi API ini: **`azhan-booking`** (`C:\laragon\www\azhan-booking`, Next.js; web publik, booking, akun pelanggan, dan CMS SEO per brand, database CMS sendiri). Endpoint publik `GET /api/public/v1/*`, `GET /api/public/brand?domain={hostname}`, `GET /api/public/auth/*`, dan `/api/account/*` adalah KONTRAK dengan repo itu (rinci di `SPEK-WEB-PUBLIK-CMS-2026-10-20.md`) — ubah nama field/struktur nested (BUKAN nambah field baru) di endpoint ini bisa mematahkan web publik secara diam-diam. Kalau prompt minta ubah salah satu endpoint itu secara breaking, STOP dan laporkan dulu.
 
-`azhan-microsite` punya `AGENTS.md` sendiri (kontrak API detail + cara jalankan Nginx multi-domain) — baca itu kalau kerja di repo itu, TIDAK otomatis mewarisi file ini.
+`azhan-booking` punya `AGENTS.md` sendiri — baca itu kalau kerja di repo itu, TIDAK otomatis mewarisi file ini. Repo `azhan-microsite` sudah dihapus (diganti `azhan-booking`); riwayatnya masih ada di GitHub.
 
 ---
 
@@ -114,7 +114,7 @@ Repo: github.com/MalikSae/erp-azhan
 - **SEMUA kerja WAJIB di branch `dev-malik`** — JANGAN PERNAH commit/push langsung ke `main`. Cek branch aktif (`git branch --show-current`) di awal sesi; kalau bukan `dev-malik`, `git checkout dev-malik` dulu (buat dari `main` kalau belum ada lokal).
 - Commit lokal boleh dilakukan rutin setelah unit kerja selesai (pesan deskriptif, Bahasa Indonesia/Inggris bebas tapi jelas).
 - **`git push` WAJIB minta konfirmasi eksplisit dari user setiap kali** — TIDAK PERNAH push otomatis tanpa ditanya dulu, meski sudah pernah diizinkan sebelumnya di sesi yang sama.
-- **Setiap kali diminta commit & push, selalu cek status KEDUA repo (erp-azhan dan azhan-microsite), meskipun perubahan sesi ini cuma menyentuh satu repo — laporkan status repo yang tidak ada perubahan apa adanya (bersih), jangan diabaikan begitu saja.**
+- **Setiap kali diminta commit & push, selalu cek status KEDUA repo (erp-azhan dan azhan-booking), meskipun perubahan sesi ini cuma menyentuh satu repo — laporkan status repo yang tidak ada perubahan apa adanya (bersih), jangan diabaikan begitu saja.**
 
 ---
 
