@@ -1,6 +1,6 @@
 # ERP Azhan — Sistem ERP Umroh Multi-Brand
 
-Backend API dan Frontend Dashboard untuk ekosistem ERP Umroh Azhan Grup. Dibangun dengan Go (net/http + chi router) native, MySQL 8+, serta React + Vite untuk dashboard admin dan portal layanan.
+Backend API dan Frontend Dashboard untuk ekosistem ERP Umroh Azhan Grup. Dibangun dengan Go (net/http + chi router) native, MySQL 8+, serta React + Vite untuk dashboard internal (Office Dashboard). Web publik, booking pelanggan, dan CMS SEO ada di repositori terpisah `azhan-booking`.
 
 ---
 
@@ -31,34 +31,45 @@ Backend API dan Frontend Dashboard untuk ekosistem ERP Umroh Azhan Grup. Dibangu
 ```
 erp-azhan/
 ├── cmd/
-│   └── api/
-│       └── main.go          # Entry point backend API server
+│   ├── api/                 # Entry point backend API server
+│   └── seed-*/              # Seeder admin, hotel, maskapai, dan paket
 ├── internal/
-│   ├── addon/               # Modul Add-Ons (perlengkapan/layanan tambahan master paket)
-│   ├── adminuser/           # Modul Manajemen Admin/Staff & Reset Password (Super Admin)
-│   ├── airline/             # Modul Master Maskapai Penerbangan
-│   ├── booking/             # Modul Pemesanan (Bookings, Addons, Diskon, Progress, Distribusi Perlengkapan)
-│   ├── brand/               # Modul Brand & Tenant Multi-Brand, Domain Resolution
-│   ├── dokumen/             # Modul Manajemen Dokumen Jamaah (Paspor, KTP, KK, Buku Nikah, dll)
-│   ├── hotel/               # Modul Master Hotel (Makkah, Madinah, Transit)
-│   ├── identity/            # Modul Autentikasi & Otorisasi (JWT Admin Staff & Portal Jamaah)
-│   ├── itinerary/           # Modul Master Itinerary & Itinerary Days
-│   ├── jamaah/              # Modul Data Master Jamaah & ID Jamaah Terstruktur
-│   ├── media/               # Modul Upload Media (Foto Hotel, Logo Maskapai, Dokumen, Bukti Bayar)
-│   ├── paket/               # Modul / Helper struktur paket
-│   ├── payment/             # Modul Pembayaran, Bukti Transfer & Verifikasi Transaksi
-│   ├── perlengkapan/        # Modul Inventory Perlengkapan (Item Master, Stok per Brand, Set Template)
-│   ├── portal/              # Modul Self-Service Portal Jamaah
-│   ├── schedule/            # Modul Jadwal/Paket Keberangkatan & Seat Quota
-│   └── shared/              # Shared config & DB connection helper
+│   ├── adminuser/           # Pengguna admin/staff dan reset password
+│   ├── agen/                # Agen Syiar: pengajuan, persetujuan, pencairan, ganti kaitan (portal agen belum dipasang)
+│   ├── airline/ airport/ hotel/ destination/ category/ itinerary/   # Master data
+│   ├── bankaccount/         # Rekening transfer resmi per brand
+│   ├── booking/             # Booking (admin): status, diskon, progress, refund, cashback, perlengkapan
+│   ├── brand/               # Brand multi-brand dan resolusi domain
+│   ├── crmdeal/             # Pemrosesan deal dari CRM
+│   ├── customer/            # Akun pelanggan (email + password) dan pesanan pelanggan
+│   ├── dokumen/             # Dokumen jamaah (paspor, KTP, KK, dll)
+│   ├── identity/            # Login admin, JWT, dan pemeriksaan izin
+│   ├── jamaah/              # Data master jamaah
+│   ├── komisi/              # Perhitungan komisi, cashback, dan saldo agen
+│   ├── mailer/              # Email transaksional (verifikasi, reset password, booking)
+│   ├── media/               # Upload dan akses berkas terlindungi
+│   ├── orgunit/             # Struktur organisasi
+│   ├── payment/             # Pembayaran, bukti transfer, verifikasi
+│   ├── perlengkapan/        # Inventori perlengkapan dan template set
+│   ├── rbac/                # Role dan permission
+│   ├── schedule/            # Paket/jadwal keberangkatan, seat, dan API publik v1
+│   ├── selfbooking/         # Checkout booking mandiri pelanggan
+│   └── shared/              # Konfigurasi, middleware, dan helper bersama
 ├── frontend/
-│   ├── master-dashboard/    # Dashboard Super Admin (Multi-Brand, Master Data, Inventory Global, User Mgmt)
-├── migrations/              # Script dan file SQL migrasi database (001 - 028)
-├── uploads/                 # Storage lokal file upload media, foto, & dokumen
+│   ├── master-dashboard/    # Office Dashboard (holding dan admin brand, menu mengikuti izin)
+│   └── shared/              # Komponen dan token UI bersama
+├── migrations/              # Migrasi SQL berurutan (jalankan lewat migrations/run.go)
+├── docs/
+│   ├── spek/                # Spek yang masih berlaku (web publik dan CMS, RBAC, pengguna dan organisasi)
+│   └── arsip/               # Audit lama yang masih jadi acuan
+├── scripts/                 # Skrip bantu
+├── uploads/                 # Penyimpanan lokal berkas unggahan
 ├── .env.example             # Template konfigurasi environment
 ├── go.mod
 └── go.sum
 ```
+
+Dokumentasi rancangan ada di `docs/spek/`. Audit yang masih dipakai sebagai acuan ada di `docs/arsip/`; audit lain tersimpan di riwayat git.
 
 ---
 
@@ -189,13 +200,13 @@ dashboard menggunakan aset resmi yang memiliki izin penggunaan.
 - Daftar keberangkatan terdekat, kapasitas kursi aktif, serta distribusi status paket.
 - Line chart transaksi terkonfirmasi selama 30 hari terakhir, dengan garis dan warna berbeda untuk setiap brand.
 - Pengelolaan beberapa rekening transfer resmi per brand dan inbox konfirmasi pembayaran lintas brand.
-- Pengelolaan brand, pengguna, paket, hotel, maskapai, itinerary, add-on, inventory, dan laporan lintas brand.
+- Pengelolaan brand, pengguna, paket, hotel, maskapai, itinerary, inventory perlengkapan, dan laporan lintas brand.
 
 ### Admin Brand di Office Dashboard (`:5173`)
 
 - Dashboard operasional berisi statistik booking, pembayaran, keberangkatan, tindak lanjut, dan kesiapan perlengkapan.
 - Grafik arus pembayaran 30 hari berdasarkan transaksi terkonfirmasi.
-- Pengelolaan jamaah, booking, add-on, diskon, pembayaran, progress dokumen, dan distribusi perlengkapan.
+- Pengelolaan jamaah, booking, diskon, pembayaran, progress dokumen, dan distribusi perlengkapan.
 - Pembatalan **block seat** tanpa membatalkan data booking.
 - Inbox konfirmasi transfer manual yang dapat dikonfirmasi atau ditolak oleh admin brand.
 - Form dan modal menggunakan susunan label/input yang konsisten dan responsif.
@@ -211,102 +222,55 @@ dashboard menggunakan aset resmi yang memiliki izin penggunaan.
 
 ## Ringkasan Endpoint API
 
-### 1. Public Endpoints (Tanpa Auth)
+Daftar lengkap ada di `cmd/api/main.go`. Rute `/api/admin/*` dibatasi per izin (RBAC) dan per brand pengguna.
+
+### 1. Publik (tanpa auth)
 | Method | Endpoint | Deskripsi |
 |---|---|---|
-| `GET` | `/api/health` | Status kesehatan API & koneksi database |
-| `GET` | `/api/schedules` | List paket/jadwal yang berstatus *published* (publik) |
-| `GET` | `/api/itineraries/{id}` | Detail itinerary paket publik |
-| `GET` | `/api/public/brand` | Resolusi info brand berdasarkan domain / subdomain |
-| `GET` | `/uploads/*` | Static file server untuk media, foto, & dokumen |
+| `GET` | `/api/health` | Status API dan koneksi database |
+| `GET` | `/api/public/v1/packages`, `/packages/{id}` | Paket untuk web publik (read-only, stabil, cache 60 detik) |
+| `GET` | `/api/public/v1/destinations`, `/sitemap-feed` | Destinasi dan data sitemap |
+| `GET` | `/api/schedules`, `/api/schedules/{id}` | Jadwal published |
+| `GET` | `/api/itineraries/{id}` | Itinerary paket |
+| `GET` | `/api/public/brand` | Identitas brand berdasarkan domain |
+| `GET` | `/api/public/categories`, `/bank-accounts` | Kategori paket dan rekening resmi brand |
+| `GET` | `/uploads/{category}/{filename}` | Berkas publik |
 
----
-
-### 2. Auth Endpoints (Admin & Staff)
+### 2. Akun pelanggan (email dan password)
 | Method | Endpoint | Deskripsi |
 |---|---|---|
-| `POST` | `/api/auth/login` | Login admin/staff & generate Access Token + Refresh Token |
-| `POST` | `/api/auth/refresh` | Refresh Access Token menggunakan Refresh Token |
-| `POST` | `/api/auth/logout` | Revoke token / Logout user |
+| `POST` | `/api/public/auth/register`, `/login`, `/verify-email` | Daftar, masuk, verifikasi email |
+| `POST` | `/api/public/auth/forgot-password`, `/reset-password` | Pemulihan password |
+| `GET` | `/api/account/me`, `/bank-accounts`, `/travelers` | Profil, rekening, dan data peserta tersimpan |
+| `GET` `POST` | `/api/account/bookings` | Daftar pesanan dan checkout booking baru |
+| `GET` | `/api/account/bookings/{id}` | Detail pesanan |
+| `POST` | `/api/account/bookings/{id}/cancel` | Batalkan pesanan |
+| `GET` `POST` | `/api/account/bookings/{id}/payments` | Riwayat dan konfirmasi pembayaran |
+| `POST` | `/api/account/media/upload` | Unggah bukti pembayaran |
 
----
+Rute portal agen `/api/portal/agen/*` belum dipasang; akan dibangun ulang di atas akun email.
 
-### 3. Portal Jamaah Endpoints (`/api/portal/*`)
+### 3. Admin dan staff
 | Method | Endpoint | Deskripsi |
 |---|---|---|
-| `POST` | `/api/portal/login` | Login jamaah via NIK & No. WhatsApp |
-| `GET` | `/api/portal/me` | Profil data jamaah yang sedang login |
-| `GET` | `/api/portal/bookings` | Daftar riwayat booking milik jamaah |
-| `GET` | `/api/portal/bookings/{id}` | Detail pemesanan & tracking progress keberangkatan |
-| `GET` | `/api/portal/bookings/{id}/payments` | Riwayat pembayaran, invoice, & status verifikasi |
-| `GET` | `/api/portal/dokumen` | Daftar dokumen jamaah & status kelengkapan |
-| `POST` | `/api/portal/dokumen` | Upload / update dokumen mandiri oleh jamaah |
-| `POST` | `/api/portal/media/upload` | Upload media / bukti dari portal jamaah |
+| `POST` | `/api/auth/login`, `/refresh`, `/logout` | Login admin/staff dan token |
+| `GET` | `/api/admin/me`, `/my-brand` | Identitas, brand, dan izin pengguna |
 
----
+Kelompok rute di bawah `/api/admin/`:
 
-### 4. Admin Endpoints (`/api/admin/*` — Memerlukan Bearer Token JWT)
-
-#### A. Identitas & Brand
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `GET` | `/api/admin/my-brand` | Mendapatkan info brand user yang sedang login |
-| `CRUD` | `/api/admin/brands` | *(Super Admin)* Manajemen master data brand & konfigurasi tenant |
-| `CRUD` | `/api/admin/users` | *(Super Admin)* Manajemen akun admin/staff tenant |
-| `PUT` | `/api/admin/users/{id}/password` | *(Super Admin)* Reset password pengguna admin/staff |
-
-#### B. Master Data Operasional & Paket
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `CRUD` | `/api/admin/hotels` | Master data hotel Makkah, Madinah, & Transit |
-| `CRUD` | `/api/admin/airlines` | Master data maskapai penerbangan |
-| `CRUD` | `/api/admin/addons` | Master perlengkapan & layanan tambahan (Add-Ons) |
-| `CRUD` | `/api/admin/itineraries` | Master itinerary perjalanan & detail program harian |
-| `CRUD` | `/api/admin/schedules` | Manajemen paket/jadwal keberangkatan |
-| `PUT` | `/api/admin/schedules/{id}/status` | Update status publikasi paket (*draft*, *published*, *archived*) |
-| `PUT` | `/api/admin/schedules/{id}/seat` | Update kuota total kursi paket |
-| `GET` | `/api/admin/analytics/transactions-30-days` | *(Super Admin)* Agregasi transaksi terkonfirmasi 30 hari per brand |
-| `GET` | `/api/admin/analytics/pax-30-days` | *(Super Admin)* Agregasi pendaftaran jamaah/pax aktif 30 hari per brand |
-| `CRUD` | `/api/admin/bank-accounts` | *(Super Admin)* Kelola beberapa rekening transfer resmi per brand |
-
-#### C. Data Jamaah & Dokumen
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `CRUD` | `/api/admin/jamaah` | Master data jamaah (NIK, Paspor, Kontak, Mahram, ID Terstruktur) |
-| `GET` | `/api/admin/jamaah/{jamaah_id}/dokumen` | List dokumen jamaah (Paspor, KTP, KK, Buku Nikah, dll) |
-| `POST` | `/api/admin/jamaah/{jamaah_id}/dokumen` | Upsert dokumen jamaah |
-| `PUT` | `/api/admin/dokumen/{id}/status` | Verifikasi status dokumen (*pending*, *verified*, *rejected*) |
-
-#### D. Transaksi Pemesanan (Bookings) & Operasional
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `CRUD` | `/api/admin/bookings` | Pemesanan paket jamaah, update status order, & hard delete draft booking |
-| `DELETE` | `/api/admin/bookings/{id}/seat-block` | Batalkan block seat tanpa menghapus atau membatalkan booking |
-| `POST` | `/api/admin/bookings/{id}/addons` | Tambah add-on berbayar ke booking tertentu |
-| `DELETE`| `/api/admin/bookings/{id}/addons/{addon_id}`| Hapus add-on dari booking |
-| `PUT` | `/api/admin/bookings/{id}/diskon` | Update nominal diskon transaksi booking |
-| `PUT` | `/api/admin/bookings/{id}/progress` | Update checklist progress operasional (Paspor, Visa, Siskopatuh, Tiket, Hotel, Perlengkapan) |
-| `PUT` | `/api/admin/bookings/{id}/perlengkapan/distribusi` | Catat distribusi perlengkapan & potong stok cabang otomatis |
-| `DELETE`| `/api/admin/bookings/{id}/perlengkapan/distribusi`| Batalkan distribusi perlengkapan & kembalikan stok |
-
-#### E. Inventory & Stok Perlengkapan
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `CRUD` | `/api/admin/perlengkapan-items` | *(Global)* Master item perlengkapan (Koper, Kain Ihram, Mukena, dll) |
-| `GET` | `/api/admin/perlengkapan-stok` | Monitoring stok perlengkapan per brand |
-| `PUT` | `/api/admin/perlengkapan-stok/{item_id}` | Penyesuaian / restock kuantitas perlengkapan brand |
-| `GET` | `/api/admin/perlengkapan-set-template` | Template standar bundle set perlengkapan jamaah |
-| `PUT` | `/api/admin/perlengkapan-set-template` | Update template standar bundle set perlengkapan |
-
-#### F. Pembayaran (Payments) & Media Upload
-| Method | Endpoint | Deskripsi |
-|---|---|---|
-| `GET` | `/api/admin/bookings/{booking_id}/payments` | List riwayat pembayaran suatu booking |
-| `GET` | `/api/admin/payments` | Inbox pembayaran; lintas brand untuk pusat dan scoped untuk admin brand |
-| `POST` | `/api/admin/bookings/{booking_id}/payments` | Pencatatan pembayaran & upload bukti transfer |
-| `PUT` | `/api/admin/payments/{id}/status` | Konfirmasi pembayaran berstatus *pending* menjadi *confirmed* |
-| `DELETE`| `/api/admin/payments/{id}` | Hapus catatan pembayaran |
-| `POST` | `/api/admin/media/upload` | Upload gambar/dokumen multipart (foto hotel, logo maskapai, dokumen jamaah, bukti bayar) |
+| Kelompok | Rute |
+|---|---|
+| Identitas dan organisasi | `users`, `roles`, `permissions`, `org-units`, `brands`, `bank-accounts` |
+| Master data | `hotels`, `airlines`, `airports`, `destinations`, `categories`, `itineraries` |
+| Paket | `schedules` (termasuk `/status`, `/seat`, `/perlengkapan`) |
+| Jamaah dan dokumen | `jamaah`, `jamaah/{id}/dokumen`, `dokumen/{id}/status` |
+| Booking | `bookings` (draft, finalize, status, seat-block, diskon, cashback, refund, progress, pax) |
+| Pembayaran | `payments`, `bookings/{id}/payments`, `payments/{id}/status` |
+| Perlengkapan | `perlengkapan-items`, `-stok`, `-mutasi`, `-set-template` |
+| Agen Syiar | `agen`, `agen/pencairan`, `kaitan-agen` |
+| CRM | `crm/deals` |
+| Laporan | `analytics/transactions-30-days`, `analytics/pax-30-days` |
+| Media | `media/upload`, `media/{category}/{filename}` (berkas terlindungi) |
 
 ---
 
@@ -322,14 +286,9 @@ List kosong selalu mengembalikan array `[]`, bukan `null`.
 
 ---
 
-## Migrasi Terbaru
+## Migrasi
 
-| File | Perubahan |
-|---|---|
-| `026_schedule_flight_routes.sql` | Menambahkan data rute pergi, transit, tujuan, dan rute pulang pada paket |
-| `027_booking_seat_block_state.sql` | Menyimpan status pembatalan block seat secara terpisah dari status booking |
-| `028_manual_bank_transfers.sql` | Migrasi rekening lama, multi-rekening per brand, bukti transfer portal, dan status penolakan |
-| `029_extend_document_types.sql` | Menambahkan vaksin meningitis dan menyelaraskan tipe dokumen portal |
+File di `migrations/` berurutan menurut nomor. Isi tiap file dijelaskan di komentar awalnya.
 
 Selalu jalankan seluruh migrasi secara berurutan setelah menarik perubahan terbaru:
 
