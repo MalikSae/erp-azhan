@@ -68,27 +68,24 @@ func TestPublicCacheHanyaUntuk200(t *testing.T) {
 	}
 }
 
-// Butir 4: bypass captcha hanya untuk APP_ENV=development + ALLOW_DEV_CAPTCHA=true.
-func TestTurnstileFailClosed(t *testing.T) {
+// Captcha opsional (keputusan 2026-10-28): tanpa TURNSTILE_SECRET_KEY nonaktif di semua APP_ENV; dengan secret aktif.
+func TestTurnstileOpsional(t *testing.T) {
 	t.Setenv("TURNSTILE_SECRET_KEY", "")
-	cases := []struct {
-		env, allow string
-		bypass     bool
-	}{{"", "", false}, {"", "true", false}, {"production", "true", false}, {"development", "", false}, {"development", "true", true}, {"Development", "TRUE", true}}
-	for _, c := range cases {
-		t.Setenv("APP_ENV", c.env)
-		t.Setenv("ALLOW_DEV_CAPTCHA", c.allow)
+	for _, env := range []string{"", "production", "development"} {
+		t.Setenv("APP_ENV", env)
 		ts := NewTurnstile()
 		ok, err := ts.Verify(t.Context(), "", "127.0.0.1")
-		if c.bypass != (ok && err == nil) || ts.Enabled() == c.bypass {
-			t.Errorf("APP_ENV=%q ALLOW=%q: ok=%v err=%v enabled=%v, want bypass=%v", c.env, c.allow, ok, err, ts.Enabled(), c.bypass)
+		if !ok || err != nil || ts.Enabled() {
+			t.Errorf("APP_ENV=%q: ok=%v err=%v enabled=%v, want lolos dan nonaktif", env, ok, err, ts.Enabled())
+		}
+		if err := ValidateCaptchaConfig(); err != nil {
+			t.Fatalf("APP_ENV=%q: startup tidak boleh gagal tanpa secret: %v", env, err)
 		}
 	}
-	t.Setenv("APP_ENV", "production")
-	if ValidateCaptchaConfig() == nil {
-		t.Fatal("produksi tanpa TURNSTILE_SECRET_KEY harus gagal start")
-	}
 	t.Setenv("TURNSTILE_SECRET_KEY", "secret-uji")
+	if !NewTurnstile().Enabled() {
+		t.Fatal("dengan secret captcha harus aktif")
+	}
 	if err := ValidateCaptchaConfig(); err != nil {
 		t.Fatal(err)
 	}

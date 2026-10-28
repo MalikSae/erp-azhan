@@ -87,10 +87,8 @@ func TestAccountLifecycle(t *testing.T) {
 		_, _ = db.Exec(`DELETE FROM brand_domains WHERE domain='akun-test.azhan.test'`)
 	})
 
-	// Captcha fail closed: tes memakai bypass pengembangan eksplisit.
+	// Captcha opsional: tanpa secret nonaktif.
 	t.Setenv("TURNSTILE_SECRET_KEY", "")
-	t.Setenv("APP_ENV", "development")
-	t.Setenv("ALLOW_DEV_CAPTCHA", "true")
 	mail := &captureMail{}
 	h := NewHandler(NewRepository(db), mail)
 	t.Setenv("SITE_URL_TEMPLATE", "http://{domain}")

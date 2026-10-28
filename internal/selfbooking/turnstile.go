@@ -17,14 +17,13 @@ import (
 const turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 // turnstileVerifier memverifikasi token Cloudflare Turnstile di server.
-// Fail closed (tinjauan keamanan 2026-10-22): tanpa TURNSTILE_SECRET_KEY verifikasi GAGAL,
-// kecuali mode pengembangan eksplisit (APP_ENV=development dan ALLOW_DEV_CAPTCHA=true)
-// yang melewatinya. Di produksi startup gagal bila secret kosong (shared.ValidateCaptchaConfig).
+// Captcha OPSIONAL (keputusan 2026-10-28): tanpa TURNSTILE_SECRET_KEY captcha nonaktif dan semua
+// request lolos; isi secret untuk mengaktifkannya.
 type turnstileVerifier struct {
 	secret    string
 	verifyURL string
 	client    *http.Client
-	devBypass bool // hanya dari shared.DevCaptchaBypass(); tes mengisinya langsung
+	devBypass bool // true bila secret kosong (captcha nonaktif); tes mengisinya langsung
 }
 
 func newTurnstileVerifier() *turnstileVerifier {
@@ -33,20 +32,17 @@ func newTurnstileVerifier() *turnstileVerifier {
 		verifyURL: turnstileVerifyURL,
 		client:    &http.Client{Timeout: 5 * time.Second},
 	}
-	if v.secret == "" {
-		v.devBypass = shared.DevCaptchaBypass()
-	}
+	v.devBypass = v.secret == ""
 	return v
 }
 
-// required: token captcha wajib dikirim (semua mode kecuali bypass pengembangan).
+// required: token captcha wajib dikirim (hanya bila captcha aktif).
 func (v *turnstileVerifier) required() bool {
 	return !(v.secret == "" && v.devBypass)
 }
 
-// verify mengembalikan true hanya bila token valid, atau bypass pengembangan aktif. Error berarti
-// Turnstile belum dikonfigurasi atau Cloudflare tidak bisa dihubungi; pemanggil harus menolak
-// request (fail closed).
+// verify mengembalikan true bila token valid atau captcha nonaktif. Error berarti Cloudflare tidak
+// bisa dihubungi; pemanggil harus menolak request.
 func (v *turnstileVerifier) verify(ctx context.Context, token, remoteIP string) (bool, error) {
 	if v.secret == "" {
 		if v.devBypass {

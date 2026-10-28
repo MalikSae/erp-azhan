@@ -63,7 +63,7 @@ func main() {
 	if mins, _ := strconv.Atoi(strings.TrimSpace(os.Getenv("JWT_ACCESS_TTL_MINUTES"))); mins > 60 {
 		log.Printf("[WARN] JWT_ACCESS_TTL_MINUTES=%d dibatasi menjadi 60 menit", mins)
 	}
-	// Captcha fail closed: produksi tanpa TURNSTILE_SECRET_KEY gagal start.
+	// Captcha opsional: tanpa TURNSTILE_SECRET_KEY nonaktif (hanya dicatat).
 	if err := shared.ValidateCaptchaConfig(); err != nil {
 		log.Fatalf("[ERROR] konfigurasi captcha: %v", err)
 	}

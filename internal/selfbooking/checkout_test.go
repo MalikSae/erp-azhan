@@ -106,8 +106,7 @@ func TestCheckoutRequiresConsentAndQuote(t *testing.T) {
 	}
 }
 
-// Tinjauan keamanan 2026-10-22: tanpa TURNSTILE_SECRET_KEY verifikasi GAGAL (fail closed),
-// kecuali bypass pengembangan eksplisit (APP_ENV=development + ALLOW_DEV_CAPTCHA=true).
+// Verifier tanpa secret dan tanpa devBypass (dibuat langsung, bukan lewat newTurnstileVerifier) menolak.
 func TestCaptchaFailClosedWithoutSecret(t *testing.T) {
 	verifier := &turnstileVerifier{}
 	if !verifier.required() {

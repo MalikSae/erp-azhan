@@ -94,17 +94,15 @@ func TestCreateBookingCaptchaFailClosedTanpaSecret(t *testing.T) {
 		}
 	}
 	t.Setenv("TURNSTILE_SECRET_KEY", "")
-	for _, env := range [][2]string{{"", ""}, {"production", "true"}, {"development", ""}} {
-		t.Setenv("APP_ENV", env[0])
-		t.Setenv("ALLOW_DEV_CAPTCHA", env[1])
-		if v := newTurnstileVerifier(); !v.required() {
-			t.Fatalf("APP_ENV=%q ALLOW_DEV_CAPTCHA=%q: captcha tidak boleh dilewati", env[0], env[1])
+	for _, env := range []string{"", "production", "development"} {
+		t.Setenv("APP_ENV", env)
+		if v := newTurnstileVerifier(); v.required() {
+			t.Fatalf("APP_ENV=%q: tanpa secret captcha harus nonaktif", env)
 		}
 	}
-	t.Setenv("APP_ENV", "development")
-	t.Setenv("ALLOW_DEV_CAPTCHA", "true")
-	if v := newTurnstileVerifier(); v.required() {
-		t.Fatal("bypass pengembangan eksplisit harus melewati captcha")
+	t.Setenv("TURNSTILE_SECRET_KEY", "secret-uji")
+	if v := newTurnstileVerifier(); !v.required() {
+		t.Fatal("dengan secret captcha harus aktif")
 	}
 }
 
