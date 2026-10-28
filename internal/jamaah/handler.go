@@ -360,3 +360,7 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
+
+// ValidasiInput memvalidasi format data jamaah (tanggal, NIK, email, HP) untuk pemanggil di luar paket ini
+// (mis. portal pelanggan). Mengembalikan pesan galat, atau "" bila semua valid.
+func ValidasiInput(req *CreateJamaahRequest) string { return validateJamaahInput(req) }
