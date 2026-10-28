@@ -210,6 +210,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, silakan masuk atau gunakan Lupa password")
 		return
 	}
+	if errors.Is(err, ErrPhoneTaken) {
+		writeError(w, http.StatusConflict, "Nomor WhatsApp sudah terdaftar. Masuk dengan email Anda, atau gunakan nomor lain.")
+		return
+	}
 	if err != nil {
 		log.Printf("[ERROR] customer create: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")

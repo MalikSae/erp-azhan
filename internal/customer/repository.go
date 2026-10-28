@@ -19,6 +19,7 @@ import (
 
 var (
 	ErrEmailTaken     = errors.New("email sudah terdaftar")
+	ErrPhoneTaken     = errors.New("nomor WhatsApp sudah terdaftar")
 	ErrNotFound       = errors.New("akun tidak ditemukan")
 	ErrTokenInvalid   = errors.New("tautan tidak valid atau sudah kedaluwarsa")
 	ErrSessionInvalid = errors.New("sesi tidak valid")
@@ -92,6 +93,9 @@ func (r *Repository) Create(ctx context.Context, brandID int64, nama, email, noH
 	if err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
+			if strings.Contains(me.Message, "uq_customer_brand_hp") {
+				return nil, ErrPhoneTaken
+			}
 			return nil, ErrEmailTaken
 		}
 		return nil, fmt.Errorf("create account: %w", err)

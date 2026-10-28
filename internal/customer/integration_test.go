@@ -184,3 +184,37 @@ func TestLoginRateLimit(t *testing.T) {
 		t.Fatalf("percobaan ke-%d harus 429, dapat %d", loginKeyLimit+1, rec.Code)
 	}
 }
+
+// Nomor WhatsApp akun unik per brand, dengan penyamaan format (0812..., 62812..., +62 812...).
+func TestRegisterNomorWhatsAppUnik(t *testing.T) {
+	db := testdb.DB(t)
+	ctx := context.Background()
+	var brandID int64
+	if err := db.QueryRowContext(ctx, `SELECT id FROM brands ORDER BY id LIMIT 1`).Scan(&brandID); err != nil {
+		t.Fatal(err)
+	}
+	tail := time.Now().UnixNano() % 100000000
+	emailA := fmt.Sprintf("hp-a-%d@example.com", time.Now().UnixNano())
+	emailB := fmt.Sprintf("hp-b-%d@example.com", time.Now().UnixNano())
+	hpA := fmt.Sprintf("0899%08d", tail)
+	hpB := fmt.Sprintf("+62 899-%08d", tail) // nomor yang sama, format lain
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM customer_accounts WHERE email_normal IN (?,?)`, emailA, emailB)
+	})
+	t.Setenv("TURNSTILE_SECRET_KEY", "")
+	h := NewHandler(NewRepository(db), &captureMail{})
+
+	rec := post(h.Register, map[string]any{"brand_id": brandID, "nama_lengkap": "Akun Satu", "email": emailA, "no_hp": hpA, "password": "rahasia-123"}, "")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("akun pertama: %d %s", rec.Code, rec.Body)
+	}
+	rec = post(h.Register, map[string]any{"brand_id": brandID, "nama_lengkap": "Akun Dua", "email": emailB, "no_hp": hpB, "password": "rahasia-123"}, "")
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Nomor WhatsApp sudah terdaftar") {
+		t.Fatalf("nomor sama beda format harus 409 dengan pesan nomor, dapat %d %s", rec.Code, rec.Body)
+	}
+	var n int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM customer_accounts WHERE email_normal=?`, emailB).Scan(&n)
+	if n != 0 {
+		t.Fatal("akun kedua tidak boleh terbentuk")
+	}
+}
