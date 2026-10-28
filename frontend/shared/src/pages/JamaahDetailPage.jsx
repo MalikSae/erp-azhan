@@ -20,6 +20,13 @@ import { Eye, Upload, ExternalLink, RefreshCw, Save, Printer } from "lucide-reac
 import { STATUS_AGEN } from "../utils/agen";
 import { printJamaah } from "../utils/printJamaah";
 
+// Label status dokumen jamaah (nilai dari API: submitted | approved | rejected).
+const STATUS_DOKUMEN = {
+  submitted: { label: "Menunggu verifikasi", warna: "text-warning-600" },
+  approved: { label: "Disetujui", warna: "text-success-600" },
+  rejected: { label: "Ditolak", warna: "text-danger-600" },
+};
+
 const DOKUMEN_TYPES = [
   { key: "pas_foto", label: "Pas Foto" },
   { key: "paspor", label: "Paspor" },
@@ -457,13 +464,13 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
                       <span className="text-sm font-medium font-body text-neutral-800 block">
                         {docType.label}
                       </span>
-                      <span className="text-xs font-body text-neutral-500 block">
-                        {hasFile ? existing.status : "Belum Diunggah"}
+                      <span className={`text-xs font-body block ${hasFile ? (STATUS_DOKUMEN[existing.status]?.warna || "text-neutral-500") : "text-neutral-500"}`}>
+                        {hasFile ? (STATUS_DOKUMEN[existing.status]?.label || existing.status) : "Belum Diunggah"}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {hasFile && <DocumentReview document={existing} onChanged={updated => setDokumenList(previous => previous.map(doc => doc.id === updated.id ? updated : doc))} />}
+                      {hasFile && existing.status !== "approved" && <DocumentReview document={existing} onChanged={updated => setDokumenList(previous => previous.map(doc => doc.id === updated.id ? updated : doc))} />}
                       {hasFile && (
                         <button
                           type="button"

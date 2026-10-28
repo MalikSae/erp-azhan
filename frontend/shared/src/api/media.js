@@ -43,6 +43,16 @@ export function protectedMediaPath(url) {
   return /^\/api\/admin\/media\/[a-z0-9-]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(path) ? path : null;
 }
 
+// Muat berkas media terlindungi sebagai blob URL untuk ditampilkan di dalam komponen sendiri (mis. modal verifikasi).
+// Pemanggil wajib memanggil URL.revokeObjectURL(objectUrl) setelah selesai.
+export async function loadProtectedMedia(url) {
+  const normalizedUrl = protectedMediaPath(url);
+  if (!normalizedUrl) throw new Error('Alamat berkas tidak sah.');
+  const response = await client.get(normalizedUrl, { responseType: 'blob' });
+  const blob = response.data;
+  return { objectUrl: URL.createObjectURL(blob), type: blob.type || '', name: String(normalizedUrl).split('/').pop() || 'berkas' };
+}
+
 // Tampilkan berkas media terlindungi (bukti transfer, paspor, KTP, dst.) lewat klien API
 // berautentikasi, di lapisan pratinjau dalam halaman. Tidak memakai window.open karena pop-up
 // sering diblokir (browser maupun panel tertanam), sehingga tab kosong / tidak terjadi apa-apa.
