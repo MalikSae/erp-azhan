@@ -114,9 +114,7 @@ Dokumentasi rancangan ada di `docs/spek/`. Audit yang masih dipakai sebagai acua
    JWT_ACCESS_TTL_MINUTES=15
    JWT_REFRESH_TTL_DAYS=7
 
-   # Captcha fail closed: tanpa TURNSTILE_SECRET_KEY, daftar akun dan booking mandiri ditolak.
-   # Untuk pengembangan lokal saja, lewati captcha secara eksplisit:
-   ALLOW_DEV_CAPTCHA=true
+   # Captcha opsional: TURNSTILE_SECRET_KEY kosong = captcha nonaktif (dev lokal tidak perlu diisi).
    ```
 
 3. **Buat Database MySQL:**
@@ -352,8 +350,7 @@ DB_USER=erp_azhan_app
 DB_PASSWORD=PASSWORD_DATABASE_YANG_KUAT
 DB_NAME=erp_azhan
 APP_PORT=9090
-# WAJIB di produksi: mematikan origin CORS pengembangan (localhost, *.test), mewajibkan
-# TURNSTILE_SECRET_KEY saat start, dan mencegah isi email (token) ditulis ke log.
+# WAJIB di produksi: mematikan origin CORS pengembangan (localhost, *.test), dan mencegah isi email (token) ditulis ke log.
 APP_ENV=production
 CORS_ALLOWED_ORIGINS=https://office.example.com,https://*.example.com
 # Acak, minimal 32 karakter (disarankan 64 heks: openssl rand -hex 32). Placeholder ditolak saat start.
@@ -361,7 +358,7 @@ JWT_SECRET=RANDOM_MINIMAL_64_KARAKTER
 # Maksimal 60 (nilai lebih besar dibatasi 60 menit).
 JWT_ACCESS_TTL_MINUTES=15
 JWT_REFRESH_TTL_DAYS=7
-# Wajib di produksi (API gagal start bila kosong). Jangan set ALLOW_DEV_CAPTCHA di produksi.
+# Opsional: kosong = captcha nonaktif. Isi bersama NEXT_PUBLIC_TURNSTILE_SITE_KEY untuk mengaktifkan.
 TURNSTILE_SECRET_KEY=SECRET_TURNSTILE_DARI_CLOUDFLARE
 # Wajib agar email verifikasi/reset/booking terkirim; tanpa SMTP di produksi email TIDAK dikirim.
 SMTP_HOST=smtp.example.com

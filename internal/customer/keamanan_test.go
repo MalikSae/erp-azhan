@@ -103,20 +103,6 @@ func TestCancelGuardPeriksaUlangDalamTransaksi(t *testing.T) {
 	}
 }
 
-// Butir 4: tanpa TURNSTILE_SECRET_KEY pendaftaran ditolak (fail closed), kecuali bypass dev eksplisit.
-func TestRegisterCaptchaFailClosed(t *testing.T) {
-	t.Setenv("TURNSTILE_SECRET_KEY", "")
-	for _, env := range []struct{ appEnv, allow string }{{"", ""}, {"production", "true"}, {"development", ""}, {"staging", "true"}} {
-		t.Setenv("APP_ENV", env.appEnv)
-		t.Setenv("ALLOW_DEV_CAPTCHA", env.allow)
-		h := NewHandler(nil, &captureMail{}) // repo nil: request harus berhenti sebelum database
-		rec := post(h.Register, map[string]any{"brand_id": 1, "nama_lengkap": "Budi", "email": "b@example.com", "no_hp": "081234567890", "password": "rahasia-123"}, "")
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("APP_ENV=%q ALLOW_DEV_CAPTCHA=%q: got %d %s, want 503", env.appEnv, env.allow, rec.Code, rec.Body.String())
-		}
-	}
-}
-
 // Butir 4: lupa password tanpa captcha dibatasi per email lintas IP; jawabannya tetap generik.
 func TestForgotPasswordBatasPerEmailLintasIP(t *testing.T) {
 	h := NewHandler(nil, &captureMail{})

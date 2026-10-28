@@ -13,9 +13,3 @@ func AppEnv() string {
 
 // IsProduction true bila APP_ENV=production.
 func IsProduction() bool { return AppEnv() == "production" }
-
-// DevCaptchaBypass true hanya bila pengembang secara eksplisit meminta captcha dilewati:
-// APP_ENV=development DAN ALLOW_DEV_CAPTCHA=true. Selain itu captcha tanpa secret DITOLAK.
-func DevCaptchaBypass() bool {
-	return AppEnv() == "development" && strings.EqualFold(strings.TrimSpace(os.Getenv("ALLOW_DEV_CAPTCHA")), "true")
-}

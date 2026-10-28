@@ -112,8 +112,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		req.PIC.NoHP = account.NoHP
 		req.PIC.Email = &account.Email
 	}
-	// Gate 1: Captcha. Fail closed: tanpa TURNSTILE_SECRET_KEY request ditolak, kecuali mode
-	// pengembangan eksplisit (APP_ENV=development dan ALLOW_DEV_CAPTCHA=true), lihat turnstile.go.
+	// Gate 1: Captcha. Opsional: tanpa TURNSTILE_SECRET_KEY gate ini dilewati, lihat turnstile.go.
 	if h.captcha.required() && strings.TrimSpace(req.CaptchaToken) == "" {
 		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
 		return
