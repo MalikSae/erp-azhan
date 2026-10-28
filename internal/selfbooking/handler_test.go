@@ -106,8 +106,8 @@ func TestCreateBookingCaptchaFailClosedTanpaSecret(t *testing.T) {
 	}
 }
 
-// K2: akun yang emailnya belum terverifikasi tidak boleh membuat booking (403 + kode stabil).
-func TestCreateBookingWajibEmailTerverifikasi(t *testing.T) {
+// Verifikasi email tidak diwajibkan: akun yang belum terverifikasi tetap bisa membuat booking.
+func TestCreateBookingTanpaVerifikasiEmail(t *testing.T) {
 	h := newTestHandler(t, "", 0)
 	dipanggil := false
 	h.book = func(context.Context, int64, int64, BookingRequest) (*BookingResponse, error) {
@@ -116,15 +116,8 @@ func TestCreateBookingWajibEmailTerverifikasi(t *testing.T) {
 	}
 	belum := *akunHandlerUji
 	belum.EmailVerifiedAt = nil
-	rec := postBook(h, bodyCheckout, &belum)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), KodeEmailBelumTerverifikasi) || !strings.Contains(rec.Body.String(), "Verifikasi email") {
-		t.Fatalf("akun belum terverifikasi: got %d %s, want 403 %s", rec.Code, rec.Body.String(), KodeEmailBelumTerverifikasi)
-	}
-	if dipanggil {
-		t.Fatal("booking diproses untuk akun belum terverifikasi")
-	}
-	if rec = postBook(h, bodyCheckout, akunHandlerUji); rec.Code != http.StatusOK || !dipanggil {
-		t.Fatalf("akun terverifikasi: got %d %s", rec.Code, rec.Body.String())
+	if rec := postBook(h, bodyCheckout, &belum); rec.Code != http.StatusOK || !dipanggil {
+		t.Fatalf("akun belum terverifikasi: got %d %s, want 200 dan booking diproses", rec.Code, rec.Body.String())
 	}
 }
 

@@ -36,10 +36,9 @@ const (
 
 // Kode galat yang dikenali frontend (azhan-booking) di samping pesan "error".
 const (
-	KodeEmailBelumTerverifikasi = "email_belum_terverifikasi"
-	KodeBatasSeatAkun           = "batas_seat_akun"
-	KodeBatasBookingHarian      = "batas_booking_harian"
-	KodeIdentitasTerlaluSering  = "percobaan_data_jamaah_terlalu_sering"
+	KodeBatasSeatAkun          = "batas_seat_akun"
+	KodeBatasBookingHarian     = "batas_booking_harian"
+	KodeIdentitasTerlaluSering = "percobaan_data_jamaah_terlalu_sering"
 )
 
 type Handler struct {
@@ -90,11 +89,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "sesi berakhir, silakan masuk kembali")
 		return
 	}
-	// K2: booking mandiri hanya untuk akun yang emailnya sudah terverifikasi.
-	if account.EmailVerifiedAt == nil {
-		writeErrorCode(w, http.StatusForbidden, "Verifikasi email Anda terlebih dahulu sebelum membuat booking. Buka tautan verifikasi di email Anda atau kirim ulang dari halaman akun.", KodeEmailBelumTerverifikasi)
-		return
-	}
+	// Verifikasi email tidak diwajibkan untuk booking (keputusan 2026-10-28); email tetap dikirim dan statusnya tampil di akun.
 	var req BookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")

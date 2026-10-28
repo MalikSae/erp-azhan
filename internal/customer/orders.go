@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/booking"
+	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/payment"
 	"github.com/go-chi/chi/v5"
@@ -22,10 +23,11 @@ type Orders struct {
 	db          *sql.DB
 	bookingRepo *booking.Repository
 	paymentRepo *payment.Repository
+	dokumen     *dokumen.Repository
 }
 
 func NewOrders(db *sql.DB, b *booking.Repository, p *payment.Repository) *Orders {
-	return &Orders{db: db, bookingRepo: b, paymentRepo: p}
+	return &Orders{db: db, bookingRepo: b, paymentRepo: p, dokumen: dokumen.NewRepository(db)}
 }
 
 type orderSummary struct {
