@@ -68,6 +68,7 @@ func (h *Handler) ListBookings(w http.ResponseWriter, r *http.Request) {
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	items, err := h.repo.List(r.Context(), brandID, jamaahID, status, ListOpts{Limit: limit, Offset: offset})
 	if err != nil {
+		log.Printf("[ERROR] booking list: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data booking")
 		return
 	}
