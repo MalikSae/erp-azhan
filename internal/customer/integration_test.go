@@ -344,6 +344,7 @@ func TestChangePassword(t *testing.T) {
 	var login authResponse
 	rec = post(h.Login, map[string]any{"brand_id": brandID, "email": email, "password": "rahasia-123"}, "")
 	_ = json.Unmarshal(rec.Body.Bytes(), &login) // sesi kedua = "perangkat lain"
+	idA, _ := h.repo.AccountBySession(ctx, reg.SessionToken)
 
 	call := func(body map[string]any) int {
 		b, _ := json.Marshal(body)
@@ -364,8 +365,15 @@ func TestChangePassword(t *testing.T) {
 	if c := call(map[string]any{"password_saat_ini": "rahasia-123", "password_baru": "rahasia-123"}); c != http.StatusBadRequest {
 		t.Fatalf("password sama harus 400, dapat %d", c)
 	}
+	resetToken, err := h.repo.IssueToken(ctx, idA.ID, PurposeResetPass, ResetTokenTTL)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if c := call(map[string]any{"password_saat_ini": "rahasia-123", "password_baru": "baru-12345"}); c != http.StatusOK {
 		t.Fatalf("ganti password harus 200, dapat %d", c)
+	}
+	if _, err := h.repo.ConsumeToken(ctx, resetToken, PurposeResetPass); err == nil {
+		t.Fatal("tautan reset lama harus dicabut setelah ganti password")
 	}
 	if _, err := h.repo.AccountBySession(ctx, reg.SessionToken); err != nil {
 		t.Fatal("sesi yang dipakai harus tetap aktif")

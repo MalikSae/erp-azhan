@@ -147,6 +147,19 @@ func (h *Handler) sendVerification(ctx context.Context, acc *Account) {
 	h.sendAsync(mailer.Message{To: acc.Email, Subject: subject, Text: text})
 }
 
+// validateProfile memeriksa nama, email, dan nomor WhatsApp (sudah di-trim); mengembalikan pesan galat, atau "" bila valid.
+func validateProfile(nama, email, noHP string) string {
+	switch {
+	case !ValidName(nama):
+		return "nama lengkap wajib diisi (2–100 karakter; hanya huruf, spasi, titik, koma, apostrof, dan tanda hubung)"
+	case !ValidEmail(email):
+		return "format email tidak valid"
+	case !ValidPhone(noHP):
+		return "nomor WhatsApp harus 10–15 digit"
+	}
+	return ""
+}
+
 type registerRequest struct {
 	BrandID      int64  `json:"brand_id"`
 	NamaLengkap  string `json:"nama_lengkap"`
@@ -186,18 +199,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
 		return
 	}
-	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
-	req.Email = strings.TrimSpace(req.Email)
-	req.NoHP = strings.TrimSpace(req.NoHP)
-	switch {
-	case !ValidName(req.NamaLengkap):
-		writeError(w, http.StatusBadRequest, "nama lengkap wajib diisi (2–100 karakter; hanya huruf, spasi, titik, koma, apostrof, dan tanda hubung)")
-		return
-	case !ValidEmail(req.Email):
-		writeError(w, http.StatusBadRequest, "format email tidak valid")
-		return
-	case !ValidPhone(req.NoHP):
-		writeError(w, http.StatusBadRequest, "nomor WhatsApp harus 10–15 digit")
+	req.NamaLengkap, req.Email, req.NoHP = strings.TrimSpace(req.NamaLengkap), strings.TrimSpace(req.Email), strings.TrimSpace(req.NoHP)
+	if msg := validateProfile(req.NamaLengkap, req.Email, req.NoHP); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if ok, msg := ValidPassword(req.Password); !ok {
@@ -353,18 +357,9 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
-	req.Email = strings.TrimSpace(req.Email)
-	req.NoHP = strings.TrimSpace(req.NoHP)
-	switch {
-	case !ValidName(req.NamaLengkap):
-		writeError(w, http.StatusBadRequest, "nama lengkap wajib diisi (2–100 karakter; hanya huruf, spasi, titik, koma, apostrof, dan tanda hubung)")
-		return
-	case !ValidEmail(req.Email):
-		writeError(w, http.StatusBadRequest, "format email tidak valid")
-		return
-	case !ValidPhone(req.NoHP):
-		writeError(w, http.StatusBadRequest, "nomor WhatsApp harus 10–15 digit")
+	req.NamaLengkap, req.Email, req.NoHP = strings.TrimSpace(req.NamaLengkap), strings.TrimSpace(req.Email), strings.TrimSpace(req.NoHP)
+	if msg := validateProfile(req.NamaLengkap, req.Email, req.NoHP); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	key := strconv.FormatInt(acc.ID, 10)
@@ -438,13 +433,18 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
-	if err = h.repo.SetPassword(r.Context(), acc.ID, string(hash)); err != nil {
-		log.Printf("[ERROR] customer set password: %v", err)
+	// Sesi lain dan tautan reset lama dicabut SEBELUM password diganti: bila salah satunya gagal, password tetap lama
+	// dan pelanggan bisa mencoba lagi; jawaban 200 berarti klaim "perangkat lain dikeluarkan" benar.
+	if err = h.repo.RevokeOtherSessions(r.Context(), acc.ID, TokenFromContext(r.Context())); err == nil {
+		err = h.repo.InvalidateTokens(r.Context(), acc.ID, PurposeResetPass)
+	}
+	if err == nil {
+		err = h.repo.SetPassword(r.Context(), acc.ID, string(hash))
+	}
+	if err != nil {
+		log.Printf("[ERROR] customer change password: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
-	}
-	if err = h.repo.RevokeOtherSessions(r.Context(), acc.ID, TokenFromContext(r.Context())); err != nil {
-		log.Printf("[ERROR] customer revoke sessions: %v", err)
 	}
 	h.pwFail.Reset(key)
 	if name, domain, err := h.repo.BrandSite(r.Context(), acc.BrandID); err == nil && domain != "" {
