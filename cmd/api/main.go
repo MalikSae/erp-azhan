@@ -242,6 +242,8 @@ func main() {
 		r.Use(requireDB(db))
 		r.Use(customerHandler.RequireCustomer)
 		r.Get("/me", customerHandler.Me)
+		r.Patch("/me", customerHandler.UpdateMe)
+		r.Post("/password", customerHandler.ChangePassword)
 		r.Post("/logout", customerHandler.Logout)
 		r.Post("/resend-verification", customerHandler.ResendVerification)
 		r.Get("/bank-accounts", customerOrders.BankAccounts)

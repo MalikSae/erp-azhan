@@ -91,17 +91,36 @@ func (r *Repository) Create(ctx context.Context, brandID int64, nama, email, noH
 		`INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash) VALUES (?,?,?,?,?,?)`,
 		brandID, nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, passwordHash)
 	if err != nil {
-		var me *mysql.MySQLError
-		if errors.As(err, &me) && me.Number == 1062 {
-			if strings.Contains(me.Message, "uq_customer_brand_hp") {
-				return nil, ErrPhoneTaken
-			}
-			return nil, ErrEmailTaken
-		}
-		return nil, fmt.Errorf("create account: %w", err)
+		return nil, mapDuplicate(err, "create account")
 	}
 	id, _ := res.LastInsertId()
 	return r.GetByID(ctx, id)
+}
+
+// mapDuplicate mengubah pelanggaran kunci unik (1062) menjadi ErrPhoneTaken atau ErrEmailTaken; galat lain dibungkus dengan op.
+func mapDuplicate(err error, op string) error {
+	var me *mysql.MySQLError
+	if errors.As(err, &me) && me.Number == 1062 {
+		if strings.Contains(me.Message, "uq_customer_brand_hp") {
+			return ErrPhoneTaken
+		}
+		return ErrEmailTaken
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
+
+// UpdateProfile mengganti nama, email, dan nomor WhatsApp akun. Email yang berubah membatalkan status terverifikasi.
+// email_verified_at harus ditulis SEBELUM email_normal: MySQL mengevaluasi SET dari kiri ke kanan, jadi pembandingnya
+// masih membaca email lama.
+func (r *Repository) UpdateProfile(ctx context.Context, id int64, nama, email, noHP string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE customer_accounts SET email_verified_at = IF(email_normal <> ?, NULL, email_verified_at),
+		 nama_lengkap=?, email=?, email_normal=?, no_hp=? WHERE id=?`,
+		NormalizeEmail(email), nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, id)
+	if err != nil {
+		return mapDuplicate(err, "update profile")
+	}
+	return nil
 }
 
 func (r *Repository) GetByID(ctx context.Context, id int64) (*Account, error) {
@@ -153,6 +172,20 @@ func (r *Repository) RevokeSession(ctx context.Context, raw string) error {
 
 func (r *Repository) RevokeAllSessions(ctx context.Context, accountID int64) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE customer_sessions SET revoked_at=? WHERE account_id=? AND revoked_at IS NULL`, time.Now(), accountID)
+	return err
+}
+
+// InvalidateTokens menandai semua token aktif akun untuk tujuan tertentu sebagai terpakai (mis. tautan reset lama).
+func (r *Repository) InvalidateTokens(ctx context.Context, accountID int64, purpose string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE customer_tokens SET used_at=? WHERE account_id=? AND purpose=? AND used_at IS NULL`, time.Now(), accountID, purpose)
+	return err
+}
+
+// RevokeOtherSessions mencabut semua sesi akun kecuali sesi yang sedang dipakai (token mentah keep).
+func (r *Repository) RevokeOtherSessions(ctx context.Context, accountID int64, keep string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE customer_sessions SET revoked_at=? WHERE account_id=? AND token_hash<>? AND revoked_at IS NULL`,
+		time.Now(), accountID, hashToken(keep))
 	return err
 }
 

@@ -36,8 +36,8 @@ func TestTemplatesContainLinks(t *testing.T) {
 
 func TestOrderCreatedMemuatKodeTautanDanIstilahBaku(t *testing.T) {
 	subject, text := OrderCreated("Hana Tours", "Budi", "HNA-0001", "Umroh Reguler", "1 Januari 2099", "Rp 30.000.000", "DP minimal Rp 5.000.000", "2 Januari 2099 10:00 WIB",
-		"https://hana.test/booking/pesanan/12", []BankInfo{{Bank: "BCA", Nomor: "123", AtasNama: "PT Hana"}})
-	for _, want := range []string{"HNA-0001", "https://hana.test/booking/pesanan/12", "BCA 123 a.n. PT Hana", "Booking seat Anda di Hana Tours"} {
+		"https://hana.test/pesanan/12", []BankInfo{{Bank: "BCA", Nomor: "123", AtasNama: "PT Hana"}})
+	for _, want := range []string{"HNA-0001", "https://hana.test/pesanan/12", "BCA 123 a.n. PT Hana", "Booking seat Anda di Hana Tours"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("isi email tanpa %q:\n%s", want, text)
 		}
@@ -46,7 +46,7 @@ func TestOrderCreatedMemuatKodeTautanDanIstilahBaku(t *testing.T) {
 		t.Fatalf("subjek: %q", subject)
 	}
 	for _, dilarang := range []string{"pesanan", "pemesanan", "kursi", "reservasi", "jemaah"} {
-		if strings.Contains(strings.ToLower(subject+strings.ReplaceAll(text, "/booking/pesanan/", "/")), dilarang) {
+		if strings.Contains(strings.ToLower(subject+strings.ReplaceAll(text, "/pesanan/", "/")), dilarang) {
 			t.Fatalf("memuat kata terlarang %q", dilarang)
 		}
 	}
