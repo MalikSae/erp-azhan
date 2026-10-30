@@ -28,6 +28,8 @@ const (
 	loginIPLimit       = 30 // gagal per 15 menit per IP
 	forgotKeyLimit     = 5  // per jam per IP+email
 	resendAccountLimit = 3  // per jam per akun
+	profileUpdateLimit = 10 // ubah data akun per jam per akun
+	passwordFailLimit  = 5  // password saat ini salah per 15 menit per akun
 	// Lupa password tidak memakai captcha (frontend tidak mengirim token), jadi dibatasi lebih
 	// ketat: per email (lintas IP) dan per IP (lintas email), selain per IP+email di atas.
 	forgotEmailLimit = 3  // per jam per brand+email
@@ -45,6 +47,8 @@ type Handler struct {
 	forgotEmail *shared.WindowLimiter
 	forgotIP    *shared.WindowLimiter
 	resend      *shared.WindowLimiter
+	profile     *shared.WindowLimiter
+	pwFail      *shared.WindowLimiter
 	dummyHash   []byte
 }
 
@@ -60,6 +64,8 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 		forgotEmail: shared.NewWindowLimiter(forgotEmailLimit, time.Hour),
 		forgotIP:    shared.NewWindowLimiter(forgotIPLimit, time.Hour),
 		resend:      shared.NewWindowLimiter(resendAccountLimit, time.Hour),
+		profile:     shared.NewWindowLimiter(profileUpdateLimit, time.Hour),
+		pwFail:      shared.NewWindowLimiter(passwordFailLimit, 15*time.Minute),
 		dummyHash:   dummy,
 	}
 }
@@ -94,6 +100,7 @@ type authResponse struct {
 const (
 	PathVerifikasiEmail   = "/booking/verifikasi-email"
 	PathAturUlangPassword = "/booking/atur-ulang-password"
+	PathLupaPassword      = "/booking/lupa-password"
 )
 
 // siteLink membentuk URL situs brand dari domain di database (bukan dari header request,
@@ -331,6 +338,120 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	a := FromContext(r.Context())
 	// Jenis kelamin diambil dari data jamaah akun (bila sudah pernah memesan) untuk mengisi checkout otomatis.
 	writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, a)})
+}
+
+type updateProfileRequest struct {
+	NamaLengkap string `json:"nama_lengkap"`
+	Email       string `json:"email"`
+	NoHP        string `json:"no_hp"`
+}
+
+// UpdateMe PATCH /api/account/me: ubah nama, email, dan nomor WhatsApp. Email baru wajib diverifikasi ulang.
+func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	acc := FromContext(r.Context())
+	var req updateProfileRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
+	req.Email = strings.TrimSpace(req.Email)
+	req.NoHP = strings.TrimSpace(req.NoHP)
+	switch {
+	case !ValidName(req.NamaLengkap):
+		writeError(w, http.StatusBadRequest, "nama lengkap wajib diisi (2–100 karakter; hanya huruf, spasi, titik, koma, apostrof, dan tanda hubung)")
+		return
+	case !ValidEmail(req.Email):
+		writeError(w, http.StatusBadRequest, "format email tidak valid")
+		return
+	case !ValidPhone(req.NoHP):
+		writeError(w, http.StatusBadRequest, "nomor WhatsApp harus 10–15 digit")
+		return
+	}
+	key := strconv.FormatInt(acc.ID, 10)
+	if !h.profile.Allow(key) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak perubahan data, coba lagi dalam 1 jam")
+		return
+	}
+	h.profile.Record(key)
+
+	emailChanged := NormalizeEmail(req.Email) != NormalizeEmail(acc.Email)
+	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP)
+	if errors.Is(err, ErrEmailTaken) {
+		writeError(w, http.StatusConflict, "email ini tidak dapat digunakan, coba email lain")
+		return
+	}
+	if errors.Is(err, ErrPhoneTaken) {
+		writeError(w, http.StatusConflict, "Nomor WhatsApp sudah dipakai akun lain. Gunakan nomor lain.")
+		return
+	}
+	if err != nil {
+		log.Printf("[ERROR] customer update profile: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		return
+	}
+	updated, err := h.repo.GetByID(r.Context(), acc.ID)
+	if err != nil {
+		log.Printf("[ERROR] customer reload profile: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		return
+	}
+	if emailChanged {
+		h.sendVerification(r.Context(), updated)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, updated)})
+}
+
+type changePasswordRequest struct {
+	PasswordSaatIni string `json:"password_saat_ini"`
+	PasswordBaru    string `json:"password_baru"`
+}
+
+// ChangePassword POST /api/account/password: ganti password dari dalam akun. Wajib menyebut password saat ini.
+// Sesi lain dicabut, sesi yang dipakai tetap aktif; pemilik akun diberi tahu lewat email.
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	acc := FromContext(r.Context())
+	var req changePasswordRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	key := strconv.FormatInt(acc.ID, 10)
+	if !h.pwFail.Allow(key) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		return
+	}
+	if len(req.PasswordSaatIni) > 72 || bcrypt.CompareHashAndPassword([]byte(acc.passwordHash), []byte(req.PasswordSaatIni)) != nil {
+		h.pwFail.Record(key)
+		writeError(w, http.StatusBadRequest, "password saat ini salah")
+		return
+	}
+	if ok, msg := ValidPassword(req.PasswordBaru); !ok {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if req.PasswordBaru == req.PasswordSaatIni {
+		writeError(w, http.StatusBadRequest, "password baru harus berbeda dari password saat ini")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.PasswordBaru), bcryptCost)
+	if err != nil {
+		log.Printf("[ERROR] customer hash: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		return
+	}
+	if err = h.repo.SetPassword(r.Context(), acc.ID, string(hash)); err != nil {
+		log.Printf("[ERROR] customer set password: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		return
+	}
+	if err = h.repo.RevokeOtherSessions(r.Context(), acc.ID, TokenFromContext(r.Context())); err != nil {
+		log.Printf("[ERROR] customer revoke sessions: %v", err)
+	}
+	h.pwFail.Reset(key)
+	if name, domain, err := h.repo.BrandSite(r.Context(), acc.BrandID); err == nil && domain != "" {
+		subject, text := mailer.PasswordChanged(name, acc.NamaLengkap, siteLink(domain, PathLupaPassword, nil))
+		h.sendAsync(mailer.Message{To: acc.Email, Subject: subject, Text: text})
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 type forgotRequest struct {

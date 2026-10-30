@@ -299,7 +299,7 @@ PR ERP ter-merge yang relevan: #7 (API v1 dan `/api/admin/me`), #8 (ketentuan pe
 
 ### 15.2 `azhan-booking` — Tahap 2: halaman publik Fase 1 (ter-merge)
 
-- Prefix `/booking` untuk masuk, daftar, akun, checkout, dan detail booking (`noindex`); alamat lama dialihkan 308. Rute detail booking tetap `/booking/pesanan/{id}` (hanya teks tampilan yang memakai istilah "booking").
+- Prefix `/booking` untuk masuk, daftar, lupa/atur ulang password, verifikasi email, dan checkout (`noindex`); alamat lama dialihkan 308. Akun dan booking berdiri di `/akun`, `/pesanan`, dan `/pesanan/{id}` (juga `noindex`; hanya teks tampilan yang memakai istilah "booking").
 - Rute paket `/paket/...` bergaya spek dari API v1, hub program dan destinasi, `sitemap.xml` dan `robots.txt` dinamis per host, JSON-LD (TravelAgency, Product+Offer, BreadcrumbList, FAQPage bila ada data).
 - Halaman publik sesuai Figma: beranda, daftar paket, hub, detail paket, kontak, dan `/jadwal-umroh`; tema per brand: **Hana marun, Alsha navy**. Figma terbaca dalam resolusi rendah, jadi **hex warna dan font Alsha adalah perkiraan** (judul Alsha memakai Lora; pita footer Alsha polos) dan harus diganti dengan aset resmi di `src/lib/theme.js` dan `src/app/globals.css`.
 - Keputusan URL dan SEO untuk go-live dirangkum di `azhan-booking/docs/deploy.md` bagian 7b (lastmod jujur, robots, meta unik, `priceValidUntil`).

@@ -64,7 +64,7 @@ func TestEmailBookingDikirimHanyaUntukBookingBaru(t *testing.T) {
 	if msg.To != "uji@example.com" {
 		t.Fatalf("tujuan: %q", msg.To)
 	}
-	for _, want := range []string{"HNA-0042", "https://hana.test/booking/pesanan/42", "Umroh Reguler", "1 Januari 2099", "Rp 30.000.000", "DP minimal Rp 5.000.000", "WIB", "BCA 123 a.n. PT Hana"} {
+	for _, want := range []string{"HNA-0042", "https://hana.test/pesanan/42", "Umroh Reguler", "1 Januari 2099", "Rp 30.000.000", "DP minimal Rp 5.000.000", "WIB", "BCA 123 a.n. PT Hana"} {
 		if !strings.Contains(msg.Text, want) {
 			t.Fatalf("email tanpa %q:\n%s", want, msg.Text)
 		}
@@ -110,7 +110,7 @@ func TestBuildBookingEmailBayarPenuhDanTanpaDomain(t *testing.T) {
 	t.Setenv("SITE_URL_TEMPLATE", "")
 	resp := &BookingResponse{Booking: BookingSummary{BookingID: 7, BookingCode: "K-7", TotalHarga: 1000000, MinimalDP: 1000000, SeatHoldExpiresAt: "2099-01-01T03:30:00Z"}}
 	msg, ok := buildBookingEmail("a@b.com", "Budi", &mailInfo{BrandName: "Hana", Domain: "hana.id", Paket: "P"}, resp)
-	if !ok || !strings.Contains(msg.Text, "Bayar penuh Rp 1.000.000") || !strings.Contains(msg.Text, "https://hana.id/booking/pesanan/7") || !strings.Contains(msg.Text, "1 Januari 2099 10:30 WIB") {
+	if !ok || !strings.Contains(msg.Text, "Bayar penuh Rp 1.000.000") || !strings.Contains(msg.Text, "https://hana.id/pesanan/7") || !strings.Contains(msg.Text, "1 Januari 2099 10:30 WIB") {
 		t.Fatalf("ok=%v\n%s", ok, msg.Text)
 	}
 	if _, ok := buildBookingEmail("a@b.com", "Budi", &mailInfo{BrandName: "Hana"}, resp); ok {

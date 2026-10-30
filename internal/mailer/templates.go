@@ -54,6 +54,22 @@ Jika Anda tidak merasa mendaftar, abaikan email ini.
 	return
 }
 
+// PasswordChanged memberi tahu pemilik akun bahwa password diubah dari dalam akun. link = halaman lupa password.
+func PasswordChanged(brandName, nama, link string) (subject, text string) {
+	brandName, nama, link = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(link, maxInlineTautan)
+	subject = "Password akun " + brandName + " diubah"
+	text = fmt.Sprintf(`Halo %s,
+
+Password akun Anda di %s baru saja diubah, dan perangkat lain yang masuk ke akun ini sudah dikeluarkan.
+
+Jika ini bukan Anda, atur ulang password sekarang lewat tautan berikut:
+
+%s
+
+%s`, nama, brandName, link, brandName)
+	return
+}
+
 func ResetPassword(brandName, nama, link string) (subject, text string) {
 	brandName, nama, link = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(link, maxInlineTautan)
 	subject = "Atur ulang password " + brandName
