@@ -41,6 +41,7 @@ type orderSummary struct {
 	SeatCount          int        `json:"seat_count"`
 	TotalHarga         float64    `json:"total_harga"`
 	MinimalDP          float64    `json:"minimal_dp"`
+	DPPerPax           float64    `json:"dp_per_pax"`
 	FullPayment        bool       `json:"full_payment"`
 	Terbayar           float64    `json:"terbayar"`
 	MenungguVerifikasi float64    `json:"menunggu_verifikasi"`
@@ -90,6 +91,7 @@ func scanOrder(row interface{ Scan(...any) error }) (*orderSummary, int, error) 
 	holdActive := blocked && (hold.Valid == false || hold.Time.After(now))
 	o.Expired = o.Status == "baru" && !holdActive
 	o.MinimalDP = o.TotalHarga
+	o.DPPerPax = dpPerPax
 	if !o.FullPayment {
 		o.MinimalDP = minFloat(o.TotalHarga, dpPerPax*float64(o.SeatCount))
 	}
