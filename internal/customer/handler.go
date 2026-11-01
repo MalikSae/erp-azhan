@@ -95,12 +95,11 @@ type authResponse struct {
 	SessionToken string   `json:"session_token,omitempty"`
 }
 
-// Alamat halaman pelanggan di situs brand (azhan-booking). Seluruh rute akun dan booking berada di bawah
-// prefix /booking; alamat lama tanpa prefix masih dialihkan situs untuk email yang sudah terkirim.
+// Alamat halaman pelanggan di situs brand (azhan-booking), langsung di akar situs (tanpa awalan).
 const (
-	PathVerifikasiEmail   = "/booking/verifikasi-email"
-	PathAturUlangPassword = "/booking/atur-ulang-password"
-	PathLupaPassword      = "/booking/lupa-password"
+	PathVerifikasiEmail   = "/verifikasi-email"
+	PathAturUlangPassword = "/atur-ulang-password"
+	PathLupaPassword      = "/lupa-password"
 )
 
 // siteLink membentuk URL situs brand dari domain di database (bukan dari header request,

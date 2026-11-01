@@ -55,16 +55,16 @@ func TestSiteLinkUsesConfiguredTemplate(t *testing.T) {
 	}
 }
 
-// Tautan email harus menunjuk ke rute akun di bawah prefix /booking (azhan-booking).
-func TestAlamatEmailDiBawahPrefixBooking(t *testing.T) {
+// Tautan email harus menunjuk ke rute pelanggan di akar situs brand (azhan-booking), tanpa awalan /booking.
+func TestAlamatEmailDiAkarSitus(t *testing.T) {
 	t.Setenv("SITE_URL_TEMPLATE", "http://{domain}:3100")
-	for _, p := range []string{PathVerifikasiEmail, PathAturUlangPassword} {
-		if !strings.HasPrefix(p, "/booking/") {
-			t.Errorf("%s harus di bawah /booking/", p)
+	for _, p := range []string{PathVerifikasiEmail, PathAturUlangPassword, PathLupaPassword} {
+		if strings.HasPrefix(p, "/booking") {
+			t.Errorf("%s tidak boleh memakai awalan /booking", p)
 		}
 	}
 	got := siteLink("hana.azhan.test", PathVerifikasiEmail, map[string][]string{"token": {"abc"}})
-	if got != "http://hana.azhan.test:3100/booking/verifikasi-email?token=abc" {
+	if got != "http://hana.azhan.test:3100/verifikasi-email?token=abc" {
 		t.Errorf("siteLink = %q", got)
 	}
 }
