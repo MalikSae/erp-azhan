@@ -147,7 +147,7 @@ Mengikuti spek SEO (§5 Spec v2.3-A). Hanya Umroh pada Fase 1.
 /paket/umroh/bulan/{periode}/       Landing bulan (Approved saja)
 /jadwal-umroh/                      Jadwal; filter bulan tanpa URL baru
 /kontak/
-/booking/...                        Booking, checkout, pesanan, akun, masuk/daftar (noindex)
+/masuk /daftar /checkout /akun /pesanan ...   Halaman pelanggan: masuk/daftar, checkout, akun, booking (noindex)
 ```
 
 Aturan: filter dan pencarian tidak membuat URL (tanpa `?q=`, `?bulan=`); tidak ada landing lokasi; tidak ada kombinasi bulan+lokasi. Router pencarian: paket persis → periode → hub → no match (URL tidak berubah). Rute lama `/paket/{id}` numerik dialihkan 301 ke slug.
@@ -196,7 +196,7 @@ Tahap 2 dan 3 berjalan beriringan. Sebelum CMS ada, slug dibangkitkan dari pola 
 ## 10. Pengujian
 
 - ERP: tes API v1 (filter, paginasi, `registration_status` di batas ambang, `visibility: gone`), migrasi atribut, izin `cms.*`.
-- `azhan-booking`: slug → paket, 301/410, sitemap hanya berisi URL yang layak, canonical, JSON-LD valid, `noindex` pada `/booking/*` dan `cms.*`.
+- `azhan-booking`: slug → paket, 301/410, sitemap hanya berisi URL yang layak, canonical, JSON-LD valid, `noindex` pada halaman pelanggan (`/masuk`, `/akun`, `/pesanan`, `/checkout`, dst.) dan `cms.*`.
 - CMS: keunikan slug, riwayat slug tanpa chain, landing tak terdaftar → 404, auto-create paket baru.
 - Aturan repo: komit hanya atas perintah pemilik proyek.
 
@@ -299,7 +299,7 @@ PR ERP ter-merge yang relevan: #7 (API v1 dan `/api/admin/me`), #8 (ketentuan pe
 
 ### 15.2 `azhan-booking` — Tahap 2: halaman publik Fase 1 (ter-merge)
 
-- Prefix `/booking` untuk masuk, daftar, lupa/atur ulang password, verifikasi email, dan checkout (`noindex`); alamat lama dialihkan 308. Akun dan booking berdiri di `/akun`, `/pesanan`, dan `/pesanan/{id}` (juga `noindex`; hanya teks tampilan yang memakai istilah "booking").
+- Halaman pelanggan (masuk, daftar, lupa/atur ulang password, verifikasi email, checkout, akun, dan booking) berdiri langsung di akar situs: `/masuk`, `/daftar`, `/checkout`, `/akun`, `/pesanan`, dan `/pesanan/{id}` (semuanya `noindex`; hanya teks tampilan yang memakai istilah "booking").
 - Rute paket `/paket/...` bergaya spek dari API v1, hub program dan destinasi, `sitemap.xml` dan `robots.txt` dinamis per host, JSON-LD (TravelAgency, Product+Offer, BreadcrumbList, FAQPage bila ada data).
 - Halaman publik sesuai Figma: beranda, daftar paket, hub, detail paket, kontak, dan `/jadwal-umroh`; tema per brand: **Hana marun, Alsha navy**. Figma terbaca dalam resolusi rendah, jadi **hex warna dan font Alsha adalah perkiraan** (judul Alsha memakai Lora; pita footer Alsha polos) dan harus diganti dengan aset resmi di `src/lib/theme.js` dan `src/app/globals.css`.
 - Keputusan URL dan SEO untuk go-live dirangkum di `azhan-booking/docs/deploy.md` bagian 7b (lastmod jujur, robots, meta unik, `priceValidUntil`).
