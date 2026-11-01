@@ -101,7 +101,7 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	}
 	req.SyaratKetentuanAgen = sanitizeString(req.SyaratKetentuanAgen)
 	if req.BatasPelunasanHari == 0 {
-		req.BatasPelunasanHari = 45
+		req.BatasPelunasanHari = 30
 	}
 	if req.BatasPelunasanHari < 1 || req.BatasPelunasanHari > 365 {
 		writeError(w, http.StatusBadRequest, "batas_pelunasan_hari harus antara 1 dan 365")
@@ -229,7 +229,7 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	}
 	req.SyaratKetentuanAgen = sanitizeString(req.SyaratKetentuanAgen)
 	if req.BatasPelunasanHari == 0 {
-		req.BatasPelunasanHari = 45
+		req.BatasPelunasanHari = 30
 	}
 	if req.BatasPelunasanHari < 1 || req.BatasPelunasanHari > 365 {
 		writeError(w, http.StatusBadRequest, "batas_pelunasan_hari harus antara 1 dan 365")
