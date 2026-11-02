@@ -31,7 +31,7 @@ func TestKotaSurat(t *testing.T) {
 }
 
 func TestNamaBerkas(t *testing.T) {
-	if got := NamaBerkas(JenisKeteranganUmroh, "Syahid  Malik, S.Kom"); got != "Surat-Keterangan-Umroh-Syahid-Malik-SKom.pdf" {
+	if got := NamaBerkas(JenisKeteranganUmroh, "Syahid  Malik, S.Kom"); got != "Surat-Cuti-Syahid-Malik-SKom.pdf" {
 		t.Fatalf("nama berkas: %q", got)
 	}
 	if got := NamaBerkas(JenisRekomPaspor, "###"); got != "Surat-Rekomendasi-Paspor-jamaah.pdf" {

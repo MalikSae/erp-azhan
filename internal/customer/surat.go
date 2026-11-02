@@ -100,7 +100,7 @@ func evaluasiSurat(o *orderSummary, d *dataJamaah, pengaturanLengkap bool, nomor
 	}
 	out := make([]suratItem, 0, len(jenis))
 	for _, j := range jenis {
-		it := suratItem{Slug: slugJenis(j), Jenis: j, Label: surat.JudulJenis(j), Nomor: nomor[fmt.Sprintf("%d|%s", d.JamaahID, j)]}
+		it := suratItem{Slug: slugJenis(j), Jenis: j, Label: surat.LabelJenis(j), Nomor: nomor[fmt.Sprintf("%d|%s", d.JamaahID, j)]}
 		switch kurang := kurangData(d); {
 		case o.Tab == "batal":
 			it.Alasan = "Booking tidak aktif."

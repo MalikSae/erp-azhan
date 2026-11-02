@@ -44,6 +44,14 @@ func JudulJenis(jenis string) string {
 	return ""
 }
 
+// LabelJenis adalah nama surat yang dilihat jamaah di daftar surat dan nama berkas ("Surat Cuti"); judul di kepala surat tetap JudulJenis.
+func LabelJenis(jenis string) string {
+	if jenis == JenisKeteranganUmroh {
+		return "Surat Cuti"
+	}
+	return JudulJenis(jenis)
+}
+
 // FormatNomor menyusun nomor surat: urut/KODE/JENIS/BULAN-ROMAWI/TAHUN, mis. 100808/HAW/SKU/XI/2026.
 func FormatNomor(urut uint32, kode, jenis string, terbit time.Time) string {
 	return fmt.Sprintf("%d/%s/%s/%s/%d", urut, strings.ToUpper(strings.TrimSpace(kode)), KodeJenis(jenis), bulanRomawi[terbit.Month()-1], terbit.Year())
@@ -77,5 +85,5 @@ func NamaBerkas(jenis, namaJamaah string) string {
 	if nama == "" {
 		nama = "jamaah"
 	}
-	return strings.ReplaceAll(JudulJenis(jenis), " ", "-") + "-" + nama + ".pdf"
+	return strings.ReplaceAll(LabelJenis(jenis), " ", "-") + "-" + nama + ".pdf"
 }
