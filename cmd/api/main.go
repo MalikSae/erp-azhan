@@ -25,6 +25,7 @@ import (
 	"erp-azhan/api/internal/bankaccount"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
+	"erp-azhan/api/internal/surat"
 	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/crmdeal"
 	"erp-azhan/api/internal/customer"
@@ -152,6 +153,7 @@ func main() {
 
 	brandRepo := brand.NewRepository(db)
 	brandHandler := brand.NewHandler(brandRepo)
+	suratHandler := surat.NewHandler(surat.NewRepository(db))
 	bankAccountRepo := bankaccount.NewRepository(db)
 	bankAccountHandler := bankaccount.NewHandler(bankAccountRepo)
 
@@ -256,6 +258,8 @@ func main() {
 		r.Post("/bookings/{id}/dokumen", customerOrders.KirimDokumen)
 		r.Get("/bookings/{id}/progress", customerOrders.Progress)
 		r.Get("/bookings/{id}/jamaah", customerOrders.DataJamaah)
+		r.Get("/bookings/{id}/surat", customerOrders.SuratDaftar)
+		r.Get("/bookings/{id}/surat/{jenis}", customerOrders.SuratUnduh)
 		r.Put("/bookings/{id}/jamaah/{jamaah_id}", customerOrders.SimpanDataJamaah)
 		r.Get("/bookings/{id}/payments", customerOrders.ListPayments)
 		r.Post("/bookings/{id}/payments", customerOrders.CreatePayment)
@@ -327,6 +331,8 @@ func main() {
 		r.Route("/brands", func(r chi.Router) {
 			r.With(identity.RequirePermission("brand.view")).Get("/", brandHandler.ListBrands)
 			r.With(identity.RequirePermission("brand.view")).Get("/{id}", brandHandler.GetBrand)
+			r.With(identity.RequirePermission("brand.view")).Get("/{id}/surat", suratHandler.Get)
+			r.With(identity.RequirePermission("brand.edit")).Put("/{id}/surat", suratHandler.Put)
 			r.With(identity.RequirePermission("brand.edit")).Post("/", brandHandler.CreateBrand)
 			r.With(identity.RequirePermission("brand.edit")).Put("/{id}", brandHandler.UpdateBrand)
 			r.With(identity.RequirePermission("brand.edit")).Delete("/{id}", brandHandler.DeleteBrand)

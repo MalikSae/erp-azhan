@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import PageHeader from 'shared/ui/PageHeader';
 import { FormTabs, FormSection } from 'shared/ui/FormLayout';
 import BrandBankAccounts from '../components/BrandBankAccounts';
+import BrandSurat from '../components/BrandSurat';
 import FormField from 'shared/ui/FormField';
 import Input from 'shared/ui/Input';
 import FileInput from 'shared/ui/FileInput';
@@ -26,6 +27,7 @@ const SECTION_LINKS = [
   { id: 'sec-sk', label: 'S&K Booking' },
   { id: 'sec-agen', label: 'Aturan Agen' },
   { id: 'sec-rekening', label: 'Rekening Bank' },
+  { id: 'sec-surat', label: 'Surat Jamaah' },
 ];
 
 const initialFormData = {
@@ -747,6 +749,12 @@ const BrandFormPage = () => {
 
           <FormSection id="sec-rekening" title="Rekening Bank">
             <BrandBankAccounts brandId={id} />
+          </FormSection>
+
+          <FormSection id="sec-surat" title="Surat Jamaah">
+            {isEditMode
+              ? <BrandSurat brandId={id} />
+              : <p className="text-sm text-neutral-500">Simpan brand terlebih dahulu, lalu atur kop, tanda tangan, dan penomoran surat di sini.</p>}
           </FormSection>
         </FormTabs>
       </form>
