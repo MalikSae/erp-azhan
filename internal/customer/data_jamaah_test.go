@@ -10,8 +10,8 @@ func TestKelengkapanDataJamaah(t *testing.T) {
 	}
 	inf := dataJamaah{PaxType: "infant"}
 	inf.hitungKelengkapan()
-	if inf.Total != 8 {
-		t.Fatalf("infant tanpa kontak darurat: total %d, want 8", inf.Total)
+	if inf.Total != 7 {
+		t.Fatalf("infant tanpa kontak darurat dan WhatsApp: total %d, want 7", inf.Total)
 	}
 }
 
