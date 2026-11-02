@@ -159,6 +159,12 @@ type paxView struct {
 	Status   string  `json:"status"`
 }
 
+// discountView: diskon atau cashback yang dipotong dari total booking (booking_discounts), ditampilkan di rincian booking.
+type discountView struct {
+	Nama    string  `json:"nama"`
+	Nominal float64 `json:"nominal"`
+}
+
 type bankView struct {
 	ID            int64   `json:"id"`
 	BankName      string  `json:"bank_name"`
@@ -236,6 +242,17 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	discounts := []discountView{}
+	drows, err := o.db.QueryContext(r.Context(), `SELECT nama, nominal FROM booking_discounts WHERE booking_id=? ORDER BY id`, id)
+	if err == nil {
+		defer drows.Close()
+		for drows.Next() {
+			var d discountView
+			if drows.Scan(&d.Nama, &d.Nominal) == nil {
+				discounts = append(discounts, d)
+			}
+		}
+	}
 	payments, err := o.paymentRepo.ListByBookingID(r.Context(), id, nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil riwayat pembayaran")
@@ -249,7 +266,7 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil rekening")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": order, "pax": pax, "payments": payments, "bank_accounts": banks})
+	writeJSON(w, http.StatusOK, map[string]any{"order": order, "pax": pax, "discounts": discounts, "payments": payments, "bank_accounts": banks})
 }
 
 // Cancel POST /api/account/bookings/{id}/cancel: hanya sebelum ada pembayaran tercatat.
