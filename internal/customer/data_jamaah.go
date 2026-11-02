@@ -46,7 +46,8 @@ type dataJamaah struct {
 	Kurang              []string `json:"kurang"`
 }
 
-// Data wajib untuk kelengkapan (kunci JSON -> label tampil). Infant tidak wajib kontak darurat.
+// Data wajib untuk kelengkapan (kunci JSON -> label tampil), sengaja seminim mungkin agar tidak membebani jamaah. Infant tidak wajib kontak darurat
+// dan nomor WhatsApp (bayi tidak punya nomor sendiri; kontak ada di pemesan). Tanda * di formulir jamaah mengikuti daftar ini.
 var dataWajibJamaah = []struct{ key, label string }{
 	{"tempat_lahir", "Tempat lahir"},
 	{"tanggal_lahir", "Tanggal lahir"},
@@ -91,7 +92,7 @@ func (d *dataJamaah) hitungKelengkapan() {
 	d.Kurang = []string{}
 	d.Total, d.Terisi = 0, 0
 	for _, f := range dataWajibJamaah {
-		if d.PaxType == "infant" && strings.HasPrefix(f.key, "emergency_") {
+		if d.PaxType == "infant" && (strings.HasPrefix(f.key, "emergency_") || f.key == "no_hp") {
 			continue
 		}
 		d.Total++
