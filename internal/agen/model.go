@@ -17,6 +17,10 @@ var (
 	ErrPembayaranBukanMenunggu = errors.New("hanya pembayaran berstatus menunggu verifikasi yang bisa ditolak")
 	ErrSiklusDitutup           = errors.New("pengajuan keagenan ini sudah ditolak, silakan ajukan ulang dari awal")
 	ErrTidakAdaPengajuan       = errors.New("belum ada pengajuan agen")
+	ErrAksiTidakValid          = errors.New("aksi keputusan tidak dikenal")
+	ErrCatatanWajib            = errors.New("catatan wajib diisi untuk aksi ini")
+	ErrKeputusanTidakBisa      = errors.New("aksi ini tidak bisa dilakukan pada status pengajuan saat ini")
+	ErrBuktiBelumAda           = errors.New("bukti transfer belum diunggah, pilih bebaskan biaya, setujui bayar menyusul, atau minta unggah ulang")
 )
 
 // Pembayaran pendaftaran agen satu siklus pengajuan (7.10) beserta riwayat
@@ -31,6 +35,7 @@ type Pembayaran struct {
 	KeputusanAgen     string     `json:"keputusan_agen"`
 	KeputusanAgenAt   *time.Time `json:"keputusan_agen_at"`
 	AlasanDitolakAgen *string    `json:"alasan_ditolak_agen"`
+	CatatanAdmin      *string    `json:"catatan_admin"`
 	CreatedAt         time.Time  `json:"created_at"`
 	Uploads           []Upload   `json:"uploads"`
 }

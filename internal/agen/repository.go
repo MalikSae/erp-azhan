@@ -395,10 +395,10 @@ func latestPembayaran(ctx context.Context, q querier, akunID int64) (*Pembayaran
 	var p Pembayaran
 	err := q.QueryRowContext(ctx, `
 		SELECT id, nominal_tagihan, status, bukti_transfer_url, catatan_penolakan, diverifikasi_at,
-		       keputusan_agen, keputusan_agen_at, alasan_ditolak_agen, created_at
+		       keputusan_agen, keputusan_agen_at, alasan_ditolak_agen, catatan_admin, created_at
 		FROM pembayaran_pendaftaran_agen WHERE akun_id = ? ORDER BY id DESC LIMIT 1`, akunID).
 		Scan(&p.ID, &p.NominalTagihan, &p.Status, &p.BuktiTransferURL, &p.CatatanPenolakan, &p.DiverifikasiAt,
-			&p.KeputusanAgen, &p.KeputusanAgenAt, &p.AlasanDitolakAgen, &p.CreatedAt)
+			&p.KeputusanAgen, &p.KeputusanAgenAt, &p.AlasanDitolakAgen, &p.CatatanAdmin, &p.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

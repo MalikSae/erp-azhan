@@ -375,7 +375,7 @@ func listPencairan(ctx context.Context, q querier, akunID int64) ([]Pencairan, e
 func listSiklus(ctx context.Context, q querier, akunID int64) ([]Pembayaran, error) {
 	rows, err := q.QueryContext(ctx, `
 		SELECT id, nominal_tagihan, status, bukti_transfer_url, catatan_penolakan, diverifikasi_at,
-		       keputusan_agen, keputusan_agen_at, alasan_ditolak_agen, created_at
+		       keputusan_agen, keputusan_agen_at, alasan_ditolak_agen, catatan_admin, created_at
 		FROM pembayaran_pendaftaran_agen WHERE akun_id = ? ORDER BY id DESC`, akunID)
 	if err != nil {
 		return nil, fmt.Errorf("agen: list siklus: %w", err)
@@ -385,7 +385,7 @@ func listSiklus(ctx context.Context, q querier, akunID int64) ([]Pembayaran, err
 	for rows.Next() {
 		var p Pembayaran
 		if err := rows.Scan(&p.ID, &p.NominalTagihan, &p.Status, &p.BuktiTransferURL, &p.CatatanPenolakan, &p.DiverifikasiAt,
-			&p.KeputusanAgen, &p.KeputusanAgenAt, &p.AlasanDitolakAgen, &p.CreatedAt); err != nil {
+			&p.KeputusanAgen, &p.KeputusanAgenAt, &p.AlasanDitolakAgen, &p.CatatanAdmin, &p.CreatedAt); err != nil {
 			return nil, fmt.Errorf("agen: scan siklus: %w", err)
 		}
 		p.Uploads = []Upload{}
