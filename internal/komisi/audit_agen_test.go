@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
-// Audit probes intentionally demonstrate current behavior; PASS confirms the
-// finding, not correctness. Fixtures are rolled back by testdb.Tx.
+// Dua probe pertama mendokumentasikan perilaku yang diaudit; PASS berarti temuan itu
+// terkonfirmasi, bukan berarti perilakunya benar. Fixtures are rolled back by testdb.Tx.
 func TestAuditAgenSkippedCommissionAppearsAfterReactivation(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	schedule, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{KomisiLangsung: rp(1000000), BerangkatTanggal: "2099-01-01"})
-	agent := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Audit Agent", StatusAgen: "nonaktif"})
+	agent := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Audit Agent", StatusAgen: "nonaktif"})
 	pax := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Audit Pax", Direkrut: agent})
 	booking, _ := testdb.NewBookingPax(t, tx, schedule, "dp", 20000000, testdb.Pax{JamaahID: pax})
 	lunas(t, tx, booking)
@@ -20,7 +20,7 @@ func TestAuditAgenSkippedCommissionAppearsAfterReactivation(t *testing.T) {
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM transaksi_komisi WHERE booking_id=?`, booking).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	testdb.Exec(t, tx, `UPDATE jamaah SET status_agen='aktif' WHERE id=?`, agent)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET status_agen='aktif' WHERE id=?`, agent)
 	testdb.Exec(t, tx, `UPDATE bookings SET status='dp' WHERE id=?`, booking)
 	lunas(t, tx, booking)
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM transaksi_komisi WHERE booking_id=?`, booking).Scan(&after); err != nil {
@@ -34,12 +34,16 @@ func TestAuditAgenSkippedCommissionAppearsAfterReactivation(t *testing.T) {
 
 func TestAuditAgenRepeatChangesAfterHistoricalPaxCancellation(t *testing.T) {
 	_, tx := testdb.Tx(t)
+	// Cabang repeat dimatikan di tahap awal; probe ini mendokumentasikan perilaku cabang itu bila dinyalakan lagi.
+	nyalakanRepeatCashback(t)
 	schedule, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{KomisiLangsung: rp(1000000), BerangkatTanggal: "2099-01-01"})
-	agent := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Audit Agent", StatusAgen: "aktif"})
+	agent := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Audit Agent", StatusAgen: "aktif"})
 	pax := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Audit Repeat", Direkrut: agent})
 	old, _ := testdb.NewBookingPax(t, tx, schedule, "dp", 20000000, testdb.Pax{JamaahID: pax})
 	lunas(t, tx, old)
 	current, _ := testdb.NewBookingPax(t, tx, schedule, "dp", 20000000, testdb.Pax{JamaahID: pax})
+	pemesan := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Audit Pemesan"})
+	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, pemesan, current)
 	lunas(t, tx, current)
 	var before, after float64
 	if err := tx.QueryRow(`SELECT SUM(nominal) FROM transaksi_komisi WHERE booking_id=?`, current).Scan(&before); err != nil {
@@ -57,10 +61,12 @@ func TestAuditAgenRepeatChangesAfterHistoricalPaxCancellation(t *testing.T) {
 	t.Logf("CONFIRMED: same booking ledger grows from Rp%.0f to Rp%.0f after historical pax cancellation", before, after)
 }
 
-func TestAuditAgenCancelledSourceStillBecomesWithdrawable(t *testing.T) {
+// Komisi yang sudah tercatat tetap menjadi hak agen walau booking atau pax dibatalkan setelah lunas (K20, spek 5.1):
+// tidak ada pembalikan komisi. Secara bisnis tidak ada refund penuh, jadi komisi tercatat tidak menjadi beban travel.
+func TestKomisiTercatatTetapMenjadiSaldoTersediaSetelahBookingBatal(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	schedule, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{KomisiLangsung: rp(1000000), BerangkatTanggal: "2099-01-01"})
-	agent := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Audit Agent", StatusAgen: "aktif"})
+	agent := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Audit Agent", StatusAgen: "aktif"})
 	pax := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Audit Cancel", Direkrut: agent})
 	booking, _ := testdb.NewBookingPax(t, tx, schedule, "dp", 20000000, testdb.Pax{JamaahID: pax})
 	lunas(t, tx, booking)
@@ -72,7 +78,11 @@ func TestAuditAgenCancelledSourceStillBecomesWithdrawable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if saldo.Tersedia != 1000000 {
-		t.Fatalf("probe changed: %v", saldo.Tersedia)
+		t.Fatalf("saldo tersedia = %v, want 1000000: komisi yang sudah tercatat tidak boleh dibalik saat booking batal", saldo.Tersedia)
 	}
-	t.Logf("CONFIRMED BUSINESS RISK: cancelled booking/pax still yields available balance Rp%.0f", saldo.Tersedia)
+	var baris int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM transaksi_komisi WHERE booking_id=?`, booking).Scan(&baris); err != nil || baris != 1 {
+		t.Fatalf("baris komisi setelah batal = %d (err %v), want 1", baris, err)
+	}
+	t.Logf("komisi Rp%.0f tetap menjadi saldo tersedia setelah booking batal (disengaja)", saldo.Tersedia)
 }

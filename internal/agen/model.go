@@ -11,12 +11,16 @@ import (
 var (
 	ErrNotFound                = errors.New("data tidak ditemukan")
 	ErrSudahMengajukan         = errors.New("anda sudah terdaftar atau sedang mengajukan sebagai agen")
-	ErrBukanPengajuan          = errors.New("jamaah ini tidak sedang mengajukan keagenan")
+	ErrBukanPengajuan          = errors.New("akun ini tidak sedang mengajukan keagenan")
 	ErrStatusTidakValid        = errors.New("status agen hanya bisa diubah antara aktif dan nonaktif")
-	ErrPembayaranFinal         = errors.New("pembayaran pendaftaran sudah terverifikasi")
+	ErrPembayaranFinal         = errors.New("pembayaran pendaftaran sudah terverifikasi atau dibebaskan")
 	ErrPembayaranBukanMenunggu = errors.New("hanya pembayaran berstatus menunggu verifikasi yang bisa ditolak")
 	ErrSiklusDitutup           = errors.New("pengajuan keagenan ini sudah ditolak, silakan ajukan ulang dari awal")
 	ErrTidakAdaPengajuan       = errors.New("belum ada pengajuan agen")
+	ErrAksiTidakValid          = errors.New("aksi keputusan tidak dikenal")
+	ErrCatatanWajib            = errors.New("catatan wajib diisi untuk aksi ini")
+	ErrKeputusanTidakBisa      = errors.New("aksi ini tidak bisa dilakukan pada status pengajuan saat ini")
+	ErrBuktiBelumAda           = errors.New("bukti transfer belum diunggah, pilih bebaskan biaya, setujui bayar menyusul, atau minta unggah ulang")
 )
 
 // Pembayaran pendaftaran agen satu siklus pengajuan (7.10) beserta riwayat
@@ -31,6 +35,7 @@ type Pembayaran struct {
 	KeputusanAgen     string     `json:"keputusan_agen"`
 	KeputusanAgenAt   *time.Time `json:"keputusan_agen_at"`
 	AlasanDitolakAgen *string    `json:"alasan_ditolak_agen"`
+	CatatanAdmin      *string    `json:"catatan_admin"`
 	CreatedAt         time.Time  `json:"created_at"`
 	Uploads           []Upload   `json:"uploads"`
 }
@@ -42,7 +47,7 @@ type Upload struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
-// StatusPortal adalah state Syiar milik jamaah yang login (screen A1–A4).
+// StatusPortal adalah state Syiar milik akun yang login (screen A1–A4).
 type StatusPortal struct {
 	StatusAgen           string      `json:"status_agen"`
 	KodeReferral         *string     `json:"kode_referral"`
@@ -56,8 +61,7 @@ type StatusPortal struct {
 
 // Pengajuan adalah satu baris antrian Persetujuan Agen (screen B1).
 type Pengajuan struct {
-	JamaahID     int64       `json:"jamaah_id"`
-	IDJamaah     string      `json:"id_jamaah"`
+	AkunID       int64       `json:"akun_id"`
 	BrandID      int64       `json:"brand_id"`
 	NamaLengkap  string      `json:"nama_lengkap"`
 	NoHP         *string     `json:"no_hp"`

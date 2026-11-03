@@ -55,7 +55,7 @@ type PencairanRiwayat struct {
 // PencairanAdmin adalah satu baris antrian C1.
 type PencairanAdmin struct {
 	PencairanRiwayat
-	JamaahAgenID   int64     `json:"jamaah_agen_id"`
+	AkunAgenID     int64     `json:"akun_agen_id"`
 	NamaAgen       string    `json:"nama_agen"`
 	KodeReferral   *string   `json:"kode_referral"`
 	BrandID        int64     `json:"brand_id"`
@@ -112,7 +112,7 @@ func getPencairanPortal(ctx context.Context, q querier, agenID int64) (*Pencaira
 	p.Minimal = MinimalPencairan
 	var bank, nomor, atas sql.NullString
 	if err := q.QueryRowContext(ctx,
-		`SELECT rekening_bank_agen, rekening_nomor_agen, rekening_atas_nama_agen FROM jamaah WHERE id = ?`, agenID).
+		`SELECT rekening_bank_agen, rekening_nomor_agen, rekening_atas_nama_agen FROM customer_accounts WHERE id = ?`, agenID).
 		Scan(&bank, &nomor, &atas); err != nil {
 		return nil, fmt.Errorf("agen: rekening agen: %w", err)
 	}
@@ -121,7 +121,7 @@ func getPencairanPortal(ctx context.Context, q querier, agenID int64) (*Pencaira
 	if p.Saldo, err = komisi.HitungSaldo(ctx, q, agenID); err != nil {
 		return nil, err
 	}
-	if p.Riwayat, err = listPencairanRiwayat(ctx, q, "jamaah_agen_id = ?", agenID); err != nil {
+	if p.Riwayat, err = listPencairanRiwayat(ctx, q, "akun_agen_id = ?", agenID); err != nil {
 		return nil, err
 	}
 	for _, r := range p.Riwayat {
@@ -140,7 +140,7 @@ func ajukanPencairanTx(ctx context.Context, tx *sql.Tx, agenID int64, req Ajukan
 	}
 	var status string
 	var brandID int64
-	err := tx.QueryRowContext(ctx, `SELECT status_agen, brand_id FROM jamaah WHERE id = ? FOR UPDATE`, agenID).Scan(&status, &brandID)
+	err := tx.QueryRowContext(ctx, `SELECT status_agen, brand_id FROM customer_accounts WHERE id = ? FOR UPDATE`, agenID).Scan(&status, &brandID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
 	}
@@ -152,7 +152,7 @@ func ajukanPencairanTx(ctx context.Context, tx *sql.Tx, agenID int64, req Ajukan
 	}
 	var pending int
 	if err := tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM pengajuan_pencairan WHERE jamaah_agen_id = ? AND status = 'pending'`, agenID).Scan(&pending); err != nil {
+		`SELECT COUNT(*) FROM pengajuan_pencairan WHERE akun_agen_id = ? AND status = 'pending'`, agenID).Scan(&pending); err != nil {
 		return 0, fmt.Errorf("agen: cek pending: %w", err)
 	}
 	if pending > 0 {
@@ -166,12 +166,12 @@ func ajukanPencairanTx(ctx context.Context, tx *sql.Tx, agenID int64, req Ajukan
 		return 0, ErrPencairanMelebihi
 	}
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE jamaah SET rekening_bank_agen = ?, rekening_nomor_agen = ?, rekening_atas_nama_agen = ? WHERE id = ?`,
+		UPDATE customer_accounts SET rekening_bank_agen = ?, rekening_nomor_agen = ?, rekening_atas_nama_agen = ? WHERE id = ?`,
 		req.Bank, req.Nomor, req.AtasNama, agenID); err != nil {
 		return 0, fmt.Errorf("agen: simpan rekening: %w", err)
 	}
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO pengajuan_pencairan (brand_id, jamaah_agen_id, nominal_diajukan, rekening_bank, rekening_nomor, rekening_atas_nama)
+		INSERT INTO pengajuan_pencairan (brand_id, akun_agen_id, nominal_diajukan, rekening_bank, rekening_nomor, rekening_atas_nama)
 		VALUES (?, ?, ?, ?, ?, ?)`, brandID, agenID, req.Nominal, req.Bank, req.Nomor, req.AtasNama)
 	if err != nil {
 		return 0, fmt.Errorf("agen: insert pencairan: %w", err)
@@ -182,7 +182,7 @@ func ajukanPencairanTx(ctx context.Context, tx *sql.Tx, agenID int64, req Ajukan
 // lockPencairan mengunci pengajuan pending beserta baris agennya.
 func lockPencairan(ctx context.Context, tx *sql.Tx, id int64) (agenID int64, err error) {
 	var status string
-	err = tx.QueryRowContext(ctx, `SELECT jamaah_agen_id, status FROM pengajuan_pencairan WHERE id = ? FOR UPDATE`, id).Scan(&agenID, &status)
+	err = tx.QueryRowContext(ctx, `SELECT akun_agen_id, status FROM pengajuan_pencairan WHERE id = ? FOR UPDATE`, id).Scan(&agenID, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
 	}
@@ -192,7 +192,7 @@ func lockPencairan(ctx context.Context, tx *sql.Tx, id int64) (agenID int64, err
 	if status != "pending" {
 		return 0, ErrPencairanBukanPending
 	}
-	if _, err := tx.ExecContext(ctx, `SELECT id FROM jamaah WHERE id = ? FOR UPDATE`, agenID); err != nil {
+	if _, err := tx.ExecContext(ctx, `SELECT id FROM customer_accounts WHERE id = ? FOR UPDATE`, agenID); err != nil {
 		return 0, fmt.Errorf("agen: kunci agen: %w", err)
 	}
 	return agenID, nil
@@ -238,9 +238,9 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 	query := `
 		SELECT p.id, p.nominal_diajukan, p.status, p.diajukan_at, p.diproses_at, p.catatan_penolakan,
 		       p.rekening_bank, p.rekening_nomor, p.rekening_atas_nama, p.bukti_transfer_keluar_url IS NOT NULL,
-		       p.jamaah_agen_id, j.nama_lengkap, j.kode_referral, p.brand_id, b.name, COALESCE(au.display_name, au.email), p.bukti_transfer_keluar_url
+		       p.akun_agen_id, j.nama_lengkap, j.kode_referral, p.brand_id, b.name, COALESCE(au.display_name, au.email), p.bukti_transfer_keluar_url
 		FROM pengajuan_pencairan p
-		JOIN jamaah j ON j.id = p.jamaah_agen_id
+		JOIN customer_accounts j ON j.id = p.akun_agen_id
 		JOIN brands b ON b.id = p.brand_id
 		LEFT JOIN admin_users au ON au.id = p.diproses_oleh
 		WHERE 1=1`
@@ -263,7 +263,7 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 		var p PencairanAdmin
 		if err := rows.Scan(&p.ID, &p.NominalDiajukan, &p.Status, &p.DiajukanAt, &p.DiprosesAt, &p.CatatanPenolakan,
 			&p.Bank, &p.Nomor, &p.AtasNama, &p.PunyaBukti,
-			&p.JamaahAgenID, &p.NamaAgen, &p.KodeReferral, &p.BrandID, &p.BrandName, &p.DiprosesOlehNm, &p.BuktiURL); err != nil {
+			&p.AkunAgenID, &p.NamaAgen, &p.KodeReferral, &p.BrandID, &p.BrandName, &p.DiprosesOlehNm, &p.BuktiURL); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("agen: scan pencairan admin: %w", err)
 		}
@@ -278,7 +278,7 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 		if items[i].Status != "pending" {
 			continue
 		}
-		s, err := komisi.HitungSaldo(ctx, q, items[i].JamaahAgenID)
+		s, err := komisi.HitungSaldo(ctx, q, items[i].AkunAgenID)
 		if err != nil {
 			return nil, err
 		}
@@ -293,7 +293,7 @@ func buktiPencairan(ctx context.Context, q querier, id, agenID int64) (string, e
 	query := `SELECT bukti_transfer_keluar_url FROM pengajuan_pencairan WHERE id = ? AND status = 'disetujui'`
 	args := []any{id}
 	if agenID > 0 {
-		query += ` AND jamaah_agen_id = ?`
+		query += ` AND akun_agen_id = ?`
 		args = append(args, agenID)
 	}
 	var url sql.NullString

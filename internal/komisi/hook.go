@@ -15,7 +15,7 @@ import (
 //
 // Booking bisa mundur dari 'lunas' ke 'dp' lalu naik lagi, jadi fungsi ini bisa
 // terpanggil lebih dari sekali untuk booking yang sama. ProcessBookingLunas
-// idempoten: UNIQUE(booking_pax_id, jenis, jamaah_penerima_id) di
+// idempoten: UNIQUE(booking_pax_id, jenis, akun_penerima_id) di
 // transaksi_komisi dan pertama_lunas_at yang hanya diisi sekali.
 //
 // Berupa variabel agar test bisa memverifikasi pemanggilannya. Jangan diganti

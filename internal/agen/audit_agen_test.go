@@ -19,7 +19,7 @@ func TestAuditAgenNonexistentPhotoAccepted(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
 	testdb.Exec(t, tx, `UPDATE brands SET biaya_pendaftaran_agen=500000 WHERE id=?`, brand)
-	applicant := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Audit Applicant"})
+	applicant := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Audit Applicant"})
 	req := AjukanRequest{FotoAgenURL: "/api/admin/media/dokumen-jamaah/00000000-0000-0000-0000-000000000000.jpg", Domisili: "Jakarta", SetujuSyaratKetentuan: true}
 	if !fotoPortalURL.MatchString(req.FotoAgenURL) {
 		t.Fatal("fixture must pass HTTP URL validation")
@@ -28,7 +28,7 @@ func TestAuditAgenNonexistentPhotoAccepted(t *testing.T) {
 		t.Fatal(err)
 	}
 	var photo string
-	if err := tx.QueryRow(`SELECT foto_agen_url FROM jamaah WHERE id=?`, applicant).Scan(&photo); err != nil {
+	if err := tx.QueryRow(`SELECT foto_agen_url FROM customer_accounts WHERE id=?`, applicant).Scan(&photo); err != nil {
 		t.Fatal(err)
 	}
 	if photo != req.FotoAgenURL {

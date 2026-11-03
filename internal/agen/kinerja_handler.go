@@ -45,7 +45,7 @@ func handleKinerjaError(w http.ResponseWriter, err error) {
 
 // Dashboard GET /api/portal/agen/dashboard (A3)
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
-	d, err := h.repo.GetDashboardAgen(r.Context(), identity.GetPortalJamaahID(r.Context()))
+	d, err := h.repo.GetDashboardAgen(r.Context(), identity.GetCustomerAccountID(r.Context()))
 	if err != nil {
 		handleKinerjaError(w, err)
 		return
@@ -55,7 +55,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 // RiwayatKomisiPortal GET /api/portal/agen/komisi (A6)
 func (h *Handler) RiwayatKomisiPortal(w http.ResponseWriter, r *http.Request) {
-	items, err := h.repo.ListKomisiAgen(r.Context(), identity.GetPortalJamaahID(r.Context()), komisiFilterFromQuery(r))
+	items, err := h.repo.ListKomisiAgen(r.Context(), identity.GetCustomerAccountID(r.Context()), komisiFilterFromQuery(r))
 	if err != nil {
 		handleKinerjaError(w, err)
 		return
@@ -73,9 +73,9 @@ func (h *Handler) ListAgen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
-// DetailAgen GET /api/admin/agen/{jamaahID} (B2a)
+// DetailAgen GET /api/admin/agen/{akunID} (B2a)
 func (h *Handler) DetailAgen(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r, "jamaahID")
+	id, ok := parseID(w, r, "akunID")
 	if !ok {
 		return
 	}

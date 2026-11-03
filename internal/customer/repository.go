@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/agen"
 	"github.com/go-sql-driver/mysql"
 )
 
@@ -41,7 +42,10 @@ type Account struct {
 	NoHP            string     `json:"no_hp"`
 	EmailVerifiedAt *time.Time `json:"email_verified_at"`
 	JamaahID        *int64     `json:"-"`
-	passwordHash    string
+	// Status keagenan akun (spek 6.3) dan kode referral bila sudah pernah disetujui.
+	StatusAgen   string  `json:"status_agen"`
+	KodeReferral *string `json:"kode_referral"`
+	passwordHash string
 }
 
 type Repository struct{ db *sql.DB }
@@ -64,13 +68,14 @@ func newRawToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-const accountCols = `id, brand_id, nama_lengkap, email, no_hp, email_verified_at, jamaah_id, password_hash`
+const accountCols = `id, brand_id, nama_lengkap, email, no_hp, email_verified_at, jamaah_id, password_hash, status_agen, kode_referral`
 
 func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 	var a Account
 	var verified sql.NullTime
 	var jamaah sql.NullInt64
-	if err := row.Scan(&a.ID, &a.BrandID, &a.NamaLengkap, &a.Email, &a.NoHP, &verified, &jamaah, &a.passwordHash); err != nil {
+	var kode sql.NullString
+	if err := row.Scan(&a.ID, &a.BrandID, &a.NamaLengkap, &a.Email, &a.NoHP, &verified, &jamaah, &a.passwordHash, &a.StatusAgen, &kode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -83,13 +88,22 @@ func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 	if jamaah.Valid {
 		a.JamaahID = &jamaah.Int64
 	}
+	if kode.Valid {
+		a.KodeReferral = &kode.String
+	}
 	return &a, nil
 }
 
-func (r *Repository) Create(ctx context.Context, brandID int64, nama, email, noHP, passwordHash string) (*Account, error) {
+// Create membuat akun. kodeReferral (cookie azhan_ref) diselesaikan menjadi agen aktif pemilik kode di brand yang
+// sama dan disimpan sebagai direkrut_oleh_akun_id; kode kosong, tidak dikenal, atau milik agen nonaktif diabaikan.
+func (r *Repository) Create(ctx context.Context, brandID int64, nama, email, noHP, passwordHash, kodeReferral string) (*Account, error) {
+	agenID, err := agen.IkatAkunDariReferral(ctx, r.db, brandID, kodeReferral)
+	if err != nil {
+		return nil, err
+	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash) VALUES (?,?,?,?,?,?)`,
-		brandID, nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, passwordHash)
+		`INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash, direkrut_oleh_akun_id) VALUES (?,?,?,?,?,?,?)`,
+		brandID, nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, passwordHash, nullableAgen(agenID))
 	if err != nil {
 		return nil, mapDuplicate(err, "create account")
 	}
@@ -156,7 +170,7 @@ func (r *Repository) AccountBySession(ctx context.Context, raw string) (*Account
 		return nil, ErrSessionInvalid
 	}
 	a, err := scanAccount(r.db.QueryRowContext(ctx, `
-		SELECT a.id, a.brand_id, a.nama_lengkap, a.email, a.no_hp, a.email_verified_at, a.jamaah_id, a.password_hash
+		SELECT a.id, a.brand_id, a.nama_lengkap, a.email, a.no_hp, a.email_verified_at, a.jamaah_id, a.password_hash, a.status_agen, a.kode_referral
 		FROM customer_sessions s JOIN customer_accounts a ON a.id = s.account_id
 		WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > ?`, hashToken(raw), time.Now()))
 	if errors.Is(err, ErrNotFound) {
@@ -260,4 +274,11 @@ func (r *Repository) BrandSite(ctx context.Context, brandID int64) (name, domain
 		_ = r.db.QueryRowContext(ctx, `SELECT domain FROM brand_domains WHERE brand_id=? ORDER BY is_primary DESC, id LIMIT 1`, brandID).Scan(&domain)
 	}
 	return name, domain, nil
+}
+
+func nullableAgen(id int64) any {
+	if id <= 0 {
+		return nil
+	}
+	return id
 }

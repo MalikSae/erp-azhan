@@ -166,6 +166,9 @@ type registerRequest struct {
 	NoHP         string `json:"no_hp"`
 	Password     string `json:"password"`
 	CaptchaToken string `json:"captcha_token"`
+	// KodeReferral diisi route handler web publik dari cookie azhan_ref (klik terakhir, 90 hari), bukan dari input
+	// pengguna. Hanya dibaca di sini, saat akun dibuat: akun terikat ke agen pemilik kode (spek 4.1).
+	KodeReferral string `json:"kode_referral"`
 }
 
 // Register POST /api/public/auth/register
@@ -213,7 +216,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
-	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash))
+	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), req.KodeReferral)
 	if errors.Is(err, ErrEmailTaken) {
 		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
 		// Penebakan email tetap dibatasi captcha + registerIPLimit.

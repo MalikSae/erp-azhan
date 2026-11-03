@@ -398,3 +398,77 @@ func TestChangePassword(t *testing.T) {
 		t.Fatalf("setelah %d percobaan salah harus 429, dapat %d", passwordFailLimit, c)
 	}
 }
+
+// Pengikatan akun (spek 4.1): akun terikat ke agen pemilik kode referral saat akun dibuat. Kode yang dikirim
+// route handler adalah kode klik terakhir sebelum daftar. Contoh: Z klik link W (hari 1), link X lalu daftar
+// (hari 2), link Q (hari 3) -> akun Z terikat ke X. Klik Q sesudahnya tidak punya jalur apa pun ke backend.
+func TestRegisterMengikatAkunKeAgenDariKodeReferral(t *testing.T) {
+	db := testdb.DB(t)
+	ctx := context.Background()
+	var brandID int64
+	if err := db.QueryRowContext(ctx, `SELECT id FROM brands ORDER BY id LIMIT 1`).Scan(&brandID); err != nil {
+		t.Fatal(err)
+	}
+	u := fmt.Sprint(time.Now().UnixNano())
+	emails := map[string]string{}
+	for _, k := range []string{"w", "x", "q", "nonaktif", "z", "z2", "z3", "z4"} {
+		emails[k] = fmt.Sprintf("ref-%s-%s@example.com", k, u)
+	}
+	t.Cleanup(func() {
+		// Anak dulu (akun yang diikat), baru agen.
+		for _, k := range []string{"z", "z2", "z3", "z4"} {
+			_, _ = db.Exec(`DELETE FROM customer_accounts WHERE email_normal=?`, emails[k])
+		}
+		for _, k := range []string{"w", "x", "q", "nonaktif"} {
+			_, _ = db.Exec(`DELETE FROM customer_accounts WHERE email_normal=?`, emails[k])
+		}
+	})
+	agen := func(k, kode, status string, n int) int64 {
+		res, err := db.Exec(`INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash, status_agen, kode_referral)
+			VALUES (?,?,?,?,?,'x',?,?)`, brandID, "Agen "+k, emails[k], emails[k], fmt.Sprintf("0877%02d%06d", n, time.Now().UnixNano()%1000000), status, kode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := res.LastInsertId()
+		return id
+	}
+	kode := func(p string) string { return strings.ToUpper(p + u[len(u)-6:]) }
+	_ = agen("w", kode("w"), "aktif", 1)
+	x := agen("x", kode("x"), "aktif", 2)
+	_ = agen("q", kode("q"), "aktif", 3)
+	_ = agen("nonaktif", kode("n"), "nonaktif", 4)
+
+	t.Setenv("TURNSTILE_SECRET_KEY", "")
+	h := NewHandler(NewRepository(db), &captureMail{})
+	daftar := func(k, kodeRef string, n int) int64 {
+		rec := post(h.Register, map[string]any{"brand_id": brandID, "nama_lengkap": "Akun Uji", "email": emails[k],
+			"no_hp": fmt.Sprintf("0866%02d%06d", n, time.Now().UnixNano()%1000000), "password": "rahasia-123", "kode_referral": kodeRef}, "")
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("register %s: %d %s", k, rec.Code, rec.Body)
+		}
+		var id int64
+		var direkrut *int64
+		if err := db.QueryRow(`SELECT id, direkrut_oleh_akun_id FROM customer_accounts WHERE email_normal=?`, emails[k]).Scan(&id, &direkrut); err != nil {
+			t.Fatal(err)
+		}
+		if direkrut != nil {
+			return *direkrut
+		}
+		return 0
+	}
+
+	// Kode klik terakhir sebelum daftar (X) yang dipakai, huruf kecil dinormalisasi.
+	if got := daftar("z", strings.ToLower(kode("x")), 1); got != x {
+		t.Fatalf("akun Z terikat ke %d, want X (%d)", got, x)
+	}
+	// Tanpa kode, kode tidak dikenal, dan kode agen nonaktif: diabaikan diam-diam, akun tetap tanpa agen.
+	if got := daftar("z2", "", 2); got != 0 {
+		t.Fatalf("tanpa kode: terikat ke %d, want tanpa agen", got)
+	}
+	if got := daftar("z3", "TIDAKADA", 3); got != 0 {
+		t.Fatalf("kode tidak dikenal: terikat ke %d, want tanpa agen", got)
+	}
+	if got := daftar("z4", kode("n"), 4); got != 0 {
+		t.Fatalf("kode agen nonaktif: terikat ke %d, want tanpa agen", got)
+	}
+}

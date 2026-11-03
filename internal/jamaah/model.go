@@ -38,9 +38,8 @@ type Jamaah struct {
 	CreatedAt            time.Time `json:"created_at"`
 	PortalAktif          bool      `json:"portal_aktif"`
 	KaitanStatus         string    `json:"kaitan_status"`
-	DirekrutOlehJamaahID *int64    `json:"direkrut_oleh_jamaah_id"`
+	DirekrutOlehAkunID *int64    `json:"direkrut_oleh_akun_id"`
 	DirekrutOlehNama     *string   `json:"direkrut_oleh_nama"`
-	StatusAgen           string    `json:"status_agen"`
 }
 
 // JamaahListItem adalah ringkasan untuk endpoint list.
@@ -60,9 +59,8 @@ type JamaahListItem struct {
 	PctDokumen           int       `json:"pct_dokumen"`
 	CreatedAt            time.Time `json:"created_at"`
 	KaitanStatus         string    `json:"kaitan_status"`
-	DirekrutOlehJamaahID *int64    `json:"direkrut_oleh_jamaah_id"`
+	DirekrutOlehAkunID *int64    `json:"direkrut_oleh_akun_id"`
 	DirekrutOlehNama     *string   `json:"direkrut_oleh_nama"`
-	StatusAgen           string    `json:"status_agen"`
 	// Jumlah booking yang melibatkan jamaah ini (sebagai PIC atau peserta), semua status.
 	TotalBooking int `json:"total_booking"`
 }
@@ -102,11 +100,11 @@ type CreateJamaahRequest struct {
 	KaitanAgen *KaitanAgenInput `json:"kaitan_agen"`
 }
 
-// KaitanAgenInput: mode "agen" (wajib agen_jamaah_id agen aktif di brand yang
+// KaitanAgenInput: mode "agen" (wajib agen_akun_id agen aktif di brand yang
 // sama) atau "tanpa_agen".
 type KaitanAgenInput struct {
 	Mode         string `json:"mode"`
-	AgenJamaahID *int64 `json:"agen_jamaah_id"`
+	AgenAkunID   *int64 `json:"agen_akun_id"`
 }
 
 // UpdateJamaahRequest memiliki struktur yang sama dengan Create.

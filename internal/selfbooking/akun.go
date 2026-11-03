@@ -5,11 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
-	"erp-azhan/api/internal/shared"
 )
 
 // Batas akun pelanggan (K2). Setiap booking menahan seat 24 jam tanpa pembayaran, jadi jumlah seat
@@ -74,72 +72,38 @@ func nullableID(id int64) any {
 	return id
 }
 
-// resolveAkunPIC menentukan jamaah PIC untuk booking atas nama akun pelanggan.
+// resolvePIC menentukan jamaah PIC (pemesan yang ikut berangkat): dicocokkan lewat NIK dan nama seperti
+// penumpang lain (resolveAnggotaPublik), bukan lagi dibuat baru tanpa NIK (spek 10 butir 5). Akun tidak
+// terhubung ke satu jamaah; satu orang dikenali dari NIK-nya, siapa pun akun yang memasukkannya.
 //
-//  1. Akun sudah punya jamaah_id: pakai itu.
-//  2. Belum ada: SELALU buat jamaah baru dari data akun, walau nomor WhatsApp akun sama
-//     dengan jamaah lama di brand ini.
-//
-// Keputusan K1 (tinjauan keamanan 2026-10-22): nomor HP akun tidak diverifikasi, jadi
-// kecocokan HP (dan nama) bukan bukti identitas. Menautkan akun ke jamaah lama membuka data
-// jamaah itu (NIK, jenis kelamin) kepada siapa pun yang tahu nomornya, dan jawaban berbeda
-// untuk nama cocok/beda menjadi oracle. Akibatnya pelanggan lama bisa punya dua baris jamaah;
-// admin menggabungkannya secara manual (pengamanan > deduplikasi otomatis).
-//
-// Nomor, email, dan identitas akun diambil dari tabel akun, bukan dari request,
-// sehingga PIC tidak bisa diarahkan ke nomor orang lain lewat payload.
-func resolveAkunPIC(ctx context.Context, tx *sql.Tx, brandID, accountID int64, pic PICInput) (int64, error) {
+// Nomor WhatsApp dan email PIC diisi handler dari tabel akun, bukan dari payload, sehingga PIC tidak bisa
+// diarahkan ke kontak orang lain. Jamaah lama yang cocok tidak ditimpa datanya; email akun hanya melengkapi
+// jamaah yang emailnya masih kosong.
+func resolvePIC(ctx context.Context, tx *sql.Tx, brandID, accountID int64, pic PICInput) (int64, error) {
 	var accBrand int64
-	var email, noHP string
-	var jamaahID sql.NullInt64
-	err := tx.QueryRowContext(ctx,
-		`SELECT brand_id, email, no_hp, jamaah_id FROM customer_accounts WHERE id=? FOR UPDATE`, accountID,
-	).Scan(&accBrand, &email, &noHP, &jamaahID)
+	err := tx.QueryRowContext(ctx, `SELECT brand_id FROM customer_accounts WHERE id=? FOR UPDATE`, accountID).Scan(&accBrand)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && accBrand != brandID) {
 		return 0, ErrAkunTidakValid
 	}
 	if err != nil {
 		return 0, fmt.Errorf("baca akun: %w", err)
 	}
-	if jamaahID.Valid {
-		return jamaahID.Int64, nil
+	var hp *string
+	if pic.NoHP != "" {
+		hp = &pic.NoHP
 	}
-
-	// Skema menegakkan satu nomor HP = satu jamaah per brand (uq_jamaah_brand_hp, migrasi 060).
-	// Bila nomor akun sudah dipakai jamaah lain, jamaah PIC baru dibuat TANPA nomor HP (kontak
-	// pemesan tetap tercatat di akun); jawabannya sama persis dengan nomor yang belum dipakai.
-	hpPIC := noHP
-	canonical, local := shared.PhoneVariants(noHP)
-	var dipakai int64
-	err = tx.QueryRowContext(ctx, `
-		SELECT id FROM jamaah
-		WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?)
-		ORDER BY id LIMIT 1 FOR UPDATE`, brandID, canonical, local).Scan(&dipakai)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-	case err != nil:
-		return 0, fmt.Errorf("periksa nomor pemesan: %w", err)
-	default:
-		hpPIC = ""
-		log.Printf("[AUDIT] selfbooking hp_pic_bentrok brand=%d akun=%d jamaah_lama=%d (PIC baru tanpa nomor; tinjau/gabungkan manual)", brandID, accountID, dipakai)
-	}
-
-	jk := pic.JenisKelamin
-	em := email
-	// CreateJamaah, bukan ResolveJamaah: ResolveJamaah memakai ulang baris lama yang cocok nomor HP.
-	baruID, err := shared.CreateJamaah(ctx, tx, brandID, shared.JamaahInput{
-		NamaLengkap:  strings.TrimSpace(pic.NamaLengkap),
-		NoHP:         hpPIC,
-		Email:        &em,
-		JenisKelamin: &jk,
+	id, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{
+		PaxType: "reguler", NamaLengkap: strings.TrimSpace(pic.NamaLengkap), NoHP: hp, JenisKelamin: pic.JenisKelamin, NIK: pic.NIK, Nomor: 1,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("buat jamaah pemesan: %w", err)
+		return 0, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, baruID, accountID); err != nil {
-		return 0, fmt.Errorf("kaitkan akun ke jamaah: %w", err)
+	if pic.Email != nil && strings.TrimSpace(*pic.Email) != "" {
+		if _, err := tx.ExecContext(ctx, `UPDATE jamaah SET email=? WHERE id=? AND (email IS NULL OR email='')`, strings.TrimSpace(*pic.Email), id); err != nil {
+			return 0, fmt.Errorf("lengkapi email PIC: %w", err)
+		}
 	}
-	return baruID, nil
+	return id, nil
 }
 
 // simpanTravelers menyimpan anggota rombongan ke daftar jamaah tersimpan akun

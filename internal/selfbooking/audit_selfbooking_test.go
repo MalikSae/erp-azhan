@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"erp-azhan/api/internal/testdb"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -13,10 +15,11 @@ import (
 // All database changes use the existing rollback fixture.
 func TestAuditSelfBookingDuplicateMember(t *testing.T) {
 	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
-	member := testdb.NewJamaah(t, tx, brandID, testdb.JamaahOpts{Nama: "Audit shared member", Direkrut: agentID})
+	nikMember := nikUji()
+	member := testdb.NewJamaah(t, tx, brandID, testdb.JamaahOpts{Nama: "Audit shared member", Direkrut: agentID, NIK: nikMember})
 	for i := 0; i < 2; i++ {
-		req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Audit PIC", NoHP: nomorUji(800 + i), JenisKelamin: "L", RoomType: "Quad"}, Anggota: []AnggotaInput{{JamaahID: &member, NamaLengkap: "Audit shared member", JenisKelamin: "L", PaxType: "reguler", RoomType: quad()}}}
-		_, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{agenID: agentID})
+		req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Audit PIC", NoHP: nomorUji(800 + i), JenisKelamin: "L", RoomType: "Quad"}, Anggota: []AnggotaInput{{JamaahID: &member, NamaLengkap: "Audit shared member (uji)", JenisKelamin: "L", PaxType: "reguler", RoomType: quad(), NIK: &nikMember}}}
+		_, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 		if i == 0 && err != nil {
 			t.Fatal(err)
 		}
@@ -50,10 +53,8 @@ func TestAuditSelfBookingTanpaAkun(t *testing.T) {
 	}
 }
 
-// K1 (tinjauan keamanan 2026-10-22): nomor HP akun belum terverifikasi, jadi akun TIDAK boleh
-// ditautkan ke jamaah lama hanya karena HP (dan nama) cocok. Setiap akun tanpa jamaah mendapat
-// jamaah PIC baru; jawaban sama untuk nama cocok maupun beda (tidak ada oracle), dan data jamaah
-// lama (termasuk NIK) tidak tersentuh.
+// Nomor WA bukan kunci identitas jamaah (spek 4.3): akun yang nomornya sama dengan jamaah lama tidak ditautkan ke
+// jamaah itu. Jamaah PIC dikenali dari NIK; NIK baru membuat jamaah baru dan data jamaah lama tidak tersentuh.
 func TestAuditSelfBookingNomorMilikOrangLain(t *testing.T) {
 	tx, scheduleID, brandID, _ := setupAgenBooking(t)
 	ctx := context.Background()
@@ -67,28 +68,19 @@ func TestAuditSelfBookingNomorMilikOrangLain(t *testing.T) {
 	}
 
 	for i, nama := range []string{"Penyusup", "  pemilik   ASLI "} {
-		akun := akunUji(t, tx, brandID, nama, nomor)
+		akun := akunUji(t, tx, brandID, nama, nomor+fmt.Sprint(i))
 		nik := []string{"3174010101014444", "3174010101013333"}[i]
-		req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: nama, JenisKelamin: "L", RoomType: "Quad", NIK: &nik}}
+		req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: nama, NoHP: nomor, JenisKelamin: "L", RoomType: "Quad", NIK: &nik}}
 		resp, err := processBookingTx(ctx, tx, brandID, req, inisiator{accountID: akun})
 		if err != nil {
-			t.Fatalf("akun %q: booking harus berhasil tanpa membuka data jamaah lama: %v", nama, err)
+			t.Fatalf("akun %q: booking harus berhasil: %v", nama, err)
 		}
 		if resp.Jamaah.ID == lamaID {
 			t.Fatalf("akun %q tertaut ke jamaah lama %d lewat nomor HP", nama, lamaID)
 		}
-		var linked int64
-		var jamaahNama string
-		var hpPIC sql.NullString
-		if err = tx.QueryRow(`SELECT a.jamaah_id, j.nama_lengkap, j.no_hp FROM customer_accounts a JOIN jamaah j ON j.id=a.jamaah_id WHERE a.id=?`, akun).Scan(&linked, &jamaahNama, &hpPIC); err != nil {
-			t.Fatal(err)
-		}
-		if linked != resp.Jamaah.ID || normalizeName(jamaahNama) != normalizeName(nama) {
-			t.Fatalf("akun %q tertaut ke jamaah %d (%s), want jamaah PIC baru %d", nama, linked, jamaahNama, resp.Jamaah.ID)
-		}
-		// Satu nomor = satu jamaah per brand (migrasi 060): PIC baru dibuat tanpa nomor yang bentrok.
-		if hpPIC.Valid {
-			t.Fatalf("PIC baru memakai nomor jamaah lama: %q", hpPIC.String)
+		var nikPIC sql.NullString
+		if err = tx.QueryRow(`SELECT nik FROM jamaah WHERE id=?`, resp.Jamaah.ID).Scan(&nikPIC); err != nil || nikPIC.String != nik {
+			t.Fatalf("NIK PIC = %q (err %v), want %s", nikPIC.String, err, nik)
 		}
 	}
 
@@ -101,8 +93,8 @@ func TestAuditSelfBookingNomorMilikOrangLain(t *testing.T) {
 	}
 }
 
-// NIK PIC yang sudah dimiliki jamaah lain tidak menolak booking (tidak menjadi oracle) dan tidak
-// menautkan akun ke jamaah itu; NIK tidak dipasang ke jamaah PIC baru (admin menggabungkan manual).
+// PIC dicocokkan lewat NIK dan nama seperti penumpang lain: NIK milik jamaah lain dengan nama berbeda ditolak
+// generik (tanpa membuka nama terdaftar), nama sama memakai ulang jamaah itu.
 func TestBookingAkunNIKPICMilikJamaahLain(t *testing.T) {
 	tx, scheduleID, brandID, _ := setupAgenBooking(t)
 	nik := "3174010101016666"
@@ -110,16 +102,22 @@ func TestBookingAkunNIKPICMilikJamaahLain(t *testing.T) {
 		brandID, "TST-NIK-905", "TK905", "Pemilik NIK", nik)
 	akun := akunUji(t, tx, brandID, "Orang Lain", nomorUji(905))
 	req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Orang Lain", JenisKelamin: "L", RoomType: "Quad", NIK: &nik}}
+	_, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{accountID: akun})
+	if !errors.Is(err, ErrNIKAtasNamaLain) {
+		t.Fatalf("nama beda untuk NIK yang sama: err=%v, want ErrNIKAtasNamaLain", err)
+	}
+	if strings.Contains(err.Error(), "Pemilik NIK") {
+		t.Fatalf("pesan membuka nama terdaftar: %q", err.Error())
+	}
+
+	req.PIC.NamaLengkap = " pemilik  nik "
 	resp, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{accountID: akun})
 	if err != nil {
-		t.Fatalf("NIK bentrok harus tetap diproses tanpa membuka data: %v", err)
+		t.Fatalf("nama sama harus memakai ulang jamaah: %v", err)
 	}
-	var nikPIC sql.NullString
-	if err = tx.QueryRow(`SELECT nik FROM jamaah WHERE id=?`, resp.Jamaah.ID).Scan(&nikPIC); err != nil {
-		t.Fatal(err)
-	}
-	if nikPIC.Valid && nikPIC.String != "" {
-		t.Fatalf("NIK milik jamaah lain terpasang ke PIC baru: %q", nikPIC.String)
+	var idJamaah string
+	if err := tx.QueryRow(`SELECT id_jamaah FROM jamaah WHERE id=?`, resp.Jamaah.ID).Scan(&idJamaah); err != nil || idJamaah != "TST-NIK-905" {
+		t.Fatalf("PIC = %q (err %v), want jamaah lama TST-NIK-905", idJamaah, err)
 	}
 }
 
@@ -151,8 +149,8 @@ func TestAuditSelfBookingExistingAdultAsInfant(t *testing.T) {
 	member := testdb.NewJamaah(t, tx, brandID, testdb.JamaahOpts{Nama: "Audit adult", Direkrut: agentID})
 	testdb.Exec(t, tx, `UPDATE jamaah SET tanggal_lahir='1990-01-01' WHERE id=?`, member)
 	suppliedDOB := time.Now().AddDate(0, -6, 0).Format("2006-01-02")
-	req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Audit infant PIC", NoHP: nomorUji(950), JenisKelamin: "L", RoomType: "Quad"}, Anggota: []AnggotaInput{{JamaahID: &member, NamaLengkap: "Audit adult", JenisKelamin: "L", PaxType: "infant", TanggalLahir: &suppliedDOB}}}
-	if _, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{agenID: agentID}); !errors.Is(err, ErrUsiaInfant) {
+	req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Audit infant PIC", NoHP: nomorUji(950), JenisKelamin: "L", RoomType: "Quad"}, Anggota: []AnggotaInput{{JamaahID: &member, NamaLengkap: "Audit adult (uji)", JenisKelamin: "L", PaxType: "infant", TanggalLahir: &suppliedDOB}}}
+	if _, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID)); !errors.Is(err, ErrUsiaInfant) {
 		t.Fatalf("adult as infant: %v", err)
 	}
 }

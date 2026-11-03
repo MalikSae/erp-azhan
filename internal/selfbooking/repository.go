@@ -18,17 +18,12 @@ var (
 	ErrSeatHabis = errors.New("seat tidak cukup")
 	ErrDuplicate = errors.New("anda sudah memiliki booking aktif di jadwal ini")
 	ErrNotFound  = errors.New("data tidak ditemukan")
-	// Nomor WhatsApp anggota dipakai jamaah lain dengan nama berbeda. Pesan generik (sama gayanya
-	// dengan pesan NIK) agar tidak membuka keberadaan data pihak lain; percobaan dibatasi per akun.
-	ErrAnggotaNameMismatch   = errors.New("data jamaah belum dapat diproses. Periksa kembali nama dan nomor WhatsApp anggota, kosongkan nomornya, atau hubungi kami via WhatsApp")
 	ErrDuplicatePaxInBooking = errors.New("jamaah tidak boleh terdaftar lebih dari sekali dalam satu booking")
 	ErrCutoffBooking         = errors.New("pendaftaran online untuk jadwal ini sudah ditutup (30 hari sebelum keberangkatan)")
 	ErrAkunTidakValid        = errors.New("akun tidak valid untuk brand ini")
-	// Booking agen (Jalur 1). Pesan sengaja umum: tidak membocorkan data
-	// pemilik nomor yang sudah terdaftar (D8).
+	// Booking agen (portal agen). Pesan sengaja umum: tidak membocorkan data jamaah atau pemilik kuncinya.
 	ErrBukanAgenAktif   = errors.New("akun agen tidak aktif")
-	ErrNomorMilikLain   = errors.New("nomor sudah terdaftar, minta jamaah booking sendiri atau hubungi admin")
-	ErrJamaahBukanMilik = errors.New("jamaah tidak ada di daftar Jamaah Saya")
+	ErrJamaahBukanMilik = errors.New("data jamaah belum dapat diproses. Periksa kembali NIK dan nama sesuai KTP")
 )
 
 type Repository struct {
@@ -43,11 +38,10 @@ func normalizeName(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), " "))
 }
 
-// inisiator menentukan siapa yang membuat booking. Booking publik (Jalur 2)
-// dibuat pelanggan yang login (accountID): akun itu pemilik booking dan
-// jamaah PIC-nya ditentukan dari akun. Booking agen (Jalur 1, agenID) dibuat
-// agen untuk jamaahnya: agen bukan PIC, dan hanya jamaah yang dibuat di booking
-// ini yang diikat ke agen (keputusan D8).
+// inisiator menentukan siapa yang membuat booking. Pemesan selalu sebuah akun (accountID). Booking publik
+// (web, lewat link ref) dibuat akun biasa; booking portal agen diberi agenID = accountID: akun agen aktif
+// itu pemesan sekaligus agen pembuat booking, tanpa captcha. Agen penentu komisi bukan inisiator: komisi
+// mengikuti kunci jamaah (komisi.ProcessBookingLunas).
 type inisiator struct {
 	accountID int64
 	agenID    int64
@@ -58,9 +52,9 @@ func (r *Repository) ProcessBooking(ctx context.Context, brandID, accountID int6
 	return r.processBooking(ctx, brandID, req, inisiator{accountID: accountID})
 }
 
-// ProcessBookingAgen POST /api/portal/agen/bookings (Jalur 1).
+// ProcessBookingAgen POST /api/portal/agen/bookings (portal agen).
 func (r *Repository) ProcessBookingAgen(ctx context.Context, brandID int64, req BookingRequest, agenID int64) (*BookingResponse, error) {
-	return r.processBooking(ctx, brandID, req, inisiator{agenID: agenID})
+	return r.processBooking(ctx, brandID, req, inisiator{accountID: agenID, agenID: agenID})
 }
 
 func (r *Repository) processBooking(ctx context.Context, brandID int64, req BookingRequest, ini inisiator) (*BookingResponse, error) {
@@ -88,8 +82,8 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 			return nil, ErrBukanAgenAktif
 		}
 	}
-	// Jamaah yang dibuat oleh booking agen ini; hanya mereka yang diikat (D8).
-	var jamaahBaruAgen []int64
+	// Peringatan booking agen: jamaah yang sudah terkunci ke agen lain (komisi ke pemilik kunci).
+	var peringatan []string
 
 	// 1. Lock schedule
 	var scheduleStatus string
@@ -120,7 +114,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	if scheduleStatus != "published" {
 		return nil, ErrNotFound
 	}
-	if ini.accountID > 0 {
+	if !modeAgen {
 		butuh := 1 // PIC
 		for _, a := range req.Anggota {
 			if a.PaxType == "reguler" {
@@ -150,42 +144,43 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 
 	var picJamaahID int64
 
-	// 2a. Booking agen: PIC baru dibuat tanpa PIN (jamaah mengaktifkan akun
-	// portalnya sendiri), atau dipilih dari "Jamaah Saya".
-	if modeAgen {
-		noHP := req.PIC.NoHP
-		var baru bool
-		picJamaahID, baru, err = resolvePaxAgen(ctx, tx, brandID, ini.agenID, req.PIC.JamaahID, req.PIC.NamaLengkap, &noHP, req.PIC.JenisKelamin, req.PIC.Email, nil)
-		if err != nil {
-			return nil, err
-		}
-		if baru {
-			jamaahBaruAgen = append(jamaahBaruAgen, picJamaahID)
-		}
-	}
-
-	// 2. Booking publik: PIC ditentukan dari akun pelanggan yang login.
-	if ini.accountID > 0 {
-		if req.PemesanTidakIkut {
-			// Pemesan tidak berangkat: PIC booking = jamaah pertama, diperlakukan seperti anggota.
-			var hp *string
-			if req.PIC.NoHP != "" {
-				hp = &req.PIC.NoHP
-			}
-			picJamaahID, err = resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{
-				PaxType: "reguler", NamaLengkap: req.PIC.NamaLengkap, NoHP: hp, JenisKelamin: req.PIC.JenisKelamin, NIK: req.PIC.NIK, Nomor: 1,
-			})
-		} else {
-			picJamaahID, err = resolveAkunPIC(ctx, tx, brandID, ini.accountID, req.PIC)
-			if err == nil {
-				err = pasangNIKPIC(ctx, tx, brandID, picJamaahID, nikBersih(req.PIC.NIK))
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
-	} else if !modeAgen {
+	// 2. Penumpang pertama (PIC). Booking agen: dikenali dari NIK seperti penumpang lain; "Saya sendiri"
+	// menandai penumpang itu sebagai agen sendiri. Booking publik: pemesan yang ikut berangkat dicocokkan
+	// lewat NIK dan nama (resolvePIC); pemesan yang tidak ikut memesankan jamaah pertama.
+	if ini.accountID <= 0 {
 		return nil, ErrAkunTidakValid
+	}
+	if modeAgen {
+		var hp *string
+		if req.PIC.NoHP != "" {
+			hp = &req.PIC.NoHP
+		}
+		var terkunci bool
+		picJamaahID, terkunci, err = resolvePaxAgen(ctx, tx, brandID, ini.agenID, req.PIC.JamaahID, AnggotaInput{
+			PaxType: "reguler", NamaLengkap: req.PIC.NamaLengkap, NoHP: hp, JenisKelamin: req.PIC.JenisKelamin, NIK: req.PIC.NIK, Nomor: 1,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if terkunci && !req.PIC.SayaSendiri {
+			peringatan = append(peringatan, fmt.Sprintf(pesanJamaahTerkunci, 1))
+		}
+	} else if req.PemesanTidakIkut {
+		// Pemesan tidak berangkat: PIC booking = jamaah pertama, diperlakukan seperti anggota.
+		var hp *string
+		if req.PIC.NoHP != "" {
+			hp = &req.PIC.NoHP
+		}
+		picJamaahID, err = resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{
+			PaxType: "reguler", NamaLengkap: req.PIC.NamaLengkap, NoHP: hp, JenisKelamin: req.PIC.JenisKelamin, NIK: req.PIC.NIK, Nomor: 1,
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if picJamaahID, err = resolvePIC(ctx, tx, brandID, ini.accountID, req.PIC); err != nil {
+			return nil, err
+		}
 	}
 
 	// 3. Duplikasi check
@@ -223,18 +218,18 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	// 6. Create or reuse jamaah records for anggota
 	anggotaJamaahIDs := make([]int64, len(req.Anggota))
 	for i, a := range req.Anggota {
+		a.Nomor = i + 2
 		if modeAgen {
-			id, baru, err := resolvePaxAgen(ctx, tx, brandID, ini.agenID, a.JamaahID, a.NamaLengkap, a.NoHP, a.JenisKelamin, nil, a.TanggalLahir)
+			id, terkunci, err := resolvePaxAgen(ctx, tx, brandID, ini.agenID, a.JamaahID, a)
 			if err != nil {
 				return nil, err
 			}
-			if baru {
-				jamaahBaruAgen = append(jamaahBaruAgen, id)
+			if terkunci {
+				peringatan = append(peringatan, fmt.Sprintf(pesanJamaahTerkunci, a.Nomor))
 			}
 			anggotaJamaahIDs[i] = id
 			continue
 		}
-		a.Nomor = i + 2
 		id, err := resolveAnggotaPublik(ctx, tx, brandID, a)
 		if err != nil {
 			return nil, err
@@ -278,21 +273,20 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		}
 	}
 
+	// Kunci jamaah ke agen (spek 4.2, first-set-wins: hanya jamaah belum_ditentukan yang diikat). Portal agen:
+	// agen pembuat booking. Web publik: agen yang mengikat akun pemesan; cookie referral tidak dibaca di sini.
+	// Tanpa keduanya, jamaah tetap belum_ditentukan.
+	semuaJamaah := append([]int64{picJamaahID}, anggotaJamaahIDs...)
 	if modeAgen {
-		// Jalur 1 (D8): hanya jamaah yang dibuat di booking ini yang diikat.
-		for _, id := range jamaahBaruAgen {
-			if err := agen.IkatJamaah(ctx, tx, id, ini.agenID, agen.SumberJalur1); err != nil {
-				return nil, err
-			}
+		if err := agen.IkatRombongan(ctx, tx, semuaJamaah, ini.agenID, agen.SumberJalur1); err != nil {
+			return nil, err
 		}
 	} else {
-		// Kaitan agen Jalur 2 (3.2–3.4): kode referral dari cookie, lalu auto-bind
-		// seluruh pax yang belum punya kaitan ke agen booking ini.
-		agenReferral, err := agen.ResolveKodeReferral(ctx, tx, brandID, req.KodeReferral)
+		agenAkun, err := agen.AgenPengikatAkun(ctx, tx, ini.accountID)
 		if err != nil {
 			return nil, err
 		}
-		if err := agen.IkatRombongan(ctx, tx, picJamaahID, anggotaJamaahIDs, agenReferral); err != nil {
+		if err := agen.IkatRombongan(ctx, tx, semuaJamaah, agenAkun, agen.SumberReferral); err != nil {
 			return nil, err
 		}
 	}
@@ -311,9 +305,9 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	// 8. Create booking header
 	seatHoldExpiresAt := time.Now().Add(24 * time.Hour).UTC()
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, seat_hold_expires_at, customer_account_id)
-		VALUES (?, ?, ?, ?, 'baru', TRUE, ?, ?)
-	`, bookingCode, req.ScheduleID, picJamaahID, regulerPaxCount, seatHoldExpiresAt, nullableID(ini.accountID))
+		INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, seat_hold_expires_at, customer_account_id, dibuat_oleh_agen_akun_id)
+		VALUES (?, ?, ?, ?, 'baru', TRUE, ?, ?, ?)
+	`, bookingCode, req.ScheduleID, picJamaahID, regulerPaxCount, seatHoldExpiresAt, nullableID(ini.accountID), nullableID(ini.agenID))
 	if err != nil {
 		return nil, fmt.Errorf("insert booking: %w", err)
 	}
@@ -347,10 +341,14 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		RoomType: &req.PIC.RoomType,
 		Harga:    picHarga,
 	})
+	var sayaSendiri any // komisi langsung atas diri agen sendiri (K13), hanya portal agen
+	if modeAgen && req.PIC.SayaSendiri {
+		sayaSendiri = ini.agenID
+	}
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO booking_pax (booking_id, jamaah_id, pax_type, room_type, harga_pax, counts_for_seat, pax_status)
-		VALUES (?, ?, 'reguler', ?, ?, TRUE, 'aktif')
-	`, bookingID, picJamaahID, req.PIC.RoomType, picHarga)
+		INSERT INTO booking_pax (booking_id, jamaah_id, pax_type, room_type, harga_pax, counts_for_seat, pax_status, saya_sendiri_akun_id)
+		VALUES (?, ?, 'reguler', ?, ?, TRUE, 'aktif', ?)
+	`, bookingID, picJamaahID, req.PIC.RoomType, picHarga, sayaSendiri)
 	if err != nil {
 		return nil, fmt.Errorf("insert pic pax: %w", err)
 	}
@@ -470,6 +468,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 			IDJamaah: idJamaahPIC,
 		},
 		BankAccounts: bankAccounts,
+		Peringatan:   peringatan,
 	}
 	invoiceToken, err := newInvoiceToken()
 	if err != nil {
@@ -509,7 +508,7 @@ func stringPtr(s string) *string {
 }
 
 // resolveAnggotaPublik mencari atau membuat jamaah untuk anggota booking publik.
-// Nomor WhatsApp yang sudah terdaftar dipakai ulang hanya bila namanya cocok.
+// Jamaah dikenali dari NIK (nama harus cocok); tanpa NIK (bayi) dari nama dan tanggal lahir.
 func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID int64, a AnggotaInput) (int64, error) {
 	nik := nikBersih(a.NIK)
 	if nik != "" {
@@ -537,93 +536,51 @@ func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID int64, a Angg
 	return id, nil
 }
 
+// resolveAnggotaTanpaNIK mencari atau membuat jamaah untuk pax tanpa NIK (bayi). Nomor WhatsApp bukan kunci
+// identitas (spek 4.3): bayi dicocokkan lewat nama dan tanggal lahir; bila tidak ada yang cocok, jamaah baru
+// dibuat dengan nomor sebagai kontak biasa. Jamaah lama yang cocok dipakai ulang tanpa menimpa data apa pun.
 func resolveAnggotaTanpaNIK(ctx context.Context, tx *sql.Tx, brandID int64, a AnggotaInput) (int64, error) {
-	var err error
-	var rawPhone string
+	dob := tanggalLahirOrNil(a.TanggalLahir)
+	if dob != nil {
+		rows, err := tx.QueryContext(ctx, `SELECT id, nama_lengkap FROM jamaah WHERE brand_id=? AND tanggal_lahir=? ORDER BY id FOR UPDATE`, brandID, dob)
+		if err != nil {
+			return 0, fmt.Errorf("cari jamaah by nama dan tanggal lahir: %w", err)
+		}
+		var cocok int64
+		for rows.Next() {
+			var id int64
+			var nama string
+			if err := rows.Scan(&id, &nama); err != nil {
+				rows.Close()
+				return 0, err
+			}
+			if cocok == 0 && normalizeName(nama) == normalizeName(a.NamaLengkap) {
+				cocok = id
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		if cocok > 0 {
+			return cocok, nil
+		}
+	}
+	var hp string
 	if a.NoHP != nil {
-		rawPhone = strings.TrimSpace(*a.NoHP)
+		hp = strings.TrimSpace(*a.NoHP)
 	}
-
-	if rawPhone == "" {
-		// No HP kosong (NULL) -> Selalu INSERT baru dengan no_hp NULL
-		var brandCode string
-		var counter uint64
-		err = tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter)
-		if err != nil {
-			return 0, fmt.Errorf("lock brand: %w", err)
-		}
-		counter++
-		_, err = tx.ExecContext(ctx, `UPDATE brands SET jamaah_counter=? WHERE id=?`, counter, brandID)
-		if err != nil {
-			return 0, fmt.Errorf("update counter: %w", err)
-		}
-		idJamaah := fmt.Sprintf("%s-%02d%02d%06d", strings.ToUpper(strings.TrimSpace(brandCode)), time.Now().Year()%100, int(time.Now().Month()), counter)
-		kodeJamaah, err := shared.UniqueCode(ctx, tx, "jamaah", "kode_jamaah", "", 6)
-		if err != nil {
-			return 0, fmt.Errorf("kode jamaah: %w", err)
-		}
-
-		res, err := tx.ExecContext(ctx, `
-		INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir)
-		VALUES (?, ?, ?, ?, NULL, ?, ?)
-	`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, a.JenisKelamin, tanggalLahirOrNil(a.TanggalLahir))
-		if err != nil {
-			return 0, fmt.Errorf("insert anggota jamaah: %w", err)
-		}
-		anggotaID, _ := res.LastInsertId()
-		return anggotaID, nil
-	} else {
-		// No HP terisi -> Cari apakah sudah terdaftar
-		canonicalAnggota, localAnggota := shared.PhoneVariants(rawPhone)
-		var existingAnggotaID int64
-		var existingAnggotaNama string
-
-		err = tx.QueryRowContext(ctx, `
-		SELECT id, nama_lengkap 
-		FROM jamaah 
-		WHERE brand_id = ? AND REGEXP_REPLACE(COALESCE(no_hp,''),'[^0-9]','') IN (?,?) 
-		ORDER BY id LIMIT 1 FOR UPDATE
-	`, brandID, canonicalAnggota, localAnggota).Scan(&existingAnggotaID, &existingAnggotaNama)
-
-		if errors.Is(err, sql.ErrNoRows) {
-			// Belum terdaftar -> INSERT baru dengan no_hp
-			var brandCode string
-			var counter uint64
-			err = tx.QueryRowContext(ctx, `SELECT kode_brand, jamaah_counter FROM brands WHERE id=? FOR UPDATE`, brandID).Scan(&brandCode, &counter)
-			if err != nil {
-				return 0, fmt.Errorf("lock brand: %w", err)
-			}
-			counter++
-			_, err = tx.ExecContext(ctx, `UPDATE brands SET jamaah_counter=? WHERE id=?`, counter, brandID)
-			if err != nil {
-				return 0, fmt.Errorf("update counter: %w", err)
-			}
-			idJamaah := fmt.Sprintf("%s-%02d%02d%06d", strings.ToUpper(strings.TrimSpace(brandCode)), time.Now().Year()%100, int(time.Now().Month()), counter)
-			kodeJamaah, err := shared.UniqueCode(ctx, tx, "jamaah", "kode_jamaah", "", 6)
-			if err != nil {
-				return 0, fmt.Errorf("kode jamaah: %w", err)
-			}
-
-			res, err := tx.ExecContext(ctx, `
-			INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap, no_hp, jenis_kelamin, tanggal_lahir)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, brandID, idJamaah, kodeJamaah, a.NamaLengkap, rawPhone, a.JenisKelamin, tanggalLahirOrNil(a.TanggalLahir))
-			if err != nil {
-				return 0, fmt.Errorf("insert anggota jamaah: %w", err)
-			}
-			anggotaID, _ := res.LastInsertId()
-			return anggotaID, nil
-		} else if err != nil {
-			return 0, fmt.Errorf("find anggota: %w", err)
-		} else {
-			// Sudah terdaftar -> Verifikasi Nama
-			if normalizeName(a.NamaLengkap) != normalizeName(existingAnggotaNama) {
-				return 0, ErrAnggotaNameMismatch
-			}
-			// Cocok -> pakai ulang baris jamaah itu, JANGAN UPDATE field apa pun
-			return existingAnggotaID, nil
+	jk := a.JenisKelamin
+	id, err := shared.CreateJamaah(ctx, tx, brandID, shared.JamaahInput{NamaLengkap: a.NamaLengkap, NoHP: hp, JenisKelamin: &jk})
+	if err != nil {
+		return 0, fmt.Errorf("insert anggota jamaah: %w", err)
+	}
+	if dob != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir=? WHERE id=?`, dob, id); err != nil {
+			return 0, fmt.Errorf("tanggal lahir anggota: %w", err)
 		}
 	}
+	return id, nil
 }
 
 // travelersUntukSimpan: bila pemesan tidak ikut, jamaah pertama (di data "pic") juga disimpan.

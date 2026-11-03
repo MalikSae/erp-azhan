@@ -19,7 +19,6 @@ import (
 var (
 	ErrNotFound        = errors.New("data tidak ditemukan")
 	ErrDuplicateNIK    = errors.New("NIK sudah terdaftar")
-	ErrDuplicateNoHP   = errors.New("nomor HP sudah dipakai jamaah lain di brand ini")
 	ErrKodeBrandNotSet = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
 )
 
@@ -139,9 +138,8 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 			(SELECT COUNT(*) FROM dokumen_jamaah dj WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status IN ('submitted', 'approved')) / 6.0 * 100
 		) AS pct_dokumen,
 		created_at,
-		kaitan_status, direkrut_oleh_jamaah_id,
-		(SELECT a.nama_lengkap FROM jamaah a WHERE a.id = jamaah.direkrut_oleh_jamaah_id) AS direkrut_oleh_nama,
-		status_agen,
+		kaitan_status, direkrut_oleh_akun_id,
+		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama,
 		(SELECT COUNT(*) FROM (
 			SELECT id AS booking_id FROM bookings WHERE pic_jamaah_id = jamaah.id
 			UNION
@@ -191,7 +189,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 	for rows.Next() {
 		var item JamaahListItem
 		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &item.PctDokumen, &item.CreatedAt,
-			&item.KaitanStatus, &item.DirekrutOlehJamaahID, &item.DirekrutOlehNama, &item.StatusAgen, &item.TotalBooking); err != nil {
+			&item.KaitanStatus, &item.DirekrutOlehAkunID, &item.DirekrutOlehNama, &item.TotalBooking); err != nil {
 			return nil, fmt.Errorf("jamaah.List scan: %w", err)
 		}
 		items = append(items, item)
@@ -212,9 +210,8 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		alamat, kota, catatan, status, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat,
 		created_at,
 		EXISTS(SELECT 1 FROM customer_accounts WHERE jamaah_id = jamaah.id) AS portal_aktif,
-		kaitan_status, direkrut_oleh_jamaah_id,
-		(SELECT a.nama_lengkap FROM jamaah a WHERE a.id = jamaah.direkrut_oleh_jamaah_id) AS direkrut_oleh_nama,
-		status_agen
+		kaitan_status, direkrut_oleh_akun_id,
+		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama
 		FROM jamaah WHERE id=?`
 
 	var args []interface{}
@@ -234,7 +231,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		&j.Alamat, &j.Kota, &j.Catatan, &j.Status, &j.EmergencyNama, &j.EmergencyNIK, &j.EmergencyHP, &j.EmergencyHubungan, &j.EmergencyAlamat,
 		&j.CreatedAt,
 		&j.PortalAktif,
-		&j.KaitanStatus, &j.DirekrutOlehJamaahID, &j.DirekrutOlehNama, &j.StatusAgen,
+		&j.KaitanStatus, &j.DirekrutOlehAkunID, &j.DirekrutOlehNama,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -300,7 +297,7 @@ func (r *Repository) Create(ctx context.Context, brandID int64, req *CreateJamaa
 	if req.KaitanAgen != nil {
 		var agenID int64
 		if req.KaitanAgen.Mode == "agen" {
-			agenID = *req.KaitanAgen.AgenJamaahID
+			agenID = *req.KaitanAgen.AgenAkunID
 			if err := agen.ValidasiAgenAktif(ctx, tx, brandID, agenID); err != nil {
 				return nil, err
 			}
@@ -355,14 +352,9 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 	return r.GetByID(ctx, id, brandID)
 }
 
-// duplicateJamaahError memetakan pelanggaran unique key jamaah ke error
-// domain berdasarkan nama key: uq_jamaah_brand_hp (migrasi 060, nomor
-// ternormalisasi) atau uq_jamaah_brand_phone (nomor mentah, ada di sebagian
-// database karena pernah ditambahkan manual di luar folder migrations).
+// duplicateJamaahError memetakan pelanggaran unique key jamaah ke error domain. Nomor HP bukan
+// kunci identitas jamaah (spek keagenan 4.3), jadi satu-satunya kunci unik bisnis adalah (brand, nik).
 func duplicateJamaahError(mysqlErr *mysql.MySQLError) error {
-	if strings.Contains(mysqlErr.Message, "uq_jamaah_brand_hp") || strings.Contains(mysqlErr.Message, "uq_jamaah_brand_phone") {
-		return ErrDuplicateNoHP
-	}
 	return ErrDuplicateNIK
 }
 
@@ -441,12 +433,8 @@ func (r *Repository) CekPindahBrand(ctx context.Context, existing *Jamaah, targe
 	if bookings > 0 {
 		return "jamaah sudah memiliki booking sehingga tidak bisa dipindah ke brand lain", nil
 	}
-	var direkrut int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM jamaah WHERE direkrut_oleh_jamaah_id = ?`, existing.ID).Scan(&direkrut); err != nil {
-		return "", fmt.Errorf("jamaah.CekPindahBrand downline: %w", err)
-	}
-	if existing.DirekrutOlehJamaahID != nil || direkrut > 0 || existing.StatusAgen != "tidak_aktif" {
-		return "jamaah terikat dengan agen atau berstatus agen sehingga tidak bisa dipindah ke brand lain", nil
+	if existing.DirekrutOlehAkunID != nil {
+		return "jamaah terikat dengan agen sehingga tidak bisa dipindah ke brand lain", nil
 	}
 	return "", nil
 }

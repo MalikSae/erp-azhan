@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func Tx(t *testing.T) (*sql.DB, *sql.Tx) {
 	// Fixture memakai baris bersama (jadwal pertama, brand-nya); paket uji Go berjalan
 	// paralel, jadi transaksi uji saling mengunci baris itu dan deadlock. Kunci bernama
 	// menyerialkan semua test Tx lintas paket.
-	Serialize(t, db, "erp_test_tx_fixture")
+	serializeFixture(t, db)
 	tx, err := db.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
@@ -80,6 +81,9 @@ func DB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("koneksi database: %v", err)
 	}
+	// Test yang meng-commit data (bukan transaksi rollback) memakai kunci fixture yang sama dengan Tx supaya
+	// tidak berebut baris dan celah indeks unik dengan test Tx di paket lain (deadlock 1213 acak).
+	serializeFixture(t, db)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
@@ -181,34 +185,65 @@ func Schedule(t *testing.T, tx *sql.Tx, o ScheduleOpts) (scheduleID, brandID int
 	return scheduleID, brandID
 }
 
-// JamaahOpts mengatur jamaah fixture. Direkrut/Upline 0 = NULL.
-type JamaahOpts struct {
+// AkunOpts mengatur akun fixture. Direkrut/Upline (id akun agen) 0 = NULL. Akun berstatus agen aktif
+// otomatis mendapat kode referral unik.
+type AkunOpts struct {
 	Nama       string
 	StatusAgen string // default tidak_aktif
-	Direkrut   int64
-	Upline     int64
-	TanpaAgen  bool
+	Direkrut   int64  // direkrut_oleh_akun_id (pengikat akun)
+	Upline     int64  // upline_akun_id (snapshot saat disetujui)
 }
 
-func NewJamaah(t *testing.T, tx *sql.Tx, brandID int64, o JamaahOpts) int64 {
+// NewAkun membuat akun pelanggan fixture (email, WA, dan kode referral unik).
+func NewAkun(t *testing.T, tx *sql.Tx, brandID int64, o AkunOpts) int64 {
 	t.Helper()
 	if o.StatusAgen == "" {
 		o.StatusAgen = "tidak_aktif"
 	}
-	kaitan := "belum_ditentukan"
-	var direkrut, upline any
+	var direkrut, upline, kode any
 	if o.Direkrut > 0 {
-		direkrut, kaitan = o.Direkrut, "terikat_agen"
-	} else if o.TanpaAgen {
-		kaitan = "tanpa_agen"
+		direkrut = o.Direkrut
 	}
 	if o.Upline > 0 {
 		upline = o.Upline
 	}
 	u := uniq()
+	if o.StatusAgen == "aktif" || o.StatusAgen == "nonaktif" {
+		kode = "K" + u
+	}
+	// no_hp unik per brand: 08 + 10 digit dari uniq.
+	res := mustExec(t, tx, `INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash,
+		status_agen, kode_referral, direkrut_oleh_akun_id, upline_akun_id) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		brandID, o.Nama+" (uji)", "t"+u+"@uji.test", "t"+u+"@uji.test", hpUji(u), "x",
+		o.StatusAgen, kode, direkrut, upline)
+	id, _ := res.LastInsertId()
+	return id
+}
+
+// JamaahOpts mengatur jamaah fixture. Direkrut (id akun agen) 0 = belum ditentukan.
+type JamaahOpts struct {
+	Nama      string
+	Direkrut  int64 // akun agen pemilik kunci
+	TanpaAgen bool
+	NIK       string
+}
+
+func NewJamaah(t *testing.T, tx *sql.Tx, brandID int64, o JamaahOpts) int64 {
+	t.Helper()
+	kaitan := "belum_ditentukan"
+	var direkrut, nik any
+	if o.Direkrut > 0 {
+		direkrut, kaitan = o.Direkrut, "terikat_agen"
+	} else if o.TanpaAgen {
+		kaitan = "tanpa_agen"
+	}
+	if o.NIK != "" {
+		nik = o.NIK
+	}
+	u := uniq()
 	res := mustExec(t, tx, `INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap,
-		status_agen, direkrut_oleh_jamaah_id, upline_jamaah_id, kaitan_status) VALUES (?,?,?,?,?,?,?,?)`,
-		brandID, "TST-"+u, "T"+u, o.Nama+" (uji)", o.StatusAgen, direkrut, upline, kaitan)
+		nik, direkrut_oleh_akun_id, kaitan_status) VALUES (?,?,?,?,?,?,?)`,
+		brandID, "TST-"+u, "T"+u, o.Nama+" (uji)", nik, direkrut, kaitan)
 	id, _ := res.LastInsertId()
 	return id
 }
@@ -271,4 +306,33 @@ func mustExec(t *testing.T, tx *sql.Tx, q string, args ...any) sql.Result {
 		t.Fatalf("exec %q: %v", q, err)
 	}
 	return res
+}
+
+// hpUji membentuk nomor WA fixture yang unik per akun dari akhiran uniq().
+func hpUji(u string) string { return "0877000" + u }
+
+const kunciFixture = "erp_test_tx_fixture"
+
+var (
+	fixtureMu   sync.Mutex
+	fixtureHeld = map[*testing.T]bool{}
+)
+
+// serializeFixture memegang kunci fixture bersama sekali per test, jadi test yang memanggil DB dan Tx
+// sekaligus tidak mengunci dirinya sendiri.
+func serializeFixture(t *testing.T, db *sql.DB) {
+	t.Helper()
+	fixtureMu.Lock()
+	if fixtureHeld[t] {
+		fixtureMu.Unlock()
+		return
+	}
+	fixtureHeld[t] = true
+	fixtureMu.Unlock()
+	t.Cleanup(func() {
+		fixtureMu.Lock()
+		delete(fixtureHeld, t)
+		fixtureMu.Unlock()
+	})
+	Serialize(t, db, kunciFixture)
 }

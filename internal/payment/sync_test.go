@@ -99,7 +99,7 @@ func TestSyncLunasMencatatKomisi(t *testing.T) {
 	langsung := 750_000.0
 
 	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{KomisiLangsung: &langsung, BerangkatTanggal: "2099-01-01"})
-	agen := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Agen", StatusAgen: "aktif"})
+	agen := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Agen", StatusAgen: "aktif"})
 	x := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "X", Direkrut: agen})
 	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: x})
 	if err := komisi.SnapshotNominal(ctx, tx, b); err != nil {
@@ -113,7 +113,7 @@ func TestSyncLunasMencatatKomisi(t *testing.T) {
 	var penerima int64
 	var jenis string
 	var nominal float64
-	if err := tx.QueryRow(`SELECT jamaah_penerima_id, jenis, nominal FROM transaksi_komisi WHERE booking_id=?`, b).
+	if err := tx.QueryRow(`SELECT akun_penerima_id, jenis, nominal FROM transaksi_komisi WHERE booking_id=?`, b).
 		Scan(&penerima, &jenis, &nominal); err != nil {
 		t.Fatalf("komisi tidak tercatat: %v", err)
 	}

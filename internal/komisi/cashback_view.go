@@ -22,7 +22,7 @@ func ReadCashback(ctx context.Context, db *sql.DB, id int64) (*CashbackView, err
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT booking_id,nominal,'diterima',created_at FROM transaksi_komisi WHERE jamaah_penerima_id=? AND jenis='cashback' UNION ALL SELECT booking_id,-nominal,'dipakai',created_at FROM pemakaian_cashback WHERE jamaah_id=? ORDER BY created_at DESC`, id, id)
+	rows, err := db.QueryContext(ctx, `SELECT booking_id,nominal,'diterima',created_at FROM transaksi_komisi WHERE akun_penerima_id=? AND jenis='cashback' UNION ALL SELECT booking_id,-nominal,'dipakai',created_at FROM pemakaian_cashback WHERE akun_id=? ORDER BY created_at DESC`, id, id)
 	if err != nil {
 		return nil, err
 	}

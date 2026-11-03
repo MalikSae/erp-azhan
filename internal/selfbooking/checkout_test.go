@@ -12,13 +12,13 @@ import (
 func TestCheckoutReplayDoesNotReserveTwice(t *testing.T) {
 	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
 	req := BookingRequest{RequestKey: strings.Repeat("a", 48), TermsVersion: TermsVersion, TermsAccepted: true, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Retry PIC", NoHP: nomorUji(980), JenisKelamin: "L", RoomType: "Quad"}}
-	first, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{agenID: agentID})
+	first, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var remaining int
 	tx.QueryRow(`SELECT seat_sisa FROM schedules WHERE id=?`, scheduleID).Scan(&remaining)
-	second, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{agenID: agentID})
+	second, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestCheckoutReplayDoesNotReserveTwice(t *testing.T) {
 		t.Fatal("retry must not consume the successful-booking phone quota")
 	}
 	req.PIC.NamaLengkap = "Changed request"
-	if _, err = processBookingTx(context.Background(), tx, brandID, req, inisiator{agenID: agentID}); !errors.Is(err, ErrRequestConflict) {
+	if _, err = processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID)); !errors.Is(err, ErrRequestConflict) {
 		t.Fatalf("changed request accepted: %v", err)
 	}
 }
@@ -41,7 +41,7 @@ func TestCheckoutRejectsChangedQuote(t *testing.T) {
 	oldPrice := 1.0
 	zero := 0.0
 	req := BookingRequest{ExpectedTotal: &oldPrice, ExpectedDP: &zero, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Quote PIC", NoHP: nomorUji(981), JenisKelamin: "L", RoomType: "Quad"}}
-	if _, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{agenID: agentID}); !errors.Is(err, ErrQuoteChanged) {
+	if _, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID)); !errors.Is(err, ErrQuoteChanged) {
 		t.Fatalf("stale quote accepted: %v", err)
 	}
 }
@@ -50,7 +50,7 @@ func TestCheckoutSnapshotsDP(t *testing.T) {
 	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
 	testdb.Exec(t, tx, `UPDATE schedules SET minimal_dp=1000000 WHERE id=?`, scheduleID)
 	req := BookingRequest{TermsVersion: TermsVersion, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Snapshot PIC", NoHP: nomorUji(982), JenisKelamin: "L", RoomType: "Quad"}}
-	response, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{agenID: agentID})
+	response, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestLateDepartureSnapshotsFullPayment(t *testing.T) {
 	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
 	testdb.Exec(t, tx, `UPDATE schedules SET berangkat_tanggal=DATE_ADD(CURRENT_DATE,INTERVAL 30 DAY) WHERE id=?`, scheduleID)
 	req := BookingRequest{TermsVersion: TermsVersion, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Late PIC", NoHP: nomorUji(983), JenisKelamin: "L", RoomType: "Quad"}}
-	response, err := processBookingTx(context.Background(), tx, brandID, req, inisiator{agenID: agentID})
+	response, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 	if err != nil {
 		t.Fatal(err)
 	}

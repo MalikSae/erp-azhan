@@ -212,6 +212,8 @@ func main() {
 	publicV1.Get("/api/public/v1/packages/{id}", scheduleHandler.GetPackageV1)
 	publicV1.Get("/api/public/v1/destinations", scheduleHandler.ListDestinationsV1)
 	publicV1.Get("/api/public/v1/sitemap-feed", scheduleHandler.SitemapFeedV1)
+	// Rentang komisi agen dari jadwal tayang untuk landing /jadi-agen (spek keagenan K23).
+	publicV1.Get("/api/public/v1/agen/ujroh", agenHandler.UjrohPublik)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: categories & brand & bank accounts
@@ -238,8 +240,28 @@ func main() {
 		r.Post("/logout", identityHandler.Logout)
 	})
 
+	// Area agen Syiar berbasis akun email (spek keagenan bagian 10 butir 10). Sesi sama dengan /api/account.
+	// Status dan pengajuan terbuka untuk akun mana pun; selebihnya hanya agen aktif (agen nonaktif 403, layar A4).
+	// Foto dan bukti bayar diunggah lewat POST /api/account/media/upload, lalu URL-nya dikirim ke sini.
+	r.Route("/api/portal/agen", func(r chi.Router) {
+		r.Use(requireDB(db))
+		r.Use(customerHandler.RequireCustomer)
+		r.Get("/", agenHandler.GetStatus)
+		r.Post("/pengajuan", agenHandler.Ajukan)
+		r.Post("/pembayaran/bukti", agenHandler.UploadBukti)
+		r.Group(func(r chi.Router) {
+			r.Use(agenHandler.RequireAgenAktif)
+			r.Get("/dashboard", agenHandler.Dashboard)
+			r.Get("/komisi", agenHandler.RiwayatKomisiPortal)
+			r.Get("/pencairan", agenHandler.GetPencairan)
+			r.Post("/pencairan", agenHandler.AjukanPencairan)
+			r.Get("/pencairan/{id}/bukti", agenHandler.BuktiPencairanPortal)
+			r.Get("/jamaah", selfBookingHandler.ListJamaahSaya)
+			r.Post("/bookings", selfBookingHandler.CreateBookingAgen)
+		})
+	})
+
 	// Area akun pelanggan: butuh sesi (Authorization: Bearer <token sesi>).
-	// Area agen Syiar (/api/portal/agen/*) sengaja belum dipasang: dibangun ulang di atas akun email.
 	r.Route("/api/account", func(r chi.Router) {
 		r.Use(requireDB(db))
 		r.Use(customerHandler.RequireCustomer)
@@ -469,10 +491,11 @@ func main() {
 			r.Get("/", agenHandler.ListAgen)
 			r.Get("/komisi", agenHandler.RiwayatKomisiAdmin)
 			r.Get("/peringkat", agenHandler.PeringkatAgen)
-			r.Get("/{jamaahID}", agenHandler.DetailAgen)
-			r.With(identity.RequirePermission("agen.approve")).Post("/{jamaahID}/setujui", agenHandler.Setujui)
-			r.With(identity.RequirePermission("agen.approve")).Post("/{jamaahID}/tolak", agenHandler.Tolak)
-			r.With(identity.RequirePermission("agen.edit")).Put("/{jamaahID}/status", agenHandler.UbahStatus)
+			r.Get("/{akunID}", agenHandler.DetailAgen)
+			r.With(identity.RequirePermission("agen.approve")).Post("/{akunID}/setujui", agenHandler.Setujui)
+			r.With(identity.RequirePermission("agen.approve")).Post("/{akunID}/tolak", agenHandler.Tolak)
+			r.With(identity.RequirePermission("agen.approve")).Post("/{akunID}/keputusan", agenHandler.Keputusan)
+			r.With(identity.RequirePermission("agen.edit")).Put("/{akunID}/status", agenHandler.UbahStatus)
 			r.With(identity.RequirePermission("agen.approve")).Post("/pembayaran/{id}/verifikasi", agenHandler.VerifikasiPembayaran)
 			r.With(identity.RequirePermission("agen.approve")).Post("/pembayaran/{id}/tolak", agenHandler.TolakPembayaran)
 			r.With(identity.RequirePermission("agen.approve")).Post("/pembayaran/{id}/bukti", agenHandler.UploadBuktiAdmin)
@@ -491,6 +514,9 @@ func main() {
 			r.Get("/kaitan-agen", agenHandler.CariJamaahKaitan)
 			r.Get("/kaitan-agen/{jamaahID}/log", agenHandler.LogKaitan)
 			r.Put("/kaitan-agen/{jamaahID}", agenHandler.GantiKaitan)
+			r.Get("/kaitan-agen/akun", agenHandler.CariAkunKaitan)
+			r.Get("/kaitan-agen/akun/{akunID}/log", agenHandler.LogKaitanAkun)
+			r.Put("/kaitan-agen/akun/{akunID}", agenHandler.GantiAgenAkun)
 		})
 
 		// Analytics lintas brand

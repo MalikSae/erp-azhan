@@ -73,28 +73,17 @@ func TestResolveAnggotaPublikNIK(t *testing.T) {
 	if got := err.Error(); !strings.Contains(got, "Jamaah 2") || strings.Contains(got, "Pemilik NIK") || strings.Contains(strings.ToLower(got), "terdaftar") {
 		t.Fatalf("pesan = %q: harus menyebut Jamaah 2 tanpa membuka keberadaan data jamaah lain", got)
 	}
-	if ErrAnggotaNameMismatch.Error() == "" || strings.Contains(strings.ToLower(ErrAnggotaNameMismatch.Error()), "terdaftar") {
-		t.Fatalf("pesan nomor anggota tidak generik: %q", ErrAnggotaNameMismatch.Error())
-	}
 
-	// Jamaah lama (dikenali lewat nomor) tanpa NIK: NIK diisikan, tidak menimpa NIK yang ada.
+	// Nomor WA bukan kunci identitas (spek 4.3): NIK berbeda dengan nomor yang sama menghasilkan jamaah berbeda.
 	hp := nomorUji(990)
-	lama, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Jamaah Lama", NoHP: &hp, JenisKelamin: "P"})
+	nikBaru := "3174010101018888"
+	nikLain := "3174010101017777"
+	satu, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Berbagi Nomor Satu", NoHP: &hp, JenisKelamin: "P", NIK: &nikBaru})
 	if err != nil {
 		t.Fatal(err)
 	}
-	nikBaru := "3174010101018888"
-	if _, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Jamaah Lama", NoHP: &hp, JenisKelamin: "P", NIK: &nikBaru}); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.QueryRow(`SELECT nik FROM jamaah WHERE id=?`, lama).Scan(&tersimpan); err != nil || tersimpan.String != nikBaru {
-		t.Fatalf("NIK jamaah lama = %q (err %v), want %s", tersimpan.String, err, nikBaru)
-	}
-	nikLain := "3174010101017777"
-	if _, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Jamaah Lama", NoHP: &hp, JenisKelamin: "P", NIK: &nikLain}); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.QueryRow(`SELECT nik FROM jamaah WHERE id=?`, lama).Scan(&tersimpan); err != nil || tersimpan.String != nikBaru {
-		t.Fatalf("NIK yang sudah ada tidak boleh ditimpa: %q", tersimpan.String)
+	dua, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Berbagi Nomor Dua", NoHP: &hp, JenisKelamin: "L", NIK: &nikLain})
+	if err != nil || dua == satu {
+		t.Fatalf("dua NIK dengan nomor sama: id1=%d id2=%d err=%v, want dua jamaah", satu, dua, err)
 	}
 }
