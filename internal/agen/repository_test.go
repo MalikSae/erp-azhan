@@ -244,3 +244,28 @@ func TestAdminUploadDanBrandScope(t *testing.T) {
 	must(t, "aktifkan", ubahStatusTx(ctx, f.tx, x, &f.brandID, "aktif"))
 	mustErr(t, "status lain", ubahStatusTx(ctx, f.tx, x, &f.brandID, "pengajuan"), ErrStatusTidakValid)
 }
+
+// K24: NIK agen disimpan saat mengajukan, unik antar akun per brand, dan kartu B1 memperingatkan admin
+// bila NIK itu dikenal atas nama lain atau jamaahnya terkunci ke agen lain.
+func TestNIKAgenUnikDanPeringatanAdmin(t *testing.T) {
+	f := setup(t, 0)
+	ctx := context.Background()
+	x := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Agen X", StatusAgen: "aktif"})
+	z := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Zainab"})
+	y := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Yusuf"})
+	nikW := "3201010101010001"
+	testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Jamaah W", Direkrut: x, NIK: nikW})
+
+	req := ajuan
+	req.NIK = nikW
+	must(t, "ajukan Z", ajukanTx(ctx, f.tx, z, req))
+	row := findPengajuan(t, f, z)
+	if row == nil || row.NIKMasked != "••••••••••••0001" {
+		t.Fatalf("nik_masked = %+v", row)
+	}
+	if len(row.PeringatanNIK) != 2 {
+		t.Fatalf("peringatan = %v, want nama berbeda dan terkunci ke agen lain", row.PeringatanNIK)
+	}
+
+	mustErr(t, "NIK sama dengan akun lain", ajukanTx(ctx, f.tx, y, req), ErrNIKAgenTidakBisaDipakai)
+}

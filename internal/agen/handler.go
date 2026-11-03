@@ -25,6 +25,7 @@ func NewHandler(repo *Repository) *Handler {
 // URL file hanya boleh hasil upload ke kategori media terproteksi, supaya
 // pengguna tidak bisa mengisi URL sembarang (lihat media.processUpload).
 var (
+	nikAgenPattern = regexp.MustCompile(`^\d{16}$`)
 	fotoPortalURL  = regexp.MustCompile(`^/api/admin/media/dokumen-jamaah/[0-9a-f-]{36}\.(jpg|png|webp|gif)$`)
 	buktiPortalURL = regexp.MustCompile(`^/api/admin/media/dokumen-jamaah/[0-9a-f-]{36}\.(jpg|png|webp|gif|pdf)$`)
 	buktiAdminURL  = regexp.MustCompile(`^/api/admin/media/(dokumen-jamaah|payment-proofs)/[0-9a-f-]{36}\.(jpg|png|webp|gif|pdf)$`)
@@ -51,7 +52,12 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 	}
 	req.FotoAgenURL = strings.TrimSpace(req.FotoAgenURL)
 	req.Domisili = strings.TrimSpace(req.Domisili)
+	req.NIK = strings.TrimSpace(req.NIK)
 
+	if !nikAgenPattern.MatchString(req.NIK) {
+		writeError(w, http.StatusBadRequest, ErrNIKAgenTidakValid.Error())
+		return
+	}
 	if !fotoPortalURL.MatchString(req.FotoAgenURL) {
 		writeError(w, http.StatusBadRequest, "foto diri wajib diunggah (JPG, PNG, WEBP, atau GIF)")
 		return
@@ -275,7 +281,8 @@ func handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, ErrTidakAdaPengajuan), errors.Is(err, ErrAksiTidakValid), errors.Is(err, ErrCatatanWajib):
+	case errors.Is(err, ErrTidakAdaPengajuan), errors.Is(err, ErrAksiTidakValid), errors.Is(err, ErrCatatanWajib),
+		errors.Is(err, ErrNIKAgenTidakValid), errors.Is(err, ErrNIKAgenTidakBisaDipakai):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrStatusTidakValid):
 		writeError(w, http.StatusBadRequest, err.Error())

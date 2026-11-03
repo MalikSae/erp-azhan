@@ -162,7 +162,11 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		if err != nil {
 			return nil, err
 		}
-		if terkunci && !req.PIC.SayaSendiri {
+		if req.PIC.SayaSendiri {
+			if err := pastikanSayaSendiri(ctx, tx, ini.agenID, picJamaahID); err != nil {
+				return nil, err
+			}
+		} else if terkunci {
 			peringatan = append(peringatan, fmt.Sprintf(pesanJamaahTerkunci, 1))
 		}
 	} else if req.PemesanTidakIkut {
