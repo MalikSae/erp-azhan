@@ -648,15 +648,6 @@ const BrandFormPage = () => {
                   className="!mb-0"
                 />
                 <Input
-                  label="Cashback Alumni (Rp)"
-                  name="cashback_alumni"
-                  value={formData.cashback_alumni ? Number(formData.cashback_alumni).toLocaleString('id-ID') : ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cashback_alumni: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="mis. 500.000"
-                  inputMode="numeric"
-                  className="!mb-0"
-                />
-                <Input
                     label="Batas Pelunasan (H-)"
                     name="batas_pelunasan_hari"
                     value={formData.batas_pelunasan_hari}
@@ -703,36 +694,6 @@ const BrandFormPage = () => {
                     className="!mb-0"
                   />
                 )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Input
-                  label="Ujroh Closing (Rp/jamaah)"
-                  name="ujroh_closing"
-                  value={formData.ujroh_closing ? Number(formData.ujroh_closing).toLocaleString('id-ID') : ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, ujroh_closing: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="mis. 500.000"
-                  inputMode="numeric"
-                  className="!mb-0"
-                />
-                <Input
-                  label="Ujroh Pembinaan (Rp/jamaah)"
-                  name="ujroh_pembinaan"
-                  value={formData.ujroh_pembinaan ? Number(formData.ujroh_pembinaan).toLocaleString('id-ID') : ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, ujroh_pembinaan: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="mis. 200.000"
-                  inputMode="numeric"
-                  className="!mb-0"
-                />
-                <Input
-                  label="Ujroh Repeat Booking (Rp/jamaah)"
-                  name="ujroh_repeat_booking"
-                  value={formData.ujroh_repeat_booking ? Number(formData.ujroh_repeat_booking).toLocaleString('id-ID') : ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, ujroh_repeat_booking: e.target.value.replace(/\D/g, '') }))}
-                  placeholder="mis. 250.000"
-                  inputMode="numeric"
-                  className="!mb-0"
-                />
               </div>
 
               <Textarea

@@ -21,7 +21,7 @@ export function validateKaitan(value) {
 
 export function toKaitanPayload(value) {
   return value.mode === 'agen'
-    ? { mode: 'agen', agen_jamaah_id: value.agen.id }
+    ? { mode: 'agen', agen_akun_id: value.agen.id }
     : { mode: 'tanpa_agen' };
 }
 
@@ -29,7 +29,7 @@ const agenLabel = (a) => (a.kode_referral ? `${a.nama_lengkap} · ${a.kode_refer
 
 // excludeAgenId: sembunyikan satu agen dari hasil (mis. agen yang sedang terkait
 // di Ganti Kaitan Agen, karena memilihnya tidak mengubah apa pun).
-const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequired = false, error, hint, name = 'kaitan_agen', excludeAgenId }) => {
+const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequired = false, error, hint, name = 'kaitan_agen', excludeAgenId, tanpaAgenLabel = 'Tanpa Agen' }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -69,7 +69,7 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         {[
           { mode: 'agen', label: 'Kaitkan ke Agen' },
-          { mode: 'tanpa_agen', label: 'Tanpa Agen' },
+          { mode: 'tanpa_agen', label: tanpaAgenLabel },
         ].map((opt) => (
           <label key={opt.mode} className="flex items-center gap-2 text-sm font-body cursor-pointer text-neutral-700 hover:text-neutral-900">
             <input

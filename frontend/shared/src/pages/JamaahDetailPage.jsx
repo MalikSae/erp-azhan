@@ -424,12 +424,12 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-medium text-neutral-500 font-body">Agen yang mengajak</span>
-                {jamaah.kaitan_status === "terikat_agen" && jamaah.direkrut_oleh_jamaah_id ? (
+                {jamaah.kaitan_status === "terikat_agen" && jamaah.direkrut_oleh_akun_id ? (
                   <Link
-                    to={`/agen/${jamaah.direkrut_oleh_jamaah_id}`}
+                    to={`/agen/${jamaah.direkrut_oleh_akun_id}`}
                     className="text-sm font-semibold text-neutral-900 underline underline-offset-2 text-right"
                   >
-                    {jamaah.direkrut_oleh_nama || `#${jamaah.direkrut_oleh_jamaah_id}`}
+                    {jamaah.direkrut_oleh_nama || `#${jamaah.direkrut_oleh_akun_id}`}
                   </Link>
                 ) : (
                   <span className="text-sm font-medium text-neutral-700">

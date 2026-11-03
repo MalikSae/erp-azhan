@@ -85,7 +85,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
     setSaving(true);
     setActionError('');
     try {
-      await ubahStatusAgen(agen.jamaah_id, targetStatus);
+      await ubahStatusAgen(agen.akun_id, targetStatus);
       setConfirmOpen(false);
       await load();
     } catch (err) {
@@ -111,10 +111,9 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
       </PageHeader>
 
       {/* e. Ringkasan komisi & saldo */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatTile icon={Wallet} variant="success" value={money(agen.saldo.saldo_tersedia)} label="Saldo tersedia" hint="Dari booking yang sudah berangkat" />
         <StatTile icon={Clock3} variant="warning" value={money(agen.saldo.saldo_tertahan)} label="Saldo tertahan" />
-        <StatTile icon={Banknote} variant="violet" value={money(agen.saldo.kredit_cashback)} label="Kredit cashback" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -123,10 +122,8 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
             <div className="space-y-2">
               <Row label="Total komisi langsung">{money(agen.total_per_jenis.langsung)}</Row>
               <Row label="Total bonus pembinaan">{money(agen.total_per_jenis.pembinaan)}</Row>
-              <Row label="Total repeat order">{money(agen.total_per_jenis.repeat_order)}</Row>
-              <Row label="Total cashback">{money(agen.total_per_jenis.cashback)}</Row>
             </div>
-            <Link to={`/agen/komisi?agen_id=${agen.jamaah_id}`} className="inline-block text-sm font-semibold text-neutral-900 underline underline-offset-2">
+            <Link to={`/agen/komisi?agen_id=${agen.akun_id}`} className="inline-block text-sm font-semibold text-neutral-900 underline underline-offset-2">
               Lihat riwayat lengkap
             </Link>
           </MetaBox>
@@ -219,8 +216,8 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
           <MetaBox title="Jaringan & Closing" icon={<Network size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="space-y-2">
               <Row label="Upline">
-                {agen.upline_jamaah_id ? (
-                  <Link to={`/agen/${agen.upline_jamaah_id}`} className="underline underline-offset-2">{agen.upline_nama}</Link>
+                {agen.upline_akun_id ? (
+                  <Link to={`/agen/${agen.upline_akun_id}`} className="underline underline-offset-2">{agen.upline_nama}</Link>
                 ) : 'Tidak ada'}
               </Row>
               <Row label="Jumlah downline (agen)">{agen.jumlah_downline}</Row>

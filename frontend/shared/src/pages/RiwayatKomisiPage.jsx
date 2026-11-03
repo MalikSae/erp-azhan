@@ -10,7 +10,7 @@ import Input from '../components/ui/Input';
 import DataTable from '../components/ui/DataTable';
 import PageHeader from '../components/ui/PageHeader';
 import StatTile from '../components/ui/StatTile';
-import { dateLabel, JENIS_KOMISI, money } from '../utils/agen';
+import { dateLabel, JENIS_KOMISI, JENIS_KOMISI_FILTER, money } from '../utils/agen';
 
 const LIMIT = 200;
 const valueOf = (v) => (v?.target ? v.target.value : v);
@@ -123,7 +123,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
       <CustomDropdown
         value={filter.jenis}
         onChange={(v) => setFilter('jenis', valueOf(v))}
-        options={[{ value: '', label: 'Semua jenis' }, ...Object.entries(JENIS_KOMISI).map(([value, label]) => ({ value, label }))]}
+        options={[{ value: '', label: 'Semua jenis' }, ...Object.entries(JENIS_KOMISI_FILTER).map(([value, label]) => ({ value, label }))]}
         placeholder="Semua jenis"
         className="!mb-0 flex-1 sm:w-44 sm:flex-none"
       />
@@ -158,7 +158,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
         <CustomDropdown label="Agen" name="agen_id" value={filter.agen_id}
           onChange={(v) => setFilter('agen_id', valueOf(v))}
           options={[{ value: '', label: 'Semua agen' }, ...agenOptions.map((a) => ({
-            value: String(a.jamaah_id),
+            value: String(a.akun_id),
             label: showBrandColumn && !filter.brand_id ? `${a.nama_lengkap} (${a.brand_name})` : a.nama_lengkap,
           }))]} placeholder="Semua agen" />
         <Input label="Dari tanggal" type="date" name="dari" value={filter.dari} onChange={(e) => setFilter('dari', e.target.value)} />
@@ -189,7 +189,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
             label="Transaksi"
             hint={items.length >= LIMIT ? `${LIMIT} terbaru` : undefined}
           />
-          <StatTile icon={Banknote} variant="violet" value={money(stats.total)} label="Total komisi" hint="Termasuk cashback" />
+          <StatTile icon={Banknote} variant="violet" value={money(stats.total)} label="Total komisi" />
           <StatTile icon={CheckCircle2} variant="success" value={money(stats.tersedia)} label="Tersedia" />
           <StatTile icon={Clock3} variant="warning" value={money(stats.tertahan)} label="Tertahan" hint="Sampai berangkat" />
         </div>

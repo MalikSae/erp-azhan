@@ -1,37 +1,32 @@
 import client from './client';
 
-// Agen Syiar — Persetujuan Agen & status (agen-azhan.md 3.6, screen B1/B2a).
+// Keagenan berbasis akun (spek keagenan 2026-11-03). Semua id agen di sini adalah id akun (customer_accounts).
 
 export async function listPengajuanAgen() {
   const { data } = await client.get('/api/admin/agen/pengajuan');
   return data || [];
 }
 
-export async function setujuiAgen(jamaahId) {
-  const { data } = await client.post(`/api/admin/agen/${jamaahId}/setujui`);
+// B1 Keputusan admin atas satu pengajuan (spek bagian 7): satu aksi, satu transaksi.
+export const AKSI_KEPUTUSAN_AGEN = {
+  SETUJUI: 'setujui',
+  BEBASKAN: 'bebaskan',
+  MINTA_UNGGAH_ULANG: 'minta_unggah_ulang',
+  TOLAK: 'tolak',
+  SETUJUI_BAYAR_MENYUSUL: 'setujui_bayar_menyusul',
+};
+
+export async function keputusanAgen(akunId, aksi, catatan = '') {
+  const { data } = await client.post(`/api/admin/agen/${akunId}/keputusan`, { aksi, catatan });
   return data;
 }
 
-export async function tolakAgen(jamaahId, alasan) {
-  const { data } = await client.post(`/api/admin/agen/${jamaahId}/tolak`, { alasan });
+export async function ubahStatusAgen(akunId, status) {
+  const { data } = await client.put(`/api/admin/agen/${akunId}/status`, { status });
   return data;
 }
 
-export async function ubahStatusAgen(jamaahId, status) {
-  const { data } = await client.put(`/api/admin/agen/${jamaahId}/status`, { status });
-  return data;
-}
-
-export async function verifikasiPembayaranAgen(pembayaranId) {
-  const { data } = await client.post(`/api/admin/agen/pembayaran/${pembayaranId}/verifikasi`);
-  return data;
-}
-
-export async function tolakPembayaranAgen(pembayaranId, alasan) {
-  const { data } = await client.post(`/api/admin/agen/pembayaran/${pembayaranId}/tolak`, { alasan });
-  return data;
-}
-
+// Unggah bukti oleh admin atas nama pemohon (pemohon kirim lewat WhatsApp).
 export async function uploadBuktiPembayaranAgen(pembayaranId, buktiTransferUrl) {
   const { data } = await client.post(`/api/admin/agen/pembayaran/${pembayaranId}/bukti`, {
     bukti_transfer_url: buktiTransferUrl,
@@ -39,7 +34,7 @@ export async function uploadBuktiPembayaranAgen(pembayaranId, buktiTransferUrl) 
   return data;
 }
 
-// Picker Jalur 3: agen aktif satu brand. brandId wajib untuk super admin.
+// Picker agen: agen aktif satu brand. brandId wajib untuk super admin.
 export async function listAgenAktif({ brandId, q } = {}) {
   const params = {};
   if (brandId) params.brand_id = brandId;
@@ -67,8 +62,8 @@ export async function getPeringkatAgen({ dari, sampai, brandId }) {
 }
 
 // B2a Detail Agen (8 kelompok data).
-export async function getDetailAgen(jamaahId) {
-  const { data } = await client.get(`/api/admin/agen/${jamaahId}`);
+export async function getDetailAgen(akunId) {
+  const { data } = await client.get(`/api/admin/agen/${akunId}`);
   return data;
 }
 
@@ -79,7 +74,7 @@ export async function listRiwayatKomisi(filter = {}) {
   return data || [];
 }
 
-// B5 Pakai Kredit Cashback di detail booking.
+// B5 Pakai Kredit Cashback di detail booking (dimatikan, lihat KOMISI_REPEAT_CASHBACK_AKTIF).
 export async function getKreditCashback(bookingId) {
   const { data } = await client.get(`/api/admin/bookings/${bookingId}/cashback`);
   return data;
@@ -111,7 +106,7 @@ export async function tolakPencairan(id, alasan) {
   return data;
 }
 
-// C4 Ganti Kaitan Agen (Admin Master).
+// C4 Override kaitan (Admin Master): pindahkan kunci jamaah ke agen lain.
 export async function cariJamaahKaitan(q, brandId) {
   const params = { q };
   if (brandId) params.brand_id = brandId;
@@ -124,10 +119,34 @@ export async function listKaitanLog(jamaahId) {
   return data || [];
 }
 
-export async function gantiKaitanAgen(jamaahId, { mode, agenJamaahId, alasan }) {
+// pindahkanKomisi wajib true bila jamaah sudah punya komisi tercatat (mode 'agen').
+export async function gantiKaitanAgen(jamaahId, { mode, agenAkunId, alasan, pindahkanKomisi = false }) {
   const { data } = await client.put(`/api/admin/kaitan-agen/${jamaahId}`, {
     mode,
-    agen_jamaah_id: mode === 'agen' ? agenJamaahId : null,
+    agen_akun_id: mode === 'agen' ? agenAkunId : null,
+    alasan,
+    pindahkan_komisi: mode === 'agen' && pindahkanKomisi,
+  });
+  return data;
+}
+
+// C4 Override pada akun: pasang, ganti, atau lepas agen yang mengikat akun.
+export async function cariAkunKaitan(q, brandId) {
+  const params = { q };
+  if (brandId) params.brand_id = brandId;
+  const { data } = await client.get('/api/admin/kaitan-agen/akun', { params });
+  return data || [];
+}
+
+export async function listKaitanAkunLog(akunId) {
+  const { data } = await client.get(`/api/admin/kaitan-agen/akun/${akunId}/log`);
+  return data || [];
+}
+
+export async function gantiAgenAkun(akunId, { agenAkunId, ubahUpline = false, alasan }) {
+  const { data } = await client.put(`/api/admin/kaitan-agen/akun/${akunId}`, {
+    agen_akun_id: agenAkunId ?? null,
+    ubah_upline: ubahUpline,
     alasan,
   });
   return data;
