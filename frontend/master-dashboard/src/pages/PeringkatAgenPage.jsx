@@ -100,7 +100,6 @@ export default function PeringkatAgenPage() {
     { header: 'Booking', key: 'booking_closing', sortable: true },
     { header: 'Komisi Langsung', key: 'komisi_langsung', sortable: true },
     { header: 'Bonus Pembinaan', key: 'bonus_pembinaan', sortable: true },
-    { header: 'Repeat Order', key: 'repeat_order', sortable: true },
     { header: 'Total Komisi', key: 'total_komisi', sortable: true },
   ];
 
@@ -121,7 +120,7 @@ export default function PeringkatAgenPage() {
       );
     }
     if (key === 'brand_name') return <BrandChip name={brandsMap[row.brand_id]?.name || row.brand_name} color={brandsMap[row.brand_id]?.primary_color} />;
-    if (['komisi_langsung', 'bonus_pembinaan', 'repeat_order'].includes(key)) return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{money(row[key])}</span>;
+    if (['komisi_langsung', 'bonus_pembinaan'].includes(key)) return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{money(row[key])}</span>;
     if (key === 'total_komisi') return <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.total_komisi)}</span>;
     if (key === 'pax_closing' || key === 'booking_closing') return <span className="text-[13px] font-body text-neutral-700">{row[key] ?? 0}</span>;
     return row[key] ?? '-';
@@ -168,7 +167,7 @@ export default function PeringkatAgenPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatTile icon={Users} variant="primary" value={ringkasan.agen} label="Agen berkomisi" />
           <StatTile icon={Trophy} variant="success" value={ringkasan.pax} label="Pax closing" />
-          <StatTile icon={Coins} variant="violet" value={money(ringkasan.komisi)} label="Total komisi" hint="Tanpa cashback" />
+          <StatTile icon={Coins} variant="violet" value={money(ringkasan.komisi)} label="Total komisi" />
         </div>
       )}
 
@@ -176,7 +175,7 @@ export default function PeringkatAgenPage() {
         columns={columns}
         data={items}
         renderCell={renderCell}
-        onRowClick={(row) => navigate(`/agen/${row.jamaah_id}`)}
+        onRowClick={(row) => navigate(`/agen/${row.akun_id}`)}
         itemsPerPage={20}
         toolbarActions={toolbarActions}
         toolbarPanel={toolbarPanel}

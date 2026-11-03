@@ -38,6 +38,7 @@ import CurrencyInput from "../components/ui/CurrencyInput";
 import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
 import KreditCashbackPanel from "../components/KreditCashbackPanel";
+import { KOMISI_REPEAT_CASHBACK_AKTIF } from "../utils/agen";
 import RefundPanel from "../components/RefundPanel";
 import { CheckCircle, ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
 
@@ -1132,12 +1133,14 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             )}
           </TableCard>
 
-          {/* Section: Kredit Cashback (B5) — hanya tampil bila ada pax dengan kredit */}
-          <KreditCashbackPanel
-            bookingId={id}
-            refreshKey={`${booking.total_harga}-${discounts.length}-${booking.status}`}
-            onApplied={fetchAll}
-          />
+          {/* Section: Kredit Cashback (B5) — dimatikan bersama flag backend KomisiRepeatCashbackAktif */}
+          {KOMISI_REPEAT_CASHBACK_AKTIF && (
+            <KreditCashbackPanel
+              bookingId={id}
+              refreshKey={`${booking.total_harga}-${discounts.length}-${booking.status}`}
+              onApplied={fetchAll}
+            />
+          )}
 
           {/* Section: Pengembalian Dana — hanya tampil untuk booking batal yang sudah dibayar */}
           <RefundPanel booking={booking} onRecorded={fetchAll} />

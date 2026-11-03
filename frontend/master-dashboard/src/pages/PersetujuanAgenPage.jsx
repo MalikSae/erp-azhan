@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   listPengajuanAgen,
-  setujuiAgen,
-  tolakAgen,
-  verifikasiPembayaranAgen,
-  tolakPembayaranAgen,
+  keputusanAgen,
+  AKSI_KEPUTUSAN_AGEN as AKSI,
   uploadBuktiPembayaranAgen,
   uploadMedia,
   openProtectedMedia,
@@ -17,14 +15,15 @@ import Button from 'shared/ui/Button';
 import DataTable from 'shared/ui/DataTable';
 import Modal from 'shared/ui/Modal';
 import PageHeader from 'shared/ui/PageHeader';
-import { Eye, UserCheck, ClipboardList, Banknote } from 'lucide-react';
+import { Eye, UserCheck, ClipboardList, Banknote, TriangleAlert } from 'lucide-react';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
 const bayarMeta = {
-  menunggu_verifikasi: { label: 'Menunggu verifikasi', variant: 'pending', dot: 'bg-warning-500' },
-  terverifikasi: { label: 'Terverifikasi', variant: 'success', dot: 'bg-success-500' },
-  ditolak: { label: 'Ditolak', variant: 'danger', dot: 'bg-danger-500' },
+  menunggu_verifikasi: { label: 'Menunggu verifikasi', dot: 'bg-warning-500' },
+  terverifikasi: { label: 'Lunas', dot: 'bg-success-500' },
+  dibebaskan: { label: 'Dibebaskan', dot: 'bg-success-500' },
+  ditolak: { label: 'Bukti ditolak, menunggu unggah ulang', dot: 'bg-danger-500' },
 };
 
 // Status = titik berwarna kecil + teks (bukan badge berwarna).
@@ -35,15 +34,75 @@ const StatusDot = ({ meta }) => (
   </span>
 );
 
-// Screen B1 — antrian pengajuan agen. Approve keagenan TIDAK PERNAH dikunci
-// oleh status pembayaran (agen-azhan.md §5 poin 20).
+const AKSI_META = {
+  [AKSI.SETUJUI]: {
+    label: 'Setujui',
+    desc: 'Bukti valid atau biaya Rp0. Agen aktif, tagihan lunas, kode referral dibuat.',
+    variant: 'primary',
+    wajibCatatan: false,
+  },
+  [AKSI.BEBASKAN]: {
+    label: 'Bebaskan biaya',
+    desc: 'Agen aktif, tagihan dihapus tanpa pembayaran.',
+    variant: 'primary',
+    wajibCatatan: true,
+    placeholder: 'Mis. keluarga pemilik travel, biaya dibebaskan',
+  },
+  [AKSI.MINTA_UNGGAH_ULANG]: {
+    label: 'Minta unggah ulang',
+    desc: 'Bukti kurang jelas. Pengajuan tetap menunggu, kembali ke antrean setelah pemohon mengunggah lagi.',
+    variant: 'secondary',
+    wajibCatatan: true,
+    placeholder: 'Mis. foto buram, nominal tidak terbaca (dibaca pemohon di portal)',
+  },
+  [AKSI.TOLAK]: {
+    label: 'Tolak',
+    desc: 'Pengajuan ditutup. Pemohon boleh mengajukan ulang dari awal.',
+    variant: 'danger',
+    wajibCatatan: true,
+    placeholder: 'Alasan penolakan (dibaca pemohon)',
+  },
+  [AKSI.SETUJUI_BAYAR_MENYUSUL]: {
+    label: 'Setujui, bayar menyusul',
+    desc: 'Agen aktif sekarang, tagihan tetap tercatat. Lunas setelah bukti diverifikasi, atau bebaskan kemudian.',
+    variant: 'primary',
+    wajibCatatan: true,
+    placeholder: 'Mis. transfer menyusul pekan depan, dikonfirmasi lewat WhatsApp',
+  },
+};
+
+// Aksi yang tersedia mengikuti aturan keputusanTx di backend (internal/agen/keputusan.go).
+// Mengembalikan [{ aksi, alasanNonaktif }]; alasanNonaktif terisi bila aksi ada tetapi belum bisa dipilih.
+function aksiTersedia(row) {
+  const p = row.pembayaran;
+  if (!p) return [];
+  const final = p.status === 'terverifikasi' || p.status === 'dibebaskan';
+  const berbayar = Number(p.nominal_tagihan) > 0;
+  const adaBukti = p.status === 'menunggu_verifikasi' && Boolean(p.bukti_transfer_url);
+  const pengajuan = row.status_agen === 'pengajuan';
+  const susulan = row.status_agen === 'aktif' && p.keputusan_agen === 'disetujui' && !final && berbayar;
+  if (!pengajuan && !susulan) return [];
+
+  const setujui = { aksi: AKSI.SETUJUI };
+  if (!final && !adaBukti) setujui.alasanNonaktif = 'Bukti transfer belum ada atau sudah ditolak. Pilih bebaskan, bayar menyusul, atau tunggu unggahan.';
+  const daftar = [setujui];
+  if (!final) daftar.push({ aksi: AKSI.BEBASKAN });
+  if (pengajuan && !final && berbayar) {
+    daftar.push({ aksi: AKSI.MINTA_UNGGAH_ULANG, ...(adaBukti ? {} : { alasanNonaktif: 'Hanya untuk bukti yang menunggu verifikasi.' }) });
+  }
+  if (pengajuan) daftar.push({ aksi: AKSI.TOLAK });
+  if (pengajuan && !final && berbayar) daftar.push({ aksi: AKSI.SETUJUI_BAYAR_MENYUSUL });
+  return daftar;
+}
+
+// Screen B1 — satu kartu pengajuan, satu keputusan admin dengan lima aksi (spek keagenan bagian 7).
 export default function PersetujuanAgenPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
-  const [mode, setMode] = useState(null); // null | 'tolak-agen' | 'tolak-bayar'
-  const [alasan, setAlasan] = useState('');
+  const [aksi, setAksi] = useState(null);
+  const [catatan, setCatatan] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
   const fotoSrc = useProtectedImage(selected?.foto_agen_url);
@@ -69,8 +128,8 @@ export default function PersetujuanAgenPage() {
 
   const open = (row) => {
     setSelected(row);
-    setMode(null);
-    setAlasan('');
+    setAksi(null);
+    setCatatan('');
     setActionError('');
   };
 
@@ -79,42 +138,48 @@ export default function PersetujuanAgenPage() {
     setSelected(null);
   };
 
-  // Jalankan aksi lalu muat ulang. Kalau pengajuan masih ada (mis. hanya
-  // verifikasi pembayaran), modal tetap terbuka dengan data terbaru.
-  const run = async (fn) => {
-    setSaving(true);
-    setActionError('');
-    try {
-      await fn();
-      const data = await load();
-      const fresh = data.find((it) => it.jamaah_id === selected?.jamaah_id);
-      setSelected(fresh || null);
-      setMode(null);
-      setAlasan('');
-    } catch (err) {
-      setActionError(err.response?.data?.error || 'Aksi gagal diproses.');
-    } finally {
-      setSaving(false);
-    }
+  const refreshSelected = async () => {
+    const data = await load();
+    const fresh = data.find((it) => it.akun_id === selected?.akun_id);
+    setSelected(fresh || null);
+    setAksi(null);
+    setCatatan('');
   };
 
   const handleUploadAdmin = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !selected?.pembayaran) return;
-    await run(async () => {
+    setSaving(true);
+    setActionError('');
+    try {
       const url = await uploadMedia(file, 'payment-proofs');
       await uploadBuktiPembayaranAgen(selected.pembayaran.id, url);
-    });
+      await refreshSelected();
+    } catch (err) {
+      setActionError(err.response?.data?.error || 'Bukti transfer gagal diunggah.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const submitAlasan = () => {
-    if (alasan.trim().length < 3) {
-      setActionError('Alasan wajib diisi (minimal 3 karakter).');
+  const submitKeputusan = async () => {
+    const meta = AKSI_META[aksi];
+    if (!meta) return;
+    if (meta.wajibCatatan && catatan.trim().length < 3) {
+      setActionError(aksi === AKSI.TOLAK ? 'Alasan wajib diisi (minimal 3 karakter).' : 'Catatan wajib diisi (minimal 3 karakter).');
       return;
     }
-    if (mode === 'tolak-agen') run(() => tolakAgen(selected.jamaah_id, alasan.trim()));
-    if (mode === 'tolak-bayar') run(() => tolakPembayaranAgen(selected.pembayaran.id, alasan.trim()));
+    setSaving(true);
+    setActionError('');
+    try {
+      await keputusanAgen(selected.akun_id, aksi, catatan.trim());
+      await refreshSelected();
+    } catch (err) {
+      setActionError(err.response?.data?.error || 'Keputusan gagal disimpan.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const columns = [
@@ -137,11 +202,14 @@ export default function PersetujuanAgenPage() {
           >
             {row.nama_lengkap}
           </button>
-          <p className="mt-0.5 text-[11px] text-neutral-400 font-mono">{row.id_jamaah || '-'}{row.no_hp ? ` • ${row.no_hp}` : ''}</p>
+          <p className="mt-0.5 text-[11px] text-neutral-400 font-mono">{row.nik_masked || '-'}{row.no_hp ? ` • ${row.no_hp}` : ''}</p>
+          {row.peringatan_nik?.length > 0 && (
+            <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-warning-700"><TriangleAlert size={12} />Periksa NIK</p>
+          )}
           {row.status_agen !== 'pengajuan' && (
             <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-body text-success-700"><span className="w-1.5 h-1.5 rounded-full bg-success-500" />Agen {row.status_agen} • tinggal pembayaran</div>
           )}
-          {row.direkrut_oleh_nama && <p className="mt-0.5 text-[11px] text-neutral-400">Direkrut: {row.direkrut_oleh_nama}</p>}
+          {row.direkrut_oleh_nama && <p className="mt-0.5 text-[11px] text-neutral-400">Diikat oleh: {row.direkrut_oleh_nama}</p>}
         </div>
       );
     }
@@ -150,7 +218,7 @@ export default function PersetujuanAgenPage() {
       const p = row.pembayaran;
       if (!p) return '-';
       if (Number(p.nominal_tagihan) === 0) return <span className="text-xs text-neutral-500">Tanpa biaya</span>;
-      const meta = bayarMeta[p.status] || { label: p.status, variant: 'neutral' };
+      const meta = bayarMeta[p.status] || { label: p.status };
       return (
         <div>
           <p className="text-[13px] font-semibold text-neutral-900">{money(p.nominal_tagihan)}</p>
@@ -166,7 +234,10 @@ export default function PersetujuanAgenPage() {
 
   const p = selected?.pembayaran;
   const berbayar = p && Number(p.nominal_tagihan) > 0;
-  const bayarLabel = p ? (bayarMeta[p.status] || { label: p.status, variant: 'neutral' }) : null;
+  const bayarLabel = p ? (bayarMeta[p.status] || { label: p.status }) : null;
+  const pilihan = selected ? aksiTersedia(selected) : [];
+  const aksiMeta = aksi ? AKSI_META[aksi] : null;
+  const bisaUnggah = p && berbayar && p.status !== 'terverifikasi' && p.status !== 'dibebaskan';
 
   return (
     <div className="space-y-5">
@@ -176,8 +247,8 @@ export default function PersetujuanAgenPage() {
       {!loading && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatTile icon={ClipboardList} variant="primary" value={items.length} label="Total Pengajuan" />
-          <StatTile icon={UserCheck} variant="warning" value={items.filter((it) => it.status_agen === 'pengajuan').length} label="Menunggu Persetujuan" />
-          <StatTile icon={Banknote} variant="info" value={items.filter((it) => it.pembayaran?.status === 'menunggu_verifikasi').length} label="Menunggu Verifikasi Bayar" />
+          <StatTile icon={UserCheck} variant="warning" value={items.filter((it) => it.status_agen === 'pengajuan').length} label="Menunggu Keputusan" />
+          <StatTile icon={Banknote} variant="info" value={items.filter((it) => it.pembayaran?.status === 'menunggu_verifikasi').length} label="Bukti Perlu Diperiksa" />
         </div>
       )}
 
@@ -187,7 +258,7 @@ export default function PersetujuanAgenPage() {
         renderCell={renderCell}
         itemsPerPage={10}
         onRowClick={open}
-        searchPlaceholder="Cari nama, ID jamaah, atau domisili..."
+        searchPlaceholder="Cari nama, nomor HP, atau domisili..."
         emptyMessage={loading ? 'Memuat pengajuan...' : 'Belum ada pengajuan agen'}
       />
 
@@ -199,31 +270,31 @@ export default function PersetujuanAgenPage() {
         footer={
           <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
             <Button variant="secondary" onClick={close} disabled={saving}>Tutup</Button>
-            <div className="flex flex-col sm:flex-row gap-2">
-              {mode ? (
-                <>
-                  <Button variant="secondary" onClick={() => { setMode(null); setActionError(''); }} disabled={saving}>Batal</Button>
-                  <Button variant="danger" onClick={submitAlasan} isLoading={saving}>
-                    {mode === 'tolak-agen' ? 'Konfirmasi Tolak Keagenan' : 'Konfirmasi Tolak Pembayaran'}
-                  </Button>
-                </>
-              ) : selected?.status_agen === 'pengajuan' ? (
-                <>
-                  <Button variant="danger-light" onClick={() => setMode('tolak-agen')} disabled={saving}>Tolak Keagenan</Button>
-                  <Button variant="primary" onClick={() => run(() => setujuiAgen(selected.jamaah_id))} isLoading={saving}>
-                    Setujui Agen
-                  </Button>
-                </>
-              ) : (
-                <span className="text-xs text-neutral-500 self-center">Keagenan sudah disetujui. Tinggal verifikasi pembayaran.</span>
-              )}
-            </div>
+            {pilihan.length > 0 && (
+              <Button
+                variant={aksiMeta?.variant === 'danger' ? 'danger' : 'primary'}
+                onClick={submitKeputusan}
+                isLoading={saving}
+                disabled={!aksi}
+              >
+                {aksiMeta ? `Simpan keputusan: ${aksiMeta.label}` : 'Pilih satu keputusan'}
+              </Button>
+            )}
           </div>
         }
       >
         {selected && (
           <div className="space-y-4">
             {actionError && <Alert variant="error" message={actionError} />}
+
+            {selected.peringatan_nik?.length > 0 && (
+              <div role="alert" className="rounded-xl border border-warning-300 bg-warning-50 p-3.5 space-y-1.5">
+                <p className="flex items-center gap-2 text-sm font-bold text-warning-900"><TriangleAlert size={16} />Periksa NIK sebelum menyetujui</p>
+                <ul className="list-disc pl-6 text-xs text-warning-900 space-y-0.5">
+                  {selected.peringatan_nik.map((w) => <li key={w}>{w}</li>)}
+                </ul>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-3">
@@ -233,8 +304,12 @@ export default function PersetujuanAgenPage() {
                     <span className="font-semibold text-neutral-900 text-right">{selected.nama_lengkap}</span>
                   </div>
                   <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
-                    <span className="text-neutral-500">ID Jamaah / HP</span>
-                    <span className="font-mono text-neutral-800 text-right">{selected.id_jamaah || '-'} • {selected.no_hp || '-'}</span>
+                    <span className="text-neutral-500">NIK</span>
+                    <span className="font-mono text-neutral-800 text-right">{selected.nik_masked || '-'}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
+                    <span className="text-neutral-500">Nomor WA</span>
+                    <span className="font-mono text-neutral-800 text-right">{selected.no_hp || '-'}</span>
                   </div>
                   <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
                     <span className="text-neutral-500">Domisili</span>
@@ -245,23 +320,27 @@ export default function PersetujuanAgenPage() {
                     <span className="text-neutral-800">{dateLabel(selected.menyetujui_syarat_ketentuan_agen_at)}</span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span className="text-neutral-500">Direkrut oleh</span>
+                    <span className="text-neutral-500">Diikat oleh agen</span>
                     <span className="text-neutral-800 text-right">{selected.direkrut_oleh_nama || 'Tanpa agen (tidak ada upline)'}</span>
                   </div>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200/80 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Pembayaran pendaftaran</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Biaya pendaftaran</span>
                     {berbayar && bayarLabel && <StatusDot meta={bayarLabel} />}
                   </div>
                   <p className="text-xl font-black text-neutral-900">{berbayar ? money(p.nominal_tagihan) : 'Tanpa biaya'}</p>
                   {p?.status === 'ditolak' && p.catatan_penolakan && (
                     <p className="text-xs text-danger-700 bg-danger-50 p-2 rounded-lg border border-danger-200/60">
-                      <strong>Alasan ditolak:</strong> {p.catatan_penolakan}
+                      <strong>Catatan unggah ulang:</strong> {p.catatan_penolakan}
                     </p>
                   )}
-                  <p className="text-[11px] text-neutral-500">Status pembayaran tidak menghalangi persetujuan keagenan.</p>
+                  {p?.catatan_admin && (
+                    <p className="text-xs text-neutral-700 bg-white p-2 rounded-lg border border-neutral-200">
+                      <strong>Catatan admin:</strong> {p.catatan_admin}
+                    </p>
+                  )}
 
                   {berbayar && (
                     <div className="space-y-1.5 pt-1">
@@ -286,21 +365,11 @@ export default function PersetujuanAgenPage() {
                           ))}
                         </ul>
                       )}
-                      {p.status !== 'terverifikasi' && (
-                        <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                          <Button size="sm" variant="primary" onClick={() => run(() => verifikasiPembayaranAgen(p.id))} disabled={saving || Boolean(mode)}>
-                            Tandai Terverifikasi
-                          </Button>
-                          {p.status === 'menunggu_verifikasi' && (
-                            <Button size="sm" variant="danger-light" onClick={() => setMode('tolak-bayar')} disabled={saving || Boolean(mode)}>
-                              Tolak Pembayaran
-                            </Button>
-                          )}
-                          <label className={`inline-flex items-center justify-center rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 ${saving || mode ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
-                            Upload Bukti Transfer
-                            <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUploadAdmin} />
-                          </label>
-                        </div>
+                      {bisaUnggah && (
+                        <label className={`inline-flex items-center justify-center rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 ${saving ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
+                          Unggah bukti atas nama pemohon
+                          <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUploadAdmin} />
+                        </label>
                       )}
                     </div>
                   )}
@@ -308,7 +377,7 @@ export default function PersetujuanAgenPage() {
               </div>
 
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-neutral-700 mb-2 block">Foto diri (ID card)</span>
+                <span className="text-xs font-bold text-neutral-700 mb-2 block">Foto agen</span>
                 <div className="flex-1 min-h-[240px] max-h-[340px] rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden flex items-center justify-center p-2">
                   {fotoSrc ? (
                     <img src={fotoSrc} alt={`Foto ${selected.nama_lengkap}`} className="max-h-[320px] w-auto max-w-full object-contain rounded-lg" />
@@ -319,21 +388,62 @@ export default function PersetujuanAgenPage() {
               </div>
             </div>
 
-            {mode && (
-              <div className="p-3.5 rounded-xl bg-danger-50/70 border border-danger-200/80 space-y-2">
-                <label htmlFor="alasan-tolak" className="block text-xs font-bold text-danger-900">
-                  {mode === 'tolak-agen' ? 'Alasan penolakan keagenan' : 'Catatan penolakan pembayaran'} <span className="text-danger-600">*</span>
-                </label>
-                <textarea
-                  id="alasan-tolak"
-                  value={alasan}
-                  onChange={(e) => setAlasan(e.target.value)}
-                  rows={3}
-                  placeholder={mode === 'tolak-agen' ? 'Mis. domisili di luar area layanan' : 'Mis. nominal transfer kurang Rp10.000 (dibaca pemohon di portal)'}
-                  className="w-full rounded-lg border border-danger-300 bg-white p-2.5 text-xs text-neutral-800 placeholder-neutral-400 focus:border-danger-500 focus:outline-none focus:ring-1 focus:ring-danger-500"
-                  autoFocus
-                />
-              </div>
+            {pilihan.length === 0 ? (
+              <p className="text-xs text-neutral-500">Tidak ada keputusan yang bisa diambil pada status ini.</p>
+            ) : (
+              <fieldset className="space-y-2" disabled={saving}>
+                <legend className="text-xs font-bold text-neutral-700 mb-1">
+                  {selected.status_agen === 'pengajuan' ? 'Keputusan admin' : 'Keputusan atas tagihan yang tersisa'}
+                </legend>
+                {pilihan.map(({ aksi: kode, alasanNonaktif }) => {
+                  const meta = AKSI_META[kode];
+                  const aktif = aksi === kode;
+                  return (
+                    <label
+                      key={kode}
+                      className={`flex items-start gap-3 rounded-xl border p-3 text-xs transition-colors ${
+                        alasanNonaktif ? 'opacity-60 cursor-not-allowed border-neutral-200 bg-neutral-50'
+                          : aktif ? 'cursor-pointer border-primary-400 bg-primary-50' : 'cursor-pointer border-neutral-200 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="keputusan-agen"
+                        value={kode}
+                        checked={aktif}
+                        disabled={Boolean(alasanNonaktif)}
+                        onChange={() => { setAksi(kode); setActionError(''); }}
+                        className="mt-0.5 w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-neutral-900">{meta.label}</span>
+                        <span className="block text-neutral-500 mt-0.5">{meta.desc}</span>
+                        {alasanNonaktif && <span className="block text-neutral-500 mt-0.5 italic">{alasanNonaktif}</span>}
+                        {kode === AKSI.SETUJUI && selected.peringatan_nik?.length > 0 && !alasanNonaktif && (
+                          <span className="mt-1 flex items-center gap-1 font-semibold text-warning-700"><TriangleAlert size={12} />Ada peringatan NIK di atas. Periksa dulu.</span>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+
+                {aksiMeta?.wajibCatatan && (
+                  <div className="space-y-1.5 pt-1">
+                    <label htmlFor="catatan-keputusan" className="block text-xs font-bold text-neutral-700">
+                      {aksi === AKSI.TOLAK ? 'Alasan penolakan' : 'Catatan admin'} <span className="text-danger-600">*</span>
+                    </label>
+                    <textarea
+                      id="catatan-keputusan"
+                      value={catatan}
+                      onChange={(e) => setCatatan(e.target.value)}
+                      rows={3}
+                      placeholder={aksiMeta.placeholder}
+                      className="w-full rounded-lg border border-neutral-300 bg-white p-2.5 text-xs text-neutral-800 placeholder-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      autoFocus
+                    />
+                  </div>
+                )}
+              </fieldset>
             )}
           </div>
         )}

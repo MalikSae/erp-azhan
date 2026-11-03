@@ -107,7 +107,7 @@ export default function DaftarAgenPage({ showBrandColumn = false }) {
       return (
         <ActionMenu
           align="right"
-          items={[{ label: 'Lihat Detail', icon: Eye, tooltip: 'Lihat detail dan kinerja agen', onClick: () => navigate(`/agen/${row.jamaah_id}`) }]}
+          items={[{ label: 'Lihat Detail', icon: Eye, tooltip: 'Lihat detail dan kinerja agen', onClick: () => navigate(`/agen/${row.akun_id}`) }]}
         />
       );
     }
@@ -124,7 +124,7 @@ export default function DaftarAgenPage({ showBrandColumn = false }) {
           <StatTile icon={Network} variant="primary" value={stats.total} label="Agen" />
           <StatTile icon={CheckCircle2} variant="success" value={stats.aktif} label="Aktif" />
           <StatTile icon={Users} variant="info" value={stats.closing} label="Closing" hint="Jamaah" />
-          <StatTile icon={Banknote} variant="violet" value={money(stats.komisi)} label="Total komisi" hint="Tanpa cashback" />
+          <StatTile icon={Banknote} variant="violet" value={money(stats.komisi)} label="Total komisi" />
         </div>
       )}
 
@@ -132,7 +132,7 @@ export default function DaftarAgenPage({ showBrandColumn = false }) {
         columns={columns}
         data={data}
         renderCell={renderCell}
-        onRowClick={(row) => navigate(`/agen/${row.jamaah_id}`)}
+        onRowClick={(row) => navigate(`/agen/${row.akun_id}`)}
         itemsPerPage={15}
         searchPlaceholder="Cari nama atau kode referral..."
         emptyMessage={loading ? 'Memuat agen...' : 'Belum ada agen'}
