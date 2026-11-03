@@ -15,7 +15,7 @@ import (
 
 // PathDetailBooking adalah rute halaman detail booking di situs brand (azhan-booking). Rute tetap
 // memakai kata lama "pesanan"; hanya teks tampilan yang memakai istilah "booking".
-const PathDetailBooking = "/pesanan/"
+const PathDetailBooking = "/akun/booking/"
 
 // mailInfo adalah data brand dan jadwal yang dibutuhkan email "Booking berhasil dibuat".
 type mailInfo struct {
