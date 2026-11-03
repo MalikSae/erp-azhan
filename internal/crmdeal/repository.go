@@ -228,7 +228,7 @@ func (r *Repository) Process(ctx context.Context, brandID, createdBy int64, idem
 	if err != nil {
 		return nil, err
 	}
-	if err := agen.IkatRombongan(ctx, tx, jamaahID, nil, agenReferral); err != nil {
+	if err := agen.IkatRombongan(ctx, tx, []int64{jamaahID}, agenReferral, agen.SumberReferral); err != nil {
 		return nil, err
 	}
 

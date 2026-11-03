@@ -27,7 +27,7 @@ func handleSprint5Error(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrPencairanMasihPending), errors.Is(err, ErrPencairanBukanPending),
 		errors.Is(err, ErrSaldoTidakCukup), errors.Is(err, ErrKaitanBukanJalur3),
-		errors.Is(err, ErrKaitanSudahKomisi), errors.Is(err, ErrKaitanJamaahAgen):
+		errors.Is(err, ErrKaitanSudahKomisi):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		handleError(w, err)
@@ -38,7 +38,7 @@ func handleSprint5Error(w http.ResponseWriter, err error) {
 
 // GetPencairan GET /api/portal/agen/pencairan
 func (h *Handler) GetPencairan(w http.ResponseWriter, r *http.Request) {
-	p, err := h.repo.GetPencairanPortal(r.Context(), identity.GetPortalJamaahID(r.Context()))
+	p, err := h.repo.GetPencairanPortal(r.Context(), identity.GetCustomerAccountID(r.Context()))
 	if err != nil {
 		handleSprint5Error(w, err)
 		return
@@ -53,7 +53,7 @@ func (h *Handler) AjukanPencairan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
-	agenID := identity.GetPortalJamaahID(r.Context())
+	agenID := identity.GetCustomerAccountID(r.Context())
 	id, err := h.repo.AjukanPencairan(r.Context(), agenID, req)
 	if err != nil {
 		handleSprint5Error(w, err)
@@ -69,7 +69,7 @@ func (h *Handler) BuktiPencairanPortal(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	url, err := h.repo.BuktiPencairan(r.Context(), id, identity.GetPortalJamaahID(r.Context()))
+	url, err := h.repo.BuktiPencairan(r.Context(), id, identity.GetCustomerAccountID(r.Context()))
 	if err != nil {
 		handleSprint5Error(w, err)
 		return

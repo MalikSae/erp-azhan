@@ -11,7 +11,7 @@ type RowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// Saldo seorang jamaah/agen (agen-azhan.md 7.7 dan 7.13, keputusan D4 & D6).
+// Saldo seorang akun agen (agen-azhan.md 7.7 dan 7.13, keputusan D4 & D6).
 type Saldo struct {
 	// Tersedia: komisi (tanpa cashback) yang booking sumbernya sudah berangkat,
 	// dikurangi pencairan yang disetujui maupun masih pending.
@@ -28,24 +28,24 @@ SELECT
   COALESCE((SELECT SUM(tk.nominal) FROM transaksi_komisi tk
             JOIN bookings b ON b.id = tk.booking_id
             JOIN schedules s ON s.id = b.schedule_id
-            WHERE tk.jamaah_penerima_id = ? AND tk.jenis <> 'cashback'
+            WHERE tk.akun_penerima_id = ? AND tk.jenis <> 'cashback'
               AND s.berangkat_tanggal <= CURRENT_DATE), 0),
   COALESCE((SELECT SUM(tk.nominal) FROM transaksi_komisi tk
             JOIN bookings b ON b.id = tk.booking_id
             JOIN schedules s ON s.id = b.schedule_id
-            WHERE tk.jamaah_penerima_id = ? AND tk.jenis <> 'cashback'
+            WHERE tk.akun_penerima_id = ? AND tk.jenis <> 'cashback'
               AND s.berangkat_tanggal > CURRENT_DATE), 0),
   COALESCE((SELECT SUM(nominal_diajukan) FROM pengajuan_pencairan
-            WHERE jamaah_agen_id = ? AND status IN ('disetujui','pending')), 0),
+            WHERE akun_agen_id = ? AND status IN ('disetujui','pending')), 0),
   COALESCE((SELECT SUM(nominal) FROM transaksi_komisi
-            WHERE jamaah_penerima_id = ? AND jenis = 'cashback'), 0),
-  COALESCE((SELECT SUM(nominal) FROM pemakaian_cashback WHERE jamaah_id = ?), 0)`
+            WHERE akun_penerima_id = ? AND jenis = 'cashback'), 0),
+  COALESCE((SELECT SUM(nominal) FROM pemakaian_cashback WHERE akun_id = ?), 0)`
 
-// HitungSaldo menghitung saldo seorang jamaah/agen. Untuk validasi pencairan,
+// HitungSaldo menghitung saldo seorang akun agen. Untuk validasi pencairan,
 // panggil dengan *sql.Tx setelah mengunci baris agen (7.6).
-func HitungSaldo(ctx context.Context, q RowQuerier, jamaahID int64) (Saldo, error) {
+func HitungSaldo(ctx context.Context, q RowQuerier, akunID int64) (Saldo, error) {
 	var matang, tertahan, pencairan, cashback, cashbackDipakai float64
-	err := q.QueryRowContext(ctx, qSaldo, jamaahID, jamaahID, jamaahID, jamaahID, jamaahID).
+	err := q.QueryRowContext(ctx, qSaldo, akunID, akunID, akunID, akunID, akunID).
 		Scan(&matang, &tertahan, &pencairan, &cashback, &cashbackDipakai)
 	if err != nil {
 		return Saldo{}, fmt.Errorf("komisi: hitung saldo: %w", err)

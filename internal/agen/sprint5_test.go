@@ -34,7 +34,7 @@ func TestLangkah8dan9Pencairan(t *testing.T) {
 		KomisiLangsung: rp(1_000_000), BerangkatTanggal: "2000-01-01",
 	})
 	admin := adminUji(t, tx)
-	adam := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Adam", StatusAgen: "aktif"})
+	adam := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Adam", StatusAgen: "aktif"})
 	idris := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Idris", Direkrut: adam})
 	istri := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Istri", Direkrut: adam})
 	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 2000, testdb.Pax{JamaahID: idris}, testdb.Pax{JamaahID: istri})
@@ -85,7 +85,7 @@ func TestLangkah8dan9Pencairan(t *testing.T) {
 	if u, err := buktiPencairan(ctx, tx, id1, adam); err != nil || u == "" {
 		t.Fatalf("bukti milik agen: %q %v", u, err)
 	}
-	lain := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "AgenLain", StatusAgen: "aktif"})
+	lain := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenLain", StatusAgen: "aktif"})
 	if _, err := buktiPencairan(ctx, tx, id1, lain); err != ErrNotFound {
 		t.Fatalf("bukti dibuka agen lain: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestLangkah8dan9Pencairan(t *testing.T) {
 
 	// Agen nonaktif tidak bisa mengajukan.
 	testdb.Exec(t, tx, `UPDATE schedules SET berangkat_tanggal='2000-01-01' WHERE id=?`, sched)
-	testdb.Exec(t, tx, `UPDATE jamaah SET status_agen='nonaktif' WHERE id=?`, adam)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET status_agen='nonaktif' WHERE id=?`, adam)
 	if err := ajukan(500_000, rekeningUji); err != ErrBukanAgenAktif {
 		t.Fatalf("agen nonaktif: %v", err)
 	}
@@ -127,7 +127,7 @@ func kaitanSumber(t *testing.T, tx *sql.Tx, id int64) (string, int64, string) {
 	var st string
 	var by sql.NullInt64
 	var sumber sql.NullString
-	must(t, "baca", tx.QueryRow(`SELECT kaitan_status, direkrut_oleh_jamaah_id, kaitan_sumber FROM jamaah WHERE id=?`, id).Scan(&st, &by, &sumber))
+	must(t, "baca", tx.QueryRow(`SELECT kaitan_status, direkrut_oleh_akun_id, kaitan_sumber FROM jamaah WHERE id=?`, id).Scan(&st, &by, &sumber))
 	return st, by.Int64, sumber.String
 }
 
@@ -137,12 +137,12 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 	ctx := context.Background()
 	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{KomisiLangsung: rp(1_000_000), BerangkatTanggal: "2099-01-01"})
 	admin := adminUji(t, tx)
-	nuh := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Nuh", StatusAgen: "aktif"})
-	hud := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Hud", StatusAgen: "aktif"})
+	nuh := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Nuh", StatusAgen: "aktif"})
+	hud := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Hud", StatusAgen: "aktif"})
 	ganti := func(id int64, mode string, agenID int64) error {
 		req := GantiKaitanRequest{Mode: mode, Alasan: "salah pilih saat input"}
 		if agenID > 0 {
-			req.AgenJamaahID = &agenID
+			req.AgenAkunID = &agenID
 		}
 		return gantiKaitanTx(ctx, tx, id, admin, req)
 	}
@@ -151,7 +151,7 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 	utsman := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Utsman"})
 	companion := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Companion"})
 	must(t, "jalur 3", TetapkanKaitanJalur3(ctx, tx, utsman, "agen", nuh))
-	must(t, "ikut PIC", IkatRombongan(ctx, tx, utsman, []int64{companion}, 0))
+	must(t, "ikut PIC", IkatJamaah(ctx, tx, companion, nuh, SumberIkutPIC))
 	if st, _, sumber := kaitanSumber(t, tx, utsman); st != "terikat_agen" || sumber != SumberJalur3 {
 		t.Fatalf("utsman = %s/%s", st, sumber)
 	}
@@ -165,9 +165,6 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 	}
 	if err := ganti(utsman, "tanpa_agen", 0); err != ErrKaitanTidakBerubah {
 		t.Fatalf("ganti tanpa perubahan: %v", err)
-	}
-	if err := ganti(utsman, "agen", utsman); err != ErrAgenTidakValid {
-		t.Fatalf("ikat ke diri sendiri: %v", err)
 	}
 	must(t, "ganti ke Hud", ganti(utsman, "agen", hud))
 	logs, err := listKaitanLog(ctx, tx, utsman)
@@ -206,18 +203,10 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 		t.Fatalf("ikut PIC: %v", err)
 	}
 
-	// Jamaah Jalur 3 yang kemudian jadi agen tidak bisa diganti (upline terkait).
-	calon := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Calon"})
-	must(t, "jalur 3 calon", TetapkanKaitanJalur3(ctx, tx, calon, "agen", nuh))
-	testdb.Exec(t, tx, `UPDATE jamaah SET status_agen='pengajuan' WHERE id=?`, calon)
-	if err := ganti(calon, "tanpa_agen", 0); err != ErrKaitanJamaahAgen {
-		t.Fatalf("jamaah pengajuan agen: %v", err)
-	}
-
 	// Agen tujuan harus agen aktif di brand yang sama.
 	salah := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Salah"})
 	must(t, "jalur 3 salah", TetapkanKaitanJalur3(ctx, tx, salah, "tanpa_agen", 0))
-	biasa := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Biasa"})
+	biasa := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Biasa"})
 	if err := ganti(salah, "agen", biasa); err != ErrAgenTidakValid {
 		t.Fatalf("agen tujuan bukan agen: %v", err)
 	}

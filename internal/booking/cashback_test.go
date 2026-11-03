@@ -19,45 +19,47 @@ func TestPakaiKreditCashback(t *testing.T) {
 	if err := tx.QueryRow(`SELECT id FROM admin_users ORDER BY id LIMIT 1`).Scan(&adminID); err != nil {
 		t.Fatal(err)
 	}
-	jamaah := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "PenerimaCashback"})
-	lain := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "BukanPax"})
+	penerima := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "PenerimaCashback"})
+	jamaah := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "PaxCashback"})
 
-	// Booking lama menghasilkan cashback 500rb untuk jamaah.
+	// Booking lama menghasilkan cashback 500rb untuk akun pemesan.
 	lama, paxLama := testdb.NewBookingPax(t, tx, sched, "lunas", 0, testdb.Pax{JamaahID: jamaah})
-	testdb.Exec(t, tx, `INSERT INTO transaksi_komisi (brand_id, jamaah_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal)
-		VALUES (?,?,?,?,?,'cashback',500000)`, brand, jamaah, jamaah, lama, paxLama[0])
+	testdb.Exec(t, tx, `INSERT INTO transaksi_komisi (brand_id, akun_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal)
+		VALUES (?,?,?,?,?,'cashback',500000)`, brand, penerima, jamaah, lama, paxLama[0])
 
 	// Booking baru: tagihan 10 juta, status dp.
 	baru, paxBaru := testdb.NewBookingPax(t, tx, sched, "dp", 10_000_000, testdb.Pax{JamaahID: jamaah})
 	testdb.Exec(t, tx, `UPDATE booking_pax SET harga_pax=10000000 WHERE id=?`, paxBaru[0])
+	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, penerima, baru)
 
 	kredit := func() float64 {
 		t.Helper()
-		s, err := komisi.HitungSaldo(ctx, tx, jamaah)
+		s, err := komisi.HitungSaldo(ctx, tx, penerima)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return s.KreditCashback
 	}
-	pakai := func(jamaahID int64, nominal float64) error {
-		return pakaiCashbackTx(ctx, tx, repo, baru, &brand, adminID, PakaiCashbackRequest{JamaahID: jamaahID, Nominal: nominal})
+	pakai := func(nominal float64) error {
+		return pakaiCashbackTx(ctx, tx, repo, baru, &brand, adminID, PakaiCashbackRequest{Nominal: nominal})
 	}
 
 	info, err := kreditCashbackBooking(ctx, tx, baru, &brand)
-	if err != nil || len(info.Pax) != 1 || info.Pax[0].KreditCashback != 500000 || !info.BisaDipakai {
+	if err != nil || info.Akun == nil || info.Akun.AkunID != penerima || info.Akun.KreditCashback != 500000 || !info.BisaDipakai {
 		t.Fatalf("info kredit = %+v, %v", info, err)
 	}
 	lainBrand := brand + 999_999
 	if _, err := kreditCashbackBooking(ctx, tx, baru, &lainBrand); err != ErrNotFound {
 		t.Fatalf("brand lain: %v", err)
 	}
-	if err := pakai(jamaah, 600000); err != ErrCashbackMelebihiKredit {
+	if err := pakai(600000); err != ErrCashbackMelebihiKredit {
 		t.Fatalf("melebihi kredit: %v", err)
 	}
-	if err := pakai(lain, 100000); err != ErrCashbackBukanPax {
-		t.Fatalf("bukan pax: %v", err)
+	tanpaAkun, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jamaah})
+	if err := pakaiCashbackTx(ctx, tx, repo, tanpaAkun, &brand, adminID, PakaiCashbackRequest{Nominal: 100000}); err != ErrCashbackTanpaAkun {
+		t.Fatalf("booking tanpa akun pemesan: %v", err)
 	}
-	if err := pakai(jamaah, 300000); err != nil {
+	if err := pakai(300000); err != nil {
 		t.Fatalf("pakai 300rb: %v", err)
 	}
 	var total float64
@@ -74,13 +76,13 @@ func TestPakaiKreditCashback(t *testing.T) {
 
 	// Batas sisa tagihan.
 	testdb.AddPayment(t, tx, baru, 9_900_000, "confirmed")
-	if err := pakai(jamaah, 200000); err != ErrCashbackMelebihiTagihan {
+	if err := pakai(200000); err != ErrCashbackMelebihiTagihan {
 		t.Fatalf("melebihi tagihan: %v", err)
 	}
 
 	// Booking lunas tidak bisa dipotong lagi.
 	testdb.Exec(t, tx, `UPDATE bookings SET status='lunas' WHERE id=?`, baru)
-	if err := pakai(jamaah, 50000); err != ErrCashbackStatusBooking {
+	if err := pakai(50000); err != ErrCashbackStatusBooking {
 		t.Fatalf("booking lunas: %v", err)
 	}
 }

@@ -120,3 +120,16 @@ ALTER TABLE pemakaian_cashback
   RENAME COLUMN jamaah_id TO akun_id,
   RENAME INDEX idx_cashback_jamaah TO idx_cashback_akun,
   ADD CONSTRAINT fk_cashback_akun FOREIGN KEY (akun_id) REFERENCES customer_accounts (id);
+
+-- 10. Agen pembuat booking dicatat terpisah dari penerima komisi (spek 8, butir 6): booking portal agen tetap
+-- milik agen yang membuatnya walau komisi mengalir ke pemilik kunci jamaah. Dasar peringkat pembuat booking.
+ALTER TABLE bookings
+  ADD COLUMN dibuat_oleh_agen_akun_id BIGINT UNSIGNED NULL,
+  ADD KEY idx_bookings_dibuat_oleh_agen (dibuat_oleh_agen_akun_id),
+  ADD CONSTRAINT fk_bookings_dibuat_oleh_agen FOREIGN KEY (dibuat_oleh_agen_akun_id) REFERENCES customer_accounts (id);
+
+-- 11. Pilihan "Saya sendiri" di portal agen (K13): pax itu menghasilkan komisi langsung untuk agen yang memilihnya,
+-- walau jamaahnya terkunci ke agen lain. Penanda per pax karena akun tidak lagi terhubung ke satu jamaah.
+ALTER TABLE booking_pax
+  ADD COLUMN saya_sendiri_akun_id BIGINT UNSIGNED NULL,
+  ADD CONSTRAINT fk_booking_pax_saya_sendiri FOREIGN KEY (saya_sendiri_akun_id) REFERENCES customer_accounts (id);

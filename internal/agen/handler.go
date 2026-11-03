@@ -34,7 +34,7 @@ var (
 
 // GetStatus GET /api/portal/agen
 func (h *Handler) GetStatus(w http.ResponseWriter, r *http.Request) {
-	s, err := h.repo.GetStatusPortal(r.Context(), identity.GetPortalJamaahID(r.Context()))
+	s, err := h.repo.GetStatusPortal(r.Context(), identity.GetCustomerAccountID(r.Context()))
 	if err != nil {
 		handleError(w, err)
 		return
@@ -65,7 +65,7 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jamaahID := identity.GetPortalJamaahID(r.Context())
+	jamaahID := identity.GetCustomerAccountID(r.Context())
 	if err := h.repo.Ajukan(r.Context(), jamaahID, req); err != nil {
 		handleError(w, err)
 		return
@@ -85,7 +85,7 @@ func (h *Handler) UploadBukti(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bukti transfer wajib diunggah (gambar atau PDF)")
 		return
 	}
-	if err := h.repo.UploadBuktiJamaah(r.Context(), identity.GetPortalJamaahID(r.Context()), req.BuktiTransferURL); err != nil {
+	if err := h.repo.UploadBuktiAkun(r.Context(), identity.GetCustomerAccountID(r.Context()), req.BuktiTransferURL); err != nil {
 		handleError(w, err)
 		return
 	}
@@ -125,9 +125,9 @@ func (h *Handler) ListAgenAktif(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
-// Setujui POST /api/admin/agen/{jamaahID}/setujui — selalu bisa, tanpa gate pembayaran.
+// Setujui POST /api/admin/agen/{akunID}/setujui — selalu bisa, tanpa gate pembayaran.
 func (h *Handler) Setujui(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r, "jamaahID")
+	id, ok := parseID(w, r, "akunID")
 	if !ok {
 		return
 	}
@@ -135,13 +135,13 @@ func (h *Handler) Setujui(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
-	log.Printf("[AUDIT] agen_disetujui jamaah_id=%d admin_id=%d", id, identity.GetAdminUserID(r.Context()))
+	log.Printf("[AUDIT] agen_disetujui akun_id=%d admin_id=%d", id, identity.GetAdminUserID(r.Context()))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "pengajuan agen disetujui"})
 }
 
-// Tolak POST /api/admin/agen/{jamaahID}/tolak
+// Tolak POST /api/admin/agen/{akunID}/tolak
 func (h *Handler) Tolak(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r, "jamaahID")
+	id, ok := parseID(w, r, "akunID")
 	if !ok {
 		return
 	}
@@ -153,13 +153,13 @@ func (h *Handler) Tolak(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
-	log.Printf("[AUDIT] agen_ditolak jamaah_id=%d admin_id=%d", id, identity.GetAdminUserID(r.Context()))
+	log.Printf("[AUDIT] agen_ditolak akun_id=%d admin_id=%d", id, identity.GetAdminUserID(r.Context()))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "pengajuan agen ditolak"})
 }
 
-// UbahStatus PUT /api/admin/agen/{jamaahID}/status — toggle aktif/nonaktif.
+// UbahStatus PUT /api/admin/agen/{akunID}/status — toggle aktif/nonaktif.
 func (h *Handler) UbahStatus(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r, "jamaahID")
+	id, ok := parseID(w, r, "akunID")
 	if !ok {
 		return
 	}

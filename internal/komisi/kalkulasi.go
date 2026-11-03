@@ -13,13 +13,19 @@ const (
 	JenisCashback    = "cashback"
 )
 
+// KomisiRepeatCashbackAktif menyalakan cabang komisi repeat order (50/50) dan cashback. Dimatikan di tahap awal
+// keagenan berbasis akun: booking ulang dihitung seperti booking biasa (komisi langsung dan bonus pembinaan
+// penuh, spek 5.1). Logikanya sengaja dipertahankan di bawah flag ini. Berupa variabel agar test dapat
+// menyalakannya; jangan diubah di kode produksi. Bila dinyalakan lagi, penerima cashback adalah akun pemesan booking.
+var KomisiRepeatCashbackAktif = false
+
 // paxKomisi adalah satu pax aktif beserta data kaitan agennya.
 type paxKomisi struct {
 	paxID      int64
 	jamaahID   int64
-	agenID     sql.NullInt64 // jamaah.direkrut_oleh_jamaah_id
+	agenID     sql.NullInt64 // akun penerima komisi langsung: "Saya sendiri" (booking_pax), selain itu pemilik kunci (jamaah.direkrut_oleh_akun_id)
 	agenAktif  bool
-	uplineID   sql.NullInt64 // upline dari agen tsb
+	uplineID   sql.NullInt64 // upline akun agen tsb (customer_accounts.upline_akun_id)
 	uplineAktf bool
 }
 
@@ -29,10 +35,11 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	// Kunci baris booking dan tandai waktu lunas pertama (sekali saja).
 	var brandID int64
 	var langsung, pembinaan sql.NullFloat64
+	var akunPemesan sql.NullInt64
 	err := tx.QueryRowContext(ctx, `
-		SELECT s.brand_id, b.snapshot_komisi_langsung, b.snapshot_bonus_pembinaan
+		SELECT s.brand_id, b.snapshot_komisi_langsung, b.snapshot_bonus_pembinaan, b.customer_account_id
 		FROM bookings b JOIN schedules s ON s.id = b.schedule_id
-		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&brandID, &langsung, &pembinaan)
+		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&brandID, &langsung, &pembinaan, &akunPemesan)
 	if err != nil {
 		return fmt.Errorf("komisi: baca booking %d: %w", bookingID, err)
 	}
@@ -57,9 +64,12 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 		if !p.agenID.Valid {
 			continue
 		}
-		repeat, err := isRepeatOrder(ctx, tx, bookingID, p.jamaahID)
-		if err != nil {
-			return err
+		repeat := false
+		if KomisiRepeatCashbackAktif {
+			var err error
+			if repeat, err = isRepeatOrder(ctx, tx, bookingID, p.jamaahID); err != nil {
+				return err
+			}
 		}
 
 		if !repeat {
@@ -87,9 +97,9 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 				return err
 			}
 		}
-		// Cashback tidak bergantung status agen (L1): penerimanya jamaah itu sendiri.
-		if setengah > 0 {
-			if err := insertKomisi(ctx, tx, brandID, p.jamaahID, p, bookingID, JenisCashback, setengah); err != nil {
+		// Cashback tidak bergantung status agen (L1): penerimanya akun pemesan booking.
+		if setengah > 0 && akunPemesan.Valid {
+			if err := insertKomisi(ctx, tx, brandID, akunPemesan.Int64, p, bookingID, JenisCashback, setengah); err != nil {
 				return err
 			}
 		}
@@ -104,15 +114,15 @@ func positive(v sql.NullFloat64) bool { return v.Valid && v.Float64 > 0 }
 // bersamaan menunggu, lalu melihat komisi dan ditolak (audit KA-01).
 func loadPax(ctx context.Context, tx *sql.Tx, bookingID int64) ([]paxKomisi, error) {
 	rows, err := tx.QueryContext(ctx, `
-		SELECT bp.id, bp.jamaah_id, j.direkrut_oleh_jamaah_id,
+		SELECT bp.id, bp.jamaah_id, COALESCE(bp.saya_sendiri_akun_id, j.direkrut_oleh_akun_id),
 		       COALESCE(a.status_agen = 'aktif', FALSE),
-		       a.upline_jamaah_id,
+		       a.upline_akun_id,
 		       COALESCE(u.status_agen = 'aktif', FALSE)
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
-		LEFT JOIN jamaah a ON a.id = j.direkrut_oleh_jamaah_id
-		LEFT JOIN jamaah u ON u.id = a.upline_jamaah_id
-		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif'
+		LEFT JOIN customer_accounts a ON a.id = COALESCE(bp.saya_sendiri_akun_id, j.direkrut_oleh_akun_id)
+		LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id
+		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
 		ORDER BY bp.id
 		FOR SHARE OF j`, bookingID)
 	if err != nil {
@@ -156,7 +166,7 @@ func insertKomisi(ctx context.Context, tx *sql.Tx, brandID, penerimaID int64, p 
 	// ON DUPLICATE KEY (bukan INSERT IGNORE) supaya error lain seperti FK tetap muncul.
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO transaksi_komisi
-		  (brand_id, jamaah_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal)
+		  (brand_id, akun_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE id = id`,
 		brandID, penerimaID, p.jamaahID, bookingID, p.paxID, jenis, nominal)

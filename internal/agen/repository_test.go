@@ -33,9 +33,9 @@ func setup(t *testing.T, biaya float64) fixture {
 	return fixture{tx: tx, brandID: brandID, adminID: adminID}
 }
 
-func (f fixture) status(t *testing.T, jamaahID int64) *StatusPortal {
+func (f fixture) status(t *testing.T, akunID int64) *StatusPortal {
 	t.Helper()
-	s, err := getStatusPortal(context.Background(), f.tx, jamaahID)
+	s, err := getStatusPortal(context.Background(), f.tx, akunID)
 	if err != nil {
 		t.Fatalf("getStatusPortal: %v", err)
 	}
@@ -56,12 +56,12 @@ func mustErr(t *testing.T, label string, err, want error) {
 	}
 }
 
-func findPengajuan(t *testing.T, f fixture, jamaahID int64) *Pengajuan {
+func findPengajuan(t *testing.T, f fixture, akunID int64) *Pengajuan {
 	t.Helper()
 	items, err := listPengajuan(context.Background(), f.tx, &f.brandID)
 	must(t, "listPengajuan", err)
 	for i := range items {
-		if items[i].JamaahID == jamaahID {
+		if items[i].AkunID == akunID {
 			return &items[i]
 		}
 	}
@@ -75,8 +75,8 @@ var ajuan = AjukanRequest{FotoAgenURL: fotoUji, Domisili: "Kota Bekasi", SetujuS
 func TestLangkah17ApproveTidakMenungguPembayaran(t *testing.T) {
 	f := setup(t, 150_000)
 	ctx := context.Background()
-	adam := testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Adam", StatusAgen: "aktif"})
-	zainab := testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Zainab", Direkrut: adam})
+	adam := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Adam", StatusAgen: "aktif"})
+	zainab := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Zainab", Direkrut: adam})
 
 	must(t, "ajukan", ajukanTx(ctx, f.tx, zainab, ajuan))
 	s := f.status(t, zainab)
@@ -85,7 +85,7 @@ func TestLangkah17ApproveTidakMenungguPembayaran(t *testing.T) {
 	}
 	mustErr(t, "ajukan dua kali", ajukanTx(ctx, f.tx, zainab, ajuan), ErrSudahMengajukan)
 
-	must(t, "upload bukti", uploadBuktiJamaahTx(ctx, f.tx, zainab, bukti("1")))
+	must(t, "upload bukti", uploadBuktiAkunTx(ctx, f.tx, zainab, bukti("1")))
 	must(t, "setujui", setujuiTx(ctx, f.tx, zainab, &f.brandID, f.adminID))
 
 	s = f.status(t, zainab)
@@ -96,7 +96,7 @@ func TestLangkah17ApproveTidakMenungguPembayaran(t *testing.T) {
 		t.Fatalf("pembayaran harus tetap menunggu: %+v", s.Pembayaran)
 	}
 	var upline sql.NullInt64
-	must(t, "baca upline", f.tx.QueryRow(`SELECT upline_jamaah_id FROM jamaah WHERE id=?`, zainab).Scan(&upline))
+	must(t, "baca upline", f.tx.QueryRow(`SELECT upline_akun_id FROM customer_accounts WHERE id=?`, zainab).Scan(&upline))
 	if !upline.Valid || upline.Int64 != adam {
 		t.Fatalf("upline=%v, want %d (agen perekrut)", upline, adam)
 	}
@@ -121,10 +121,10 @@ func TestLangkah17ApproveTidakMenungguPembayaran(t *testing.T) {
 func TestLangkah18DitolakLaluAjukanUlang(t *testing.T) {
 	f := setup(t, 150_000)
 	ctx := context.Background()
-	yunus := testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Yunus"})
+	yunus := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Yunus"})
 
 	must(t, "ajukan", ajukanTx(ctx, f.tx, yunus, ajuan))
-	must(t, "upload", uploadBuktiJamaahTx(ctx, f.tx, yunus, bukti("1")))
+	must(t, "upload", uploadBuktiAkunTx(ctx, f.tx, yunus, bukti("1")))
 	ppa1 := f.status(t, yunus).Pembayaran.ID
 	must(t, "verifikasi", verifikasiPembayaranTx(ctx, f.tx, ppa1, &f.brandID, f.adminID))
 	must(t, "tolak keagenan", tolakTx(ctx, f.tx, yunus, &f.brandID, "domisili di luar area layanan"))
@@ -134,7 +134,7 @@ func TestLangkah18DitolakLaluAjukanUlang(t *testing.T) {
 		s.Pembayaran.AlasanDitolakAgen == nil || *s.Pembayaran.AlasanDitolakAgen != "domisili di luar area layanan" {
 		t.Fatalf("setelah tolak: %+v / %+v", s, s.Pembayaran)
 	}
-	mustErr(t, "upload ke siklus ditolak", uploadBuktiJamaahTx(ctx, f.tx, yunus, bukti("2")), ErrSiklusDitutup)
+	mustErr(t, "upload ke siklus ditolak", uploadBuktiAkunTx(ctx, f.tx, yunus, bukti("2")), ErrSiklusDitutup)
 	mustErr(t, "setujui setelah ditolak", setujuiTx(ctx, f.tx, yunus, &f.brandID, f.adminID), ErrBukanPengajuan)
 
 	must(t, "ajukan ulang", ajukanTx(ctx, f.tx, yunus, ajuan))
@@ -143,7 +143,7 @@ func TestLangkah18DitolakLaluAjukanUlang(t *testing.T) {
 		t.Fatalf("siklus baru harus terpisah & bayar dari nol: %+v", s.Pembayaran)
 	}
 	var siklus int
-	must(t, "hitung siklus", f.tx.QueryRow(`SELECT COUNT(*) FROM pembayaran_pendaftaran_agen WHERE jamaah_id=?`, yunus).Scan(&siklus))
+	must(t, "hitung siklus", f.tx.QueryRow(`SELECT COUNT(*) FROM pembayaran_pendaftaran_agen WHERE akun_id=?`, yunus).Scan(&siklus))
 	if siklus != 2 {
 		t.Fatalf("siklus=%d, want 2", siklus)
 	}
@@ -154,23 +154,23 @@ func TestLangkah18DitolakLaluAjukanUlang(t *testing.T) {
 func TestUploadKeSiklusDitolak(t *testing.T) {
 	f := setup(t, 150_000)
 	ctx := context.Background()
-	x := testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "X"})
+	x := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "X"})
 	must(t, "ajukan", ajukanTx(ctx, f.tx, x, ajuan))
 	must(t, "tolak", tolakTx(ctx, f.tx, x, &f.brandID, "data tidak lengkap"))
-	mustErr(t, "upload", uploadBuktiJamaahTx(ctx, f.tx, x, bukti("1")), ErrSiklusDitutup)
+	mustErr(t, "upload", uploadBuktiAkunTx(ctx, f.tx, x, bukti("1")), ErrSiklusDitutup)
 }
 
 // Langkah 19: brand tanpa biaya -> pembayaran otomatis terverifikasi tanpa verifikator.
 func TestLangkah19BrandTanpaBiaya(t *testing.T) {
 	f := setup(t, 0)
 	ctx := context.Background()
-	bilqis := testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Bilqis"})
+	bilqis := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Bilqis"})
 	must(t, "ajukan", ajukanTx(ctx, f.tx, bilqis, ajuan))
 
 	var status string
 	var nominal float64
 	var oleh sql.NullInt64
-	must(t, "baca", f.tx.QueryRow(`SELECT status, nominal_tagihan, diverifikasi_oleh FROM pembayaran_pendaftaran_agen WHERE jamaah_id=?`, bilqis).
+	must(t, "baca", f.tx.QueryRow(`SELECT status, nominal_tagihan, diverifikasi_oleh FROM pembayaran_pendaftaran_agen WHERE akun_id=?`, bilqis).
 		Scan(&status, &nominal, &oleh))
 	if status != "terverifikasi" || nominal != 0 || oleh.Valid {
 		t.Fatalf("status=%s nominal=%.0f oleh=%v, want terverifikasi 0 NULL", status, nominal, oleh)
@@ -183,9 +183,9 @@ func TestLangkah19BrandTanpaBiaya(t *testing.T) {
 func TestLangkah20RevisiPembayaranDitolak(t *testing.T) {
 	f := setup(t, 150_000)
 	ctx := context.Background()
-	maryam := testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Maryam"})
+	maryam := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Maryam"})
 	must(t, "ajukan", ajukanTx(ctx, f.tx, maryam, ajuan))
-	must(t, "upload 1", uploadBuktiJamaahTx(ctx, f.tx, maryam, bukti("1")))
+	must(t, "upload 1", uploadBuktiAkunTx(ctx, f.tx, maryam, bukti("1")))
 	ppa := f.status(t, maryam).Pembayaran.ID
 
 	must(t, "tolak pembayaran", tolakPembayaranTx(ctx, f.tx, ppa, &f.brandID, f.adminID, "nominal kurang Rp10.000"))
@@ -195,7 +195,7 @@ func TestLangkah20RevisiPembayaranDitolak(t *testing.T) {
 		t.Fatalf("setelah setujui: %s / %+v", s.StatusAgen, s.Pembayaran)
 	}
 
-	must(t, "upload revisi", uploadBuktiJamaahTx(ctx, f.tx, maryam, bukti("2")))
+	must(t, "upload revisi", uploadBuktiAkunTx(ctx, f.tx, maryam, bukti("2")))
 	s = f.status(t, maryam)
 	if s.Pembayaran.Status != "menunggu_verifikasi" || len(s.Pembayaran.Uploads) != 2 ||
 		s.Pembayaran.Uploads[0].BuktiTransferURL != bukti("1") || *s.Pembayaran.BuktiTransferURL != bukti("2") {
@@ -208,7 +208,7 @@ func TestLangkah20RevisiPembayaranDitolak(t *testing.T) {
 func TestAdminUploadDanBrandScope(t *testing.T) {
 	f := setup(t, 150_000)
 	ctx := context.Background()
-	x := testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "X"})
+	x := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "X"})
 	must(t, "ajukan", ajukanTx(ctx, f.tx, x, ajuan))
 	ppa := f.status(t, x).Pembayaran.ID
 
@@ -229,7 +229,7 @@ func TestAdminUploadDanBrandScope(t *testing.T) {
 	must(t, "list", err)
 	found := false
 	for _, it := range items {
-		if it.JamaahID == x && it.Pembayaran != nil && it.Pembayaran.ID == ppa {
+		if it.AkunID == x && it.Pembayaran != nil && it.Pembayaran.ID == ppa {
 			found = true
 		}
 	}

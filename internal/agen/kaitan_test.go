@@ -17,21 +17,21 @@ func kaitanOf(t *testing.T, tx *sql.Tx, jamaahID int64) (string, int64) {
 	t.Helper()
 	var status string
 	var direkrut sql.NullInt64
-	must(t, "baca kaitan", tx.QueryRow(`SELECT kaitan_status, direkrut_oleh_jamaah_id FROM jamaah WHERE id=?`, jamaahID).Scan(&status, &direkrut))
+	must(t, "baca kaitan", tx.QueryRow(`SELECT kaitan_status, direkrut_oleh_akun_id FROM jamaah WHERE id=?`, jamaahID).Scan(&status, &direkrut))
 	return status, direkrut.Int64
 }
 
 func setKode(t *testing.T, tx *sql.Tx, agenID int64, kode string) {
 	t.Helper()
-	testdb.Exec(t, tx, `UPDATE jamaah SET kode_referral=? WHERE id=?`, kode, agenID)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET kode_referral=? WHERE id=?`, kode, agenID)
 }
 
 func TestResolveKodeReferral(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
 	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
-	aktif := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Aktif", StatusAgen: "aktif"})
-	nonaktif := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Nonaktif", StatusAgen: "nonaktif"})
+	aktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Aktif", StatusAgen: "aktif"})
+	nonaktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Nonaktif", StatusAgen: "nonaktif"})
 	setKode(t, tx, aktif, "UJIAKT")
 	setKode(t, tx, nonaktif, "UJINON")
 
@@ -56,9 +56,30 @@ func TestResolveKodeReferral(t *testing.T) {
 	}
 }
 
-// Langkah 3/3b: jamaah mendaftar lewat link agen (first-set wins), lalu jadi
-// agen -> upline otomatis agen perekrut.
-func TestLangkah3JalurReferralDanUpline(t *testing.T) {
+// AgenPengikatAkun: hanya pengikat yang masih aktif yang dihitung.
+func TestAgenPengikatAkun(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
+	aktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Aktif", StatusAgen: "aktif"})
+	nonaktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Nonaktif", StatusAgen: "nonaktif"})
+	terikatAktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Z1", Direkrut: aktif})
+	terikatNonaktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Z2", Direkrut: nonaktif})
+	tanpaAgen := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Z3"})
+	for _, c := range []struct {
+		akun, want int64
+	}{{terikatAktif, aktif}, {terikatNonaktif, 0}, {tanpaAgen, 0}} {
+		got, err := AgenPengikatAkun(ctx, tx, c.akun)
+		must(t, "pengikat", err)
+		if got != c.want {
+			t.Fatalf("AgenPengikatAkun(%d) = %d, want %d", c.akun, got, c.want)
+		}
+	}
+}
+
+// Jamaah diikat ke akun agen (first-set wins); akun yang diikat agen lalu menjadi
+// agen punya upline agen yang mengikat akunnya.
+func TestKunciJamaahDanUplineAkun(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
 	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
@@ -66,8 +87,8 @@ func TestLangkah3JalurReferralDanUpline(t *testing.T) {
 	var adminID int64
 	must(t, "admin", tx.QueryRow(`SELECT id FROM admin_users ORDER BY id LIMIT 1`).Scan(&adminID))
 
-	adam := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Adam", StatusAgen: "aktif"})
-	lain := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "AgenLain", StatusAgen: "aktif"})
+	adam := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Adam", StatusAgen: "aktif"})
+	lain := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenLain", StatusAgen: "aktif"})
 	nuh := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Nuh"})
 
 	must(t, "ikat ke Adam", IkatJamaah(ctx, tx, nuh, adam, SumberReferral))
@@ -76,19 +97,17 @@ func TestLangkah3JalurReferralDanUpline(t *testing.T) {
 		t.Fatalf("Nuh = %s/%d, want terikat_agen/%d (first-set wins)", st, by, adam)
 	}
 
-	must(t, "ajukan", ajukanTx(ctx, tx, nuh, ajuan))
-	must(t, "setujui", setujuiTx(ctx, tx, nuh, &brand, adminID))
+	// Akun yang diikat Adam saat dibuat lalu mengajukan diri menjadi agen: upline-nya Adam.
+	akunNuh := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AkunNuh", Direkrut: adam})
+	must(t, "ajukan", ajukanTx(ctx, tx, akunNuh, ajuan))
+	must(t, "setujui", setujuiTx(ctx, tx, akunNuh, &brand, adminID))
 	var upline sql.NullInt64
-	must(t, "upline", tx.QueryRow(`SELECT upline_jamaah_id FROM jamaah WHERE id=?`, nuh).Scan(&upline))
+	must(t, "upline", tx.QueryRow(`SELECT upline_akun_id FROM customer_accounts WHERE id=?`, akunNuh).Scan(&upline))
 	if upline.Int64 != adam {
-		t.Fatalf("upline Nuh = %d, want Adam %d", upline.Int64, adam)
+		t.Fatalf("upline AkunNuh = %d, want Adam %d", upline.Int64, adam)
 	}
 
-	// Tidak pernah mengikat diri sendiri; 'tanpa_agen' tidak pernah diikat otomatis.
-	must(t, "ikat diri sendiri", IkatJamaah(ctx, tx, adam, adam, SumberReferral))
-	if st, _ := kaitanOf(t, tx, adam); st != "belum_ditentukan" {
-		t.Fatalf("Adam terikat ke dirinya sendiri: %s", st)
-	}
+	// 'tanpa_agen' tidak pernah diikat otomatis.
 	yusuf := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Yusuf", TanpaAgen: true})
 	must(t, "ikat tanpa_agen", IkatJamaah(ctx, tx, yusuf, adam, SumberReferral))
 	if st, _ := kaitanOf(t, tx, yusuf); st != "tanpa_agen" {
@@ -96,68 +115,73 @@ func TestLangkah3JalurReferralDanUpline(t *testing.T) {
 	}
 }
 
+// IkatRombongan mengikat semua pax yang belum terikat; yang sudah terikat tidak berubah.
 func TestIkatRombongan(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
 	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
-	x := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "AgenX", StatusAgen: "aktif"})
-	y := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "AgenY", StatusAgen: "aktif"})
+	x := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenX", StatusAgen: "aktif"})
+	y := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenY", StatusAgen: "aktif"})
 
-	// Tanpa kode referral: pax baru ikut agen PIC; pax milik agen lain tidak berubah.
-	pic := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "PIC", Direkrut: x})
-	baru := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru"})
+	baru1 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru1"})
+	baru2 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru2"})
 	milikY := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "MilikY", Direkrut: y})
-	must(t, "rombongan", IkatRombongan(ctx, tx, pic, []int64{baru, milikY}, 0))
-	if _, by := kaitanOf(t, tx, baru); by != x {
-		t.Fatalf("pax baru ikut agen %d, want PIC agen %d", by, x)
+	must(t, "rombongan", IkatRombongan(ctx, tx, []int64{baru1, baru2, milikY}, x, SumberJalur1))
+	for _, j := range []int64{baru1, baru2} {
+		if _, by := kaitanOf(t, tx, j); by != x {
+			t.Fatalf("pax baru terikat ke %d, want %d", by, x)
+		}
 	}
 	if _, by := kaitanOf(t, tx, milikY); by != y {
 		t.Fatalf("pax milik Y berubah ke %d", by)
 	}
 
-	// Dengan kode referral: agen booking = agen referral.
-	pic2 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "PIC2"})
-	baru2 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru2"})
-	must(t, "rombongan referral", IkatRombongan(ctx, tx, pic2, []int64{baru2}, y))
-	if _, by := kaitanOf(t, tx, pic2); by != y {
-		t.Fatalf("PIC2 = %d, want referral %d", by, y)
-	}
-	if _, by := kaitanOf(t, tx, baru2); by != y {
-		t.Fatalf("Baru2 = %d, want referral %d", by, y)
-	}
-
-	// PIC tanpa agen & tanpa referral: tidak ada yang diikat.
-	pic3 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "PIC3"})
+	// Tanpa agen: tidak ada yang diikat.
 	baru3 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru3"})
-	must(t, "rombongan kosong", IkatRombongan(ctx, tx, pic3, []int64{baru3}, 0))
+	must(t, "rombongan kosong", IkatRombongan(ctx, tx, []int64{baru3}, 0, SumberReferral))
 	if st, _ := kaitanOf(t, tx, baru3); st != "belum_ditentukan" {
 		t.Fatalf("Baru3 = %s, want belum_ditentukan", st)
 	}
 }
 
-// Langkah 11, 12, 14: Jalur 3 per-pax — kaitkan ke agen berbeda / tanpa agen
-// dalam satu booking, lalu komisi saat lunas mengikuti kaitan masing-masing.
-func TestLangkah14Jalur3PerPax(t *testing.T) {
+// Booking admin (tanpa akun pemesan): pax yang belum terikat ikut agen pemilik kunci PIC.
+func TestIkatRombonganBookingIkutKunciPIC(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
+	x := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenX", StatusAgen: "aktif"})
+	pic := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "PIC", Direkrut: x})
+	anggota := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Anggota"})
+	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 2000, testdb.Pax{JamaahID: pic}, testdb.Pax{JamaahID: anggota})
+	must(t, "ikat booking", IkatRombonganBooking(ctx, tx, b))
+	if st, by := kaitanOf(t, tx, anggota); st != "terikat_agen" || by != x {
+		t.Fatalf("anggota = %s/%d, want terikat_agen/%d", st, by, x)
+	}
+}
+
+// Jalur 3 per-pax: kaitkan ke agen berbeda / tanpa agen dalam satu booking,
+// lalu komisi saat lunas mengikuti kaitan masing-masing.
+func TestJalur3PerPax(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
 	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{
 		KomisiLangsung: rp(1_000_000), BonusPembinaan: rp(300_000), BerangkatTanggal: "2099-01-01",
 	})
-	adam := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Adam", StatusAgen: "aktif"})
-	nuh := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Nuh", StatusAgen: "aktif", Direkrut: adam, Upline: adam})
-	hud := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Hud", StatusAgen: "aktif", Direkrut: nuh, Upline: nuh})
+	adam := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Adam", StatusAgen: "aktif"})
+	nuh := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Nuh", StatusAgen: "aktif", Direkrut: adam, Upline: adam})
+	hud := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Hud", StatusAgen: "aktif", Direkrut: nuh, Upline: nuh})
+	biasa := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Biasa"})
 
 	umar := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Umar"})
 	salman := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Salman"})
 	bilal := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Bilal"})
-	must(t, "Umar -> Nuh", ValidasiAgenAktif(ctx, tx, brand, nuh))
 	must(t, "Umar", TetapkanKaitanJalur3(ctx, tx, umar, "agen", nuh))
 	must(t, "Salman", TetapkanKaitanJalur3(ctx, tx, salman, "tanpa_agen", 0))
 	must(t, "Bilal", TetapkanKaitanJalur3(ctx, tx, bilal, "agen", hud))
 
-	// Validasi picker: bukan agen aktif / brand lain ditolak.
-	if err := ValidasiAgenAktif(ctx, tx, brand, umar); err != ErrAgenTidakValid {
-		t.Fatalf("jamaah biasa lolos sebagai agen: %v", err)
+	// Validasi picker: akun yang bukan agen aktif / agen brand lain ditolak.
+	if err := ValidasiAgenAktif(ctx, tx, brand, biasa); err != ErrAgenTidakValid {
+		t.Fatalf("akun biasa lolos sebagai agen: %v", err)
 	}
 	if err := ValidasiAgenAktif(ctx, tx, brand+999_999, nuh); err != ErrAgenTidakValid {
 		t.Fatalf("agen brand lain lolos: %v", err)
@@ -176,7 +200,7 @@ func TestLangkah14Jalur3PerPax(t *testing.T) {
 	must(t, "komisi", komisi.ProcessBookingLunas(ctx, tx, b))
 
 	nama := map[int64]string{adam: "Adam", nuh: "Nuh", hud: "Hud"}
-	rows, err := tx.Query(`SELECT jamaah_penerima_id, jenis FROM transaksi_komisi WHERE booking_id=?`, b)
+	rows, err := tx.Query(`SELECT akun_penerima_id, jenis FROM transaksi_komisi WHERE booking_id=?`, b)
 	must(t, "ledger", err)
 	var got []string
 	for rows.Next() {
@@ -187,8 +211,9 @@ func TestLangkah14Jalur3PerPax(t *testing.T) {
 	}
 	rows.Close()
 	sort.Strings(got)
+	// Umar -> Nuh (langsung; upline Adam), Bilal -> Hud (langsung; upline Nuh), Salman tanpa agen.
 	want := []string{"Adam:pembinaan", "Hud:langsung", "Nuh:langsung", "Nuh:pembinaan"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("ledger langkah 14:\n got  %v\n want %v (Salman tanpa komisi)", got, want)
+		t.Fatalf("ledger jalur 3:\n got  %v\n want %v (Salman tanpa komisi)", got, want)
 	}
 }

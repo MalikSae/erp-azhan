@@ -17,7 +17,6 @@ import (
 var (
 	ErrKaitanBukanJalur3  = errors.New("kaitan jamaah ini bukan hasil input Admin (Jalur 3), tidak bisa diganti")
 	ErrKaitanSudahKomisi  = errors.New("jamaah ini sudah pernah menghasilkan komisi, kaitan tidak bisa diganti")
-	ErrKaitanJamaahAgen   = errors.New("jamaah ini sudah menjadi atau sedang mengajukan diri sebagai agen, kaitan tidak bisa diganti")
 	ErrKaitanTidakBerubah = errors.New("kaitan baru sama dengan kaitan saat ini")
 	ErrKaitanModeTidakSah = errors.New("pilih kaitkan ke agen atau tanpa agen")
 )
@@ -29,7 +28,6 @@ type JamaahKaitan struct {
 	NoHP         *string `json:"no_hp"`
 	BrandID      int64   `json:"brand_id"`
 	BrandName    string  `json:"brand_name"`
-	StatusAgen   string  `json:"status_agen"`
 	KaitanStatus string  `json:"kaitan_status"`
 	KaitanSumber *string `json:"kaitan_sumber"`
 	AgenID       *int64  `json:"agen_id"`
@@ -44,7 +42,7 @@ type JamaahKaitan struct {
 
 type GantiKaitanRequest struct {
 	Mode         string `json:"mode"` // 'agen' | 'tanpa_agen'
-	AgenJamaahID *int64 `json:"agen_jamaah_id"`
+	AgenAkunID   *int64 `json:"agen_akun_id"`
 	Alasan       string `json:"alasan"`
 }
 
@@ -64,8 +62,6 @@ func alasanTerkunci(j JamaahKaitan) error {
 	switch {
 	case j.KaitanSumber == nil || *j.KaitanSumber != SumberJalur3:
 		return ErrKaitanBukanJalur3
-	case j.StatusAgen != "tidak_aktif":
-		return ErrKaitanJamaahAgen
 	case j.PunyaKomisi:
 		return ErrKaitanSudahKomisi
 	}
@@ -73,19 +69,19 @@ func alasanTerkunci(j JamaahKaitan) error {
 }
 
 const qJamaahKaitan = `
-	SELECT j.id, COALESCE(j.id_jamaah,''), j.nama_lengkap, j.no_hp, j.brand_id, b.name, j.status_agen,
-	       j.kaitan_status, j.kaitan_sumber, j.direkrut_oleh_jamaah_id, ag.nama_lengkap,
+	SELECT j.id, COALESCE(j.id_jamaah,''), j.nama_lengkap, j.no_hp, j.brand_id, b.name,
+	       j.kaitan_status, j.kaitan_sumber, j.direkrut_oleh_akun_id, ag.nama_lengkap,
 	       EXISTS (SELECT 1 FROM transaksi_komisi tk WHERE tk.jamaah_sumber_id = j.id),
 	       (SELECT COUNT(DISTINCT bp.booking_id) FROM booking_pax bp JOIN bookings bk ON bk.id = bp.booking_id
 	         WHERE bp.jamaah_id = j.id AND bp.pax_status = 'aktif' AND bk.status IN ('draft','baru','dp'))
 	FROM jamaah j
 	JOIN brands b ON b.id = j.brand_id
-	LEFT JOIN jamaah ag ON ag.id = j.direkrut_oleh_jamaah_id`
+	LEFT JOIN customer_accounts ag ON ag.id = j.direkrut_oleh_akun_id`
 
 func scanJamaahKaitan(sc interface{ Scan(...any) error }) (JamaahKaitan, error) {
 	var j JamaahKaitan
 	var agen sql.NullInt64
-	err := sc.Scan(&j.JamaahID, &j.IDJamaah, &j.NamaLengkap, &j.NoHP, &j.BrandID, &j.BrandName, &j.StatusAgen,
+	err := sc.Scan(&j.JamaahID, &j.IDJamaah, &j.NamaLengkap, &j.NoHP, &j.BrandID, &j.BrandName,
 		&j.KaitanStatus, &j.KaitanSumber, &agen, &j.AgenNama, &j.PunyaKomisi, &j.BookingBelumLunas)
 	if err != nil {
 		return j, err
@@ -149,15 +145,15 @@ func gantiKaitanTx(ctx context.Context, tx *sql.Tx, jamaahID, adminID int64, req
 	statusBaru := "tanpa_agen"
 	switch req.Mode {
 	case "agen":
-		if req.AgenJamaahID == nil || *req.AgenJamaahID == jamaahID {
+		if req.AgenAkunID == nil {
 			return ErrAgenTidakValid
 		}
-		if err := ValidasiAgenAktif(ctx, tx, j.BrandID, *req.AgenJamaahID); err != nil {
+		if err := ValidasiAgenAktif(ctx, tx, j.BrandID, *req.AgenAkunID); err != nil {
 			return err
 		}
-		agenBaru = *req.AgenJamaahID
+		agenBaru = *req.AgenAkunID
 		statusBaru = "terikat_agen"
-		if j.AgenID != nil && *j.AgenID == *req.AgenJamaahID {
+		if j.AgenID != nil && *j.AgenID == *req.AgenAkunID {
 			return ErrKaitanTidakBerubah
 		}
 	case "tanpa_agen":
@@ -169,11 +165,11 @@ func gantiKaitanTx(ctx context.Context, tx *sql.Tx, jamaahID, adminID int64, req
 	}
 
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE jamaah SET direkrut_oleh_jamaah_id = ?, kaitan_status = ? WHERE id = ?`, agenBaru, statusBaru, jamaahID); err != nil {
+		`UPDATE jamaah SET direkrut_oleh_akun_id = ?, kaitan_status = ? WHERE id = ?`, agenBaru, statusBaru, jamaahID); err != nil {
 		return fmt.Errorf("agen: ganti kaitan: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO jamaah_kaitan_log (jamaah_id, direkrut_oleh_jamaah_id_lama, direkrut_oleh_jamaah_id_baru,
+		INSERT INTO jamaah_kaitan_log (jamaah_id, direkrut_oleh_akun_id_lama, direkrut_oleh_akun_id_baru,
 		                               kaitan_status_lama, kaitan_status_baru, diganti_oleh, alasan)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, jamaahID, j.AgenID, agenBaru, j.KaitanStatus, statusBaru, adminID, req.Alasan); err != nil {
 		return fmt.Errorf("agen: log kaitan: %w", err)
@@ -193,8 +189,8 @@ func listKaitanLog(ctx context.Context, q querier, jamaahID int64) ([]KaitanLog,
 		SELECT l.id, lama.nama_lengkap, baru.nama_lengkap, l.kaitan_status_lama, l.kaitan_status_baru,
 		       COALESCE(au.display_name, au.email), l.diganti_at, l.alasan
 		FROM jamaah_kaitan_log l
-		LEFT JOIN jamaah lama ON lama.id = l.direkrut_oleh_jamaah_id_lama
-		LEFT JOIN jamaah baru ON baru.id = l.direkrut_oleh_jamaah_id_baru
+		LEFT JOIN customer_accounts lama ON lama.id = l.direkrut_oleh_akun_id_lama
+		LEFT JOIN customer_accounts baru ON baru.id = l.direkrut_oleh_akun_id_baru
 		JOIN admin_users au ON au.id = l.diganti_oleh
 		WHERE l.jamaah_id = ? ORDER BY l.id DESC`, jamaahID)
 	if err != nil {
