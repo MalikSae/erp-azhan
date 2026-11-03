@@ -110,7 +110,7 @@ func TestOverrideAgenAkun(t *testing.T) {
 		return d
 	}
 	ganti := func(id int64, agen *int64, ubahUpline bool) error {
-		return gantiAgenAkunTx(ctx, tx, id, admin, GantiAgenAkunRequest{AgenAkunID: agen, UbahUpline: ubahUpline, Alasan: "dipasangkan admin"})
+		return gantiAgenAkunTx(ctx, tx, nil, id, admin, GantiAgenAkunRequest{AgenAkunID: agen, UbahUpline: ubahUpline, Alasan: "dipasangkan admin"})
 	}
 
 	// Memasangkan akun tanpa agen (K8: hanya admin).
@@ -140,17 +140,37 @@ func TestOverrideAgenAkun(t *testing.T) {
 	if upline.Int64 != b {
 		t.Fatalf("upline = %v, want B", upline)
 	}
-	logs, err := listAkunKaitanLog(ctx, tx, z)
+	logs, err := listAkunKaitanLog(ctx, tx, nil, z)
 	must(t, "log", err)
 	if len(logs) != 4 || !logs[0].UplineDiubah || logs[0].Alasan == "" {
 		t.Fatalf("log akun = %+v", logs)
 	}
-	if _, err := listAkunKaitanLog(ctx, tx, z+999_999); err != ErrNotFound {
+	if _, err := listAkunKaitanLog(ctx, tx, nil, z+999_999); err != ErrNotFound {
 		t.Fatalf("log akun tidak ada: %v", err)
 	}
 	hasil, err := cariAkunKaitan(ctx, tx, &brand, "Z (uji)")
 	must(t, "cari", err)
 	if len(hasil) != 1 || hasil[0].AgenID == nil || *hasil[0].AgenID != b {
 		t.Fatalf("cari akun = %+v", hasil)
+	}
+}
+
+// Admin yang dibatasi satu brand tidak boleh mengubah atau membaca log akun brand lain.
+func TestOverrideAgenAkunDibatasiBrandAdmin(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
+	admin := adminUji(t, tx)
+	a := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenA", StatusAgen: "aktif"})
+	z := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Z"})
+	brandLain := brand + 999_999
+	req := GantiAgenAkunRequest{AgenAkunID: &a, Alasan: "dipasangkan admin"}
+
+	mustErr(t, "ganti oleh admin brand lain", gantiAgenAkunTx(ctx, tx, &brandLain, z, admin, req), ErrNotFound)
+	_, err := listAkunKaitanLog(ctx, tx, &brandLain, z)
+	mustErr(t, "log oleh admin brand lain", err, ErrNotFound)
+	must(t, "ganti oleh admin brand sendiri", gantiAgenAkunTx(ctx, tx, &brand, z, admin, req))
+	if _, err := listAkunKaitanLog(ctx, tx, &brand, z); err != nil {
+		t.Fatalf("log oleh admin brand sendiri: %v", err)
 	}
 }

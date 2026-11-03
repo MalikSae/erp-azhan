@@ -171,8 +171,25 @@ type registerRequest struct {
 	KodeReferral string `json:"kode_referral"`
 }
 
+// modeDaftar membedakan pendaftaran akun biasa dari pendaftaran lewat form agen (K2, K22): form agen tanpa captcha dan tanpa
+// email verifikasi, dan penolakan email atau nomor WhatsApp yang sudah ada dijawab satu pesan yang sama agar tidak jadi oracle.
+type modeDaftar struct {
+	captcha    bool
+	verifikasi bool
+	generik    bool
+}
+
 // Register POST /api/public/auth/register
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	h.daftar(w, r, modeDaftar{captcha: true, verifikasi: true})
+}
+
+// RegisterAgen POST /api/public/auth/register-agen: akun untuk calon agen. Pembatas per IP tetap berlaku.
+func (h *Handler) RegisterAgen(w http.ResponseWriter, r *http.Request) {
+	h.daftar(w, r, modeDaftar{generik: true})
+}
+
+func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar) {
 	ip := shared.ClientIP(r)
 	if !h.regIP.Allow(ip) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak pendaftaran, coba lagi dalam 1 jam")
@@ -185,17 +202,19 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	h.regIP.Record(ip)
 
 	// Fail closed: tanpa TURNSTILE_SECRET_KEY Verify mengembalikan error (kecuali bypass dev eksplisit).
-	ok, err := h.captcha.Verify(r.Context(), strings.TrimSpace(req.CaptchaToken), ip)
-	if err != nil {
-		if !errors.Is(err, shared.ErrCaptchaNotConfigured) {
-			log.Printf("[ERROR] customer captcha: %v", err)
+	if mode.captcha {
+		ok, err := h.captcha.Verify(r.Context(), strings.TrimSpace(req.CaptchaToken), ip)
+		if err != nil {
+			if !errors.Is(err, shared.ErrCaptchaNotConfigured) {
+				log.Printf("[ERROR] customer captcha: %v", err)
+			}
+			writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, coba lagi")
+			return
 		}
-		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, coba lagi")
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusBadRequest, "verifikasi keamanan gagal, silakan coba lagi")
-		return
+		if !ok {
+			writeError(w, http.StatusBadRequest, "verifikasi keamanan gagal, silakan coba lagi")
+			return
+		}
 	}
 	if req.BrandID <= 0 {
 		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
@@ -217,6 +236,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), req.KodeReferral)
+	if mode.generik && (errors.Is(err, ErrEmailTaken) || errors.Is(err, ErrPhoneTaken)) {
+		writeError(w, http.StatusConflict, "pendaftaran dengan data ini tidak dapat diproses. Bila Anda sudah punya akun, silakan masuk atau gunakan Lupa kata sandi")
+		return
+	}
 	if errors.Is(err, ErrEmailTaken) {
 		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
 		// Penebakan email tetap dibatasi captcha + registerIPLimit.
@@ -238,7 +261,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
-	h.sendVerification(r.Context(), acc)
+	if mode.verifikasi {
+		h.sendVerification(r.Context(), acc)
+	}
 	writeJSON(w, http.StatusCreated, authResponse{Account: acc, SessionToken: token})
 }
 

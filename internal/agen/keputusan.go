@@ -30,7 +30,7 @@ type KeputusanRequest struct {
 }
 
 // keputusanTx menjalankan satu aksi. Berlaku untuk akun berstatus 'pengajuan', dan untuk agen aktif
-// yang masih punya tagihan tercatat (setujui bayar menyusul): hanya setujui (melunasi) dan bebaskan.
+// yang masih punya tagihan tercatat (setujui bayar menyusul): setujui (melunasi), bebaskan, atau minta unggah ulang bila bukti susulan tidak terbaca.
 func keputusanTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, adminID int64, req KeputusanRequest) error {
 	req.Aksi = strings.TrimSpace(req.Aksi)
 	req.Catatan = strings.TrimSpace(req.Catatan)

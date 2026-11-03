@@ -226,6 +226,7 @@ func main() {
 	r.Route("/api/public/auth", func(r chi.Router) {
 		r.Use(requireDB(db))
 		r.Post("/register", customerHandler.Register)
+		r.Post("/register-agen", customerHandler.RegisterAgen)
 		r.Post("/login", customerHandler.Login)
 		r.Post("/forgot-password", customerHandler.ForgotPassword)
 		r.Post("/reset-password", customerHandler.ResetPassword)
