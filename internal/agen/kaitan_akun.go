@@ -104,9 +104,10 @@ func cariAkunKaitan(ctx context.Context, q querier, brandID *int64, cari string)
 	return items, rows.Err()
 }
 
-func gantiAgenAkunTx(ctx context.Context, tx *sql.Tx, akunID, adminID int64, req GantiAgenAkunRequest) error {
+// gantiAgenAkunTx: brandID nil = Super Admin (semua brand); admin brand hanya boleh mengubah akun brand-nya sendiri.
+func gantiAgenAkunTx(ctx context.Context, tx *sql.Tx, brandID *int64, akunID, adminID int64, req GantiAgenAkunRequest) error {
 	a, err := scanAkunKaitan(tx.QueryRowContext(ctx, qAkunKaitan+` WHERE a.id = ? FOR UPDATE OF a`, akunID))
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != a.BrandID) {
 		return ErrNotFound
 	}
 	if err != nil {
@@ -120,11 +121,12 @@ func gantiAgenAkunTx(ctx context.Context, tx *sql.Tx, akunID, adminID int64, req
 		if err := ValidasiAgenAktif(ctx, tx, a.BrandID, *req.AgenAkunID); err != nil {
 			return err
 		}
-		// Rantai pengikat agen tujuan tidak boleh melewati akun ini.
+		// Rantai pengikat agen tujuan tidak boleh melewati akun ini. Tiap baris di rantai dikunci supaya dua override
+		// bersamaan (A ke B dan B ke A) tidak sama-sama lolos dan membentuk siklus.
 		cur := *req.AgenAkunID
 		for i := 0; i < 50; i++ {
 			var next sql.NullInt64
-			if err := tx.QueryRowContext(ctx, `SELECT direkrut_oleh_akun_id FROM customer_accounts WHERE id = ?`, cur).Scan(&next); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT direkrut_oleh_akun_id FROM customer_accounts WHERE id = ? FOR UPDATE`, cur).Scan(&next); err != nil {
 				return fmt.Errorf("agen: telusuri rantai pengikat: %w", err)
 			}
 			if !next.Valid {
@@ -159,9 +161,10 @@ func gantiAgenAkunTx(ctx context.Context, tx *sql.Tx, akunID, adminID int64, req
 	return nil
 }
 
-func listAkunKaitanLog(ctx context.Context, q querier, akunID int64) ([]AkunKaitanLog, error) {
+func listAkunKaitanLog(ctx context.Context, q querier, brandID *int64, akunID int64) ([]AkunKaitanLog, error) {
 	var ada bool
-	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM customer_accounts WHERE id = ?)`, akunID).Scan(&ada); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM customer_accounts WHERE id = ? AND (? IS NULL OR brand_id = ?))`,
+		akunID, brandID, brandID).Scan(&ada); err != nil {
 		return nil, fmt.Errorf("agen: cek akun log kaitan: %w", err)
 	}
 	if !ada {
@@ -193,12 +196,12 @@ func (r *Repository) CariAkunKaitan(ctx context.Context, brandID *int64, cari st
 	return cariAkunKaitan(ctx, r.db, brandID, cari)
 }
 
-func (r *Repository) GantiAgenAkun(ctx context.Context, akunID, adminID int64, req GantiAgenAkunRequest) error {
-	return r.withTx(ctx, func(tx *sql.Tx) error { return gantiAgenAkunTx(ctx, tx, akunID, adminID, req) })
+func (r *Repository) GantiAgenAkun(ctx context.Context, brandID *int64, akunID, adminID int64, req GantiAgenAkunRequest) error {
+	return r.withTx(ctx, func(tx *sql.Tx) error { return gantiAgenAkunTx(ctx, tx, brandID, akunID, adminID, req) })
 }
 
-func (r *Repository) ListAkunKaitanLog(ctx context.Context, akunID int64) ([]AkunKaitanLog, error) {
-	return listAkunKaitanLog(ctx, r.db, akunID)
+func (r *Repository) ListAkunKaitanLog(ctx context.Context, brandID *int64, akunID int64) ([]AkunKaitanLog, error) {
+	return listAkunKaitanLog(ctx, r.db, brandID, akunID)
 }
 
 // CariAkunKaitan GET /api/admin/kaitan-agen/akun?q=&brand_id=
@@ -217,7 +220,7 @@ func (h *Handler) LogKaitanAkun(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := h.repo.ListAkunKaitanLog(r.Context(), id)
+	items, err := h.repo.ListAkunKaitanLog(r.Context(), adminBrandScope(r), id)
 	if err != nil {
 		handleSprint5Error(w, err)
 		return
@@ -242,7 +245,7 @@ func (h *Handler) GantiAgenAkun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
-	if err := h.repo.GantiAgenAkun(r.Context(), id, adminID, req); err != nil {
+	if err := h.repo.GantiAgenAkun(r.Context(), adminBrandScope(r), id, adminID, req); err != nil {
 		handleSprint5Error(w, err)
 		return
 	}
