@@ -176,16 +176,27 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 	// Langkah 16: Utsman sudah pernah lunas (Hud dapat komisi) -> ditolak.
 	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: utsman})
 	// Booking belum lunas dihitung untuk peringatan UI (audit KA-03).
-	if h, err := cariJamaahKaitan(ctx, tx, &brand, "Utsman (uji)"); err != nil || len(h) != 1 || h[0].BookingBelumLunas != 1 || !h[0].BisaDiganti {
+	if h, err := cariJamaahKaitan(ctx, tx, &brand, "Utsman (uji)"); err != nil || len(h) != 1 || h[0].BookingBelumLunas != 1 {
 		t.Fatalf("booking belum lunas = %+v, %v", h, err)
 	}
 	must(t, "snapshot", komisi.SnapshotNominal(ctx, tx, b))
 	testdb.Exec(t, tx, `UPDATE bookings SET status='lunas' WHERE id=?`, b)
 	must(t, "komisi", komisi.ProcessBookingLunas(ctx, tx, b))
-	if err := ganti(utsman, "tanpa_agen", 0); err != ErrKaitanSudahKomisi {
-		t.Fatalf("langkah 16: %v", err)
+	// Ada komisi tercatat: tanpa pindahkan_komisi ditolak, tanpa agen ditolak, dengan pindahkan_komisi lolos.
+	if err := ganti(utsman, "tanpa_agen", 0); err != ErrKaitanTanpaAgenAdaKomisi {
+		t.Fatalf("tanpa agen dengan komisi: %v", err)
 	}
-	if h, err := cariJamaahKaitan(ctx, tx, &brand, "Utsman (uji)"); err != nil || len(h) != 1 || h[0].BookingBelumLunas != 0 || h[0].BisaDiganti {
+	if err := ganti(utsman, "agen", nuh); err != ErrKaitanSudahKomisi {
+		t.Fatalf("langkah 16 tanpa pindahkan_komisi: %v", err)
+	}
+	req := GantiKaitanRequest{Mode: "agen", AgenAkunID: &nuh, Alasan: "pindah ke Nuh", PindahkanKomisi: true}
+	must(t, "pindahkan komisi", gantiKaitanTx(ctx, tx, utsman, admin, req))
+	var penerima int64
+	must(t, "penerima", tx.QueryRow(`SELECT akun_penerima_id FROM transaksi_komisi WHERE booking_id=? AND jenis='langsung'`, b).Scan(&penerima))
+	if penerima != nuh {
+		t.Fatalf("komisi langsung = akun %d, want Nuh %d", penerima, nuh)
+	}
+	if h, err := cariJamaahKaitan(ctx, tx, &brand, "Utsman (uji)"); err != nil || len(h) != 1 || h[0].BookingBelumLunas != 0 {
 		t.Fatalf("setelah lunas = %+v, %v", h, err)
 	}
 	// Log jamaah yang tidak ada: ErrNotFound, bukan daftar kosong (audit KA-04).
@@ -193,15 +204,11 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 		t.Fatalf("log jamaah tidak ada: %v", err)
 	}
 
-	// Kaitan Jalur 2 (referral) dan ikut PIC tidak bisa diganti lewat C4.
+	// Override berlaku untuk semua kaitan_sumber: referral (jalur 2) dan ikut PIC ikut bisa diganti.
 	referral := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Referral"})
 	must(t, "referral", IkatJamaah(ctx, tx, referral, nuh, SumberReferral))
-	if err := ganti(referral, "tanpa_agen", 0); err != ErrKaitanBukanJalur3 {
-		t.Fatalf("jalur 2: %v", err)
-	}
-	if err := ganti(companion, "tanpa_agen", 0); err != ErrKaitanBukanJalur3 {
-		t.Fatalf("ikut PIC: %v", err)
-	}
+	must(t, "jalur 2", ganti(referral, "tanpa_agen", 0))
+	must(t, "ikut PIC", ganti(companion, "tanpa_agen", 0))
 
 	// Agen tujuan harus agen aktif di brand yang sama.
 	salah := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Salah"})
@@ -211,14 +218,4 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 		t.Fatalf("agen tujuan bukan agen: %v", err)
 	}
 
-	// Pencarian C4 menandai mana yang bisa diganti.
-	hasil, err := cariJamaahKaitan(ctx, tx, &brand, "(uji)")
-	must(t, "cari", err)
-	bisa := map[int64]bool{}
-	for _, h := range hasil {
-		bisa[h.JamaahID] = h.BisaDiganti
-	}
-	if bisa[utsman] || bisa[referral] || !bisa[salah] {
-		t.Fatalf("flag bisa diganti = %v", bisa)
-	}
 }

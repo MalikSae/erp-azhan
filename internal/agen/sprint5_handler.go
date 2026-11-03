@@ -26,7 +26,7 @@ func handleSprint5Error(w http.ResponseWriter, err error) {
 		errors.Is(err, ErrKaitanTidakBerubah), errors.Is(err, ErrKaitanModeTidakSah):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrPencairanMasihPending), errors.Is(err, ErrPencairanBukanPending),
-		errors.Is(err, ErrSaldoTidakCukup), errors.Is(err, ErrKaitanBukanJalur3),
+		errors.Is(err, ErrSaldoTidakCukup), errors.Is(err, ErrKaitanTanpaAgenAdaKomisi), errors.Is(err, ErrKomisiSudahDicairkan), errors.Is(err, ErrKaitanAkunSiklus),
 		errors.Is(err, ErrKaitanSudahKomisi):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
