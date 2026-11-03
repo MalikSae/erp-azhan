@@ -253,7 +253,7 @@ func TestNIKAgenUnikDanPeringatanAdmin(t *testing.T) {
 	x := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Agen X", StatusAgen: "aktif"})
 	z := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Zainab"})
 	y := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Yusuf"})
-	nikW := "3201010101010001"
+	nikW := "9999999999990001"
 	testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Jamaah W", Direkrut: x, NIK: nikW})
 
 	req := ajuan
