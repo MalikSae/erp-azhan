@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/go-sql-driver/mysql"
 
 	"erp-azhan/api/internal/shared"
 )
@@ -122,9 +125,13 @@ func ajukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) 
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE customer_accounts SET foto_agen_url = ?, domisili = ?, menyetujui_syarat_ketentuan_agen_at = NOW(),
+		UPDATE customer_accounts SET foto_agen_url = ?, domisili = ?, nik_agen = NULLIF(?, ''), menyetujui_syarat_ketentuan_agen_at = NOW(),
 		       status_agen = 'pengajuan', diajukan_agen_at = NOW()
-		WHERE id = ?`, req.FotoAgenURL, req.Domisili, akunID); err != nil {
+		WHERE id = ?`, req.FotoAgenURL, req.Domisili, req.NIK, akunID); err != nil {
+		var me *mysql.MySQLError
+		if errors.As(err, &me) && me.Number == 1062 {
+			return ErrNIKAgenTidakBisaDipakai
+		}
 		return fmt.Errorf("agen.Ajukan update akun: %w", err)
 	}
 
@@ -167,7 +174,7 @@ func listPengajuan(ctx context.Context, db querier, brandID *int64) ([]Pengajuan
 	q := `
 		SELECT j.id, j.brand_id, j.nama_lengkap, j.no_hp, j.status_agen,
 		       j.foto_agen_url, j.domisili, j.menyetujui_syarat_ketentuan_agen_at, j.diajukan_agen_at,
-		       rek.nama_lengkap
+		       rek.nama_lengkap, j.nik_agen
 		FROM customer_accounts j
 		LEFT JOIN customer_accounts rek ON rek.id = j.direkrut_oleh_akun_id
 		WHERE (j.status_agen = 'pengajuan'
@@ -187,14 +194,17 @@ func listPengajuan(ctx context.Context, db querier, brandID *int64) ([]Pengajuan
 		return nil, fmt.Errorf("agen.ListPengajuan: %w", err)
 	}
 	items := []Pengajuan{}
+	niks := []string{}
 	for rows.Next() {
 		var p Pengajuan
+		var nik sql.NullString
 		if err := rows.Scan(&p.AkunID, &p.BrandID, &p.NamaLengkap, &p.NoHP, &p.StatusAgen,
-			&p.FotoAgenURL, &p.Domisili, &p.SetujuSKAt, &p.DiajukanAt, &p.DirekrutOleh); err != nil {
+			&p.FotoAgenURL, &p.Domisili, &p.SetujuSKAt, &p.DiajukanAt, &p.DirekrutOleh, &nik); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("agen.ListPengajuan scan: %w", err)
 		}
 		items = append(items, p)
+		niks = append(niks, nik.String)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -204,8 +214,45 @@ func listPengajuan(ctx context.Context, db querier, brandID *int64) ([]Pengajuan
 		if items[i].Pembayaran, err = latestPembayaran(ctx, db, items[i].AkunID); err != nil {
 			return nil, err
 		}
+		items[i].NIKMasked = maskNIK(niks[i])
+		if items[i].PeringatanNIK, err = peringatanNIK(ctx, db, items[i].BrandID, items[i].AkunID, items[i].NamaLengkap, niks[i]); err != nil {
+			return nil, err
+		}
 	}
 	return items, nil
+}
+
+func maskNIK(nik string) string {
+	if len(nik) != 16 {
+		return ""
+	}
+	return strings.Repeat("•", 12) + nik[12:]
+}
+
+// peringatanNIK membandingkan NIK pendaftar dengan jamaah yang sudah tercatat di brand yang sama, untuk kartu B1:
+// admin perlu tahu bila NIK itu dikenal atas nama lain atau jamaahnya terkunci ke agen lain sebelum menyetujui.
+func peringatanNIK(ctx context.Context, q querier, brandID, akunID int64, nama, nik string) ([]string, error) {
+	peringatan := []string{}
+	if nik == "" {
+		return peringatan, nil
+	}
+	var namaJamaah string
+	var direkrutOleh sql.NullInt64
+	err := q.QueryRowContext(ctx, `SELECT nama_lengkap, direkrut_oleh_akun_id FROM jamaah WHERE brand_id = ? AND nik = ? LIMIT 1`,
+		brandID, nik).Scan(&namaJamaah, &direkrutOleh)
+	if errors.Is(err, sql.ErrNoRows) {
+		return peringatan, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("agen.peringatanNIK: %w", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(namaJamaah), strings.TrimSpace(nama)) {
+		peringatan = append(peringatan, fmt.Sprintf("NIK ini sudah tercatat sebagai jamaah atas nama %q, berbeda dengan nama akun", namaJamaah))
+	}
+	if direkrutOleh.Valid && direkrutOleh.Int64 != akunID {
+		peringatan = append(peringatan, "Jamaah dengan NIK ini terkunci ke agen lain")
+	}
+	return peringatan, nil
 }
 
 // setujuiTx mengaktifkan agen. Tidak memeriksa status pembayaran sama sekali

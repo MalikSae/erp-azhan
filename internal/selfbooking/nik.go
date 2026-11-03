@@ -15,6 +15,25 @@ var nikPattern = regexp.MustCompile(`^\d{16}$`)
 // ErrNIKAtasNamaLain: NIK sudah dimiliki jamaah lain di brand ini dengan nama berbeda.
 var ErrNIKAtasNamaLain = errors.New("NIK sudah terdaftar dengan nama yang berbeda")
 
+// ErrSayaSendiriBukanAnda: pilihan "Saya sendiri" dipakai untuk jamaah yang NIK-nya bukan NIK agen (K24).
+var ErrSayaSendiriBukanAnda = errors.New("pilihan Saya sendiri hanya untuk data Anda sendiri")
+
+// pastikanSayaSendiri menolak "Saya sendiri" bila NIK jamaah pertama berbeda dari NIK yang agen isi saat mendaftar.
+// Tanpa pemeriksaan ini agen bisa mengetik NIK jamaah yang terkunci ke agen lain dan mengambil komisinya.
+func pastikanSayaSendiri(ctx context.Context, tx *sql.Tx, agenID, jamaahID int64) error {
+	var nikAgen, nikJamaah sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT nik_agen FROM customer_accounts WHERE id = ?`, agenID).Scan(&nikAgen); err != nil {
+		return fmt.Errorf("selfbooking: baca NIK agen: %w", err)
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT nik FROM jamaah WHERE id = ?`, jamaahID).Scan(&nikJamaah); err != nil {
+		return fmt.Errorf("selfbooking: baca NIK jamaah: %w", err)
+	}
+	if !nikAgen.Valid || nikAgen.String == "" || nikAgen.String != nikJamaah.String {
+		return ErrSayaSendiriBukanAnda
+	}
+	return nil
+}
+
 // nikBedaError: NIK sudah terdaftar dengan nama berbeda. Pesannya generik: menyebut nomor jamaah di
 // form tanpa membuka nama terdaftar maupun keberadaan NIK itu (bukan oracle data pihak lain), dan
 // lolos errors.Is(err, ErrNIKAtasNamaLain). Percobaan yang gagal dibatasi per akun (handler.go).

@@ -20,6 +20,8 @@ var (
 	ErrAksiTidakValid          = errors.New("aksi keputusan tidak dikenal")
 	ErrCatatanWajib            = errors.New("catatan wajib diisi untuk aksi ini")
 	ErrKeputusanTidakBisa      = errors.New("aksi ini tidak bisa dilakukan pada status pengajuan saat ini")
+	ErrNIKAgenTidakValid       = errors.New("NIK harus 16 digit angka")
+	ErrNIKAgenTidakBisaDipakai = errors.New("NIK ini tidak dapat dipakai untuk pendaftaran. Periksa kembali atau hubungi admin")
 	ErrBuktiBelumAda           = errors.New("bukti transfer belum diunggah, pilih bebaskan biaya, setujui bayar menyusul, atau minta unggah ulang")
 )
 
@@ -72,9 +74,13 @@ type Pengajuan struct {
 	DiajukanAt   *time.Time  `json:"diajukan_agen_at"`
 	DirekrutOleh *string     `json:"direkrut_oleh_nama"`
 	Pembayaran   *Pembayaran `json:"pembayaran"`
+	// NIKMasked dan PeringatanNIK untuk admin: NIK pendaftar sudah tercatat atas nama lain, atau jamaahnya terkunci ke agen lain.
+	NIKMasked     string   `json:"nik_masked"`
+	PeringatanNIK []string `json:"peringatan_nik"`
 }
 
 type AjukanRequest struct {
+	NIK                   string `json:"nik"`
 	FotoAgenURL           string `json:"foto_agen_url"`
 	Domisili              string `json:"domisili"`
 	SetujuSyaratKetentuan bool   `json:"setuju_syarat_ketentuan"`

@@ -212,6 +212,7 @@ func TestBookingAgenSayaSendiriKomisiUntukAgen(t *testing.T) {
 	a := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenA", StatusAgen: "aktif"})
 	x := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenX", StatusAgen: "aktif", Direkrut: a, Upline: a})
 	nik := nikUji()
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nik, x) // NIK yang diisi X saat mendaftar agen (K24)
 	jamaahX := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Agen X", Direkrut: a, NIK: nik})
 
 	req := agenReq(sched, PICInput{NamaLengkap: "Agen X (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nik), SayaSendiri: true})
@@ -244,6 +245,31 @@ func TestBookingAgenSayaSendiriKomisiUntukAgen(t *testing.T) {
 	tx.QueryRow(`SELECT COALESCE(SUM(nominal),0) FROM transaksi_komisi WHERE booking_id=? AND akun_penerima_id=? AND jenis='pembinaan'`, resp.Booking.BookingID, a).Scan(&pembinaanA)
 	if langsungX != 1_000_000 || pembinaanA != 300_000 {
 		t.Fatalf("komisi: X langsung=%.0f A pembinaan=%.0f, want 1000000 dan 300000", langsungX, pembinaanA)
+	}
+}
+
+// K24: "Saya sendiri" hanya diterima bila NIK jamaah pertama sama dengan NIK yang agen isi saat mendaftar.
+// Agen Z tidak bisa mengetik NIK jamaah W (terkunci ke agen lain) lalu mencentang "Saya sendiri".
+func TestBookingAgenSayaSendiriDitolakBilaNIKBukanMilikAgen(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
+	testdb.Exec(t, tx, `UPDATE schedules SET status='published', nominal_komisi_langsung=1000000, nominal_bonus_pembinaan=300000 WHERE id=?`, sched)
+	x := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenX", StatusAgen: "aktif"})
+	z := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenZ", StatusAgen: "aktif"})
+	nikW := nikUji()
+	testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Jamaah W", Direkrut: x, NIK: nikW})
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nikUji(), z)
+
+	req := agenReq(sched, PICInput{NamaLengkap: "Jamaah W (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikW), SayaSendiri: true})
+	if _, err := processBookingTx(ctx, tx, brand, req, inisiatorAgen(z)); !errors.Is(err, ErrSayaSendiriBukanAnda) {
+		t.Fatalf("err = %v, want ErrSayaSendiriBukanAnda", err)
+	}
+
+	// Agen tanpa NIK tersimpan juga ditolak (tidak ada pembanding).
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=NULL WHERE id=?`, z)
+	if _, err := processBookingTx(ctx, tx, brand, req, inisiatorAgen(z)); !errors.Is(err, ErrSayaSendiriBukanAnda) {
+		t.Fatalf("tanpa nik_agen: err = %v, want ErrSayaSendiriBukanAnda", err)
 	}
 }
 

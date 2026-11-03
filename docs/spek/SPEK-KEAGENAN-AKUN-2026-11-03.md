@@ -62,6 +62,7 @@ Catatan istilah di kode: kode lama menyimpan status agen di tabel `jamaah` dan m
 | K21 | "Setujui, bayar menyusul": tagihan tetap tercatat dan dapat dilunasi atau dibebaskan kemudian. |
 | K22 | Akun dibuat lewat endpoint atomik tersendiri. Pengajuan agen dikirim lewat panggilan terpisah setelah sesi ada. |
 | K23 | Landing `/jadi-agen` menampilkan rentang ujroh dari jadwal tayang, bukan satu angka, karena nominal komisi ada di jadwal. |
+| K24 | NIK 16 digit wajib saat mengajukan agen, disimpan di akun (`customer_accounts.nik_agen`, unik per brand). "Saya sendiri" di portal agen hanya diterima bila NIK jamaah pertama sama dengan NIK agen; bila beda, booking ditolak ("Pilihan Saya sendiri hanya untuk data Anda sendiri"). Kartu B1 memperingatkan admin bila NIK pendaftar sudah tercatat atas nama lain atau jamaahnya terkunci ke agen lain. |
 
 ## 4. Aturan pengikatan
 
