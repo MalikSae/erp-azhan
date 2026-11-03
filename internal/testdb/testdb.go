@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func Tx(t *testing.T) (*sql.DB, *sql.Tx) {
 	// Fixture memakai baris bersama (jadwal pertama, brand-nya); paket uji Go berjalan
 	// paralel, jadi transaksi uji saling mengunci baris itu dan deadlock. Kunci bernama
 	// menyerialkan semua test Tx lintas paket.
-	Serialize(t, db, "erp_test_tx_fixture")
+	serializeFixture(t, db)
 	tx, err := db.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
@@ -80,6 +81,9 @@ func DB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("koneksi database: %v", err)
 	}
+	// Test yang meng-commit data (bukan transaksi rollback) memakai kunci fixture yang sama dengan Tx supaya
+	// tidak berebut baris dan celah indeks unik dengan test Tx di paket lain (deadlock 1213 acak).
+	serializeFixture(t, db)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
@@ -306,3 +310,29 @@ func mustExec(t *testing.T, tx *sql.Tx, q string, args ...any) sql.Result {
 
 // hpUji membentuk nomor WA fixture yang unik per akun dari akhiran uniq().
 func hpUji(u string) string { return "0877000" + u }
+
+const kunciFixture = "erp_test_tx_fixture"
+
+var (
+	fixtureMu   sync.Mutex
+	fixtureHeld = map[*testing.T]bool{}
+)
+
+// serializeFixture memegang kunci fixture bersama sekali per test, jadi test yang memanggil DB dan Tx
+// sekaligus tidak mengunci dirinya sendiri.
+func serializeFixture(t *testing.T, db *sql.DB) {
+	t.Helper()
+	fixtureMu.Lock()
+	if fixtureHeld[t] {
+		fixtureMu.Unlock()
+		return
+	}
+	fixtureHeld[t] = true
+	fixtureMu.Unlock()
+	t.Cleanup(func() {
+		fixtureMu.Lock()
+		delete(fixtureHeld, t)
+		fixtureMu.Unlock()
+	})
+	Serialize(t, db, kunciFixture)
+}
