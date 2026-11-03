@@ -147,7 +147,7 @@ Mengikuti spek SEO (§5 Spec v2.3-A). Hanya Umroh pada Fase 1.
 /paket/umroh/bulan/{periode}/       Landing bulan (Approved saja)
 /jadwal-umroh/                      Jadwal; filter bulan tanpa URL baru
 /kontak/
-/masuk /daftar /checkout /akun /pesanan ...   Halaman pelanggan: masuk/daftar, checkout, akun, booking (noindex)
+/masuk /daftar /checkout /akun /akun/booking ...   Halaman pelanggan: masuk/daftar, checkout, akun, booking (noindex)
 ```
 
 Aturan: filter dan pencarian tidak membuat URL (tanpa `?q=`, `?bulan=`); tidak ada landing lokasi; tidak ada kombinasi bulan+lokasi. Router pencarian: paket persis → periode → hub → no match (URL tidak berubah). Rute lama `/paket/{id}` numerik dialihkan 301 ke slug.
