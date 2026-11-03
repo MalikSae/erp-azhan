@@ -152,8 +152,8 @@ func GetRole(ctx context.Context) string {
 	return ""
 }
 
-// GetPortalJamaahID: sisa handler agen Syiar (belum dipasang ke route) masih membacanya.
-// Selalu 0 sampai area agen dibangun ulang di atas akun email.
+// GetPortalJamaahID: hanya sisa media portal jamaah lama yang masih membacanya; selalu 0 selama portal PIN
+// tidak dipasang. Handler agen Syiar kini memakai akun: lihat GetCustomerAccountID (customer_ctx.go).
 func GetPortalJamaahID(ctx context.Context) int64 {
 	if val, ok := ctx.Value(PortalJamaahIDKey).(int64); ok {
 		return val
