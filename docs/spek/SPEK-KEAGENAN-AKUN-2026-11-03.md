@@ -287,3 +287,14 @@ Masih terbuka:
 6. Penyesuaian dashboard admin (bagian 12).
 
 Setiap tahap dapat dirilis terpisah selama tahap 1 dan 2 selesai lebih dulu.
+
+## 16. Catatan implementasi tahap 1 dan 2
+
+Nama yang dipakai di kode (migrasi 114), bila berbeda dari usulan di atas:
+
+- `transaksi_komisi.akun_penerima_id` (usulan: penerima menjadi akun); `pembayaran_pendaftaran_agen.akun_id`; `pengajuan_pencairan.akun_agen_id`; `pemakaian_cashback.akun_id`.
+- `jamaah.direkrut_oleh_akun_id` (nama lama `direkrut_oleh_jamaah_id`); `jamaah_kaitan_log.direkrut_oleh_akun_id_lama` dan `_baru`.
+- Rekening pencairan (`rekening_bank_agen`, `rekening_nomor_agen`, `rekening_atas_nama_agen`) ikut pindah ke `customer_accounts`.
+- `customer_accounts.jamaah_id` dibiarkan opsional dan tidak lagi ditulis.
+- Tambahan: `bookings.dibuat_oleh_agen_akun_id` (agen pembuat booking portal, terpisah dari penerima komisi) dan `booking_pax.saya_sendiri_akun_id` (penanda "Saya sendiri").
+- Flag komisi: `komisi.KomisiRepeatCashbackAktif` (default `false`).
