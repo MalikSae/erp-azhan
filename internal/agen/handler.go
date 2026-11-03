@@ -65,8 +65,16 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jamaahID := identity.GetCustomerAccountID(r.Context())
-	if err := h.repo.Ajukan(r.Context(), jamaahID, req); err != nil {
+	akunID := identity.GetCustomerAccountID(r.Context())
+	if ok, err := mediaMilikAkun(r.Context(), h.repo.db, akunID, req.FotoAgenURL); err != nil || !ok {
+		if err != nil {
+			handleError(w, err)
+			return
+		}
+		writeError(w, http.StatusBadRequest, "foto diri wajib diunggah (JPG, PNG, WEBP, atau GIF)")
+		return
+	}
+	if err := h.repo.Ajukan(r.Context(), akunID, req); err != nil {
 		handleError(w, err)
 		return
 	}
@@ -85,7 +93,16 @@ func (h *Handler) UploadBukti(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bukti transfer wajib diunggah (gambar atau PDF)")
 		return
 	}
-	if err := h.repo.UploadBuktiAkun(r.Context(), identity.GetCustomerAccountID(r.Context()), req.BuktiTransferURL); err != nil {
+	akunID := identity.GetCustomerAccountID(r.Context())
+	if ok, err := mediaMilikAkun(r.Context(), h.repo.db, akunID, req.BuktiTransferURL); err != nil || !ok {
+		if err != nil {
+			handleError(w, err)
+			return
+		}
+		writeError(w, http.StatusBadRequest, "bukti transfer wajib diunggah (gambar atau PDF)")
+		return
+	}
+	if err := h.repo.UploadBuktiAkun(r.Context(), akunID, req.BuktiTransferURL); err != nil {
 		handleError(w, err)
 		return
 	}
@@ -172,7 +189,7 @@ func (h *Handler) UbahStatus(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
-	log.Printf("[AUDIT] agen_status jamaah_id=%d status=%s admin_id=%d", id, req.Status, identity.GetAdminUserID(r.Context()))
+	log.Printf("[AUDIT] agen_status akun_id=%d status=%s admin_id=%d", id, req.Status, identity.GetAdminUserID(r.Context()))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "status agen diperbarui"})
 }
 
@@ -258,13 +275,13 @@ func handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, ErrTidakAdaPengajuan):
+	case errors.Is(err, ErrTidakAdaPengajuan), errors.Is(err, ErrAksiTidakValid), errors.Is(err, ErrCatatanWajib):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrStatusTidakValid):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrSudahMengajukan), errors.Is(err, ErrBukanPengajuan),
 		errors.Is(err, ErrPembayaranFinal), errors.Is(err, ErrPembayaranBukanMenunggu),
-		errors.Is(err, ErrSiklusDitutup):
+		errors.Is(err, ErrSiklusDitutup), errors.Is(err, ErrKeputusanTidakBisa), errors.Is(err, ErrBuktiBelumAda):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] agen: %v", err)
