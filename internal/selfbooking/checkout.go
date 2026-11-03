@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
 )
 
 const TermsVersion = "booking-2026-10-17"
@@ -42,7 +41,7 @@ func validateCheckout(req *BookingRequest, agent bool) string {
 		if len(strings.TrimSpace(req.PIC.NamaLengkap)) < 2 || len(req.PIC.NamaLengkap) > 255 {
 			return "nama lengkap harus 2–255 karakter"
 		}
-		if !(req.PemesanTidakIkut && req.PIC.NoHP == "") && !validPhone(req.PIC.NoHP) {
+		if !((req.PemesanTidakIkut || agent) && req.PIC.NoHP == "") && !validPhone(req.PIC.NoHP) {
 			return "nomor WhatsApp harus 10–15 digit"
 		}
 		if req.PIC.JenisKelamin != "L" && req.PIC.JenisKelamin != "P" {
@@ -54,15 +53,14 @@ func validateCheckout(req *BookingRequest, agent bool) string {
 			return "email tidak valid"
 		}
 	}
-	if !agent {
-		if !nikValid(nikBersih(req.PIC.NIK)) {
-			return "NIK jamaah 1 harus 16 digit angka"
-		}
-		for i, p := range req.Anggota {
-			nik := nikBersih(p.NIK)
-			if (p.PaxType == "infant" && nik != "" && !nikValid(nik)) || (p.PaxType != "infant" && !nikValid(nik)) {
-				return "NIK jamaah " + strconv.Itoa(i+2) + " harus 16 digit angka"
-			}
+	// NIK 16 digit wajib untuk semua pax reguler di semua jalur, termasuk portal agen (K14); bayi opsional.
+	if !nikValid(nikBersih(req.PIC.NIK)) {
+		return "NIK jamaah 1 harus 16 digit angka"
+	}
+	for i, p := range req.Anggota {
+		nik := nikBersih(p.NIK)
+		if (p.PaxType == "infant" && nik != "" && !nikValid(nik)) || (p.PaxType != "infant" && !nikValid(nik)) {
+			return "NIK jamaah " + strconv.Itoa(i+2) + " harus 16 digit angka"
 		}
 	}
 	for _, p := range req.Anggota {

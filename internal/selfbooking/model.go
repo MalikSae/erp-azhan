@@ -11,6 +11,9 @@ type PICInput struct {
 	// JamaahID hanya dipakai booking agen (Jalur 1): memilih jamaah dari
 	// daftar "Jamaah Saya". Booking publik mengabaikannya.
 	JamaahID *int64 `json:"jamaah_id,omitempty"`
+	// SayaSendiri hanya dipakai booking agen: penumpang pertama adalah agen itu sendiri, sehingga pax ini
+	// menghasilkan komisi langsung untuk agen (K13) walau jamaahnya terkunci ke agen lain.
+	SayaSendiri bool `json:"saya_sendiri,omitempty"`
 }
 
 // AnggotaInput adalah data anggota rombongan (minimal).
@@ -39,11 +42,9 @@ type BookingRequest struct {
 	// PemesanTidakIkut: pemesan (pemilik akun) memesankan untuk orang lain dan
 	// tidak berangkat. Data "pic" lalu berisi jamaah pertama, bukan pemesan.
 	PemesanTidakIkut bool `json:"pemesan_tidak_ikut"`
-	// KodeReferral diisi route handler web publik dari cookie referral
-	// (last-click 90 hari), bukan dari input pengguna.
-	KodeReferral string         `json:"kode_referral"`
-	PIC          PICInput       `json:"pic"`
-	Anggota      []AnggotaInput `json:"anggota"`
+	// Cookie referral tidak dibaca saat booking: akun sudah terikat ke agen saat dibuat (spek 4.1, 4.2).
+	PIC     PICInput       `json:"pic"`
+	Anggota []AnggotaInput `json:"anggota"`
 }
 
 // PaxSummary adalah ringkasan per pax di response.
@@ -88,5 +89,7 @@ type BookingResponse struct {
 	Booking      BookingSummary    `json:"booking"`
 	Jamaah       JamaahInfo        `json:"jamaah"`
 	BankAccounts []BankAccountInfo `json:"bank_accounts"`
+	// Peringatan hanya untuk booking agen: jamaah yang sudah terkunci ke agen lain tetap dipesan, komisinya
+	// ke pemilik kunci. Isinya tidak membuka nama pemilik kunci maupun data jamaah.
+	Peringatan []string `json:"peringatan,omitempty"`
 }
-

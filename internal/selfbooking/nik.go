@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -56,24 +55,4 @@ func isiNIKBilaKosong(ctx context.Context, tx *sql.Tx, jamaahID int64, nik strin
 		return fmt.Errorf("isi nik jamaah: %w", err)
 	}
 	return nil
-}
-
-// pasangNIKPIC: NIK pemesan yang ikut berangkat. Bila jamaah pemesan belum punya NIK, NIK diisikan.
-// Bila NIK itu sudah milik jamaah lain, booking TIDAK ditolak dan NIK tidak dipasang: menolak akan
-// memberi tahu bahwa NIK itu terdaftar (oracle), dan sejak K1 PIC akun selalu jamaah baru sehingga
-// pelanggan lama yang NIK-nya tercatat di baris lama pasti bentrok. Bentrok dicatat di log audit
-// (tanpa NIK) agar admin dapat menggabungkan jamaah secara manual.
-func pasangNIKPIC(ctx context.Context, tx *sql.Tx, brandID, jamaahID int64, nik string) error {
-	if nik == "" {
-		return nil
-	}
-	id, _, ada, err := cariJamaahByNIK(ctx, tx, brandID, nik)
-	if err != nil {
-		return err
-	}
-	if ada && id != jamaahID {
-		log.Printf("[AUDIT] selfbooking nik_pic_bentrok brand=%d jamaah_pic=%d jamaah_lama=%d (perlu tinjauan/penggabungan admin)", brandID, jamaahID, id)
-		return nil
-	}
-	return isiNIKBilaKosong(ctx, tx, jamaahID, nik)
 }

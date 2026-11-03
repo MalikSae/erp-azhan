@@ -220,13 +220,13 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 			writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasBookingHarian)
 			return
 		}
-		if errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrAnggotaNameMismatch) {
+		if errors.Is(err, ErrNIKAtasNamaLain) {
 			if h.identitasGagal != nil {
 				h.identitasGagal.record(accountKey)
 			}
 		}
 		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) ||
-			errors.Is(err, ErrAnggotaNameMismatch) || errors.Is(err, ErrDuplicatePaxInBooking) ||
+			errors.Is(err, ErrDuplicatePaxInBooking) ||
 			errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrAkunTidakValid) || errors.Is(err, ErrCutoffBooking) ||
 			errors.Is(err, ErrTanggalLahirTidakValid) || errors.Is(err, ErrUsiaInfant) || errors.Is(err, ErrInfantUnavailable) || errors.Is(err, ErrInvalidDP) {
 			writeError(w, http.StatusBadRequest, err.Error())
