@@ -260,7 +260,7 @@ Semua butir di bawah belum dikerjakan. Nomor migrasi: berikutnya setelah migrasi
 - Email tidak terverifikasi berarti notifikasi hasil pengajuan bisa salah alamat. Kanal utama untuk kabar keputusan adalah WhatsApp.
 - WA unik antar akun membuka kemungkinan menebak nomor yang terdaftar. Batasi percobaan per IP, dan jangan menampilkan siapa pemilik nomor.
 - Pesan penolakan NIK tetap generik (tidak menjadi oracle data pihak lain). Peringatan "sudah terikat agen lain" hanya muncul bila NIK dan nama cocok sekaligus.
-- Kunci seumur hidup berarti jamaah yang tidak pernah closing tetap terkunci. Satu-satunya jalan keluar adalah override admin.
+- Kunci seumur hidup berarti jamaah yang tidak pernah closing tetap terkunci. Satu-satunya jalan keluar adalah override admin. Diputuskan 2026-11-03: tidak ada kunci sementara atau pelepasan otomatis. Risiko agen mengunci massal dinilai rendah karena NIK jamaah sulit didapat sembarang orang; booking palsu ditindak manual oleh admin/travel.
 
 ## 14. Keputusan lanjutan dan hal yang masih terbuka
 
