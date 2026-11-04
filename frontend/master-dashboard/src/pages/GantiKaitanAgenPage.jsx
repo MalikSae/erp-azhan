@@ -183,7 +183,7 @@ export default function GantiKaitanAgenPage() {
     if (isJamaah) {
       return `${l.kaitan_status_lama === 'terikat_agen' ? l.agen_lama_nama : 'Tanpa agen'} → ${l.kaitan_status_baru === 'terikat_agen' ? l.agen_baru_nama : 'Tanpa agen'}`;
     }
-    return `${l.agen_lama_nama || 'Tanpa agen'} → ${l.agen_baru_nama || 'Tanpa agen'}`;
+    return `${l.agen_lama_nama || 'Tanpa upline'} → ${l.agen_baru_nama || 'Tanpa upline'}`;
   };
 
   return (
@@ -252,7 +252,7 @@ export default function GantiKaitanAgenPage() {
                     ) : (
                       <>
                         <p className="text-xs text-neutral-500 truncate">{row.brand_name} • {row.email}</p>
-                        <p className="text-xs text-neutral-700 mt-0.5">{row.agen_nama ? `Diikat ke ${row.agen_nama}` : 'Tanpa agen'} • {STATUS_AGEN[row.status_agen] || row.status_agen}</p>
+                        <p className="text-xs text-neutral-700 mt-0.5">{row.agen_nama ? `Upline: ${row.agen_nama}` : 'Tanpa upline'} • {STATUS_AGEN[row.status_agen] || row.status_agen}</p>
                       </>
                     )}
                   </button>
@@ -324,7 +324,7 @@ export default function GantiKaitanAgenPage() {
                     brandId={selected.brand_id}
                     brandRequired
                     excludeAgenId={agenSaatIni ?? undefined}
-                    tanpaAgenLabel={isJamaah ? 'Tanpa Agen' : 'Lepas agen (tanpa agen)'}
+                    tanpaAgenLabel={isJamaah ? 'Tanpa Agen' : 'Lepas upline (tanpa upline)'}
                     hint={isJamaah ? 'Perubahan tidak mengubah kunci jamaah lain dalam booking yang sama.' : 'Kunci jamaah yang sudah ada tidak berubah.'}
                   />
                   {sudahPunyaKomisi && kaitan.mode === 'agen' && (

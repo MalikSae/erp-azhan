@@ -61,10 +61,10 @@ export default function DetailAkunPage({ showBrandColumn = false }) {
         <div className="space-y-6">
           <MetaBox
             title="Upline"
-            subtitle="Agen yang mengajak akun ini dan menerima bonus pembinaan darinya."
             icon={<Network size={18} />}
             contentClassName="p-4 sm:p-5 space-y-3"
           >
+            <p className="text-xs text-neutral-500">Agen yang mengajak akun ini dan menerima bonus pembinaan darinya.</p>
             <p className="text-sm font-heading font-semibold text-neutral-900">
               {akun.upline_akun_id ? <Link to={`/agen/${akun.upline_akun_id}`} className="text-primary-600 hover:underline">{akun.upline_nama}</Link> : 'Tanpa upline'}
             </p>
