@@ -7,17 +7,17 @@ Istilah domain yang dipakai di kode, dokumen, dan percakapan proyek. Satu istila
 **Akun**: orang yang punya akun (email + password) dan bisa booking atau memesan. Tabel `customer_accounts`. Disebut juga pemesan.
 _Hindari_: user, pelanggan (terlalu umum), jamaah (itu orang lain).
 
-**Jamaah**: orang yang berangkat umroh. Tabel `jamaah`. Disebut juga penumpang. Data identitas milik jamaah, bukan milik akun. Banyak akun boleh memasukkan jamaah yang sama; jamaah yang sama dikenali dari NIK. Jamaah belum tentu punya akun.
-_Hindari_: peserta, pax untuk orang (pax adalah kursi dalam booking).
+**Jamaah**: orang yang berangkat umroh. Tabel `jamaah`. Bukan "penumpang". Data identitas milik jamaah, bukan milik akun. Banyak akun boleh memasukkan jamaah yang sama; jamaah yang sama dikenali dari NIK. Jamaah belum tentu punya akun.
+_Hindari_: peserta, penumpang, pax untuk orang (pax adalah kursi dalam booking).
 
 **Agen**: akun yang punya kode referral dan berstatus aktif. Agen tidak harus pernah berangkat umroh. Program keagenan disebut **Syiar**.
 _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lama, sistem belum deploy).
 
 **Calon agen**: akun yang pengajuannya sedang diproses (status agen `pengajuan`).
 
-**Upline**: agen yang mengikat akun seorang agen saat akun itu dibuat. Menerima bonus pembinaan. Satu tingkat saja.
+**Upline**: agen yang mengajak sebuah akun, lewat tautan atau kode referralnya saat akun dibuat, atau agen yang dipasangkan admin. Berlaku untuk semua akun. Bila akun itu menjadi agen, upline-nya menerima bonus pembinaan darinya. Satu tingkat saja. Override admin memindahkan upline dan penerima bonus bersama-sama; bonus yang sudah tercatat tidak ditarik kembali.
 
-**PIC**: pemesan yang ikut berangkat dalam satu booking, dicocokkan lewat NIK dan nama seperti penumpang lain.
+**PIC**: pemesan yang ikut berangkat dalam satu booking, dicocokkan lewat NIK dan nama seperti jamaah lain.
 
 ## Pemesanan
 
@@ -33,13 +33,13 @@ _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lam
 
 **Kode referral**: kode unik agen, dibagikan sebagai `?ref=KODE`. Disimpan di cookie `azhan_ref` (90 hari, klik terakhir menimpa).
 
-**Pengikatan akun**: pencatatan agen pemilik akun saat akun dibuat, dari cookie referral. Setelah akun ada, cookie diabaikan. Akun tanpa agen tetap tanpa agen kecuali admin memasangkannya.
+**Pengikatan akun**: pencatatan upline akun saat akun dibuat, dari cookie referral. Setelah akun ada, cookie diabaikan. Akun tanpa agen tetap tanpa agen kecuali admin memasangkannya.
 
 **Kunci (kaitan)**: ikatan jamaah ke agen yang pertama membawanya. Seumur hidup. Hanya override admin yang memindahkan. Pemilik kunci menerima komisi atas jamaah itu siapa pun yang memesan.
 
 **Override admin**: pemindahan kunci jamaah atau pemasangan agen akun oleh Admin Master (layar C4).
 
-**Saya sendiri**: pilihan di form booking portal agen untuk penumpang pertama. Memicu komisi langsung atas dirinya.
+**Saya sendiri**: pilihan di form booking portal agen untuk jamaah pertama. Memicu komisi langsung atas dirinya.
 
 **Komisi langsung**: nominal flat per pax berangkat untuk agen pemilik kunci jamaah.
 
