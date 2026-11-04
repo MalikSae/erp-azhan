@@ -28,7 +28,7 @@ Di luar lingkup tahap awal (dinonaktifkan, kode tidak dihapus):
 | Istilah | Arti |
 |---|---|
 | **Akun** | Orang yang punya akun (email + password) dan bisa booking atau memesan. Disebut juga pemesan. |
-| **Jamaah** | Orang yang berangkat umroh. Disebut juga penumpang. Data identitas milik jamaah, bukan milik akun. |
+| **Jamaah** | Orang yang berangkat umroh. Bukan "penumpang". Data identitas milik jamaah, bukan milik akun. |
 | **Agen** | Akun yang punya kode referral dan berstatus aktif. Agen tidak harus pernah berangkat umroh. |
 
 Model data mengikuti tiket.com: banyak akun boleh memasukkan jamaah yang sama. Jamaah yang sama dikenali dari identitas (NIK), bukan dari nomor WA atau dari akun. Jamaah belum tentu punya akun, dan akun belum tentu punya jamaah.
@@ -48,12 +48,12 @@ Catatan istilah di kode: kode lama menyimpan status agen di tabel `jamaah` dan m
 | K7 | Akun terikat ke agen **saat akun dibuat**, dari cookie `azhan_ref` (klik terakhir sebelum daftar). Setelah akun ada, cookie diabaikan. |
 | K8 | Akun yang dibuat tanpa agen tetap tanpa agen. Hanya admin yang dapat memasangkannya. |
 | K9 | Jamaah terkunci ke agen yang pertama membawanya **selamanya**. Hanya override admin yang dapat memindahkan. |
-| K10 | Upline agen baru adalah agen yang mengikat akunnya. Tidak ada kolom "kode agen perekrut" di form. |
+| K10 | Upline agen baru adalah agen yang mengajak akunnya (upline satu konsep: pengajak sekaligus penerima bonus pembinaan; override admin memindahkan keduanya). Tidak ada kolom "kode agen perekrut" di form. |
 | K11 | Komisi tahap awal: komisi langsung dan bonus pembinaan (satu tingkat). Cashback dan komisi repeat dinonaktifkan. |
 | K12 | Booking ulang jamaah dihitung seperti booking biasa: komisi langsung dan bonus pembinaan penuh. |
 | K13 | Agen yang mendaftarkan dirinya lewat portal agen ("Saya sendiri") mendapat komisi langsung atas dirinya. Lewat web publik dihitung booking ulang. |
 | K14 | NIK 16 digit wajib untuk semua pax reguler di semua jalur, termasuk portal agen. Bayi opsional. |
-| K15 | Pemesan yang ikut berangkat (PIC) dicocokkan lewat NIK dan nama seperti penumpang lain. |
+| K15 | Pemesan yang ikut berangkat (PIC) dicocokkan lewat NIK dan nama seperti jamaah lain. |
 | K16 | Agen yang memesan jamaah yang sudah terkunci agen lain: booking jalan dengan peringatan, komisi ke pemilik kunci. |
 | K17 | Booking agen dan booking pelanggan memakai satu komponen form dan satu inti backend, di dua alamat. |
 | K18 | Pax bayi tidak menghasilkan komisi apa pun (langsung maupun pembinaan). |
@@ -172,14 +172,14 @@ Dua jalur booking umroh: (1) didaftarkan agen di portal agen, (2) daftar mandiri
 |---|---|---|
 | Pemesan | Akun biasa | Akun berstatus agen aktif |
 | Penentu agen komisi | Kunci jamaah, lalu agen akun | Agen pembuat booking, kecuali jamaah sudah terkunci agen lain |
-| Memilih penumpang | Penumpang tersimpan akun | "Saya sendiri", "Jamaah Saya", atau isi baru |
+| Memilih jamaah | Jamaah tersimpan akun | "Saya sendiri", "Jamaah Saya", atau isi baru |
 | Pemesan ikut berangkat | Pilihan pengguna | Default tidak ikut |
 | Perlindungan | Captcha | Tanpa captcha, batas 20 booking per jam per agen |
 | Pemberitahuan | Email "Booking berhasil dibuat" | Tidak ada email |
 
 Aturan tambahan portal agen:
 - NIK 16 digit wajib untuk pax reguler (K14).
-- Pilihan "Saya sendiri" untuk penumpang pertama memicu komisi atas dirinya (K13). Pilihan ini adalah penanda eksplisit karena akun tidak lagi terhubung ke satu jamaah.
+- Pilihan "Saya sendiri" untuk jamaah pertama memicu komisi atas dirinya (K13). Pilihan ini adalah penanda eksplisit karena akun tidak lagi terhubung ke satu jamaah.
 - Bila jamaah sudah terkunci agen lain, agen melihat: "Jamaah ini sudah terikat agen lain. Booking ini tidak menghasilkan komisi untuk Anda." Nama pemilik kunci dan data jamaah tidak ditampilkan. Peringatan hanya muncul bila NIK dan nama cocok.
 - Booking tetap tercatat sebagai dibuat oleh agen pembuat, sementara komisi mengalir ke pemilik kunci. Dua hal ini dicatat terpisah supaya peringkat agen tidak salah.
 - NIK sama dengan nama berbeda ditolak generik.
@@ -232,7 +232,7 @@ Semua butir di bawah belum dikerjakan. Nomor migrasi: berikutnya setelah migrasi
 4. **Prioritas pengikat saat booking.** Ubah `IkatRombongan`: agen akun menang atas cookie; cookie tidak dibaca saat checkout. Pada portal agen, agen pembuat booking mengikat jamaah baru.
 5. **`resolveAkunPIC` dan PIC.** Akun tidak lagi terhubung ke satu jamaah (`customer_accounts.jamaah_id` dihapus atau menjadi opsional). PIC yang ikut berangkat dicocokkan seperti anggota (`resolveAnggotaPublik`), tidak lagi dibuat jamaah baru tanpa NIK (`pasangNIKPIC`).
 6. **Portal agen booking.** Ubah `resolvePaxAgen` (`selfbooking/agen_booking.go:30`): jamaah milik agen lain atau nomor milik agen lain tidak lagi ditolak (`ErrJamaahBukanMilik`, `ErrNomorMilikLain`), melainkan jalan dengan peringatan. Tambahkan NIK wajib dan pilihan "Saya sendiri". Catat agen pembuat booking terpisah dari pemilik komisi.
-7. **Komisi.** Matikan cabang repeat dan cashback di `kalkulasi.go` lewat flag. Tambahkan aturan: penumpang yang dipilih lewat "Saya sendiri" di portal menghasilkan komisi langsung untuk agen itu sendiri. Saring pax bayi (`pax_type` infant) dari perhitungan. Tidak ada pembalikan komisi saat booking atau pax batal; ubah nama dan pesan tes `TestAuditAgenCancelledSourceStillBecomesWithdrawable` (`internal/komisi/audit_agen_test.go`) karena perilakunya kini disengaja.
+7. **Komisi.** Matikan cabang repeat dan cashback di `kalkulasi.go` lewat flag. Tambahkan aturan: jamaah yang dipilih lewat "Saya sendiri" di portal menghasilkan komisi langsung untuk agen itu sendiri. Saring pax bayi (`pax_type` infant) dari perhitungan. Tidak ada pembalikan komisi saat booking atau pax batal; ubah nama dan pesan tes `TestAuditAgenCancelledSourceStillBecomesWithdrawable` (`internal/komisi/audit_agen_test.go`) karena perilakunya kini disengaja.
 8. **Override admin (C4).** Longgarkan pembatasan sumber `jalur3`, dan sediakan pemindahan komisi yang sudah tercatat. Atur ulang temuan audit KA-01.
 9. **Keputusan admin gabungan.** Endpoint tunggal untuk lima aksi bagian 7, dengan catatan wajib dan status pembayaran `dibebaskan`.
 10. **Rute portal agen.** Pasang kembali `/api/portal/agen/*` (komentar `cmd/api/main.go:242`) berbasis akun email, bukan PIN. Handler dan tes yang ada menjadi dasar.

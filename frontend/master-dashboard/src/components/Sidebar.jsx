@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Network,
   UserCheck,
+  UserRound,
   Wallet,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
@@ -56,6 +57,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'JAMAAH & BOOKING',
       items: [
         { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
+        { name: 'Akun Pelanggan', path: '/akun', icon: UserRound, perm: 'akun.view' },
         { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
         { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
       ],

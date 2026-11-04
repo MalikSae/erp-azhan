@@ -7,6 +7,8 @@ export { default as BookingDetailPage } from './pages/BookingDetailPage';
 export { default as BookingFormPage } from './pages/BookingFormPage';
 export { default as DaftarAgenPage } from './pages/DaftarAgenPage';
 export { default as DetailAgenPage } from './pages/DetailAgenPage';
+export { default as DaftarAkunPage } from './pages/DaftarAkunPage';
+export { default as DetailAkunPage } from './pages/DetailAkunPage';
 export { default as RiwayatKomisiPage } from './pages/RiwayatKomisiPage';
 export { default as PaymentConfirmationsPage } from './pages/PaymentConfirmationsPage';
 export { default as NotFoundPage } from './pages/NotFoundPage';
@@ -46,6 +48,7 @@ export * from './api/media';
 export * from './api/perlengkapan';
 export * from './api/schedules';
 export * from './api/agen';
+export * from './api/akun';
 
 // Data & Utils
 export * from './data/indonesianCities';

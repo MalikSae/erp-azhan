@@ -39,6 +39,8 @@ import {
   BookingDetailPage,
   BookingFormPage,
   DaftarAgenPage,
+  DaftarAkunPage,
+  DetailAkunPage,
   DetailAgenPage,
   RiwayatKomisiPage,
   PaymentConfirmationsPage,
@@ -72,6 +74,8 @@ function AppRoutes() {
           <Route path="/schedules/:id/edit" element={<RequireAccess perm="schedule.edit"><ScheduleFormPage /></RequireAccess>} />
 
           {/* Jamaah & Booking (halaman bersama) */}
+          <Route path="/akun" element={<RequireAccess perm="akun.view"><DaftarAkunPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
+          <Route path="/akun/:id" element={<RequireAccess perm="akun.view"><DetailAkunPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah" element={<RequireAccess perm="jamaah.view"><JamaahPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/new" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/:id" element={<RequireAccess perm="jamaah.view"><JamaahDetailPage showBrandColumn={showBrandColumn} /></RequireAccess>} />

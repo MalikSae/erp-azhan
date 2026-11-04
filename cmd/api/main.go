@@ -193,6 +193,7 @@ func main() {
 
 	agenRepo := agen.NewRepository(db)
 	agenHandler := agen.NewHandler(agenRepo)
+	adminAkunHandler := customer.NewAdminAkun(db, agenRepo)
 
 	// ─── Routes ───────────────────────────────────────────────────────────────
 	r.Get("/api/health", healthHandler(db))
@@ -482,6 +483,13 @@ func main() {
 
 		// CRM: konversi lead menjadi jamaah, booking, seat hold/payment dalam satu transaksi.
 		r.With(identity.RequirePermission("crmdeal.process")).Post("/crm/deals", crmDealHandler.ProcessDeal)
+
+		// Akun Pelanggan: daftar dan detail akun yang bisa booking (baca saja; brand scope dicek di query).
+		r.Route("/akun", func(r chi.Router) {
+			r.Use(identity.RequirePermission("akun.view"))
+			r.Get("/", adminAkunHandler.List)
+			r.Get("/{id}", adminAkunHandler.Detail)
+		})
 
 		// Agen Syiar — Persetujuan Agen & status (screen B1/B2a). Akun CS sudah
 		// diblokir oleh RequireAdminOrCRMAccess; brand scope dicek di repository.

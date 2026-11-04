@@ -38,7 +38,7 @@ const jamaahLabel = (j) => {
 const STATUS_AGEN = { tidak_aktif: 'Bukan agen', pengajuan: 'Mengajukan agen', aktif: 'Agen aktif', nonaktif: 'Agen nonaktif' };
 
 // Screen C4 — override admin (spek keagenan 4.4), Admin Master saja. Dua objek:
-// jamaah (pindahkan kunci, termasuk komisi yang sudah tercatat) dan akun (pasang/ganti/lepas agen pengikat).
+// jamaah (pindahkan kunci, termasuk komisi yang sudah tercatat) dan akun (pasang/ganti/lepas upline).
 const TABS = [
   { key: 'jamaah', label: 'Kunci jamaah', icon: IdCard },
   { key: 'akun', label: 'Agen akun', icon: UserRound },
@@ -58,7 +58,6 @@ export default function GantiKaitanAgenPage() {
   const [kaitan, setKaitan] = useState(EMPTY_KAITAN);
   const [alasan, setAlasan] = useState('');
   const [pindahkanKomisi, setPindahkanKomisi] = useState(false);
-  const [ubahUpline, setUbahUpline] = useState(false);
   const [log, setLog] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -75,7 +74,6 @@ export default function GantiKaitanAgenPage() {
     setKaitan(EMPTY_KAITAN);
     setAlasan('');
     setPindahkanKomisi(false);
-    setUbahUpline(false);
   };
 
   const ganti = (key) => {
@@ -167,7 +165,6 @@ export default function GantiKaitanAgenPage() {
       } else {
         await gantiAgenAkun(selected.akun_id, {
           agenAkunId: kaitan.mode === 'agen' ? kaitan.agen.id : null,
-          ubahUpline: akunJadiAgen && ubahUpline,
           alasan: alasan.trim(),
         });
       }
@@ -186,7 +183,7 @@ export default function GantiKaitanAgenPage() {
     if (isJamaah) {
       return `${l.kaitan_status_lama === 'terikat_agen' ? l.agen_lama_nama : 'Tanpa agen'} → ${l.kaitan_status_baru === 'terikat_agen' ? l.agen_baru_nama : 'Tanpa agen'}`;
     }
-    return `${l.agen_lama_nama || 'Tanpa agen'} → ${l.agen_baru_nama || 'Tanpa agen'}`;
+    return `${l.agen_lama_nama || 'Tanpa upline'} → ${l.agen_baru_nama || 'Tanpa upline'}`;
   };
 
   return (
@@ -211,7 +208,7 @@ export default function GantiKaitanAgenPage() {
       {error && !selected && <Alert variant="error" message={error} />}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
         <div className="lg:col-span-2 min-w-0">
-          <MetaBox title={isJamaah ? 'Cari Jamaah' : 'Cari Akun'} subtitle={isJamaah ? 'Pilih jamaah yang kuncinya ingin dipindah.' : 'Pilih akun yang agen pengikatnya ingin dipasang, diganti, atau dilepas.'} icon={<Search size={18} />} contentClassName="p-4 sm:p-5 space-y-4">
+          <MetaBox title={isJamaah ? 'Cari Jamaah' : 'Cari Akun'} subtitle={isJamaah ? 'Pilih jamaah yang kuncinya ingin dipindah.' : 'Pilih akun yang upline-nya ingin dipasang, diganti, atau dilepas.'} icon={<Search size={18} />} contentClassName="p-4 sm:p-5 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
               <Input
                 label={isJamaah ? 'Cari jamaah' : 'Cari akun'}
@@ -255,7 +252,7 @@ export default function GantiKaitanAgenPage() {
                     ) : (
                       <>
                         <p className="text-xs text-neutral-500 truncate">{row.brand_name} • {row.email}</p>
-                        <p className="text-xs text-neutral-700 mt-0.5">{row.agen_nama ? `Diikat ke ${row.agen_nama}` : 'Tanpa agen'} • {STATUS_AGEN[row.status_agen] || row.status_agen}</p>
+                        <p className="text-xs text-neutral-700 mt-0.5">{row.agen_nama ? `Upline: ${row.agen_nama}` : 'Tanpa upline'} • {STATUS_AGEN[row.status_agen] || row.status_agen}</p>
                       </>
                     )}
                   </button>
@@ -294,11 +291,8 @@ export default function GantiKaitanAgenPage() {
                     </>
                   ) : (
                     <>
-                      <div className="flex justify-between gap-3"><span className="text-neutral-500">Agen pengikat</span><span className="font-medium text-neutral-900 text-right">{selected.agen_nama || 'Tanpa agen'}</span></div>
+                      <div className="flex justify-between gap-3"><span className="text-neutral-500">Upline</span><span className="font-medium text-neutral-900 text-right">{selected.agen_nama || 'Tanpa upline'}</span></div>
                       <div className="flex justify-between gap-3"><span className="text-neutral-500">Status akun</span><span className="font-medium text-neutral-900">{STATUS_AGEN[selected.status_agen] || selected.status_agen}</span></div>
-                      {akunJadiAgen && (
-                        <div className="flex justify-between gap-3"><span className="text-neutral-500">Upline saat ini</span><span className="font-medium text-neutral-900 text-right">{selected.upline_nama || 'Tanpa upline'}</span></div>
-                      )}
                     </>
                   )}
                 </div>
@@ -308,7 +302,7 @@ export default function GantiKaitanAgenPage() {
 
                 <div className="space-y-4 border-t border-neutral-100 pt-5">
                   <div>
-                    <h3 className="text-sm font-bold text-neutral-900">{isJamaah ? 'Kunci baru' : 'Agen pengikat baru'}</h3>
+                    <h3 className="text-sm font-bold text-neutral-900">{isJamaah ? 'Kunci baru' : 'Upline baru'}</h3>
                     <p className="mt-1 text-xs text-neutral-500">Tentukan pengganti dan tulis alasan perubahan. Tercatat di riwayat.</p>
                   </div>
                   {isJamaah && selected.booking_belum_lunas > 0 && (
@@ -330,8 +324,8 @@ export default function GantiKaitanAgenPage() {
                     brandId={selected.brand_id}
                     brandRequired
                     excludeAgenId={agenSaatIni ?? undefined}
-                    tanpaAgenLabel={isJamaah ? 'Tanpa Agen' : 'Lepas agen (tanpa agen)'}
-                    hint={isJamaah ? 'Perubahan tidak mengubah kunci jamaah lain dalam booking yang sama.' : 'Hanya mengubah agen pengikat akun. Kunci jamaah yang sudah ada tidak berubah.'}
+                    tanpaAgenLabel={isJamaah ? 'Tanpa Agen' : 'Lepas upline (tanpa upline)'}
+                    hint={isJamaah ? 'Perubahan tidak mengubah kunci jamaah lain dalam booking yang sama.' : 'Kunci jamaah yang sudah ada tidak berubah.'}
                   />
                   {sudahPunyaKomisi && kaitan.mode === 'agen' && (
                     <label className="flex items-start gap-2.5 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-800 cursor-pointer">
@@ -339,12 +333,7 @@ export default function GantiKaitanAgenPage() {
                       <span><strong className="block text-neutral-900">Pindahkan komisi yang sudah tercatat</strong>Komisi langsung pindah ke agen baru, bonus pembinaan ke upline-nya. Ditolak bila saldo agen lama sudah dicairkan.</span>
                     </label>
                   )}
-                  {akunJadiAgen && (
-                    <label className="flex items-start gap-2.5 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-800 cursor-pointer">
-                      <input type="checkbox" checked={ubahUpline} onChange={(e) => setUbahUpline(e.target.checked)} className="mt-0.5 w-4 h-4 text-primary-500 border-neutral-300 rounded focus:ring-primary-500" />
-                      <span><strong className="block text-neutral-900">Ikut ganti upline</strong>Akun ini sudah menjadi agen. Upline (penerima bonus pembinaan) ikut diganti ke agen pengikat yang baru.</span>
-                    </label>
-                  )}
+                  {akunJadiAgen && <p className="text-xs text-neutral-600">Akun ini sudah menjadi agen. Upline baru juga menerima bonus pembinaan dari komisi berikutnya. Komisi yang sudah tercatat tidak berubah.</p>}
                   <Textarea
                     label="Alasan penggantian *"
                     value={alasan}
