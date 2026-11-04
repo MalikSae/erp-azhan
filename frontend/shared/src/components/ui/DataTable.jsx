@@ -15,10 +15,17 @@ const DataTable = ({
   toolbarLeading,
   toolbarActions,
   toolbarPanel,
-  onRowClick
+  onRowClick,
+  // Mode server: paging dan pencarian ditangani API. { total, page, perPage, onPage(n), query, onQuery(text) }
+  server
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [localQuery, setLocalQuery] = useState('');
+  const [localPage, setLocalPage] = useState(1);
+  const searchQuery = server ? server.query : localQuery;
+  const setSearchQuery = server ? server.onQuery : setLocalQuery;
+  const currentPage = server ? server.page : localPage;
+  const setCurrentPage = server ? (fn) => server.onPage(typeof fn === 'function' ? fn(server.page) : fn) : setLocalPage;
+  if (server) itemsPerPage = server.perPage;
   const [sortConfig, setSortConfig] = useState(null);
 
   const handleSort = (key) => {
@@ -32,6 +39,7 @@ const DataTable = ({
   // Filter and sort data
   const filteredData = useMemo(() => {
     let result = data;
+    if (server) return result;
     
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
@@ -63,20 +71,21 @@ const DataTable = ({
     }
     
     return result;
-  }, [data, searchQuery, sortConfig, columns]);
+  }, [data, searchQuery, sortConfig, columns, server]);
 
   // Reset to first page when search or data changes
   React.useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, data, itemsPerPage]);
+    if (!server) setLocalPage(1);
+  }, [searchQuery, data, itemsPerPage, server]);
 
   // Paginate data
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const totalCount = server ? server.total : filteredData.length;
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
   const paginatedData = useMemo(() => {
-    if (!pagination) return filteredData;
+    if (!pagination || server) return filteredData;
     const startIndex = (currentPage - 1) * itemsPerPage;
     return filteredData.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredData, pagination, currentPage, itemsPerPage]);
+  }, [filteredData, pagination, currentPage, itemsPerPage, server]);
 
   return (
     <div className="w-full bg-white rounded-2xl border border-neutral-200/80 shadow-card overflow-hidden">
@@ -131,10 +140,10 @@ const DataTable = ({
       />
 
       {/* Footer / Pagination */}
-      {pagination && filteredData.length > 0 && (
+      {pagination && totalCount > 0 && (
         <div className="p-4 border-t border-neutral-200/80 flex flex-col sm:flex-row items-center justify-between bg-white gap-4">
           <div className="text-xs md:text-sm text-neutral-500 font-body text-center sm:text-left">
-            Menampilkan <span className="font-semibold text-neutral-900">{(currentPage - 1) * itemsPerPage + 1}</span> hingga <span className="font-semibold text-neutral-900">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> dari <span className="font-semibold text-neutral-900">{filteredData.length}</span> entri
+            Menampilkan <span className="font-semibold text-neutral-900">{(currentPage - 1) * itemsPerPage + 1}</span> hingga <span className="font-semibold text-neutral-900">{Math.min(currentPage * itemsPerPage, totalCount)}</span> dari <span className="font-semibold text-neutral-900">{totalCount}</span> entri
           </div>
           <div className="flex gap-1.5 items-center">
             <Button 
