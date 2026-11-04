@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 import {
   listPengajuanAgen,
   keputusanAgen,
@@ -97,6 +99,7 @@ function aksiTersedia(row) {
 
 // Screen B1 — satu kartu pengajuan, satu keputusan admin dengan lima aksi (spek keagenan bagian 7).
 export default function PersetujuanAgenPage() {
+  const { hasPermission } = useContext(AuthContext);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -209,7 +212,7 @@ export default function PersetujuanAgenPage() {
           {row.status_agen !== 'pengajuan' && (
             <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-body text-success-700"><span className="w-1.5 h-1.5 rounded-full bg-success-500" />Agen {row.status_agen} • tinggal pembayaran</div>
           )}
-          {row.direkrut_oleh_nama && <p className="mt-0.5 text-[11px] text-neutral-400">Diikat oleh: {row.direkrut_oleh_nama}</p>}
+          {row.direkrut_oleh_nama && <p className="mt-0.5 text-[11px] text-neutral-400">Upline: {row.direkrut_oleh_nama}</p>}
         </div>
       );
     }
@@ -320,9 +323,14 @@ export default function PersetujuanAgenPage() {
                     <span className="text-neutral-800">{dateLabel(selected.menyetujui_syarat_ketentuan_agen_at)}</span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span className="text-neutral-500">Diikat oleh agen</span>
+                    <span className="text-neutral-500">Upline</span>
                     <span className="text-neutral-800 text-right">{selected.direkrut_oleh_nama || 'Tanpa agen (tidak ada upline)'}</span>
                   </div>
+                  {hasPermission('akun.view') && (
+                    <div className="pt-1.5 text-right">
+                      <Link to={`/akun/${selected.akun_id}`} className="text-primary-600 hover:underline">Buka detail akun</Link>
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200/80 space-y-2">
