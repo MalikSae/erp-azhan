@@ -209,7 +209,7 @@ export default function PersetujuanAgenPage() {
           {row.status_agen !== 'pengajuan' && (
             <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-body text-success-700"><span className="w-1.5 h-1.5 rounded-full bg-success-500" />Agen {row.status_agen} • tinggal pembayaran</div>
           )}
-          {row.direkrut_oleh_nama && <p className="mt-0.5 text-[11px] text-neutral-400">Diikat oleh: {row.direkrut_oleh_nama}</p>}
+          {row.direkrut_oleh_nama && <p className="mt-0.5 text-[11px] text-neutral-400">Upline: {row.direkrut_oleh_nama}</p>}
         </div>
       );
     }
@@ -320,7 +320,7 @@ export default function PersetujuanAgenPage() {
                     <span className="text-neutral-800">{dateLabel(selected.menyetujui_syarat_ketentuan_agen_at)}</span>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <span className="text-neutral-500">Diikat oleh agen</span>
+                    <span className="text-neutral-500">Upline</span>
                     <span className="text-neutral-800 text-right">{selected.direkrut_oleh_nama || 'Tanpa agen (tidak ada upline)'}</span>
                   </div>
                 </div>
