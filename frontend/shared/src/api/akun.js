@@ -16,3 +16,14 @@ export async function getAkunPelanggan(akunId) {
   const { data } = await client.get(`/api/admin/akun/${akunId}`);
   return data;
 }
+
+// Admin mengubah data akun. Alasan wajib; API membalas 409 dengan akun_id pemakai bila nilai baru bentrok.
+export async function ubahProfilAkun(akunId, { nama_lengkap, no_hp, domisili, alasan }) {
+  const { data } = await client.put(`/api/admin/akun/${akunId}`, { nama_lengkap, no_hp, domisili, alasan });
+  return data;
+}
+
+export async function ubahNikAgen(akunId, { nik, alasan }) {
+  const { data } = await client.put(`/api/admin/akun/${akunId}/nik-agen`, { nik, alasan });
+  return data;
+}

@@ -47,7 +47,7 @@ import {
 } from 'shared';
 
 function AppRoutes() {
-  const { isHolding } = useContext(AuthContext);
+  const { isHolding, hasPermission } = useContext(AuthContext);
   // Holding melihat lintas brand (kolom Brand + filter); admin brand terkunci ke brand-nya.
   const showBrandColumn = isHolding;
 
@@ -75,7 +75,7 @@ function AppRoutes() {
 
           {/* Jamaah & Booking (halaman bersama) */}
           <Route path="/akun" element={<RequireAccess perm="akun.view"><DaftarAkunPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
-          <Route path="/akun/:id" element={<RequireAccess perm="akun.view"><DetailAkunPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
+          <Route path="/akun/:id" element={<RequireAccess perm="akun.view"><DetailAkunPage showBrandColumn={showBrandColumn} izin={{ ubahProfil: hasPermission('akun.edit'), nikPengajuan: hasPermission('agen.approve'), nikAktif: hasPermission('agen.kaitan.edit') }} /></RequireAccess>} />
           <Route path="/jamaah" element={<RequireAccess perm="jamaah.view"><JamaahPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/new" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/:id" element={<RequireAccess perm="jamaah.view"><JamaahDetailPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
