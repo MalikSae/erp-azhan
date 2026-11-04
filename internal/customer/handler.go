@@ -171,12 +171,10 @@ type registerRequest struct {
 	KodeReferral string `json:"kode_referral"`
 }
 
-// modeDaftar membedakan pendaftaran akun biasa dari pendaftaran lewat form agen (K2, K22): form agen tanpa captcha dan tanpa
-// email verifikasi, dan penolakan email atau nomor WhatsApp yang sudah ada dijawab satu pesan yang sama agar tidak jadi oracle.
+// modeDaftar membedakan pendaftaran akun biasa dari pendaftaran lewat form agen (K2): form agen tanpa captcha dan tanpa email verifikasi.
 type modeDaftar struct {
 	captcha    bool
 	verifikasi bool
-	generik    bool
 }
 
 // Register POST /api/public/auth/register
@@ -186,7 +184,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 // RegisterAgen POST /api/public/auth/register-agen: akun untuk calon agen. Pembatas per IP tetap berlaku.
 func (h *Handler) RegisterAgen(w http.ResponseWriter, r *http.Request) {
-	h.daftar(w, r, modeDaftar{generik: true})
+	h.daftar(w, r, modeDaftar{})
 }
 
 func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar) {
@@ -236,18 +234,14 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 		return
 	}
 	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), req.KodeReferral)
-	if mode.generik && (errors.Is(err, ErrEmailTaken) || errors.Is(err, ErrPhoneTaken)) {
-		writeError(w, http.StatusConflict, "pendaftaran dengan data ini tidak dapat diproses. Bila Anda sudah punya akun, silakan masuk atau gunakan Lupa kata sandi")
-		return
-	}
 	if errors.Is(err, ErrEmailTaken) {
 		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
 		// Penebakan email tetap dibatasi captcha + registerIPLimit.
-		writeError(w, http.StatusConflict, "pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, silakan masuk atau gunakan Lupa password")
+		writeError(w, http.StatusConflict, "Pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, silakan masuk atau gunakan Lupa kata sandi.")
 		return
 	}
 	if errors.Is(err, ErrPhoneTaken) {
-		writeError(w, http.StatusConflict, "Nomor WhatsApp sudah terdaftar. Masuk dengan email Anda, atau gunakan nomor lain.")
+		writeError(w, http.StatusConflict, "Nomor WhatsApp sudah terdaftar. Gunakan nomor WhatsApp lain.")
 		return
 	}
 	if err != nil {

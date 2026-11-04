@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"erp-azhan/api/internal/testdb"
 )
 
-// K2 dan K22: pendaftaran lewat form agen tanpa captcha dan tanpa email verifikasi; penolakan email atau nomor
-// yang sudah ada dijawab satu pesan yang sama (bukan oracle).
+// K2: pendaftaran lewat form agen tanpa captcha dan tanpa email verifikasi. Nomor WhatsApp yang sudah ada dijawab pesan ringkas
+// yang menyuruh memakai nomor lain; email yang sudah ada tidak menegaskan data akun lain.
 func TestRegisterAgenTanpaCaptchaDanTanpaEmail(t *testing.T) {
 	db := testdb.DB(t)
 	ctx := context.Background()
@@ -51,7 +52,10 @@ func TestRegisterAgenTanpaCaptchaDanTanpaEmail(t *testing.T) {
 	if emailSama.Code != http.StatusConflict || hpSama.Code != http.StatusConflict {
 		t.Fatalf("duplikat harus 409: email %d, nomor %d", emailSama.Code, hpSama.Code)
 	}
-	if emailSama.Body.String() != hpSama.Body.String() {
-		t.Fatalf("pesan email dan nomor harus sama: %q vs %q", emailSama.Body, hpSama.Body)
+	if !strings.Contains(hpSama.Body.String(), "Nomor WhatsApp sudah terdaftar. Gunakan nomor WhatsApp lain.") {
+		t.Fatalf("nomor sama harus memberi pesan ringkas: %q", hpSama.Body)
+	}
+	if strings.Contains(emailSama.Body.String(), "WhatsApp") || !strings.Contains(emailSama.Body.String(), "Lupa kata sandi") {
+		t.Fatalf("email sama harus memakai pesan email: %q", emailSama.Body)
 	}
 }
