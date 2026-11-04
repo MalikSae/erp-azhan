@@ -143,10 +143,9 @@ export async function listKaitanAkunLog(akunId) {
   return data || [];
 }
 
-export async function gantiAgenAkun(akunId, { agenAkunId, ubahUpline = false, alasan }) {
+export async function gantiAgenAkun(akunId, { agenAkunId, alasan }) {
   const { data } = await client.put(`/api/admin/kaitan-agen/akun/${akunId}`, {
     agen_akun_id: agenAkunId ?? null,
-    ubah_upline: ubahUpline,
     alasan,
   });
   return data;

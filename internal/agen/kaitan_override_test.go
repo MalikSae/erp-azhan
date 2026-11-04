@@ -109,36 +109,45 @@ func TestOverrideAgenAkun(t *testing.T) {
 		must(t, "baca", tx.QueryRow(`SELECT direkrut_oleh_akun_id FROM customer_accounts WHERE id=?`, z).Scan(&d))
 		return d
 	}
-	ganti := func(id int64, agen *int64, ubahUpline bool) error {
-		return gantiAgenAkunTx(ctx, tx, nil, id, admin, GantiAgenAkunRequest{AgenAkunID: agen, UbahUpline: ubahUpline, Alasan: "dipasangkan admin"})
+	uplineZ := func() sql.NullInt64 {
+		var u sql.NullInt64
+		must(t, "baca upline", tx.QueryRow(`SELECT upline_akun_id FROM customer_accounts WHERE id=?`, z).Scan(&u))
+		return u
+	}
+	ganti := func(id int64, agen *int64) error {
+		return gantiAgenAkunTx(ctx, tx, nil, id, admin, GantiAgenAkunRequest{AgenAkunID: agen, Alasan: "dipasangkan admin"})
 	}
 
-	// Memasangkan akun tanpa agen (K8: hanya admin).
-	must(t, "pasang ke A", ganti(z, &a, false))
+	// Memasangkan akun tanpa agen (K8: hanya admin). Akun yang belum menjadi agen belum punya upline.
+	must(t, "pasang ke A", ganti(z, &a))
 	if d := direkrutZ(); d.Int64 != a {
 		t.Fatalf("direkrut = %v, want A", d)
 	}
-	mustErr(t, "tanpa perubahan", ganti(z, &a, false), ErrKaitanTidakBerubah)
-	must(t, "ganti ke B", ganti(z, &b, false))
-	mustErr(t, "agen nonaktif", ganti(z, &nonaktif, false), ErrAgenTidakValid)
-	mustErr(t, "diri sendiri", ganti(z, &z, false), ErrAgenTidakValid)
-	mustErr(t, "akun tidak ada", ganti(z+999_999, &a, false), ErrNotFound)
+	if u := uplineZ(); u.Valid {
+		t.Fatalf("upline akun non-agen = %v, want NULL", u)
+	}
+	mustErr(t, "tanpa perubahan", ganti(z, &a), ErrKaitanTidakBerubah)
+	must(t, "ganti ke B", ganti(z, &b))
+	mustErr(t, "agen nonaktif", ganti(z, &nonaktif), ErrAgenTidakValid)
+	mustErr(t, "diri sendiri", ganti(z, &z), ErrAgenTidakValid)
+	mustErr(t, "akun tidak ada", ganti(z+999_999, &a), ErrNotFound)
 
 	// Rantai berputar ditolak: A diikat Z, lalu Z diikat A.
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET direkrut_oleh_akun_id=? WHERE id=?`, z, a)
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET status_agen='aktif' WHERE id=?`, z)
-	mustErr(t, "siklus", ganti(z, &a, false), ErrKaitanAkunSiklus)
+	mustErr(t, "siklus", ganti(z, &a), ErrKaitanAkunSiklus)
 
-	// Lepas agen, dan ubah upline akun yang sudah menjadi agen.
-	must(t, "lepas", ganti(z, nil, false))
+	// Akun yang sudah menjadi agen: upline selalu ikut pindah, juga saat dilepas.
+	must(t, "lepas", ganti(z, nil))
 	if d := direkrutZ(); d.Valid {
 		t.Fatalf("direkrut = %v, want NULL", d)
 	}
-	must(t, "pasang ke B + upline", ganti(z, &b, true))
-	var upline sql.NullInt64
-	must(t, "upline", tx.QueryRow(`SELECT upline_akun_id FROM customer_accounts WHERE id=?`, z).Scan(&upline))
-	if upline.Int64 != b {
-		t.Fatalf("upline = %v, want B", upline)
+	if u := uplineZ(); u.Valid {
+		t.Fatalf("upline setelah dilepas = %v, want NULL", u)
+	}
+	must(t, "pasang ke B", ganti(z, &b))
+	if u := uplineZ(); u.Int64 != b {
+		t.Fatalf("upline = %v, want B", u)
 	}
 	logs, err := listAkunKaitanLog(ctx, tx, nil, z)
 	must(t, "log", err)
@@ -152,6 +161,36 @@ func TestOverrideAgenAkun(t *testing.T) {
 	must(t, "cari", err)
 	if len(hasil) != 1 || hasil[0].AgenID == nil || *hasil[0].AgenID != b {
 		t.Fatalf("cari akun = %+v", hasil)
+	}
+}
+
+// X mengajak Y, Y agen dengan upline X. Setelah admin memindahkan Y ke Q, upline Y menjadi Q, dan bonus pembinaan
+// yang sudah tercatat atas X tidak ditarik kembali.
+func TestOverrideAgenAkunMemindahkanUplineTanpaMenarikBonusLama(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{KomisiLangsung: rp(1_000_000), BonusPembinaan: rp(300_000), BerangkatTanggal: "2099-01-01"})
+	admin := adminUji(t, tx)
+	x := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "X", StatusAgen: "aktif"})
+	y := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Y", StatusAgen: "aktif", Direkrut: x, Upline: x})
+	q := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Q", StatusAgen: "aktif"})
+	j := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "W", Direkrut: y})
+	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: j})
+	must(t, "snapshot", komisi.SnapshotNominal(ctx, tx, b))
+	testdb.Exec(t, tx, `UPDATE bookings SET status='lunas' WHERE id=?`, b)
+	must(t, "komisi", komisi.ProcessBookingLunas(ctx, tx, b))
+
+	must(t, "pindah Y ke Q", gantiAgenAkunTx(ctx, tx, nil, y, admin, GantiAgenAkunRequest{AgenAkunID: &q, Alasan: "sengketa diputus admin"}))
+
+	var direkrut, upline sql.NullInt64
+	must(t, "baca Y", tx.QueryRow(`SELECT direkrut_oleh_akun_id, upline_akun_id FROM customer_accounts WHERE id=?`, y).Scan(&direkrut, &upline))
+	if direkrut.Int64 != q || upline.Int64 != q {
+		t.Fatalf("Y: direkrut=%v upline=%v, want keduanya Q", direkrut, upline)
+	}
+	var penerima int64
+	must(t, "bonus lama", tx.QueryRow(`SELECT akun_penerima_id FROM transaksi_komisi WHERE booking_id=? AND jenis='pembinaan'`, b).Scan(&penerima))
+	if penerima != x {
+		t.Fatalf("bonus pembinaan tercatat = %d, want tetap X (%d)", penerima, x)
 	}
 }
 

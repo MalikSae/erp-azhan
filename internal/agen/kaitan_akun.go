@@ -35,9 +35,7 @@ type AkunKaitan struct {
 }
 
 type GantiAgenAkunRequest struct {
-	AgenAkunID *int64 `json:"agen_akun_id"` // null = lepas agen pengikat
-	// UbahUpline ikut mengganti upline_akun_id (snapshot saat disetujui) bila akun sudah menjadi agen.
-	UbahUpline bool   `json:"ubah_upline"`
+	AgenAkunID *int64 `json:"agen_akun_id"` // null = lepas upline; akun yang sudah menjadi agen ikut mengganti upline_akun_id
 	Alasan     string `json:"alasan"`
 }
 
@@ -139,10 +137,10 @@ func gantiAgenAkunTx(ctx context.Context, tx *sql.Tx, brandID *int64, akunID, ad
 		}
 		baru = *req.AgenAkunID
 	}
-	sama := (a.AgenID == nil && req.AgenAkunID == nil) || (a.AgenID != nil && req.AgenAkunID != nil && *a.AgenID == *req.AgenAkunID)
-	jadiAgen := a.StatusAgen == "aktif" || a.StatusAgen == "nonaktif"
-	ubahUpline := req.UbahUpline && jadiAgen
-	if sama && !ubahUpline {
+	samaID := func(x, y *int64) bool { return (x == nil && y == nil) || (x != nil && y != nil && *x == *y) }
+	// Upline satu konsep dengan pengajak: akun yang sudah menjadi agen selalu ikut dipindah (bonus pembinaan menuju upline).
+	ubahUpline := a.StatusAgen == "aktif" || a.StatusAgen == "nonaktif"
+	if samaID(a.AgenID, req.AgenAkunID) && (!ubahUpline || samaID(a.UplineID, req.AgenAkunID)) {
 		return ErrKaitanTidakBerubah
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE customer_accounts SET direkrut_oleh_akun_id = ? WHERE id = ?`, baru, akunID); err != nil {
@@ -228,7 +226,7 @@ func (h *Handler) LogKaitanAkun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
-// GantiAgenAkun PUT /api/admin/kaitan-agen/akun/{akunID} {agen_akun_id|null, ubah_upline, alasan}
+// GantiAgenAkun PUT /api/admin/kaitan-agen/akun/{akunID} {agen_akun_id|null, alasan}
 func (h *Handler) GantiAgenAkun(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r, "akunID")
 	if !ok {
