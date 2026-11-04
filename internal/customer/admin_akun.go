@@ -61,6 +61,16 @@ type JamaahRingkas struct {
 	Nama string `json:"nama_lengkap"`
 }
 
+// LogData: satu perubahan data akun oleh admin. NIK agen sudah disamarkan saat dicatat.
+type LogData struct {
+	Kolom      string    `json:"kolom"`
+	NilaiLama  *string   `json:"nilai_lama"`
+	NilaiBaru  *string   `json:"nilai_baru"`
+	Alasan     string    `json:"alasan"`
+	DiubahOleh string    `json:"diubah_oleh"`
+	DiubahAt   time.Time `json:"diubah_at"`
+}
+
 type AkunDetail struct {
 	AkunID          int64      `json:"akun_id"`
 	BrandID         int64      `json:"brand_id"`
@@ -87,6 +97,8 @@ type AkunDetail struct {
 	// Jamaah milik akun sendiri (yang dipakai sebagai PIC booking).
 	Jamaah *JamaahRingkas        `json:"jamaah"`
 	Log    []agen.AkunKaitanLog `json:"riwayat_upline"`
+	// Perubahan nama, WhatsApp, domisili, dan NIK agen oleh admin (terbaru dulu).
+	RiwayatData []LogData `json:"riwayat_data"`
 }
 
 // samarkanNIK menyisakan 4 angka awal dan 2 angka akhir.
@@ -210,6 +222,25 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 		d.Jamaah = &JamaahRingkas{ID: jamaahID.Int64, Nama: jamaahNama.String}
 	}
 	d.Log = []agen.AkunKaitanLog{}
+	rows, err := q.QueryContext(ctx, `
+		SELECT l.kolom, l.nilai_lama, l.nilai_baru, l.alasan, COALESCE(au.display_name, au.email), l.diubah_at
+		FROM akun_data_log l JOIN admin_users au ON au.id = l.diubah_oleh
+		WHERE l.akun_id = ? ORDER BY l.id DESC`, akunID)
+	if err != nil {
+		return nil, fmt.Errorf("customer: riwayat data akun: %w", err)
+	}
+	defer rows.Close()
+	d.RiwayatData = []LogData{}
+	for rows.Next() {
+		var l LogData
+		if err := rows.Scan(&l.Kolom, &l.NilaiLama, &l.NilaiBaru, &l.Alasan, &l.DiubahOleh, &l.DiubahAt); err != nil {
+			return nil, fmt.Errorf("customer: scan riwayat data akun: %w", err)
+		}
+		d.RiwayatData = append(d.RiwayatData, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return &d, nil
 }
 

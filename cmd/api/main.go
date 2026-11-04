@@ -489,6 +489,9 @@ func main() {
 			r.Use(identity.RequirePermission("akun.view"))
 			r.Get("/", adminAkunHandler.List)
 			r.Get("/{id}", adminAkunHandler.Detail)
+			r.With(identity.RequirePermission("akun.edit")).Put("/{id}", adminAkunHandler.UbahProfil)
+			// Izin NIK agen (agen.approve atau agen.kaitan.edit) diperiksa di handler menurut status akun.
+			r.Put("/{id}/nik-agen", adminAkunHandler.UbahNIK)
 		})
 
 		// Agen Syiar — Persetujuan Agen & status (screen B1/B2a). Akun CS sudah
