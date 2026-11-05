@@ -11,6 +11,7 @@ import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import Textarea from '../components/ui/Textarea';
 import { dateLabel } from '../utils/agen';
+import useProtectedImage from '../utils/useProtectedImage';
 import { StatusAkun } from './DaftarAkunPage';
 
 const dateTime = (v) => (!v ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(v)));
@@ -48,6 +49,8 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
     setAkun(null);
     muat();
   }, [muat]);
+
+  const fotoSrc = useProtectedImage(akun?.foto_url);
 
   if (error) return <div className="space-y-6"><PageHeader title="Detail Akun" onBack={() => navigate('/akun')} /><Alert variant="error" message={error} /></div>;
   if (!akun) return <LoadingSpinner />;
@@ -92,6 +95,13 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
           contentClassName="p-4 sm:p-5 space-y-2.5"
           headerAction={izin.ubahProfil ? <TombolUbah onClick={() => buka('profil')}>Ubah</TombolUbah> : null}
         >
+          {akun.foto_url && (
+            <div className="flex justify-center pb-2">
+              <div className="size-24 overflow-hidden rounded-full border border-neutral-200 bg-neutral-50">
+                {fotoSrc && <img src={fotoSrc} alt={`Foto ${akun.nama_lengkap}`} className="h-full w-full object-cover" />}
+              </div>
+            </div>
+          )}
           <Row label="Nama">{akun.nama_lengkap}</Row>
           <Row label="Email">{akun.email}{akun.email_verified_at ? '' : ' (belum diverifikasi)'}</Row>
           <Row label="WhatsApp">{akun.no_hp}</Row>
