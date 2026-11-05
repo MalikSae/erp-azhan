@@ -316,6 +316,8 @@ type meView struct {
 	*Account
 	JenisKelamin string `json:"jenis_kelamin"`
 	NIKMasked    string `json:"nik_masked"`
+	// NIKAgenMasked: NIK yang agen simpan saat mendaftar, tersamar; untuk petunjuk "terisi otomatis" di form booking agen.
+	NIKAgenMasked string `json:"nik_agen_masked"`
 }
 
 type rowQuerier interface {
@@ -339,6 +341,12 @@ func MaskNIK(nik string) string {
 // buildMeView melengkapi akun dengan jenis kelamin dan NIK tersamar dari jamaah akun (bila ada).
 func buildMeView(ctx context.Context, q rowQuerier, a *Account) meView {
 	view := meView{Account: a}
+	if a != nil {
+		var nikAgen sql.NullString
+		if err := q.QueryRowContext(ctx, `SELECT nik_agen FROM customer_accounts WHERE id=?`, a.ID).Scan(&nikAgen); err == nil {
+			view.NIKAgenMasked = MaskNIK(nikAgen.String)
+		}
+	}
 	if a != nil && a.JamaahID != nil {
 		var jk, nik sql.NullString
 		if err := q.QueryRowContext(ctx, `SELECT jenis_kelamin, nik FROM jamaah WHERE id=?`, *a.JamaahID).Scan(&jk, &nik); err == nil {
@@ -572,4 +580,3 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = h.repo.RevokeAllSessions(r.Context(), accountID)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
-

@@ -151,6 +151,10 @@ func (h *Handler) CreateBookingAgen(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
+	if err := isiNIKSayaSendiri(r.Context(), h.repo.db, agenID, &req); err != nil {
+		h.writeAgenBookingError(w, err)
+		return
+	}
 	if msg := validateAgenBooking(&req); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
@@ -222,7 +226,7 @@ func (h *Handler) writeAgenBookingError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrBukanAgenAktif):
 		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, ErrJamaahBukanMilik), errors.Is(err, ErrNIKAtasNamaLain), errors.Is(err, ErrSayaSendiriBukanAnda),
+	case errors.Is(err, ErrJamaahBukanMilik), errors.Is(err, ErrNIKAtasNamaLain), errors.Is(err, ErrSayaSendiriBukanAnda), errors.Is(err, ErrNIKAgenBelumAda),
 		errors.Is(err, ErrSeatHabis), errors.Is(err, ErrDuplicate),
 		errors.Is(err, ErrDuplicatePaxInBooking), errors.Is(err, ErrCutoffBooking),
 		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant), errors.Is(err, ErrInfantUnavailable), errors.Is(err, ErrInvalidDP):

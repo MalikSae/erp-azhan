@@ -16,7 +16,30 @@ var nikPattern = regexp.MustCompile(`^\d{16}$`)
 var ErrNIKAtasNamaLain = errors.New("NIK sudah terdaftar dengan nama yang berbeda")
 
 // ErrSayaSendiriBukanAnda: pilihan "Saya sendiri" dipakai untuk jamaah yang NIK-nya bukan NIK agen (K24).
-var ErrSayaSendiriBukanAnda = errors.New("pilihan Saya sendiri hanya untuk data Anda sendiri")
+var ErrSayaSendiriBukanAnda = errors.New("NIK jamaah ini tidak sama dengan NIK Anda sebagai agen, jadi tidak bisa dipilih sebagai Saya sendiri")
+
+// ErrNIKAgenBelumAda: agen memilih "Saya sendiri" tetapi belum punya NIK tercatat (agen lama, sebelum NIK wajib).
+var ErrNIKAgenBelumAda = errors.New("NIK Anda sebagai agen belum tercatat, jadi Saya sendiri belum bisa dipakai. Pilih Isi baru atau hubungi admin untuk melengkapinya")
+
+// isiNIKSayaSendiri mengisi NIK jamaah pertama dari NIK agen bila memilih "Saya sendiri": NIK yang dikirim browser diabaikan,
+// jadi agen tidak perlu mengetik ulang dan NIK utuhnya tidak pernah dikirim ke browser. Pemeriksaan pastikanSayaSendiri tetap berlaku.
+func isiNIKSayaSendiri(ctx context.Context, q interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}, agenID int64, req *BookingRequest) error {
+	if !req.PIC.SayaSendiri {
+		return nil
+	}
+	var nik sql.NullString
+	if err := q.QueryRowContext(ctx, `SELECT nik_agen FROM customer_accounts WHERE id = ?`, agenID).Scan(&nik); err != nil {
+		return fmt.Errorf("selfbooking: baca NIK agen: %w", err)
+	}
+	if !nik.Valid || nik.String == "" {
+		return ErrNIKAgenBelumAda
+	}
+	n := nik.String
+	req.PIC.NIK = &n
+	return nil
+}
 
 // pastikanSayaSendiri menolak "Saya sendiri" bila NIK jamaah pertama berbeda dari NIK yang agen isi saat mendaftar.
 // Tanpa pemeriksaan ini agen bisa mengetik NIK jamaah yang terkunci ke agen lain dan mengambil komisinya.
