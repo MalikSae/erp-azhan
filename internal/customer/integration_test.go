@@ -309,6 +309,48 @@ func TestUpdateMe(t *testing.T) {
 	if _, ok := mail.last(emailA2); !ok {
 		t.Fatal("email verifikasi ke alamat baru tidak terkirim")
 	}
+
+	// Kota domisili dan tanggal lahir: opsional. Tidak dikirim = tidak berubah, kosong = dihapus.
+	dasar := map[string]any{"nama_lengkap": "Nama Baru", "email": emailA2, "no_hp": hpA2}
+	withExtra := func(extra map[string]any) map[string]any {
+		m := map[string]any{}
+		for k, v := range dasar {
+			m[k] = v
+		}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+	if rec := call(withExtra(map[string]any{"domisili": "Kota Bandung", "tanggal_lahir": "1990-05-12"})); rec.Code != http.StatusOK {
+		t.Fatalf("isi domisili dan tanggal lahir: %d %s", rec.Code, rec.Body)
+	}
+	got, _ = h.repo.GetByID(ctx, idA.ID)
+	if got.Domisili == nil || *got.Domisili != "Kota Bandung" || got.TanggalLahir == nil || *got.TanggalLahir != "1990-05-12" {
+		t.Fatalf("domisili dan tanggal lahir tidak tersimpan: %+v / %+v", got.Domisili, got.TanggalLahir)
+	}
+	if rec := call(dasar); rec.Code != http.StatusOK {
+		t.Fatalf("ubah tanpa field tambahan: %d %s", rec.Code, rec.Body)
+	}
+	got, _ = h.repo.GetByID(ctx, idA.ID)
+	if got.Domisili == nil || got.TanggalLahir == nil {
+		t.Fatal("field yang tidak dikirim tidak boleh terhapus")
+	}
+	for _, tgl := range []string{"12-05-1990", "2999-01-01", "1800-01-01", "bukan"} {
+		if rec := call(withExtra(map[string]any{"tanggal_lahir": tgl})); rec.Code != http.StatusBadRequest {
+			t.Fatalf("tanggal lahir %q harus 400, dapat %d", tgl, rec.Code)
+		}
+	}
+	if rec := call(withExtra(map[string]any{"domisili": strings.Repeat("k", 101)})); rec.Code != http.StatusBadRequest {
+		t.Fatalf("domisili 101 karakter harus 400, dapat %d", rec.Code)
+	}
+	if rec := call(withExtra(map[string]any{"domisili": "", "tanggal_lahir": ""})); rec.Code != http.StatusOK {
+		t.Fatalf("kosongkan: %d %s", rec.Code, rec.Body)
+	}
+	got, _ = h.repo.GetByID(ctx, idA.ID)
+	if got.Domisili != nil || got.TanggalLahir != nil {
+		t.Fatalf("kosong harus menghapus: %+v / %+v", got.Domisili, got.TanggalLahir)
+	}
 }
 
 // Ganti password dari dalam akun: wajib password saat ini, sesi lain dicabut, sesi yang dipakai tetap aktif,

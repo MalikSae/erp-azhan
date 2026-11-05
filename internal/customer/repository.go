@@ -47,6 +47,9 @@ type Account struct {
 	KodeReferral *string `json:"kode_referral"`
 	// FotoURL: foto profil akun (privat, disajikan lewat GET /api/account/foto).
 	FotoURL      *string `json:"foto_url"`
+	// Domisili (kota atau kabupaten) dan tanggal lahir (YYYY-MM-DD): opsional, diisi pemilik akun di Profil.
+	Domisili     *string `json:"domisili"`
+	TanggalLahir *string `json:"tanggal_lahir"`
 	passwordHash string
 }
 
@@ -70,14 +73,14 @@ func newRawToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-const accountCols = `id, brand_id, nama_lengkap, email, no_hp, email_verified_at, jamaah_id, password_hash, status_agen, kode_referral, foto_url`
+const accountCols = `id, brand_id, nama_lengkap, email, no_hp, email_verified_at, jamaah_id, password_hash, status_agen, kode_referral, foto_url, domisili, DATE_FORMAT(tanggal_lahir, '%Y-%m-%d')`
 
 func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 	var a Account
 	var verified sql.NullTime
 	var jamaah sql.NullInt64
-	var kode, foto sql.NullString
-	if err := row.Scan(&a.ID, &a.BrandID, &a.NamaLengkap, &a.Email, &a.NoHP, &verified, &jamaah, &a.passwordHash, &a.StatusAgen, &kode, &foto); err != nil {
+	var kode, foto, dom, lahir sql.NullString
+	if err := row.Scan(&a.ID, &a.BrandID, &a.NamaLengkap, &a.Email, &a.NoHP, &verified, &jamaah, &a.passwordHash, &a.StatusAgen, &kode, &foto, &dom, &lahir); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -95,6 +98,12 @@ func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 	}
 	if foto.Valid {
 		a.FotoURL = &foto.String
+	}
+	if dom.Valid {
+		a.Domisili = &dom.String
+	}
+	if lahir.Valid {
+		a.TanggalLahir = &lahir.String
 	}
 	return &a, nil
 }
@@ -131,11 +140,21 @@ func mapDuplicate(err error, op string) error {
 // UpdateProfile mengganti nama, email, dan nomor WhatsApp akun. Email yang berubah membatalkan status terverifikasi.
 // email_verified_at harus ditulis SEBELUM email_normal: MySQL mengevaluasi SET dari kiri ke kanan, jadi pembandingnya
 // masih membaca email lama.
-func (r *Repository) UpdateProfile(ctx context.Context, id int64, nama, email, noHP string) error {
+// domisili dan tanggalLahir: nil = tidak berubah, string kosong = dihapus.
+func (r *Repository) UpdateProfile(ctx context.Context, id int64, nama, email, noHP string, domisili, tanggalLahir *string) error {
+	var ubahDom, ubahLahir bool
+	var dom, lahir string
+	if domisili != nil {
+		ubahDom, dom = true, *domisili
+	}
+	if tanggalLahir != nil {
+		ubahLahir, lahir = true, *tanggalLahir
+	}
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE customer_accounts SET email_verified_at = IF(email_normal <> ?, NULL, email_verified_at),
-		 nama_lengkap=?, email=?, email_normal=?, no_hp=? WHERE id=?`,
-		NormalizeEmail(email), nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, id)
+		 nama_lengkap=?, email=?, email_normal=?, no_hp=?,
+		 domisili = IF(?, NULLIF(?, ''), domisili), tanggal_lahir = IF(?, NULLIF(?, ''), tanggal_lahir) WHERE id=?`,
+		NormalizeEmail(email), nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, ubahDom, dom, ubahLahir, lahir, id)
 	if err != nil {
 		return mapDuplicate(err, "update profile")
 	}
@@ -175,7 +194,7 @@ func (r *Repository) AccountBySession(ctx context.Context, raw string) (*Account
 		return nil, ErrSessionInvalid
 	}
 	a, err := scanAccount(r.db.QueryRowContext(ctx, `
-		SELECT a.id, a.brand_id, a.nama_lengkap, a.email, a.no_hp, a.email_verified_at, a.jamaah_id, a.password_hash, a.status_agen, a.kode_referral, a.foto_url
+		SELECT a.id, a.brand_id, a.nama_lengkap, a.email, a.no_hp, a.email_verified_at, a.jamaah_id, a.password_hash, a.status_agen, a.kode_referral, a.foto_url, a.domisili, DATE_FORMAT(a.tanggal_lahir, '%Y-%m-%d')
 		FROM customer_sessions s JOIN customer_accounts a ON a.id = s.account_id
 		WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > ?`, hashToken(raw), time.Now()))
 	if errors.Is(err, ErrNotFound) {

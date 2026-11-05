@@ -147,6 +147,21 @@ func (h *Handler) sendVerification(ctx context.Context, acc *Account) {
 }
 
 // validateProfile memeriksa nama, email, dan nomor WhatsApp (sudah di-trim); mengembalikan pesan galat, atau "" bila valid.
+// validateDomisiliLahir memeriksa isian opsional profil: domisili maksimal 100 karakter; tanggal lahir berbentuk YYYY-MM-DD,
+// bukan di masa depan, dan tidak sebelum 1900. nil atau string kosong lolos (kosong berarti dihapus).
+func validateDomisiliLahir(domisili, tanggalLahir *string, sekarang time.Time) string {
+	if domisili != nil && utf8.RuneCountInString(*domisili) > 100 {
+		return "kota domisili maksimal 100 karakter"
+	}
+	if tanggalLahir != nil && *tanggalLahir != "" {
+		t, err := time.Parse("2006-01-02", *tanggalLahir)
+		if err != nil || t.After(sekarang) || t.Year() < 1900 {
+			return "tanggal lahir tidak valid"
+		}
+	}
+	return ""
+}
+
 func validateProfile(nama, email, noHP string) string {
 	switch {
 	case !ValidName(nama):
@@ -365,10 +380,13 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, a)})
 }
 
+// Domisili dan TanggalLahir opsional: tidak dikirim = tidak berubah, string kosong = dihapus.
 type updateProfileRequest struct {
-	NamaLengkap string `json:"nama_lengkap"`
-	Email       string `json:"email"`
-	NoHP        string `json:"no_hp"`
+	NamaLengkap  string  `json:"nama_lengkap"`
+	Email        string  `json:"email"`
+	NoHP         string  `json:"no_hp"`
+	Domisili     *string `json:"domisili"`
+	TanggalLahir *string `json:"tanggal_lahir"`
 }
 
 // UpdateMe PATCH /api/account/me: ubah nama, email, dan nomor WhatsApp. Email baru wajib diverifikasi ulang.
@@ -383,6 +401,18 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	if req.Domisili != nil {
+		d := strings.TrimSpace(*req.Domisili)
+		req.Domisili = &d
+	}
+	if req.TanggalLahir != nil {
+		t := strings.TrimSpace(*req.TanggalLahir)
+		req.TanggalLahir = &t
+	}
+	if msg := validateDomisiliLahir(req.Domisili, req.TanggalLahir, time.Now()); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	key := strconv.FormatInt(acc.ID, 10)
 	if !h.profile.Allow(key) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak perubahan data, coba lagi dalam 1 jam")
@@ -391,7 +421,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	h.profile.Record(key)
 
 	emailChanged := NormalizeEmail(req.Email) != NormalizeEmail(acc.Email)
-	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP)
+	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir)
 	if errors.Is(err, ErrEmailTaken) {
 		writeError(w, http.StatusConflict, "email ini tidak dapat digunakan, coba email lain")
 		return
