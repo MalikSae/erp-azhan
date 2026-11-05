@@ -136,11 +136,9 @@ func TestPortalAgenAksesHanyaAgenAktif(t *testing.T) {
 		}
 	}
 
-	// Ajukan dengan foto yang bukan hasil unggahan akun ini ditolak (URL karangan).
-	body, _ := json.Marshal(map[string]any{
-		"foto_agen_url": "/api/admin/media/dokumen-jamaah/00000000-0000-0000-0000-000000000000.jpg", "domisili": "Bekasi", "setuju_syarat_ketentuan": true,
-	})
+	// Pengajuan tidak lagi meminta foto: tanpa NIK 16 digit tetap ditolak, foto bukan syarat.
+	body, _ := json.Marshal(map[string]any{"domisili": "Bekasi", "setuju_syarat_ketentuan": true})
 	if rec := do(biasa, "POST", "/pengajuan", string(body)); rec.Code != 400 {
-		t.Fatalf("ajukan foto karangan = %d %s, want 400", rec.Code, rec.Body)
+		t.Fatalf("ajukan tanpa NIK = %d %s, want 400", rec.Code, rec.Body)
 	}
 }

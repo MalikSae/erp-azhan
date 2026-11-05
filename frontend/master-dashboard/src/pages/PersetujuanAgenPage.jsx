@@ -108,7 +108,7 @@ export default function PersetujuanAgenPage() {
   const [catatan, setCatatan] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
-  const fotoSrc = useProtectedImage(selected?.foto_agen_url);
+  const fotoSrc = useProtectedImage(selected?.foto_url);
 
   const load = async () => {
     setLoading(true);

@@ -64,7 +64,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
-  const fotoSrc = useProtectedImage(agen?.foto_agen_url);
+  const fotoSrc = useProtectedImage(agen?.foto_url);
 
   const load = useCallback(async () => {
     setLoading(true);

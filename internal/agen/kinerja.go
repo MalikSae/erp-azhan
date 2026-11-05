@@ -285,7 +285,7 @@ type DetailAgen struct {
 	BrandName   string     `json:"brand_name"`
 	NamaLengkap string     `json:"nama_lengkap"`
 	NoHP        *string    `json:"no_hp"`
-	FotoAgenURL *string    `json:"foto_agen_url"`
+	FotoURL *string    `json:"foto_url"`
 	Domisili    *string    `json:"domisili"`
 	SetujuSKAt  *time.Time `json:"menyetujui_syarat_ketentuan_agen_at"`
 	// b. Status keagenan
@@ -313,7 +313,7 @@ func getDetailAgen(ctx context.Context, q querier, akunID int64, brandID *int64)
 	var d DetailAgen
 	var upline sql.NullInt64
 	err := q.QueryRowContext(ctx, `
-		SELECT j.id, j.brand_id, b.name, j.nama_lengkap, j.no_hp, j.foto_agen_url, j.domisili,
+		SELECT j.id, j.brand_id, b.name, j.nama_lengkap, j.no_hp, j.foto_url, j.domisili,
 		       j.menyetujui_syarat_ketentuan_agen_at, j.status_agen, j.kode_referral, j.diajukan_agen_at,
 		       j.disetujui_agen_at, COALESCE(au.display_name, au.email), j.upline_akun_id, up.nama_lengkap
 		FROM customer_accounts j
@@ -321,7 +321,7 @@ func getDetailAgen(ctx context.Context, q querier, akunID int64, brandID *int64)
 		LEFT JOIN admin_users au ON au.id = j.disetujui_agen_oleh
 		LEFT JOIN customer_accounts up ON up.id = j.upline_akun_id
 		WHERE j.id = ? AND j.status_agen IN ('aktif','nonaktif')`, akunID).
-		Scan(&d.AkunID, &d.BrandID, &d.BrandName, &d.NamaLengkap, &d.NoHP, &d.FotoAgenURL, &d.Domisili,
+		Scan(&d.AkunID, &d.BrandID, &d.BrandName, &d.NamaLengkap, &d.NoHP, &d.FotoURL, &d.Domisili,
 			&d.SetujuSKAt, &d.StatusAgen, &d.KodeReferral, &d.DiajukanAt,
 			&d.DisetujuiAt, &d.DisetujuiOlehNama, &upline, &d.UplineNama)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != d.BrandID) {

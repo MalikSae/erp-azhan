@@ -86,11 +86,11 @@ func (r *Repository) UploadBuktiAdmin(ctx context.Context, ppaID int64, brandID 
 func getStatusPortal(ctx context.Context, q querier, akunID int64) (*StatusPortal, error) {
 	var s StatusPortal
 	err := q.QueryRowContext(ctx, `
-		SELECT j.status_agen, j.kode_referral, j.foto_agen_url, j.domisili,
+		SELECT j.status_agen, j.kode_referral, j.foto_url, j.domisili,
 		       b.name, b.biaya_pendaftaran_agen, b.no_wa_admin_travel
 		FROM customer_accounts j JOIN brands b ON b.id = j.brand_id
 		WHERE j.id = ?`, akunID).
-		Scan(&s.StatusAgen, &s.KodeReferral, &s.FotoAgenURL, &s.Domisili,
+		Scan(&s.StatusAgen, &s.KodeReferral, &s.FotoURL, &s.Domisili,
 			&s.BrandName, &s.BiayaPendaftaranAgen, &s.NoWAAdminTravel)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -125,9 +125,9 @@ func ajukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) 
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE customer_accounts SET foto_agen_url = ?, domisili = ?, nik_agen = NULLIF(?, ''), menyetujui_syarat_ketentuan_agen_at = NOW(),
+		UPDATE customer_accounts SET domisili = ?, nik_agen = NULLIF(?, ''), menyetujui_syarat_ketentuan_agen_at = NOW(),
 		       status_agen = 'pengajuan', diajukan_agen_at = NOW()
-		WHERE id = ?`, req.FotoAgenURL, req.Domisili, req.NIK, akunID); err != nil {
+		WHERE id = ?`, req.Domisili, req.NIK, akunID); err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
 			return ErrNIKAgenTidakBisaDipakai
@@ -173,7 +173,7 @@ func uploadBuktiAkunTx(ctx context.Context, tx *sql.Tx, akunID int64, url string
 func listPengajuan(ctx context.Context, db querier, brandID *int64) ([]Pengajuan, error) {
 	q := `
 		SELECT j.id, j.brand_id, j.nama_lengkap, j.no_hp, j.status_agen,
-		       j.foto_agen_url, j.domisili, j.menyetujui_syarat_ketentuan_agen_at, j.diajukan_agen_at,
+		       j.foto_url, j.domisili, j.menyetujui_syarat_ketentuan_agen_at, j.diajukan_agen_at,
 		       rek.nama_lengkap, j.nik_agen
 		FROM customer_accounts j
 		LEFT JOIN customer_accounts rek ON rek.id = j.direkrut_oleh_akun_id
@@ -199,7 +199,7 @@ func listPengajuan(ctx context.Context, db querier, brandID *int64) ([]Pengajuan
 		var p Pengajuan
 		var nik sql.NullString
 		if err := rows.Scan(&p.AkunID, &p.BrandID, &p.NamaLengkap, &p.NoHP, &p.StatusAgen,
-			&p.FotoAgenURL, &p.Domisili, &p.SetujuSKAt, &p.DiajukanAt, &p.DirekrutOleh, &nik); err != nil {
+			&p.FotoURL, &p.Domisili, &p.SetujuSKAt, &p.DiajukanAt, &p.DirekrutOleh, &nik); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("agen.ListPengajuan scan: %w", err)
 		}
