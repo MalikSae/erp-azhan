@@ -82,6 +82,7 @@ type AkunDetail struct {
 	Domisili        *string    `json:"domisili"`
 	CreatedAt       time.Time  `json:"created_at"`
 	LastLoginAt     *time.Time `json:"last_login_at"`
+	FotoURL         *string    `json:"foto_url"` // privat; admin membukanya lewat media terlindungi
 	// Upline = agen yang mengajak akun ini (direkrut_oleh_akun_id); untuk agen sama dengan upline_akun_id penerima bonus pembinaan.
 	UplineID   *int64  `json:"upline_akun_id"`
 	UplineNama *string `json:"upline_nama"`
@@ -196,7 +197,7 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 		       a.jamaah_id, j.nama_lengkap,
 		       (SELECT COUNT(*) FROM jamaah WHERE direkrut_oleh_akun_id = a.id),
 		       (SELECT COUNT(*) FROM customer_accounts WHERE direkrut_oleh_akun_id = a.id),
-		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id)
+		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id), a.foto_url
 		FROM customer_accounts a
 		JOIN brands b ON b.id = a.brand_id
 		LEFT JOIN customer_accounts up ON up.id = a.direkrut_oleh_akun_id
@@ -204,7 +205,7 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 		WHERE a.id = ?`, akunID).
 		Scan(&d.AkunID, &d.BrandID, &d.BrandName, &d.NamaLengkap, &d.Email, &d.EmailVerifiedAt, &d.NoHP, &d.Domisili, &d.CreatedAt, &d.LastLoginAt,
 			&upline, &d.UplineNama, &d.StatusAgen, &d.KodeReferral, &d.DiajukanAt, &d.DisetujuiAt, &nik,
-			&jamaahID, &jamaahNama, &d.JumlahJamaahAgen, &d.JumlahDiajak, &d.JumlahBooking)
+			&jamaahID, &jamaahNama, &d.JumlahJamaahAgen, &d.JumlahDiajak, &d.JumlahBooking, &d.FotoURL)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != d.BrandID) {
 		return nil, ErrNotFound
 	}

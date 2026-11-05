@@ -269,6 +269,8 @@ func main() {
 		r.Use(customerHandler.RequireCustomer)
 		r.Get("/me", customerHandler.Me)
 		r.Patch("/me", customerHandler.UpdateMe)
+		r.Get("/foto", customerHandler.Foto)
+		r.Put("/foto", customerHandler.UpdateFoto)
 		r.Post("/password", customerHandler.ChangePassword)
 		r.Post("/logout", customerHandler.Logout)
 		r.Post("/resend-verification", customerHandler.ResendVerification)

@@ -45,6 +45,8 @@ type Account struct {
 	// Status keagenan akun (spek 6.3) dan kode referral bila sudah pernah disetujui.
 	StatusAgen   string  `json:"status_agen"`
 	KodeReferral *string `json:"kode_referral"`
+	// FotoURL: foto profil akun (privat, disajikan lewat GET /api/account/foto).
+	FotoURL      *string `json:"foto_url"`
 	passwordHash string
 }
 
@@ -68,14 +70,14 @@ func newRawToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-const accountCols = `id, brand_id, nama_lengkap, email, no_hp, email_verified_at, jamaah_id, password_hash, status_agen, kode_referral`
+const accountCols = `id, brand_id, nama_lengkap, email, no_hp, email_verified_at, jamaah_id, password_hash, status_agen, kode_referral, foto_url`
 
 func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 	var a Account
 	var verified sql.NullTime
 	var jamaah sql.NullInt64
-	var kode sql.NullString
-	if err := row.Scan(&a.ID, &a.BrandID, &a.NamaLengkap, &a.Email, &a.NoHP, &verified, &jamaah, &a.passwordHash, &a.StatusAgen, &kode); err != nil {
+	var kode, foto sql.NullString
+	if err := row.Scan(&a.ID, &a.BrandID, &a.NamaLengkap, &a.Email, &a.NoHP, &verified, &jamaah, &a.passwordHash, &a.StatusAgen, &kode, &foto); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -90,6 +92,9 @@ func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 	}
 	if kode.Valid {
 		a.KodeReferral = &kode.String
+	}
+	if foto.Valid {
+		a.FotoURL = &foto.String
 	}
 	return &a, nil
 }
@@ -170,7 +175,7 @@ func (r *Repository) AccountBySession(ctx context.Context, raw string) (*Account
 		return nil, ErrSessionInvalid
 	}
 	a, err := scanAccount(r.db.QueryRowContext(ctx, `
-		SELECT a.id, a.brand_id, a.nama_lengkap, a.email, a.no_hp, a.email_verified_at, a.jamaah_id, a.password_hash, a.status_agen, a.kode_referral
+		SELECT a.id, a.brand_id, a.nama_lengkap, a.email, a.no_hp, a.email_verified_at, a.jamaah_id, a.password_hash, a.status_agen, a.kode_referral, a.foto_url
 		FROM customer_sessions s JOIN customer_accounts a ON a.id = s.account_id
 		WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > ?`, hashToken(raw), time.Now()))
 	if errors.Is(err, ErrNotFound) {
