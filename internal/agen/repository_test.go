@@ -68,7 +68,7 @@ func findPengajuan(t *testing.T, f fixture, akunID int64) *Pengajuan {
 	return nil
 }
 
-var ajuan = AjukanRequest{Domisili: "Kota Bekasi", SetujuSyaratKetentuan: true}
+var ajuan = AjukanRequest{Domisili: "Kota Bekasi", JenisKelamin: "L", TanggalLahir: "1990-05-12", SetujuSyaratKetentuan: true}
 
 // Langkah 17: brand berbayar, upload bukti, approve TANPA menunggu verifikasi,
 // verifikasi pembayaran belakangan.

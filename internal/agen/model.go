@@ -70,6 +70,8 @@ type Pengajuan struct {
 	StatusAgen   string      `json:"status_agen"` // 'pengajuan', atau 'aktif'/'nonaktif' bila tinggal pembayaran
 	FotoURL  *string     `json:"foto_url"`
 	Domisili     *string     `json:"domisili"`
+	JenisKelamin *string     `json:"jenis_kelamin"`
+	TanggalLahir *string     `json:"tanggal_lahir"` // YYYY-MM-DD
 	SetujuSKAt   *time.Time  `json:"menyetujui_syarat_ketentuan_agen_at"`
 	DiajukanAt   *time.Time  `json:"diajukan_agen_at"`
 	DirekrutOleh *string     `json:"direkrut_oleh_nama"`
@@ -82,6 +84,8 @@ type Pengajuan struct {
 type AjukanRequest struct {
 	NIK                   string `json:"nik"`
 	Domisili              string `json:"domisili"`
+	JenisKelamin          string `json:"jenis_kelamin"` // L atau P
+	TanggalLahir          string `json:"tanggal_lahir"` // YYYY-MM-DD, minimal 17 tahun
 	SetujuSyaratKetentuan bool   `json:"setuju_syarat_ketentuan"`
 }
 

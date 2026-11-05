@@ -141,4 +141,20 @@ func TestPortalAgenAksesHanyaAgenAktif(t *testing.T) {
 	if rec := do(biasa, "POST", "/pengajuan", string(body)); rec.Code != 400 {
 		t.Fatalf("ajukan tanpa NIK = %d %s, want 400", rec.Code, rec.Body)
 	}
+
+	// Jenis kelamin dan tanggal lahir wajib; pendaftar di bawah 17 tahun ditolak.
+	for nama, extra := range map[string]map[string]any{
+		"tanpa jenis kelamin": {"tanggal_lahir": "1990-05-12"},
+		"tanpa tanggal lahir": {"jenis_kelamin": "L"},
+		"di bawah 17 tahun":   {"jenis_kelamin": "L", "tanggal_lahir": "2020-01-01"},
+	} {
+		m := map[string]any{"nik": "9999999999990601", "domisili": "Bekasi", "setuju_syarat_ketentuan": true}
+		for k, v := range extra {
+			m[k] = v
+		}
+		b, _ := json.Marshal(m)
+		if rec := do(biasa, "POST", "/pengajuan", string(b)); rec.Code != 400 {
+			t.Fatalf("ajukan %s = %d %s, want 400", nama, rec.Code, rec.Body)
+		}
+	}
 }

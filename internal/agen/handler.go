@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/identity"
@@ -60,6 +61,10 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 	}
 	if n := utf8.RuneCountInString(req.Domisili); n < 2 || n > 100 {
 		writeError(w, http.StatusBadRequest, "domisili wajib diisi (2–100 karakter)")
+		return
+	}
+	if msg := validasiBiodataAgen(&req, time.Now()); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if !req.SetujuSyaratKetentuan {

@@ -83,7 +83,7 @@ func TestDetailAkunAdmin(t *testing.T) {
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=?, nik_agen='9999999999990077', domisili='Kota Bandung' WHERE id=?`, diri, agen)
 	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: milik})
 	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, agen, b)
-	testdb.Exec(t, tx, `UPDATE customer_accounts SET foto_url=?, tanggal_lahir='1990-05-12' WHERE id=?`, fotoA, agen)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET foto_url=?, tanggal_lahir='1990-05-12', jenis_kelamin='L' WHERE id=?`, fotoA, agen)
 
 	d, err := getAkunDetail(ctx, tx, &brand, agen)
 	must(t, "detail", err)
@@ -92,6 +92,9 @@ func TestDetailAkunAdmin(t *testing.T) {
 	}
 	if d.Jamaah == nil || d.Jamaah.ID != diri {
 		t.Fatalf("jamaah akun = %+v, want %d", d.Jamaah, diri)
+	}
+	if d.JenisKelamin == nil || *d.JenisKelamin != "L" {
+		t.Fatalf("jenis_kelamin = %v", d.JenisKelamin)
 	}
 	if d.TanggalLahir == nil || *d.TanggalLahir != "1990-05-12" {
 		t.Fatalf("tanggal_lahir = %v", d.TanggalLahir)

@@ -78,7 +78,8 @@ type AkunDetail struct {
 	Email           string     `json:"email"`
 	NoHP            string     `json:"no_hp"`
 	Domisili        *string    `json:"domisili"`
-	TanggalLahir    *string    `json:"tanggal_lahir"` // YYYY-MM-DD, diisi pemilik akun
+	TanggalLahir    *string    `json:"tanggal_lahir"` // YYYY-MM-DD, diisi pemilik akun atau saat mendaftar agen
+	JenisKelamin    *string    `json:"jenis_kelamin"` // L atau P
 	CreatedAt       time.Time  `json:"created_at"`
 	LastLoginAt     *time.Time `json:"last_login_at"`
 	FotoURL         *string    `json:"foto_url"` // privat; admin membukanya lewat media terlindungi
@@ -197,7 +198,7 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 		       (SELECT COUNT(*) FROM jamaah WHERE direkrut_oleh_akun_id = a.id),
 		       (SELECT COUNT(*) FROM customer_accounts WHERE direkrut_oleh_akun_id = a.id),
 		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id), a.foto_url,
-		       DATE_FORMAT(a.tanggal_lahir, '%Y-%m-%d')
+		       DATE_FORMAT(a.tanggal_lahir, '%Y-%m-%d'), a.jenis_kelamin
 		FROM customer_accounts a
 		JOIN brands b ON b.id = a.brand_id
 		LEFT JOIN customer_accounts up ON up.id = a.direkrut_oleh_akun_id
@@ -205,7 +206,7 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 		WHERE a.id = ?`, akunID).
 		Scan(&d.AkunID, &d.BrandID, &d.BrandName, &d.NamaLengkap, &d.Email, &d.NoHP, &d.Domisili, &d.CreatedAt, &d.LastLoginAt,
 			&upline, &d.UplineNama, &d.StatusAgen, &d.KodeReferral, &d.DiajukanAt, &d.DisetujuiAt, &nik,
-			&jamaahID, &jamaahNama, &d.JumlahJamaahAgen, &d.JumlahDiajak, &d.JumlahBooking, &d.FotoURL, &d.TanggalLahir)
+			&jamaahID, &jamaahNama, &d.JumlahJamaahAgen, &d.JumlahDiajak, &d.JumlahBooking, &d.FotoURL, &d.TanggalLahir, &d.JenisKelamin)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != d.BrandID) {
 		return nil, ErrNotFound
 	}

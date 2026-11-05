@@ -342,15 +342,18 @@ func MaskNIK(nik string) string {
 func buildMeView(ctx context.Context, q rowQuerier, a *Account) meView {
 	view := meView{Account: a}
 	if a != nil {
-		var nikAgen sql.NullString
-		if err := q.QueryRowContext(ctx, `SELECT nik_agen FROM customer_accounts WHERE id=?`, a.ID).Scan(&nikAgen); err == nil {
+		var nikAgen, jkAkun sql.NullString
+		if err := q.QueryRowContext(ctx, `SELECT nik_agen, jenis_kelamin FROM customer_accounts WHERE id=?`, a.ID).Scan(&nikAgen, &jkAkun); err == nil {
 			view.NIKAgenMasked = MaskNIK(nikAgen.String)
+			view.JenisKelamin = jkAkun.String // jenis kelamin akun; diganti data jamaah di bawah bila ada
 		}
 	}
 	if a != nil && a.JamaahID != nil {
 		var jk, nik sql.NullString
 		if err := q.QueryRowContext(ctx, `SELECT jenis_kelamin, nik FROM jamaah WHERE id=?`, *a.JamaahID).Scan(&jk, &nik); err == nil {
-			view.JenisKelamin = jk.String
+			if jk.String != "" {
+				view.JenisKelamin = jk.String
+			}
 			view.NIKMasked = MaskNIK(nik.String)
 		}
 	}
