@@ -270,6 +270,8 @@ func main() {
 		r.Patch("/me", customerHandler.UpdateMe)
 		r.Get("/foto", customerHandler.Foto)
 		r.Put("/foto", customerHandler.UpdateFoto)
+		r.Get("/upline", customerHandler.Upline)
+		r.Get("/upline/foto", customerHandler.UplineFoto)
 		r.Post("/password", customerHandler.ChangePassword)
 		r.Post("/logout", customerHandler.Logout)
 		r.Get("/bank-accounts", customerOrders.BankAccounts)
