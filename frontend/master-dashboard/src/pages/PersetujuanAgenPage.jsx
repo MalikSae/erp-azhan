@@ -319,6 +319,14 @@ export default function PersetujuanAgenPage() {
                     <span className="font-semibold text-neutral-800 text-right">{selected.domisili || '-'}</span>
                   </div>
                   <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
+                    <span className="text-neutral-500">Jenis kelamin</span>
+                    <span className="font-semibold text-neutral-800 text-right">{selected.jenis_kelamin === 'L' ? 'Laki-laki' : selected.jenis_kelamin === 'P' ? 'Perempuan' : '-'}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
+                    <span className="text-neutral-500">Tanggal lahir</span>
+                    <span className="font-semibold text-neutral-800 text-right">{dateLabel(selected.tanggal_lahir)}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
                     <span className="text-neutral-500">Setuju S&K</span>
                     <span className="text-neutral-800">{dateLabel(selected.menyetujui_syarat_ketentuan_agen_at)}</span>
                   </div>

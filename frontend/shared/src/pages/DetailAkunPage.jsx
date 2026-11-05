@@ -106,6 +106,7 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
           <Row label="Email">{akun.email}</Row>
           <Row label="WhatsApp">{akun.no_hp}</Row>
           <Row label="Domisili">{akun.domisili || '-'}</Row>
+          <Row label="Jenis kelamin">{akun.jenis_kelamin === 'L' ? 'Laki-laki' : akun.jenis_kelamin === 'P' ? 'Perempuan' : '-'}</Row>
           <Row label="Tanggal lahir">{akun.tanggal_lahir ? dateLabel(akun.tanggal_lahir) : '-'}</Row>
           {showBrandColumn && <Row label="Brand">{akun.brand_name}</Row>}
           <Row label="Terdaftar">{dateTime(akun.created_at)}</Row>
