@@ -17,9 +17,7 @@ const validBookingBody = `{
 	"pic": {"nama_lengkap": "Uji", "jenis_kelamin": "L", "room_type": "Quad"}
 }`
 
-var waktuVerifikasiUji = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-
-var akunHandlerUji = &customer.Account{ID: 77, BrandID: 2, NamaLengkap: "Uji", Email: "uji@example.com", NoHP: "0812-3456-7890", EmailVerifiedAt: &waktuVerifikasiUji}
+var akunHandlerUji = &customer.Account{ID: 77, BrandID: 2, NamaLengkap: "Uji", Email: "uji@example.com", NoHP: "0812-3456-7890"}
 
 // newTestHandler: tanpa siteverifyBody, captcha memakai bypass pengembangan eksplisit.
 func newTestHandler(t *testing.T, siteverifyBody string, siteverifyStatus int) *Handler {
@@ -106,7 +104,7 @@ func TestCreateBookingCaptchaFailClosedTanpaSecret(t *testing.T) {
 	}
 }
 
-// Verifikasi email tidak diwajibkan: akun yang belum terverifikasi tetap bisa membuat booking.
+// Tidak ada verifikasi email: akun mana pun yang punya sesi bisa membuat booking.
 func TestCreateBookingTanpaVerifikasiEmail(t *testing.T) {
 	h := newTestHandler(t, "", 0)
 	dipanggil := false
@@ -114,10 +112,8 @@ func TestCreateBookingTanpaVerifikasiEmail(t *testing.T) {
 		dipanggil = true
 		return &BookingResponse{Status: "success"}, nil
 	}
-	belum := *akunHandlerUji
-	belum.EmailVerifiedAt = nil
-	if rec := postBook(h, bodyCheckout, &belum); rec.Code != http.StatusOK || !dipanggil {
-		t.Fatalf("akun belum terverifikasi: got %d %s, want 200 dan booking diproses", rec.Code, rec.Body.String())
+	if rec := postBook(h, bodyCheckout, akunHandlerUji); rec.Code != http.StatusOK || !dipanggil {
+		t.Fatalf("akun dengan sesi: got %d %s, want 200 dan booking diproses", rec.Code, rec.Body.String())
 	}
 }
 

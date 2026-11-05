@@ -108,7 +108,8 @@ var protectedViewPerms = map[string][]string{
 	"payment-proofs": {"payment.view", "agen.view", "agen.approve", "agen.payout.approve"},
 }
 
-var buktiViewPerms = []string{"payment.view", "agen.view", "agen.approve", "agen.payout.approve"}
+// akun.view: foto profil akun (bukan dokumen identitas jamaah) boleh dilihat admin yang melihat daftar akun.
+var buktiViewPerms = []string{"payment.view", "agen.view", "agen.approve", "agen.payout.approve", "akun.view"}
 
 // Handler struct
 type Handler struct {

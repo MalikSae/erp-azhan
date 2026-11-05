@@ -83,6 +83,7 @@ func TestDetailAkunAdmin(t *testing.T) {
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=?, nik_agen='9999999999990077', domisili='Kota Bandung' WHERE id=?`, diri, agen)
 	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: milik})
 	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, agen, b)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET foto_url=?, tanggal_lahir='1990-05-12', jenis_kelamin='L' WHERE id=?`, fotoA, agen)
 
 	d, err := getAkunDetail(ctx, tx, &brand, agen)
 	must(t, "detail", err)
@@ -91,6 +92,15 @@ func TestDetailAkunAdmin(t *testing.T) {
 	}
 	if d.Jamaah == nil || d.Jamaah.ID != diri {
 		t.Fatalf("jamaah akun = %+v, want %d", d.Jamaah, diri)
+	}
+	if d.JenisKelamin == nil || *d.JenisKelamin != "L" {
+		t.Fatalf("jenis_kelamin = %v", d.JenisKelamin)
+	}
+	if d.TanggalLahir == nil || *d.TanggalLahir != "1990-05-12" {
+		t.Fatalf("tanggal_lahir = %v", d.TanggalLahir)
+	}
+	if d.FotoURL == nil || *d.FotoURL != fotoA {
+		t.Fatalf("foto_url = %v, want %s", d.FotoURL, fotoA)
 	}
 	if d.NIKAgen == nil || *d.NIKAgen != "9999**********77" {
 		t.Fatalf("NIK agen harus disamarkan: %v", d.NIKAgen)

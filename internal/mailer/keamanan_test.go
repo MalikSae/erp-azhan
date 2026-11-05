@@ -26,8 +26,6 @@ func TestTemplateMenormalkanNilaiSisipan(t *testing.T) {
 			}
 		}
 	}
-	_, v := VerifyEmail("Hana", payloadNama, "https://hana.test/v?token=a")
-	cek("verifikasi", v)
 	_, r := ResetPassword("Hana", payloadNama, "https://hana.test/r?token=a")
 	cek("reset", r)
 	subj, o := OrderCreated("Hana", payloadNama, "K-1\r\nBcc: x@y", "Paket\nBaru", "-", "-", "-", "-", "https://hana.test/b/1", []BankInfo{{Bank: "BCA\n", Nomor: "1", AtasNama: "PT\nHana"}})

@@ -108,7 +108,7 @@ export default function PersetujuanAgenPage() {
   const [catatan, setCatatan] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
-  const fotoSrc = useProtectedImage(selected?.foto_agen_url);
+  const fotoSrc = useProtectedImage(selected?.foto_url);
 
   const load = async () => {
     setLoading(true);
@@ -319,6 +319,14 @@ export default function PersetujuanAgenPage() {
                     <span className="font-semibold text-neutral-800 text-right">{selected.domisili || '-'}</span>
                   </div>
                   <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
+                    <span className="text-neutral-500">Jenis kelamin</span>
+                    <span className="font-semibold text-neutral-800 text-right">{selected.jenis_kelamin === 'L' ? 'Laki-laki' : selected.jenis_kelamin === 'P' ? 'Perempuan' : '-'}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
+                    <span className="text-neutral-500">Tanggal lahir</span>
+                    <span className="font-semibold text-neutral-800 text-right">{dateLabel(selected.tanggal_lahir)}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 border-b border-neutral-100 pb-1.5">
                     <span className="text-neutral-500">Setuju S&K</span>
                     <span className="text-neutral-800">{dateLabel(selected.menyetujui_syarat_ketentuan_agen_at)}</span>
                   </div>
@@ -387,7 +395,9 @@ export default function PersetujuanAgenPage() {
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-neutral-700 mb-2 block">Foto agen</span>
                 <div className="flex-1 min-h-[240px] max-h-[340px] rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden flex items-center justify-center p-2">
-                  {fotoSrc ? (
+                  {!selected.foto_url ? (
+                    <p className="text-xs text-neutral-400">Pemohon belum mengunggah foto.</p>
+                  ) : fotoSrc ? (
                     <img src={fotoSrc} alt={`Foto ${selected.nama_lengkap}`} className="max-h-[320px] w-auto max-w-full object-contain rounded-lg" />
                   ) : (
                     <p className="text-xs text-neutral-400">Memuat foto...</p>

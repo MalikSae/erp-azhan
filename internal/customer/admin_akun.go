@@ -44,7 +44,6 @@ type AkunBaris struct {
 	KodeReferral *string    `json:"kode_referral"`
 	UplineID     *int64     `json:"upline_akun_id"`
 	UplineNama   *string    `json:"upline_nama"`
-	EmailTerverf bool       `json:"email_terverifikasi"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LastLoginAt  *time.Time `json:"last_login_at"`
 }
@@ -77,11 +76,13 @@ type AkunDetail struct {
 	BrandName       string     `json:"brand_name"`
 	NamaLengkap     string     `json:"nama_lengkap"`
 	Email           string     `json:"email"`
-	EmailVerifiedAt *time.Time `json:"email_verified_at"`
 	NoHP            string     `json:"no_hp"`
 	Domisili        *string    `json:"domisili"`
+	TanggalLahir    *string    `json:"tanggal_lahir"` // YYYY-MM-DD, diisi pemilik akun atau saat mendaftar agen
+	JenisKelamin    *string    `json:"jenis_kelamin"` // L atau P
 	CreatedAt       time.Time  `json:"created_at"`
 	LastLoginAt     *time.Time `json:"last_login_at"`
+	FotoURL         *string    `json:"foto_url"` // privat; admin membukanya lewat media terlindungi
 	// Upline = agen yang mengajak akun ini (direkrut_oleh_akun_id); untuk agen sama dengan upline_akun_id penerima bonus pembinaan.
 	UplineID   *int64  `json:"upline_akun_id"`
 	UplineNama *string `json:"upline_nama"`
@@ -160,7 +161,7 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 	}
 	rows, err := q.QueryContext(ctx, `
 		SELECT a.id, a.nama_lengkap, a.email, a.no_hp, a.brand_id, b.name, a.status_agen, a.kode_referral,
-		       a.direkrut_oleh_akun_id, up.nama_lengkap, a.email_verified_at IS NOT NULL, a.created_at, a.last_login_at
+		       a.direkrut_oleh_akun_id, up.nama_lengkap, a.created_at, a.last_login_at
 		FROM customer_accounts a
 		JOIN brands b ON b.id = a.brand_id
 		LEFT JOIN customer_accounts up ON up.id = a.direkrut_oleh_akun_id
@@ -174,7 +175,7 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 		var a AkunBaris
 		var upline sql.NullInt64
 		if err := rows.Scan(&a.AkunID, &a.NamaLengkap, &a.Email, &a.NoHP, &a.BrandID, &a.BrandName, &a.StatusAgen, &a.KodeReferral,
-			&upline, &a.UplineNama, &a.EmailTerverf, &a.CreatedAt, &a.LastLoginAt); err != nil {
+			&upline, &a.UplineNama, &a.CreatedAt, &a.LastLoginAt); err != nil {
 			return out, fmt.Errorf("customer: scan akun: %w", err)
 		}
 		if upline.Valid {
@@ -191,20 +192,21 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 	var upline, jamaahID sql.NullInt64
 	var nik, jamaahNama sql.NullString
 	err := q.QueryRowContext(ctx, `
-		SELECT a.id, a.brand_id, b.name, a.nama_lengkap, a.email, a.email_verified_at, a.no_hp, a.domisili, a.created_at, a.last_login_at,
+		SELECT a.id, a.brand_id, b.name, a.nama_lengkap, a.email, a.no_hp, a.domisili, a.created_at, a.last_login_at,
 		       a.direkrut_oleh_akun_id, up.nama_lengkap, a.status_agen, a.kode_referral, a.diajukan_agen_at, a.disetujui_agen_at, a.nik_agen,
 		       a.jamaah_id, j.nama_lengkap,
 		       (SELECT COUNT(*) FROM jamaah WHERE direkrut_oleh_akun_id = a.id),
 		       (SELECT COUNT(*) FROM customer_accounts WHERE direkrut_oleh_akun_id = a.id),
-		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id)
+		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id), a.foto_url,
+		       DATE_FORMAT(a.tanggal_lahir, '%Y-%m-%d'), a.jenis_kelamin
 		FROM customer_accounts a
 		JOIN brands b ON b.id = a.brand_id
 		LEFT JOIN customer_accounts up ON up.id = a.direkrut_oleh_akun_id
 		LEFT JOIN jamaah j ON j.id = a.jamaah_id
 		WHERE a.id = ?`, akunID).
-		Scan(&d.AkunID, &d.BrandID, &d.BrandName, &d.NamaLengkap, &d.Email, &d.EmailVerifiedAt, &d.NoHP, &d.Domisili, &d.CreatedAt, &d.LastLoginAt,
+		Scan(&d.AkunID, &d.BrandID, &d.BrandName, &d.NamaLengkap, &d.Email, &d.NoHP, &d.Domisili, &d.CreatedAt, &d.LastLoginAt,
 			&upline, &d.UplineNama, &d.StatusAgen, &d.KodeReferral, &d.DiajukanAt, &d.DisetujuiAt, &nik,
-			&jamaahID, &jamaahNama, &d.JumlahJamaahAgen, &d.JumlahDiajak, &d.JumlahBooking)
+			&jamaahID, &jamaahNama, &d.JumlahJamaahAgen, &d.JumlahDiajak, &d.JumlahBooking, &d.FotoURL, &d.TanggalLahir, &d.JenisKelamin)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != d.BrandID) {
 		return nil, ErrNotFound
 	}

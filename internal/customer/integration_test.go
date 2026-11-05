@@ -100,8 +100,8 @@ func TestAccountLifecycle(t *testing.T) {
 	}
 	var reg authResponse
 	_ = json.Unmarshal(rec.Body.Bytes(), &reg)
-	if reg.SessionToken == "" || reg.Account.EmailVerifiedAt != nil {
-		t.Fatalf("register harus memberi sesi dan email belum terverifikasi: %+v", reg)
+	if reg.SessionToken == "" {
+		t.Fatalf("register harus memberi sesi: %+v", reg)
 	}
 
 	// Email sama (huruf besar) ditolak
@@ -109,21 +109,12 @@ func TestAccountLifecycle(t *testing.T) {
 		t.Fatalf("email ganda harus 409, dapat %d", rec.Code)
 	}
 
-	// Verifikasi email lewat tautan di email
-	msg, ok := mail.last(email)
-	if !ok {
-		t.Fatal("email verifikasi tidak terkirim")
+	// Tanpa verifikasi email: pendaftaran tidak mengirim email apa pun dan akun langsung bisa dipakai.
+	if _, kirim := mail.last(email); kirim {
+		t.Fatal("pendaftaran tidak boleh mengirim email verifikasi")
 	}
-	verifyToken := tokenFrom(t, msg.Text)
-	if rec = post(h.VerifyEmail, map[string]string{"token": verifyToken}, ""); rec.Code != http.StatusOK {
-		t.Fatalf("verify: %d %s", rec.Code, rec.Body)
-	}
-	if rec = post(h.VerifyEmail, map[string]string{"token": verifyToken}, ""); rec.Code != http.StatusBadRequest {
-		t.Fatal("token verifikasi tidak boleh bisa dipakai dua kali")
-	}
-	acc, err := h.repo.AccountBySession(ctx, reg.SessionToken)
-	if err != nil || acc.EmailVerifiedAt == nil {
-		t.Fatalf("akun harus terverifikasi: %v %+v", err, acc)
+	if acc, err := h.repo.AccountBySession(ctx, reg.SessionToken); err != nil || acc.Email != email {
+		t.Fatalf("sesi harus langsung berlaku: %v %+v", err, acc)
 	}
 
 	// Login: salah vs benar
@@ -156,7 +147,7 @@ func TestAccountLifecycle(t *testing.T) {
 	if rec = post(h.ResetPassword, map[string]string{"token": tokenFrom(t, resetMsg.Text), "password": "baru-12345"}, ""); rec.Code != http.StatusOK {
 		t.Fatalf("reset: %d %s", rec.Code, rec.Body)
 	}
-	if _, err = h.repo.AccountBySession(ctx, login.SessionToken); err == nil {
+	if _, err := h.repo.AccountBySession(ctx, login.SessionToken); err == nil {
 		t.Fatal("sesi lama harus dicabut setelah reset password")
 	}
 	if rec = post(h.Login, map[string]any{"brand_id": brandID, "email": email, "password": "rahasia-123"}, ""); rec.Code != http.StatusUnauthorized {
@@ -262,9 +253,6 @@ func TestUpdateMe(t *testing.T) {
 		}
 	}
 	idA, _ := h.repo.AccountBySession(ctx, tokA)
-	if err := h.repo.MarkEmailVerified(ctx, idA.ID); err != nil {
-		t.Fatal(err)
-	}
 
 	call := func(body map[string]any) *httptest.ResponseRecorder {
 		b, _ := json.Marshal(body)
@@ -276,13 +264,13 @@ func TestUpdateMe(t *testing.T) {
 		return rec
 	}
 
-	// Nama dan nomor berubah, email sama: tetap terverifikasi.
+	// Nama dan nomor berubah, email sama.
 	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailA, "no_hp": hpA2}); rec.Code != http.StatusOK {
 		t.Fatalf("ubah nama dan nomor: %d %s", rec.Code, rec.Body)
 	}
 	got, _ := h.repo.GetByID(ctx, idA.ID)
-	if got.NamaLengkap != "Nama Baru" || got.NoHP != hpA2 || got.EmailVerifiedAt == nil {
-		t.Fatalf("data tidak sesuai atau verifikasi hilang: %+v", got)
+	if got.NamaLengkap != "Nama Baru" || got.NoHP != hpA2 {
+		t.Fatalf("data tidak sesuai: %+v", got)
 	}
 
 	// Nomor akun lain ditolak.
@@ -298,16 +286,58 @@ func TestUpdateMe(t *testing.T) {
 		t.Fatalf("email tidak valid harus 400, dapat %d", rec.Code)
 	}
 
-	// Email baru: verifikasi dibatalkan dan tautan baru terkirim ke email baru.
+	// Email baru langsung berlaku, tanpa verifikasi ulang dan tanpa email apa pun.
 	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailA2, "no_hp": hpA2}); rec.Code != http.StatusOK {
 		t.Fatalf("ubah email: %d %s", rec.Code, rec.Body)
 	}
 	got, _ = h.repo.GetByID(ctx, idA.ID)
-	if got.Email != emailA2 || got.EmailVerifiedAt != nil {
-		t.Fatalf("email harus berubah dan belum terverifikasi: %+v", got)
+	if got.Email != emailA2 {
+		t.Fatalf("email harus berubah: %+v", got)
 	}
-	if _, ok := mail.last(emailA2); !ok {
-		t.Fatal("email verifikasi ke alamat baru tidak terkirim")
+	if _, ok := mail.last(emailA2); ok {
+		t.Fatal("ganti email tidak boleh mengirim email verifikasi")
+	}
+
+	// Kota domisili dan tanggal lahir: opsional. Tidak dikirim = tidak berubah, kosong = dihapus.
+	dasar := map[string]any{"nama_lengkap": "Nama Baru", "email": emailA2, "no_hp": hpA2}
+	withExtra := func(extra map[string]any) map[string]any {
+		m := map[string]any{}
+		for k, v := range dasar {
+			m[k] = v
+		}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+	if rec := call(withExtra(map[string]any{"domisili": "Kota Bandung", "tanggal_lahir": "1990-05-12"})); rec.Code != http.StatusOK {
+		t.Fatalf("isi domisili dan tanggal lahir: %d %s", rec.Code, rec.Body)
+	}
+	got, _ = h.repo.GetByID(ctx, idA.ID)
+	if got.Domisili == nil || *got.Domisili != "Kota Bandung" || got.TanggalLahir == nil || *got.TanggalLahir != "1990-05-12" {
+		t.Fatalf("domisili dan tanggal lahir tidak tersimpan: %+v / %+v", got.Domisili, got.TanggalLahir)
+	}
+	if rec := call(dasar); rec.Code != http.StatusOK {
+		t.Fatalf("ubah tanpa field tambahan: %d %s", rec.Code, rec.Body)
+	}
+	got, _ = h.repo.GetByID(ctx, idA.ID)
+	if got.Domisili == nil || got.TanggalLahir == nil {
+		t.Fatal("field yang tidak dikirim tidak boleh terhapus")
+	}
+	for _, tgl := range []string{"12-05-1990", "2999-01-01", "1800-01-01", "bukan"} {
+		if rec := call(withExtra(map[string]any{"tanggal_lahir": tgl})); rec.Code != http.StatusBadRequest {
+			t.Fatalf("tanggal lahir %q harus 400, dapat %d", tgl, rec.Code)
+		}
+	}
+	if rec := call(withExtra(map[string]any{"domisili": strings.Repeat("k", 101)})); rec.Code != http.StatusBadRequest {
+		t.Fatalf("domisili 101 karakter harus 400, dapat %d", rec.Code)
+	}
+	if rec := call(withExtra(map[string]any{"domisili": "", "tanggal_lahir": ""})); rec.Code != http.StatusOK {
+		t.Fatalf("kosongkan: %d %s", rec.Code, rec.Body)
+	}
+	got, _ = h.repo.GetByID(ctx, idA.ID)
+	if got.Domisili != nil || got.TanggalLahir != nil {
+		t.Fatalf("kosong harus menghapus: %+v / %+v", got.Domisili, got.TanggalLahir)
 	}
 }
 

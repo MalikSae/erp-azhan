@@ -27,7 +27,6 @@ const (
 	loginKeyLimit      = 5  // gagal per 15 menit per IP+email
 	loginIPLimit       = 30 // gagal per 15 menit per IP
 	forgotKeyLimit     = 5  // per jam per IP+email
-	resendAccountLimit = 3  // per jam per akun
 	profileUpdateLimit = 10 // ubah data akun per jam per akun
 	passwordFailLimit  = 5  // password saat ini salah per 15 menit per akun
 	// Lupa password tidak memakai captcha (frontend tidak mengirim token), jadi dibatasi lebih
@@ -46,7 +45,6 @@ type Handler struct {
 	forgot      *shared.WindowLimiter
 	forgotEmail *shared.WindowLimiter
 	forgotIP    *shared.WindowLimiter
-	resend      *shared.WindowLimiter
 	profile     *shared.WindowLimiter
 	pwFail      *shared.WindowLimiter
 	dummyHash   []byte
@@ -63,7 +61,6 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 		forgot:      shared.NewWindowLimiter(forgotKeyLimit, time.Hour),
 		forgotEmail: shared.NewWindowLimiter(forgotEmailLimit, time.Hour),
 		forgotIP:    shared.NewWindowLimiter(forgotIPLimit, time.Hour),
-		resend:      shared.NewWindowLimiter(resendAccountLimit, time.Hour),
 		profile:     shared.NewWindowLimiter(profileUpdateLimit, time.Hour),
 		pwFail:      shared.NewWindowLimiter(passwordFailLimit, 15*time.Minute),
 		dummyHash:   dummy,
@@ -97,7 +94,6 @@ type authResponse struct {
 
 // Alamat halaman pelanggan di situs brand (azhan-booking), langsung di akar situs (tanpa awalan).
 const (
-	PathVerifikasiEmail   = "/verifikasi-email"
 	PathAturUlangPassword = "/atur-ulang-password"
 	PathLupaPassword      = "/lupa-password"
 )
@@ -117,7 +113,7 @@ func siteLink(domain, path string, q url.Values) string {
 }
 
 // SiteLink membentuk URL situs brand untuk paket lain (mis. email booking) dengan aturan yang sama
-// seperti email verifikasi.
+// seperti email reset password.
 func SiteLink(domain, path string, q url.Values) string { return siteLink(domain, path, q) }
 
 func (h *Handler) sendAsync(msg mailer.Message) {
@@ -130,23 +126,22 @@ func (h *Handler) sendAsync(msg mailer.Message) {
 	}()
 }
 
-func (h *Handler) sendVerification(ctx context.Context, acc *Account) {
-	name, domain, err := h.repo.BrandSite(ctx, acc.BrandID)
-	if err != nil || domain == "" {
-		log.Printf("[WARN] customer: domain brand %d tidak ditemukan, email verifikasi dilewati", acc.BrandID)
-		return
+// validateProfile memeriksa nama, email, dan nomor WhatsApp (sudah di-trim); mengembalikan pesan galat, atau "" bila valid.
+// validateDomisiliLahir memeriksa isian opsional profil: domisili maksimal 100 karakter; tanggal lahir berbentuk YYYY-MM-DD,
+// bukan di masa depan, dan tidak sebelum 1900. nil atau string kosong lolos (kosong berarti dihapus).
+func validateDomisiliLahir(domisili, tanggalLahir *string, sekarang time.Time) string {
+	if domisili != nil && utf8.RuneCountInString(*domisili) > 100 {
+		return "kota domisili maksimal 100 karakter"
 	}
-	token, err := h.repo.IssueToken(ctx, acc.ID, PurposeVerifyMail, VerifyTokenTTL)
-	if err != nil {
-		log.Printf("[ERROR] customer issue verify token: %v", err)
-		return
+	if tanggalLahir != nil && *tanggalLahir != "" {
+		t, err := time.Parse("2006-01-02", *tanggalLahir)
+		if err != nil || t.After(sekarang) || t.Year() < 1900 {
+			return "tanggal lahir tidak valid"
+		}
 	}
-	link := siteLink(domain, PathVerifikasiEmail, url.Values{"token": {token}})
-	subject, text := mailer.VerifyEmail(name, acc.NamaLengkap, link)
-	h.sendAsync(mailer.Message{To: acc.Email, Subject: subject, Text: text})
+	return ""
 }
 
-// validateProfile memeriksa nama, email, dan nomor WhatsApp (sudah di-trim); mengembalikan pesan galat, atau "" bila valid.
 func validateProfile(nama, email, noHP string) string {
 	switch {
 	case !ValidName(nama):
@@ -171,15 +166,14 @@ type registerRequest struct {
 	KodeReferral string `json:"kode_referral"`
 }
 
-// modeDaftar membedakan pendaftaran akun biasa dari pendaftaran lewat form agen (K2): form agen tanpa captcha dan tanpa email verifikasi.
+// modeDaftar membedakan pendaftaran akun biasa dari pendaftaran lewat form agen (K2): form agen tanpa captcha.
 type modeDaftar struct {
-	captcha    bool
-	verifikasi bool
+	captcha bool
 }
 
 // Register POST /api/public/auth/register
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	h.daftar(w, r, modeDaftar{captcha: true, verifikasi: true})
+	h.daftar(w, r, modeDaftar{captcha: true})
 }
 
 // RegisterAgen POST /api/public/auth/register-agen: akun untuk calon agen. Pembatas per IP tetap berlaku.
@@ -255,9 +249,6 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
-	if mode.verifikasi {
-		h.sendVerification(r.Context(), acc)
-	}
 	writeJSON(w, http.StatusCreated, authResponse{Account: acc, SessionToken: token})
 }
 
@@ -325,6 +316,8 @@ type meView struct {
 	*Account
 	JenisKelamin string `json:"jenis_kelamin"`
 	NIKMasked    string `json:"nik_masked"`
+	// NIKAgenMasked: NIK yang agen simpan saat mendaftar, tersamar; untuk petunjuk "terisi otomatis" di form booking agen.
+	NIKAgenMasked string `json:"nik_agen_masked"`
 }
 
 type rowQuerier interface {
@@ -348,10 +341,19 @@ func MaskNIK(nik string) string {
 // buildMeView melengkapi akun dengan jenis kelamin dan NIK tersamar dari jamaah akun (bila ada).
 func buildMeView(ctx context.Context, q rowQuerier, a *Account) meView {
 	view := meView{Account: a}
+	if a != nil {
+		var nikAgen, jkAkun sql.NullString
+		if err := q.QueryRowContext(ctx, `SELECT nik_agen, jenis_kelamin FROM customer_accounts WHERE id=?`, a.ID).Scan(&nikAgen, &jkAkun); err == nil {
+			view.NIKAgenMasked = MaskNIK(nikAgen.String)
+			view.JenisKelamin = jkAkun.String // jenis kelamin akun; diganti data jamaah di bawah bila ada
+		}
+	}
 	if a != nil && a.JamaahID != nil {
 		var jk, nik sql.NullString
 		if err := q.QueryRowContext(ctx, `SELECT jenis_kelamin, nik FROM jamaah WHERE id=?`, *a.JamaahID).Scan(&jk, &nik); err == nil {
-			view.JenisKelamin = jk.String
+			if jk.String != "" {
+				view.JenisKelamin = jk.String
+			}
 			view.NIKMasked = MaskNIK(nik.String)
 		}
 	}
@@ -365,13 +367,16 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, a)})
 }
 
+// Domisili dan TanggalLahir opsional: tidak dikirim = tidak berubah, string kosong = dihapus.
 type updateProfileRequest struct {
-	NamaLengkap string `json:"nama_lengkap"`
-	Email       string `json:"email"`
-	NoHP        string `json:"no_hp"`
+	NamaLengkap  string  `json:"nama_lengkap"`
+	Email        string  `json:"email"`
+	NoHP         string  `json:"no_hp"`
+	Domisili     *string `json:"domisili"`
+	TanggalLahir *string `json:"tanggal_lahir"`
 }
 
-// UpdateMe PATCH /api/account/me: ubah nama, email, dan nomor WhatsApp. Email baru wajib diverifikasi ulang.
+// UpdateMe PATCH /api/account/me: ubah nama, email, nomor WhatsApp, domisili, dan tanggal lahir.
 func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	acc := FromContext(r.Context())
 	var req updateProfileRequest
@@ -383,6 +388,18 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	if req.Domisili != nil {
+		d := strings.TrimSpace(*req.Domisili)
+		req.Domisili = &d
+	}
+	if req.TanggalLahir != nil {
+		t := strings.TrimSpace(*req.TanggalLahir)
+		req.TanggalLahir = &t
+	}
+	if msg := validateDomisiliLahir(req.Domisili, req.TanggalLahir, time.Now()); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	key := strconv.FormatInt(acc.ID, 10)
 	if !h.profile.Allow(key) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak perubahan data, coba lagi dalam 1 jam")
@@ -390,8 +407,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	h.profile.Record(key)
 
-	emailChanged := NormalizeEmail(req.Email) != NormalizeEmail(acc.Email)
-	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP)
+	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir)
 	if errors.Is(err, ErrEmailTaken) {
 		writeError(w, http.StatusConflict, "email ini tidak dapat digunakan, coba email lain")
 		return
@@ -410,9 +426,6 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ERROR] customer reload profile: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
-	}
-	if emailChanged {
-		h.sendVerification(r.Context(), updated)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, updated)})
 }
@@ -568,56 +581,5 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = h.repo.RevokeAllSessions(r.Context(), accountID)
-	_ = h.repo.MarkEmailVerified(r.Context(), accountID) // tautan sampai ke kotak masuk = email terbukti milik pemilik
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-type verifyRequest struct {
-	Token string `json:"token"`
-}
-
-// VerifyEmail POST /api/public/auth/verify-email
-func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
-	ip := shared.ClientIP(r)
-	var req verifyRequest
-	if !decode(w, r, &req) {
-		return
-	}
-	if !h.loginIP.Allow(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
-		return
-	}
-	accountID, err := h.repo.ConsumeToken(r.Context(), strings.TrimSpace(req.Token), PurposeVerifyMail)
-	if errors.Is(err, ErrTokenInvalid) {
-		h.loginIP.Record(ip)
-		writeError(w, http.StatusBadRequest, ErrTokenInvalid.Error())
-		return
-	}
-	if err != nil {
-		log.Printf("[ERROR] customer consume verify: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
-		return
-	}
-	if err = h.repo.MarkEmailVerified(r.Context(), accountID); err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-// ResendVerification POST /api/account/resend-verification
-func (h *Handler) ResendVerification(w http.ResponseWriter, r *http.Request) {
-	acc := FromContext(r.Context())
-	if acc.EmailVerifiedAt != nil {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-		return
-	}
-	key := strconv.FormatInt(acc.ID, 10)
-	if !h.resend.Allow(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan, coba lagi dalam 1 jam")
-		return
-	}
-	h.resend.Record(key)
-	h.sendVerification(r.Context(), acc)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

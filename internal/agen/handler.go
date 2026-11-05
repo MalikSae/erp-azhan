@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/identity"
@@ -26,7 +27,8 @@ func NewHandler(repo *Repository) *Handler {
 // pengguna tidak bisa mengisi URL sembarang (lihat media.processUpload).
 var (
 	nikAgenPattern = regexp.MustCompile(`^\d{16}$`)
-	fotoPortalURL  = regexp.MustCompile(`^/api/admin/media/dokumen-jamaah/[0-9a-f-]{36}\.(jpg|png|webp|gif)$`)
+	// FotoPortalURL: bentuk URL foto profil akun (hasil unggah ke /api/account/media/upload); dipakai paket customer.
+	FotoPortalURL  = regexp.MustCompile(`^/api/admin/media/dokumen-jamaah/[0-9a-f-]{36}\.(jpg|png|webp|gif)$`)
 	buktiPortalURL = regexp.MustCompile(`^/api/admin/media/dokumen-jamaah/[0-9a-f-]{36}\.(jpg|png|webp|gif|pdf)$`)
 	buktiAdminURL  = regexp.MustCompile(`^/api/admin/media/(dokumen-jamaah|payment-proofs)/[0-9a-f-]{36}\.(jpg|png|webp|gif|pdf)$`)
 )
@@ -50,7 +52,6 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
-	req.FotoAgenURL = strings.TrimSpace(req.FotoAgenURL)
 	req.Domisili = strings.TrimSpace(req.Domisili)
 	req.NIK = strings.TrimSpace(req.NIK)
 
@@ -58,12 +59,12 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, ErrNIKAgenTidakValid.Error())
 		return
 	}
-	if !fotoPortalURL.MatchString(req.FotoAgenURL) {
-		writeError(w, http.StatusBadRequest, "foto diri wajib diunggah (JPG, PNG, WEBP, atau GIF)")
-		return
-	}
 	if n := utf8.RuneCountInString(req.Domisili); n < 2 || n > 100 {
 		writeError(w, http.StatusBadRequest, "domisili wajib diisi (2–100 karakter)")
+		return
+	}
+	if msg := validasiBiodataAgen(&req, time.Now()); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if !req.SetujuSyaratKetentuan {
@@ -72,14 +73,6 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	akunID := identity.GetCustomerAccountID(r.Context())
-	if ok, err := mediaMilikAkun(r.Context(), h.repo.db, akunID, req.FotoAgenURL); err != nil || !ok {
-		if err != nil {
-			handleError(w, err)
-			return
-		}
-		writeError(w, http.StatusBadRequest, "foto diri wajib diunggah (JPG, PNG, WEBP, atau GIF)")
-		return
-	}
 	if err := h.repo.Ajukan(r.Context(), akunID, req); err != nil {
 		handleError(w, err)
 		return

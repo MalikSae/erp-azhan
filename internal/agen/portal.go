@@ -27,6 +27,11 @@ func (h *Handler) RequireAgenAktif(next http.Handler) http.Handler {
 
 // mediaMilikAkun memastikan url berkas adalah hasil unggahan akun ini (media_uploads), supaya foto dan bukti
 // transfer tidak bisa diisi URL karangan atau berkas milik akun lain.
+// MediaMilikAkun: versi publik untuk paket lain (foto profil akun).
+func MediaMilikAkun(ctx context.Context, q querier, akunID int64, url string) (bool, error) {
+	return mediaMilikAkun(ctx, q, akunID, url)
+}
+
 func mediaMilikAkun(ctx context.Context, q querier, akunID int64, url string) (bool, error) {
 	var ada bool
 	err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM media_uploads WHERE path = ? AND customer_account_id = ?)`, url, akunID).Scan(&ada)
