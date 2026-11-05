@@ -58,13 +58,13 @@ func TestSiteLinkUsesConfiguredTemplate(t *testing.T) {
 // Tautan email harus menunjuk ke rute pelanggan di akar situs brand (azhan-booking), tanpa awalan /booking.
 func TestAlamatEmailDiAkarSitus(t *testing.T) {
 	t.Setenv("SITE_URL_TEMPLATE", "http://{domain}:3100")
-	for _, p := range []string{PathVerifikasiEmail, PathAturUlangPassword, PathLupaPassword} {
+	for _, p := range []string{PathAturUlangPassword, PathLupaPassword} {
 		if strings.HasPrefix(p, "/booking") {
 			t.Errorf("%s tidak boleh memakai awalan /booking", p)
 		}
 	}
-	got := siteLink("hana.azhan.test", PathVerifikasiEmail, map[string][]string{"token": {"abc"}})
-	if got != "http://hana.azhan.test:3100/verifikasi-email?token=abc" {
+	got := siteLink("hana.azhan.test", PathAturUlangPassword, map[string][]string{"token": {"abc"}})
+	if got != "http://hana.azhan.test:3100/atur-ulang-password?token=abc" {
 		t.Errorf("siteLink = %q", got)
 	}
 }

@@ -39,21 +39,6 @@ func inline(s string, max int) string {
 	return out
 }
 
-func VerifyEmail(brandName, nama, link string) (subject, text string) {
-	brandName, nama, link = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(link, maxInlineTautan)
-	subject = "Verifikasi email akun " + brandName
-	text = fmt.Sprintf(`Halo %s,
-
-Terima kasih sudah mendaftar akun di %s. Buka tautan berikut untuk memverifikasi email Anda (berlaku 24 jam):
-
-%s
-
-Jika Anda tidak merasa mendaftar, abaikan email ini.
-
-%s`, nama, brandName, link, brandName)
-	return
-}
-
 // PasswordChanged memberi tahu pemilik akun bahwa password diubah dari dalam akun. link = halaman lupa password.
 func PasswordChanged(brandName, nama, link string) (subject, text string) {
 	brandName, nama, link = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(link, maxInlineTautan)

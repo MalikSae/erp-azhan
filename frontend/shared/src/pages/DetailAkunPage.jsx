@@ -103,7 +103,7 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
             </div>
           )}
           <Row label="Nama">{akun.nama_lengkap}</Row>
-          <Row label="Email">{akun.email}{akun.email_verified_at ? '' : ' (belum diverifikasi)'}</Row>
+          <Row label="Email">{akun.email}</Row>
           <Row label="WhatsApp">{akun.no_hp}</Row>
           <Row label="Domisili">{akun.domisili || '-'}</Row>
           <Row label="Tanggal lahir">{akun.tanggal_lahir ? dateLabel(akun.tanggal_lahir) : '-'}</Row>

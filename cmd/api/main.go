@@ -223,7 +223,7 @@ func main() {
 	// Publik: wajib brand, hanya rekening aktif dan field untuk pelanggan (handler admin terpisah).
 	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.ListPublic)
 
-	// Akun pelanggan (email + password): daftar, masuk, verifikasi email, lupa password
+	// Akun pelanggan (email + password): daftar, masuk, lupa password
 	r.Route("/api/public/auth", func(r chi.Router) {
 		r.Use(requireDB(db))
 		r.Post("/register", customerHandler.Register)
@@ -231,7 +231,6 @@ func main() {
 		r.Post("/login", customerHandler.Login)
 		r.Post("/forgot-password", customerHandler.ForgotPassword)
 		r.Post("/reset-password", customerHandler.ResetPassword)
-		r.Post("/verify-email", customerHandler.VerifyEmail)
 	})
 
 	// Auth (public)
@@ -273,7 +272,6 @@ func main() {
 		r.Put("/foto", customerHandler.UpdateFoto)
 		r.Post("/password", customerHandler.ChangePassword)
 		r.Post("/logout", customerHandler.Logout)
-		r.Post("/resend-verification", customerHandler.ResendVerification)
 		r.Get("/bank-accounts", customerOrders.BankAccounts)
 		r.Get("/travelers", customerOrders.Travelers)
 		r.Get("/bookings", customerOrders.List)
