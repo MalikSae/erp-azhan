@@ -9,9 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"erp-azhan/api/internal/jamaah"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-sql-driver/mysql"
 )
 
 // Data lengkap jamaah di portal pelanggan: pemesan melengkapi data tiap jamaah di bookingnya.
@@ -44,6 +42,9 @@ type dataJamaah struct {
 	Terisi              int      `json:"terisi"`
 	Total               int      `json:"total"`
 	Kurang              []string `json:"kurang"`
+	// Hasil simpan terakhir: isian yang langsung terisi dan isian yang menunggu persetujuan admin.
+	PerubahanLangsung int `json:"perubahan_langsung,omitempty"`
+	PerubahanMenunggu int `json:"perubahan_menunggu,omitempty"`
 }
 
 // Data wajib untuk kelengkapan (kunci JSON -> label tampil), sengaja seminim mungkin agar tidak membebani jamaah. Infant tidak wajib kontak darurat
@@ -236,11 +237,22 @@ type simpanDataJamaahRequest struct {
 	EmergencyAlamat     string `json:"emergency_alamat"`
 }
 
+// peta mengubah isi formulir menjadi peta isian (kunci JSON -> nilai) untuk simpanPerubahanPelanggan.
+func (r *simpanDataJamaahRequest) peta() map[string]string {
+	return map[string]string{
+		"jenis_kelamin": r.JenisKelamin, "nama_ayah_kandung": r.NamaAyahKandung, "tempat_lahir": r.TempatLahir, "tanggal_lahir": r.TanggalLahir,
+		"no_paspor": r.NoPaspor, "tempat_paspor_keluar": r.TempatPasporKeluar, "tanggal_paspor_keluar": r.TanggalPasporKeluar,
+		"paspor_berlaku_sampai": r.PasporBerlakuSampai, "no_hp": r.NoHP, "pekerjaan": r.Pekerjaan, "pendidikan_terakhir": r.PendidikanTerakhir,
+		"penjamin_kesehatan": r.PenjaminKesehatan, "no_asuransi_bpjs": r.NoAsuransiBPJS, "alamat": r.Alamat, "kota": r.Kota,
+		"emergency_nama": r.EmergencyNama, "emergency_hp": r.EmergencyHP, "emergency_hubungan": r.EmergencyHubungan, "emergency_alamat": r.EmergencyAlamat,
+	}
+}
+
 // panjangMaksData: batas panjang tiap isian teks (sama dengan kolom database).
 const panjangMaksData = 255
 
 // SimpanDataJamaah PUT /api/account/bookings/{id}/jamaah/{jamaah_id}
-// Mengganti seluruh isian yang boleh diubah pelanggan; isian kosong dikosongkan.
+// Isian kosong yang diisi langsung tersimpan; mengubah atau mengosongkan isian yang sudah terisi menjadi pengajuan yang menunggu persetujuan admin.
 func (o *Orders) SimpanDataJamaah(w http.ResponseWriter, r *http.Request) {
 	acc := FromContext(r.Context())
 	id, ok := bookingIDParam(w, r)
@@ -281,55 +293,24 @@ func (o *Orders) SimpanDataJamaah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teks := []*string{&req.NamaAyahKandung, &req.TempatLahir, &req.NoPaspor, &req.TempatPasporKeluar, &req.NoHP, &req.Pekerjaan,
-		&req.PendidikanTerakhir, &req.PenjaminKesehatan, &req.NoAsuransiBPJS, &req.Alamat, &req.Kota,
-		&req.EmergencyNama, &req.EmergencyHP, &req.EmergencyHubungan, &req.EmergencyAlamat}
-	for _, p := range teks {
-		*p = strings.TrimSpace(*p)
-		if len([]rune(*p)) > panjangMaksData {
-			writeError(w, http.StatusBadRequest, "isian terlalu panjang (maksimal 255 karakter)")
-			return
-		}
-	}
-	req.JenisKelamin = strings.TrimSpace(req.JenisKelamin)
-	if req.JenisKelamin != "" && req.JenisKelamin != "L" && req.JenisKelamin != "P" {
-		writeError(w, http.StatusBadRequest, "jenis kelamin tidak valid")
-		return
-	}
-	if msg := periksaFormatData(&req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
-		return
-	}
-	if msg := jamaah.ValidasiInput(&jamaah.CreateJamaahRequest{
-		TanggalLahir: &req.TanggalLahir, TanggalPasporKeluar: &req.TanggalPasporKeluar, PasporBerlakuSampai: &req.PasporBerlakuSampai,
-		NoHP: &req.NoHP, EmergencyHP: &req.EmergencyHP,
-	}); msg != "" {
-		writeError(w, http.StatusBadRequest, ramahPesanData(msg))
-		return
-	}
-
-	_, err = o.db.ExecContext(r.Context(), `UPDATE jamaah SET
-		jenis_kelamin=NULLIF(?,''), nama_ayah_kandung=NULLIF(?,''), tempat_lahir=NULLIF(?,''), tanggal_lahir=NULLIF(?,''),
-		no_paspor=NULLIF(?,''), tempat_paspor_keluar=NULLIF(?,''), tanggal_paspor_keluar=NULLIF(?,''), paspor_berlaku_sampai=NULLIF(?,''),
-		no_hp=NULLIF(?,''), pekerjaan=NULLIF(?,''), pendidikan_terakhir=NULLIF(?,''), penjamin_kesehatan=NULLIF(?,''),
-		no_asuransi_bpjs=NULLIF(?,''), alamat=NULLIF(?,''), kota=NULLIF(?,''),
-		emergency_nama=NULLIF(?,''), emergency_hp=NULLIF(?,''), emergency_hubungan=NULLIF(?,''), emergency_alamat=NULLIF(?,'')
-		WHERE id=?`,
-		req.JenisKelamin, req.NamaAyahKandung, req.TempatLahir, req.TanggalLahir,
-		req.NoPaspor, req.TempatPasporKeluar, req.TanggalPasporKeluar, req.PasporBerlakuSampai,
-		req.NoHP, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan,
-		req.NoAsuransiBPJS, req.Alamat, req.Kota,
-		req.EmergencyNama, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
-		jamaahID)
+	grup, err := kelompokDari(r.Context(), o.db, acc.ID, jamaahID)
 	if err != nil {
-		var myErr *mysql.MySQLError
-		if errors.As(err, &myErr) && myErr.Number == 1062 {
-			writeError(w, http.StatusConflict, "nomor WhatsApp ini sudah dipakai jamaah lain")
-			return
-		}
-		log.Printf("[ERROR] account simpan data jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan data jamaah")
+		tulisGalatSimpan(w, err)
 		return
+	}
+	// Isian kosong yang diisi langsung tersimpan; mengubah isian yang sudah terisi menunggu persetujuan admin (lihat perubahan_jamaah.go).
+	var hasil *hasilSimpan
+	err = dalamTx(r.Context(), o.db, func(tx *sql.Tx) error {
+		var e error
+		hasil, e = simpanPerubahanPelanggan(r.Context(), tx, acc.ID, grup, req.peta())
+		return e
+	})
+	if err != nil && !errors.Is(err, ErrTidakBerubah) {
+		tulisGalatSimpan(w, err)
+		return
+	}
+	if hasil == nil {
+		hasil = &hasilSimpan{}
 	}
 
 	d, err := scanDataJamaah(o.db.QueryRowContext(r.Context(), dataJamaahSelect+` AND j.id = ?`, id, jamaahID))
@@ -340,5 +321,6 @@ func (o *Orders) SimpanDataJamaah(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
+	d.PerubahanLangsung, d.PerubahanMenunggu = hasil.Langsung, hasil.Pengajuan
 	writeJSON(w, http.StatusOK, d)
 }

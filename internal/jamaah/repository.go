@@ -349,6 +349,7 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 		}
 		return nil, fmt.Errorf("jamaah.Update: %w", err)
 	}
+	r.catatEditAdmin(ctx, id, existing, req)
 	return r.GetByID(ctx, id, brandID)
 }
 

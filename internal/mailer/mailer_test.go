@@ -55,3 +55,14 @@ func TestOrderCreatedMemuatKodeTautanDanIstilahBaku(t *testing.T) {
 		t.Fatalf("tanpa rekening harus memakai keterangan pengganti:\n%s", tanpaBank)
 	}
 }
+
+func TestPerubahanDataJamaah(t *testing.T) {
+	subj, teks := PerubahanDataJamaah("Hana", "Ani", "Siti\nAminah", true, "", "https://hana.test/akun/jamaah/5")
+	if !strings.Contains(subj, "disetujui") || strings.Contains(subj, "\n") || !strings.Contains(teks, "https://hana.test/akun/jamaah/5") {
+		t.Fatalf("setuju: %q / %q", subj, teks)
+	}
+	subj, teks = PerubahanDataJamaah("Hana", "Ani", "Siti", false, "Foto paspor\nbelum cocok", "https://hana.test/x")
+	if !strings.Contains(subj, "belum dapat disetujui") || !strings.Contains(teks, "Alasan: Foto paspor belum cocok") {
+		t.Fatalf("tolak: %q / %q", subj, teks)
+	}
+}
