@@ -51,7 +51,7 @@ Catatan istilah di kode: kode lama menyimpan status agen di tabel `jamaah` dan m
 | K10 | Upline agen baru adalah agen yang mengajak akunnya (upline satu konsep: pengajak sekaligus penerima bonus pembinaan; override admin memindahkan keduanya). Tidak ada kolom "kode agen perekrut" di form. |
 | K11 | Komisi tahap awal: komisi langsung dan bonus pembinaan (satu tingkat). Cashback dan komisi repeat dinonaktifkan. |
 | K12 | Booking ulang jamaah dihitung seperti booking biasa: komisi langsung dan bonus pembinaan penuh. |
-| K13 | Agen yang mendaftarkan dirinya lewat portal agen ("Saya sendiri") mendapat komisi langsung atas dirinya. Lewat web publik dihitung booking ulang. |
+| K13 | Agen tidak mendapat komisi dari booking dirinya sendiri (diubah 2026-11-09; semula "Saya sendiri" memberi komisi atas dirinya). Booking pribadi agen dikenali dari penanda "Saya sendiri" atau dari NIK jamaah yang sama dengan NIK agen (`nik_agen`), lewat jalur booking mana pun. Rantai bergeser satu tingkat ke atas: komisi langsung ke upline agen, bonus pembinaan ke upline dari upline itu. Agen tanpa upline aktif: tidak ada komisi. Berlaku untuk booking yang lunas sesudah perubahan; komisi yang sudah tercatat tidak diubah. |
 | K14 | NIK 16 digit wajib untuk semua pax reguler di semua jalur, termasuk portal agen. Bayi opsional. |
 | K15 | Pemesan yang ikut berangkat (PIC) dicocokkan lewat NIK dan nama seperti jamaah lain. |
 | K16 | Agen yang memesan jamaah yang sudah terkunci agen lain: booking jalan dengan peringatan, komisi ke pemilik kunci. |
@@ -122,7 +122,7 @@ Admin Master dapat memindahkan jamaah ke agen lain, dan memasangkan atau menggan
 1. Agen A membawa jamaah X: A mendapat komisi langsung.
 2. X mendaftar jadi agen (akun X terikat ke A): upline X adalah A.
 3. Agen X membawa jamaah Y: X komisi langsung, A bonus pembinaan.
-4. Agen X mendaftarkan dirinya lewat portal agen ("Saya sendiri"): X komisi langsung atas dirinya, A bonus pembinaan.
+4. Agen X mendaftarkan dirinya lewat portal agen ("Saya sendiri"): X tidak mendapat komisi (K13). Komisi langsung ke A (upline X), bonus pembinaan ke U (upline A). Hasilnya sama dengan skenario 6.
 5. Jamaah Y booking ulang: X komisi langsung, A bonus pembinaan (penuh).
 6. Agen X memesan untuk dirinya lewat web publik: dihitung booking ulang. Komisi langsung ke agen yang mengunci jamaah X (A), bonus pembinaan ke upline A.
 7. Agen Y mendaftarkan jamaah A yang terkunci ke X: booking jalan dengan peringatan, komisi ke X.
@@ -179,7 +179,7 @@ Dua jalur booking umroh: (1) didaftarkan agen di portal agen, (2) daftar mandiri
 
 Aturan tambahan portal agen:
 - NIK 16 digit wajib untuk pax reguler (K14).
-- Pilihan "Saya sendiri" untuk jamaah pertama memicu komisi atas dirinya (K13). Pilihan ini adalah penanda eksplisit karena akun tidak lagi terhubung ke satu jamaah.
+- Pilihan "Saya sendiri" untuk jamaah pertama menandai booking pribadi agen (K13): komisinya mengalir ke upline agen, bukan ke agen. Pilihan ini adalah penanda eksplisit karena akun tidak lagi terhubung ke satu jamaah; NIK yang sama dengan NIK agen juga dikenali tanpa penanda.
 - Bila jamaah sudah terkunci agen lain, agen melihat: "Jamaah ini sudah terikat agen lain. Booking ini tidak menghasilkan komisi untuk Anda." Nama pemilik kunci dan data jamaah tidak ditampilkan. Peringatan hanya muncul bila NIK dan nama cocok.
 - Booking tetap tercatat sebagai dibuat oleh agen pembuat, sementara komisi mengalir ke pemilik kunci. Dua hal ini dicatat terpisah supaya peringkat agen tidak salah.
 - NIK sama dengan nama berbeda ditolak generik.

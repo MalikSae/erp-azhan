@@ -39,7 +39,7 @@ _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lam
 
 **Override admin**: pemindahan kunci jamaah atau pemasangan agen akun oleh Admin Master (layar C4).
 
-**Saya sendiri**: pilihan di form booking portal agen untuk jamaah pertama. Memicu komisi langsung atas dirinya.
+**Saya sendiri**: pilihan di form booking portal agen untuk jamaah pertama. Menandai booking pribadi agen; agen tidak mendapat komisi dari booking dirinya sendiri, komisinya mengalir ke upline agen.
 
 **Komisi langsung**: nominal flat per pax berangkat untuk agen pemilik kunci jamaah.
 

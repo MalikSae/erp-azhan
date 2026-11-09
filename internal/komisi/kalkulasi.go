@@ -23,7 +23,7 @@ var KomisiRepeatCashbackAktif = false
 type paxKomisi struct {
 	paxID      int64
 	jamaahID   int64
-	agenID     sql.NullInt64 // akun penerima komisi langsung: "Saya sendiri" (booking_pax), selain itu pemilik kunci (jamaah.direkrut_oleh_akun_id)
+	agenID     sql.NullInt64 // akun penerima komisi langsung: pemilik kunci jamaah (jamaah.direkrut_oleh_akun_id); untuk booking pribadi agen, upline agen itu
 	agenAktif  bool
 	uplineID   sql.NullInt64 // upline akun agen tsb (customer_accounts.upline_akun_id)
 	uplineAktf bool
@@ -109,18 +109,25 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 
 func positive(v sql.NullFloat64) bool { return v.Valid && v.Float64 > 0 }
 
+// Booking pribadi agen: agen tidak mendapat komisi dari booking dirinya sendiri. Pax dianggap "diri agen" bila ditandai "Saya sendiri"
+// (booking_pax.saya_sendiri_akun_id) atau NIK jamaahnya sama dengan NIK agen (customer_accounts.nik_agen, jalur booking apa pun). Rantai komisi
+// untuk pax itu bergeser satu tingkat ke atas: komisi langsung ke upline agen, bonus pembinaan ke upline dari upline itu. Agen tanpa upline
+// aktif: tidak ada komisi. Agen terkunci ke upline-nya sejak akunnya dibuat lewat referral, jadi upline dibaca apa adanya saat lunas.
+
 // loadPax mengunci baris jamaah pax (FOR SHARE) agar kaitan agen yang dibaca
 // tetap berlaku sampai komisi tercatat: Ganti Kaitan Agen (C4) yang datang
 // bersamaan menunggu, lalu melihat komisi dan ditolak (audit KA-01).
 func loadPax(ctx context.Context, tx *sql.Tx, bookingID int64) ([]paxKomisi, error) {
 	rows, err := tx.QueryContext(ctx, `
-		SELECT bp.id, bp.jamaah_id, COALESCE(bp.saya_sendiri_akun_id, j.direkrut_oleh_akun_id),
+		SELECT bp.id, bp.jamaah_id, a.id,
 		       COALESCE(a.status_agen = 'aktif', FALSE),
 		       a.upline_akun_id,
 		       COALESCE(u.status_agen = 'aktif', FALSE)
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
-		LEFT JOIN customer_accounts a ON a.id = COALESCE(bp.saya_sendiri_akun_id, j.direkrut_oleh_akun_id)
+		LEFT JOIN customer_accounts diri ON diri.id = COALESCE(bp.saya_sendiri_akun_id,
+		     (SELECT ca.id FROM customer_accounts ca WHERE ca.brand_id = j.brand_id AND ca.nik_agen = j.nik LIMIT 1))
+		LEFT JOIN customer_accounts a ON a.id = IF(diri.id IS NOT NULL, diri.upline_akun_id, j.direkrut_oleh_akun_id)
 		LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id
 		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
 		ORDER BY bp.id

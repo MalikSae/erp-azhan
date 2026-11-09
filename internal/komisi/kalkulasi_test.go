@@ -94,12 +94,12 @@ func TestSkenarioAcuan(t *testing.T) {
 	lunas(t, tx, b3)
 	expect(t, "skenario 3", ledger(t, tx, b3, nama), "AkunX:langsung:1000000", "A:pembinaan:300000")
 
-	// Skenario 4: agen X mendaftarkan dirinya lewat portal agen ("Saya sendiri"). Jamaah X terkunci ke A,
-	// tetapi pax ini menghasilkan komisi langsung untuk X, bonus pembinaan untuk A (upline X).
+	// Skenario 4: agen X mendaftarkan dirinya lewat portal agen ("Saya sendiri"). Agen tidak mendapat komisi dari booking dirinya sendiri:
+	// komisi langsung ke upline X (A), bonus pembinaan ke upline A (U), sama dengan skenario 6.
 	b4, pax4 := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jamaahX})
 	testdb.Exec(t, tx, `UPDATE booking_pax SET saya_sendiri_akun_id=? WHERE id=?`, x, pax4[0])
 	lunas(t, tx, b4)
-	expect(t, "skenario 4", ledger(t, tx, b4, nama), "AkunX:langsung:1000000", "A:pembinaan:300000")
+	expect(t, "skenario 4", ledger(t, tx, b4, nama), "A:langsung:1000000", "U:pembinaan:300000")
 
 	// Skenario 5: jamaah Y booking ulang -> X komisi langsung, A bonus pembinaan, penuh.
 	b5, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jamaahY})
@@ -314,4 +314,79 @@ func TestSaldoTersediaTertahanDanCashback(t *testing.T) {
 	if s.KreditCashback != 300_000 {
 		t.Fatalf("cashback setelah dipakai: %+v, want 300000", s)
 	}
+}
+
+// Aturan booking pribadi agen: X mengajak Y jadi agen (Y terkunci ke X sejak akunnya dibuat lewat referral). Y mendaftar umroh bersama Z.
+// X komisi langsung dari closing Y sendiri dan bonus pembinaan dari closing Z; Y komisi langsung dari closing Z; Y tidak dapat apa pun dari dirinya sendiri.
+func TestBookingPribadiAgenKeUpline(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{
+		KomisiLangsung: rp(1_000_000), BonusPembinaan: rp(300_000), BerangkatTanggal: "2099-01-01",
+	})
+	x := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "X", StatusAgen: "aktif"})
+	y := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Y", StatusAgen: "aktif", Direkrut: x, Upline: x})
+	nama := map[int64]string{x: "X", y: "Y"}
+	const nikY = "9999999999990601"
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nikY, y)
+
+	// Y mendaftar bersama Z. Y memilih "Isi baru" dengan NIK-nya sendiri, jadi jamaahnya terkunci ke Y; Z juga terkunci ke Y.
+	jamaahY := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "JamaahY", Direkrut: y, NIK: nikY})
+	jamaahZ := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Z", Direkrut: y})
+	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 2000, testdb.Pax{JamaahID: jamaahY}, testdb.Pax{JamaahID: jamaahZ})
+	lunas(t, tx, b)
+	expect(t, "Y dan Z", ledger(t, tx, b, nama),
+		"X:langsung:1000000", // closing Y sendiri
+		"Y:langsung:1000000", // closing Z
+		"X:pembinaan:300000") // pembinaan dari closing Z
+
+	// Y sendirian lewat "Saya sendiri" (tanpa kecocokan NIK pada jamaah): hasilnya sama, hanya ke X.
+	jamaahTanpaNIK := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "YTanpaNIK", Direkrut: y})
+	b2, pax2 := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jamaahTanpaNIK})
+	testdb.Exec(t, tx, `UPDATE booking_pax SET saya_sendiri_akun_id=? WHERE id=?`, y, pax2[0])
+	lunas(t, tx, b2)
+	expect(t, "saya sendiri", ledger(t, tx, b2, nama), "X:langsung:1000000")
+}
+
+func TestBookingPribadiAgenRantaiDanTanpaUpline(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{
+		KomisiLangsung: rp(1_000_000), BonusPembinaan: rp(300_000), BerangkatTanggal: "2099-01-01",
+	})
+	nama := map[int64]string{}
+	akun := func(o testdb.AkunOpts, nik string) int64 {
+		id := testdb.NewAkun(t, tx, brand, o)
+		nama[id] = o.Nama
+		if nik != "" {
+			testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nik, id)
+		}
+		return id
+	}
+	pribadi := func(agen int64, nik string) int64 {
+		j := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: fmt.Sprintf("diri-%d", agen), Direkrut: agen, NIK: nik})
+		b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: j})
+		lunas(t, tx, b)
+		return b
+	}
+
+	// Rantai bergeser satu tingkat: W (atas X), X (atas Y). Booking pribadi Y: X komisi langsung, W bonus pembinaan.
+	w := akun(testdb.AkunOpts{Nama: "W", StatusAgen: "aktif"}, "")
+	x := akun(testdb.AkunOpts{Nama: "X", StatusAgen: "aktif", Direkrut: w, Upline: w}, "")
+	y := akun(testdb.AkunOpts{Nama: "Y", StatusAgen: "aktif", Direkrut: x, Upline: x}, "9999999999990611")
+	expect(t, "rantai bergeser", ledger(t, tx, pribadi(y, "9999999999990611"), nama), "X:langsung:1000000", "W:pembinaan:300000")
+
+	// Agen tanpa upline: booking pribadinya tidak menghasilkan komisi apa pun.
+	tanpa := akun(testdb.AkunOpts{Nama: "Tanpa", StatusAgen: "aktif"}, "9999999999990612")
+	expect(t, "tanpa upline", ledger(t, tx, pribadi(tanpa, "9999999999990612"), nama))
+
+	// Upline tidak aktif: tidak ada komisi langsung (hanya agen aktif yang menerima); bonus pembinaan tetap ke upline-nya bila aktif.
+	atas := akun(testdb.AkunOpts{Nama: "Atas", StatusAgen: "aktif"}, "")
+	mati := akun(testdb.AkunOpts{Nama: "Mati", StatusAgen: "nonaktif", Direkrut: atas, Upline: atas}, "")
+	agen := akun(testdb.AkunOpts{Nama: "Agen", StatusAgen: "aktif", Direkrut: mati, Upline: mati}, "9999999999990613")
+	expect(t, "upline nonaktif", ledger(t, tx, pribadi(agen, "9999999999990613"), nama), "Atas:pembinaan:300000")
+
+	// Jamaah yang bukan agen (NIK tidak cocok) tetap mengikuti kunci biasa.
+	biasa := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Biasa", Direkrut: y, NIK: "9999999999990699"})
+	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: biasa})
+	lunas(t, tx, b)
+	expect(t, "jamaah biasa", ledger(t, tx, b, nama), "Y:langsung:1000000", "X:pembinaan:300000")
 }
