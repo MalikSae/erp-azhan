@@ -21,12 +21,12 @@ var KomisiRepeatCashbackAktif = false
 
 // paxKomisi adalah satu pax aktif beserta data kaitan agennya.
 type paxKomisi struct {
-	paxID      int64
-	jamaahID   int64
-	agenID     sql.NullInt64 // akun penerima komisi langsung: pemilik kunci jamaah (jamaah.direkrut_oleh_akun_id); untuk booking pribadi agen, upline agen itu
-	agenAktif  bool
-	uplineID   sql.NullInt64 // upline akun agen tsb (customer_accounts.upline_akun_id)
-	uplineAktf bool
+	paxID                 int64
+	jamaahID              int64
+	penerimaLangsungID    sql.NullInt64 // akun penerima komisi langsung: pemilik kunci jamaah (jamaah.direkrut_oleh_akun_id); pada booking pribadi agen, upline agen itu
+	penerimaLangsungAktif bool
+	uplineID              sql.NullInt64 // upline akun agen tsb (customer_accounts.upline_akun_id)
+	uplineAktif           bool
 }
 
 // ProcessBookingLunas mencatat komisi untuk satu booking yang baru mencapai
@@ -61,7 +61,7 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	for _, p := range paxes {
 		// Tanpa agen (belum_ditentukan / tanpa_agen): tidak ada komisi apa pun,
 		// termasuk cashback (agen-azhan.md §6 langkah 11).
-		if !p.agenID.Valid {
+		if !p.penerimaLangsungID.Valid {
 			continue
 		}
 		repeat := false
@@ -74,12 +74,12 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 
 		if !repeat {
 			// Pax baru: komisi langsung ke agen, bonus pembinaan ke upline (1 tier).
-			if p.agenAktif && positive(langsung) {
-				if err := insertKomisi(ctx, tx, brandID, p.agenID.Int64, p, bookingID, JenisLangsung, langsung.Float64); err != nil {
+			if p.penerimaLangsungAktif && positive(langsung) {
+				if err := insertKomisi(ctx, tx, brandID, p.penerimaLangsungID.Int64, p, bookingID, JenisLangsung, langsung.Float64); err != nil {
 					return err
 				}
 			}
-			if p.uplineID.Valid && p.uplineAktf && positive(pembinaan) {
+			if p.uplineID.Valid && p.uplineAktif && positive(pembinaan) {
 				if err := insertKomisi(ctx, tx, brandID, p.uplineID.Int64, p, bookingID, JenisPembinaan, pembinaan.Float64); err != nil {
 					return err
 				}
@@ -92,8 +92,8 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 			continue
 		}
 		setengah := float64(int64(langsung.Float64) / 2)
-		if p.agenAktif && setengah > 0 {
-			if err := insertKomisi(ctx, tx, brandID, p.agenID.Int64, p, bookingID, JenisRepeatOrder, setengah); err != nil {
+		if p.penerimaLangsungAktif && setengah > 0 {
+			if err := insertKomisi(ctx, tx, brandID, p.penerimaLangsungID.Int64, p, bookingID, JenisRepeatOrder, setengah); err != nil {
 				return err
 			}
 		}
@@ -110,7 +110,8 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 func positive(v sql.NullFloat64) bool { return v.Valid && v.Float64 > 0 }
 
 // Booking pribadi agen: agen tidak mendapat komisi dari booking dirinya sendiri. Pax dianggap "diri agen" bila ditandai "Saya sendiri"
-// (booking_pax.saya_sendiri_akun_id) atau NIK jamaahnya sama dengan NIK agen (customer_accounts.nik_agen, jalur booking apa pun). Rantai komisi
+// (booking_pax.saya_sendiri_akun_id) atau NIK jamaahnya sama dengan NIK agen (customer_accounts.nik_agen) pada akun agen aktif atau nonaktif, jalur
+// booking apa pun; pemohon yang belum disetujui atau ditolak belum agen. Rantai komisi
 // untuk pax itu bergeser satu tingkat ke atas: komisi langsung ke upline agen, bonus pembinaan ke upline dari upline itu. Agen tanpa upline
 // aktif: tidak ada komisi. Agen terkunci ke upline-nya sejak akunnya dibuat lewat referral, jadi upline dibaca apa adanya saat lunas.
 
@@ -126,7 +127,7 @@ func loadPax(ctx context.Context, tx *sql.Tx, bookingID int64) ([]paxKomisi, err
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
 		LEFT JOIN customer_accounts diri ON diri.id = COALESCE(bp.saya_sendiri_akun_id,
-		     (SELECT ca.id FROM customer_accounts ca WHERE ca.brand_id = j.brand_id AND ca.nik_agen = j.nik LIMIT 1))
+		     (SELECT ca.id FROM customer_accounts ca WHERE ca.brand_id = j.brand_id AND ca.nik_agen = j.nik AND ca.status_agen IN ('aktif','nonaktif') LIMIT 1))
 		LEFT JOIN customer_accounts a ON a.id = IF(diri.id IS NOT NULL, diri.upline_akun_id, j.direkrut_oleh_akun_id)
 		LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id
 		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
@@ -139,7 +140,7 @@ func loadPax(ctx context.Context, tx *sql.Tx, bookingID int64) ([]paxKomisi, err
 	var out []paxKomisi
 	for rows.Next() {
 		var p paxKomisi
-		if err := rows.Scan(&p.paxID, &p.jamaahID, &p.agenID, &p.agenAktif, &p.uplineID, &p.uplineAktf); err != nil {
+		if err := rows.Scan(&p.paxID, &p.jamaahID, &p.penerimaLangsungID, &p.penerimaLangsungAktif, &p.uplineID, &p.uplineAktif); err != nil {
 			return nil, fmt.Errorf("komisi: scan pax: %w", err)
 		}
 		out = append(out, p)
