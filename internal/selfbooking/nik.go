@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"erp-azhan/api/internal/agen"
 )
 
 var nikPattern = regexp.MustCompile(`^\d{16}$`)
@@ -53,6 +55,31 @@ func pastikanSayaSendiri(ctx context.Context, tx *sql.Tx, agenID, jamaahID int64
 	}
 	if !nikAgen.Valid || nikAgen.String == "" || nikAgen.String != nikJamaah.String {
 		return ErrSayaSendiriBukanAnda
+	}
+	return nil
+}
+
+// ikatJamaahAgen mengunci jamaah hasil booking portal agen. Jamaah yang NIK-nya sama dengan NIK agen adalah diri agen itu sendiri:
+// agen tidak memiliki dirinya, jadi pemilik kuncinya upline aktif agen (sama dengan penerima komisi langsungnya). Agen tanpa upline
+// aktif: jamaah itu tidak dikunci ke siapa pun. Jamaah lain dikunci ke agen seperti biasa. First-set wins berlaku di IkatJamaah.
+func ikatJamaahAgen(ctx context.Context, tx *sql.Tx, jamaahIDs []int64, agenID int64) error {
+	for _, id := range jamaahIDs {
+		var uplineAktif int64
+		var diri bool
+		if err := tx.QueryRowContext(ctx, `
+			SELECT COALESCE(u.id, 0), (a.nik_agen IS NOT NULL AND a.nik_agen = j.nik)
+			FROM customer_accounts a JOIN jamaah j ON j.id = ?
+			LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id AND u.status_agen = 'aktif'
+			WHERE a.id = ?`, id, agenID).Scan(&uplineAktif, &diri); err != nil {
+			return fmt.Errorf("selfbooking: baca diri agen: %w", err)
+		}
+		pemilik := agenID
+		if diri {
+			pemilik = uplineAktif
+		}
+		if err := agen.IkatJamaah(ctx, tx, id, pemilik, agen.SumberJalur1); err != nil {
+			return err
+		}
 	}
 	return nil
 }

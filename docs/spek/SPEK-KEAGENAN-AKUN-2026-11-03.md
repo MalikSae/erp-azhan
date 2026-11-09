@@ -51,7 +51,7 @@ Catatan istilah di kode: kode lama menyimpan status agen di tabel `jamaah` dan m
 | K10 | Upline agen baru adalah agen yang mengajak akunnya (upline satu konsep: pengajak sekaligus penerima bonus pembinaan; override admin memindahkan keduanya). Tidak ada kolom "kode agen perekrut" di form. |
 | K11 | Komisi tahap awal: komisi langsung dan bonus pembinaan (satu tingkat). Cashback dan komisi repeat dinonaktifkan. |
 | K12 | Booking ulang jamaah dihitung seperti booking biasa: komisi langsung dan bonus pembinaan penuh. |
-| K13 | Agen tidak mendapat komisi dari booking dirinya sendiri (diubah 2026-11-09; semula "Saya sendiri" memberi komisi atas dirinya). Booking pribadi agen dikenali dari penanda "Saya sendiri" atau dari NIK jamaah yang sama dengan NIK agen (`nik_agen`), lewat jalur booking mana pun. Rantai bergeser satu tingkat ke atas: komisi langsung ke upline agen, bonus pembinaan ke upline dari upline itu. Agen tanpa upline aktif: tidak ada komisi. Berlaku untuk booking yang lunas sesudah perubahan; komisi yang sudah tercatat tidak diubah. |
+| K13 | Agen tidak mendapat komisi dari booking dirinya sendiri (diubah 2026-11-09; semula "Saya sendiri" memberi komisi atas dirinya). Booking pribadi agen dikenali dari penanda "Saya sendiri" atau dari NIK jamaah yang sama dengan NIK agen (`nik_agen`) pada akun agen aktif atau nonaktif (pemohon yang belum disetujui atau ditolak belum agen), lewat jalur booking mana pun. Rantai bergeser satu tingkat ke atas: komisi langsung ke upline agen, bonus pembinaan ke upline dari upline itu. Agen tanpa upline aktif: tidak ada komisi. Berlaku untuk booking yang lunas sesudah perubahan; komisi yang sudah tercatat tidak diubah. |
 | K14 | NIK 16 digit wajib untuk semua pax reguler di semua jalur, termasuk portal agen. Bayi opsional. |
 | K15 | Pemesan yang ikut berangkat (PIC) dicocokkan lewat NIK dan nama seperti jamaah lain. |
 | K16 | Agen yang memesan jamaah yang sudah terkunci agen lain: booking jalan dengan peringatan, komisi ke pemilik kunci. |
@@ -81,6 +81,8 @@ Contoh: hari 1 Z klik link W; hari 2 Z klik link X lalu daftar akun; hari 3 Z kl
 - Aturan first-set-wins tetap: hanya jamaah berstatus `belum_ditentukan` yang boleh diikat (`internal/agen/kaitan.go:62`).
 - Saat booking dibuat dan jamaah barunya belum terikat, jamaah itu diikat ke agen yang mengikat akun pemesan. Pada booking portal agen, jamaah baru diikat ke agen pembuat booking.
 - Jamaah yang sudah terikat agen lain tidak diubah.
+- Jamaah yang NIK-nya sama dengan NIK agen (diri agen) pada booking portal agen dikunci ke upline aktif agen itu, bukan ke agen sendiri; agen tanpa upline aktif: tidak dikunci ke siapa pun (diubah 2026-11-09, sejalan dengan K13).
+- Penyamaan akun dan jamaah (2026-11-09): pada booking web publik, bila pemesan ikut berangkat, akunnya belum punya pengikat, dan NIK-nya cocok dengan jamaah yang sudah dikunci agen aktif X, akun itu diikat ke X (`agen.IkatAkunDariJamaah`). Hasilnya jamaah yang pernah dibookingkan agen menjadi downline agen begitu ia memesan dari akunnya sendiri. Akun yang sudah punya pengikat tidak diubah; pemesan yang tidak ikut berangkat tidak mengikat akunnya. Yang tercatat lebih dulu menang (first-set wins).
 
 Prioritas penentu agen untuk jamaah baru:
 1. Booking lewat portal agen: agen pembuat booking.

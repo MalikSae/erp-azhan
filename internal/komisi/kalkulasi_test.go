@@ -384,6 +384,14 @@ func TestBookingPribadiAgenRantaiDanTanpaUpline(t *testing.T) {
 	agen := akun(testdb.AkunOpts{Nama: "Agen", StatusAgen: "aktif", Direkrut: mati, Upline: mati}, "9999999999990613")
 	expect(t, "upline nonaktif", ledger(t, tx, pribadi(agen, "9999999999990613"), nama), "Atas:pembinaan:300000")
 
+	// Pemohon agen yang belum disetujui (pengajuan) belum agen: NIK-nya tidak membuat pax dianggap booking pribadi, jamaah mengikuti kunci biasa.
+	pemohon := akun(testdb.AkunOpts{Nama: "Pemohon", StatusAgen: "pengajuan", Direkrut: x}, "9999999999990614")
+	jp := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "JamaahPemohon", Direkrut: x, NIK: "9999999999990614"})
+	bp, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jp})
+	lunas(t, tx, bp)
+	expect(t, "pemohon belum agen", ledger(t, tx, bp, nama), "X:langsung:1000000", "W:pembinaan:300000")
+	_ = pemohon
+
 	// Jamaah yang bukan agen (NIK tidak cocok) tetap mengikuti kunci biasa.
 	biasa := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Biasa", Direkrut: y, NIK: "9999999999990699"})
 	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: biasa})
