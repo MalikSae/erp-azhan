@@ -175,7 +175,7 @@ export default function PengumumanPage() {
           <div className="space-y-1">
             {formError && <Alert variant="error" message={formError} />}
             {isHolding && !form.id && (
-              <Select label="Brand" required value={form.brand_id} onChange={(e) => { setBulan(''); setForm((f) => ({ ...f, brand_id: e.target.value, schedule_id: '' })); }}
+              <Select label="Brand" required value={form.brand_id} onChange={(v) => { setBulan(''); setForm((f) => ({ ...f, brand_id: v, schedule_id: '' })); }}
                 options={brands.map((b) => ({ value: String(b.id), label: b.name || b.nama }))} />
             )}
             <Input label="Judul" required value={form.judul} onChange={set('judul')} maxLength={120} placeholder="Mis. Jadwal manasik kelompok" />
@@ -184,16 +184,18 @@ export default function PengumumanPage() {
               <Input label="Mulai tayang" type="date" required value={form.mulai} onChange={set('mulai')} />
               <Input label="Akhir tayang" type="date" required value={form.akhir} onChange={set('akhir')} />
             </div>
-            <Select label="Bulan berangkat" value={bulan} disabled={perluPilihBrand}
-              onChange={(e) => {
-                const ym = e.target.value;
-                setBulan(ym);
-                // Jadwal terpilih yang tidak berada di bulan itu dilepas.
-                setForm((f) => (ym && f.schedule_id && bulanDari(jadwal.find((s) => String(s.id) === f.schedule_id) || {}) !== ym ? { ...f, schedule_id: '' } : f));
-              }}
-              placeholder={perluPilihBrand ? 'Pilih brand dulu' : 'Semua bulan'} options={opsiBulan} />
-            <Select label="Untuk jadwal keberangkatan" value={form.schedule_id} onChange={set('schedule_id')} disabled={perluPilihBrand}
-              placeholder={perluPilihBrand ? 'Pilih brand dulu' : 'Semua pelanggan brand ini'} options={opsiJadwal} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+              <Select label="Bulan berangkat" value={bulan} disabled={perluPilihBrand} placeholder="Pilih brand dulu"
+                options={perluPilihBrand ? [] : [{ value: '', label: 'Semua bulan' }, ...opsiBulan]}
+                onChange={(ym) => {
+                  setBulan(ym);
+                  // Jadwal terpilih yang tidak berada di bulan itu dilepas.
+                  setForm((f) => (ym && f.schedule_id && bulanDari(jadwal.find((s) => String(s.id) === f.schedule_id) || {}) !== ym ? { ...f, schedule_id: '' } : f));
+                }} />
+              <Select label="Jadwal keberangkatan" value={form.schedule_id} disabled={perluPilihBrand} placeholder="Pilih brand dulu"
+                options={perluPilihBrand ? [] : [{ value: '', label: 'Semua pelanggan brand ini' }, ...opsiJadwal]}
+                onChange={(v) => setForm((f) => ({ ...f, schedule_id: v }))} />
+            </div>
             <p className="text-xs text-neutral-500">Pilih bulan berangkat untuk mempersempit daftar jadwal. Kosongkan jadwal agar pengumuman tampil untuk semua pelanggan; pilih jadwal bila hanya untuk jamaah di keberangkatan itu.</p>
           </div>
         )}
