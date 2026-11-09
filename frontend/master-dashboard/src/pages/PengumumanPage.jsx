@@ -32,6 +32,9 @@ const StatusDot = ({ status }) => {
 
 const KOSONG = { brand_id: '', schedule_id: '', judul: '', isi: '', mulai: '', akhir: '' };
 
+const bulanDari = (s) => String(s.berangkat_tanggal || '').slice(0, 7); // YYYY-MM
+const labelBulan = (ym) => new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date(`${ym}-01T00:00:00`));
+
 // Pengumuman: teks singkat untuk pelanggan di dashboard akun. Tanpa jadwal berarti untuk semua pelanggan brand; dengan jadwal hanya untuk
 // akun yang punya booking di keberangkatan itu. Tampil selama masa tayang.
 export default function PengumumanPage() {
@@ -42,6 +45,7 @@ export default function PengumumanPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [form, setForm] = useState(null); // null = tertutup; { id?, ...isian }
+  const [bulan, setBulan] = useState(''); // saringan bulan berangkat untuk memilih jadwal (YYYY-MM), tidak ikut disimpan
   const [hapus, setHapus] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -68,13 +72,19 @@ export default function PengumumanPage() {
   // Admin holding melihat jadwal semua brand dari API, jadi daftar dibatasi ke brand yang dipilih (kosong sebelum brand dipilih). Admin satu
   // brand sudah menerima jadwal brand-nya saja; server juga menolak jadwal dari brand lain.
   const perluPilihBrand = isHolding && !form?.brand_id;
-  const opsiJadwal = jadwal
-    .filter((s) => !isHolding || (form?.brand_id && String(s.brand_id) === String(form.brand_id)))
+  const jadwalBrand = jadwal.filter((s) => !isHolding || (form?.brand_id && String(s.brand_id) === String(form.brand_id)));
+  // Saringan bulan berangkat memudahkan memilih jadwal: hanya bulan yang punya jadwal di brand ini, urut dari yang terdekat.
+  const opsiBulan = [...new Set(jadwalBrand.map(bulanDari).filter(Boolean))].sort().map((ym) => ({ value: ym, label: labelBulan(ym) }));
+  const opsiJadwal = jadwalBrand
+    .filter((s) => !bulan || bulanDari(s) === bulan)
+    .sort((a, b) => String(a.berangkat_tanggal).localeCompare(String(b.berangkat_tanggal)))
     .map((s) => ({ value: String(s.id), label: `${s.jadwal_nama}${s.berangkat_tanggal ? ` (${tgl(String(s.berangkat_tanggal).slice(0, 10))})` : ''}` }));
 
-  const bukaBaru = () => { setFormError(''); setForm({ ...KOSONG }); };
+  const bukaBaru = () => { setFormError(''); setBulan(''); setForm({ ...KOSONG }); };
   const bukaUbah = (p) => {
     setFormError('');
+    const terpilih = jadwal.find((s) => s.id === p.schedule_id);
+    setBulan(terpilih ? bulanDari(terpilih) : '');
     setForm({ id: p.id, brand_id: String(p.brand_id), schedule_id: p.schedule_id ? String(p.schedule_id) : '', judul: p.judul, isi: p.isi, mulai: p.mulai, akhir: p.akhir });
   };
 
@@ -165,7 +175,7 @@ export default function PengumumanPage() {
           <div className="space-y-1">
             {formError && <Alert variant="error" message={formError} />}
             {isHolding && !form.id && (
-              <Select label="Brand" required value={form.brand_id} onChange={(e) => setForm((f) => ({ ...f, brand_id: e.target.value, schedule_id: '' }))}
+              <Select label="Brand" required value={form.brand_id} onChange={(e) => { setBulan(''); setForm((f) => ({ ...f, brand_id: e.target.value, schedule_id: '' })); }}
                 options={brands.map((b) => ({ value: String(b.id), label: b.name || b.nama }))} />
             )}
             <Input label="Judul" required value={form.judul} onChange={set('judul')} maxLength={120} placeholder="Mis. Jadwal manasik kelompok" />
@@ -174,9 +184,17 @@ export default function PengumumanPage() {
               <Input label="Mulai tayang" type="date" required value={form.mulai} onChange={set('mulai')} />
               <Input label="Akhir tayang" type="date" required value={form.akhir} onChange={set('akhir')} />
             </div>
+            <Select label="Bulan berangkat" value={bulan} disabled={perluPilihBrand}
+              onChange={(e) => {
+                const ym = e.target.value;
+                setBulan(ym);
+                // Jadwal terpilih yang tidak berada di bulan itu dilepas.
+                setForm((f) => (ym && f.schedule_id && bulanDari(jadwal.find((s) => String(s.id) === f.schedule_id) || {}) !== ym ? { ...f, schedule_id: '' } : f));
+              }}
+              placeholder={perluPilihBrand ? 'Pilih brand dulu' : 'Semua bulan'} options={opsiBulan} />
             <Select label="Untuk jadwal keberangkatan" value={form.schedule_id} onChange={set('schedule_id')} disabled={perluPilihBrand}
               placeholder={perluPilihBrand ? 'Pilih brand dulu' : 'Semua pelanggan brand ini'} options={opsiJadwal} />
-            <p className="text-xs text-neutral-500">Kosongkan jadwal agar pengumuman tampil untuk semua pelanggan. Jadwal dipilih bila hanya untuk jamaah di keberangkatan itu.</p>
+            <p className="text-xs text-neutral-500">Pilih bulan berangkat untuk mempersempit daftar jadwal. Kosongkan jadwal agar pengumuman tampil untuk semua pelanggan; pilih jadwal bila hanya untuk jamaah di keberangkatan itu.</p>
           </div>
         )}
       </Modal>
