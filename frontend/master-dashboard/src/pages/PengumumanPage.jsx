@@ -65,8 +65,11 @@ export default function PengumumanPage() {
   }, [isHolding]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  // Admin holding melihat jadwal semua brand dari API, jadi daftar dibatasi ke brand yang dipilih (kosong sebelum brand dipilih). Admin satu
+  // brand sudah menerima jadwal brand-nya saja; server juga menolak jadwal dari brand lain.
+  const perluPilihBrand = isHolding && !form?.brand_id;
   const opsiJadwal = jadwal
-    .filter((s) => !isHolding || !form?.brand_id || String(s.brand_id) === String(form.brand_id))
+    .filter((s) => !isHolding || (form?.brand_id && String(s.brand_id) === String(form.brand_id)))
     .map((s) => ({ value: String(s.id), label: `${s.jadwal_nama}${s.berangkat_tanggal ? ` (${tgl(String(s.berangkat_tanggal).slice(0, 10))})` : ''}` }));
 
   const bukaBaru = () => { setFormError(''); setForm({ ...KOSONG }); };
@@ -171,8 +174,8 @@ export default function PengumumanPage() {
               <Input label="Mulai tayang" type="date" required value={form.mulai} onChange={set('mulai')} />
               <Input label="Akhir tayang" type="date" required value={form.akhir} onChange={set('akhir')} />
             </div>
-            <Select label="Untuk jadwal keberangkatan" value={form.schedule_id} onChange={set('schedule_id')} placeholder="Semua pelanggan brand ini"
-              options={opsiJadwal} />
+            <Select label="Untuk jadwal keberangkatan" value={form.schedule_id} onChange={set('schedule_id')} disabled={perluPilihBrand}
+              placeholder={perluPilihBrand ? 'Pilih brand dulu' : 'Semua pelanggan brand ini'} options={opsiJadwal} />
             <p className="text-xs text-neutral-500">Kosongkan jadwal agar pengumuman tampil untuk semua pelanggan. Jadwal dipilih bila hanya untuk jamaah di keberangkatan itu.</p>
           </div>
         )}
