@@ -32,6 +32,9 @@ type suratItem struct {
 	Bisa   bool   `json:"bisa"`
 	Alasan string `json:"alasan"`
 	Nomor  string `json:"nomor"`
+	// Kurang: isian jamaah yang boleh dilengkapi pelanggan agar surat bisa diunduh (kunci isian: tempat_lahir, tanggal_lahir). Terisi hanya bila
+	// data itulah satu-satunya penghalang; web menampilkan formulir singkat lalu mengunduh.
+	Kurang []string `json:"kurang,omitempty"`
 }
 
 type suratJamaah struct {
@@ -74,6 +77,18 @@ func kurangData(d *dataJamaah) []string {
 	return kurang
 }
 
+// kunciKurang: isian yang bisa dilengkapi pelanggan (nama tidak: identitas terkunci).
+func kunciKurang(d *dataJamaah) []string {
+	var k []string
+	if strings.TrimSpace(d.TempatLahir) == "" {
+		k = append(k, "tempat_lahir")
+	}
+	if strings.TrimSpace(d.TanggalLahir) == "" {
+		k = append(k, "tanggal_lahir")
+	}
+	return k
+}
+
 func gabungDan(s []string) string {
 	switch len(s) {
 	case 0:
@@ -110,6 +125,7 @@ func evaluasiSurat(o *orderSummary, d *dataJamaah, pengaturanLengkap bool, nomor
 			it.Alasan = "Surat belum tersedia. Hubungi kami."
 		case len(kurang) > 0:
 			it.Alasan = "Lengkapi " + gabungDan(kurang) + " terlebih dahulu."
+			it.Kurang = kunciKurang(d)
 		default:
 			it.Bisa = true
 		}

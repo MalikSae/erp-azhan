@@ -58,7 +58,7 @@ func TestEvaluasiSurat_SyaratUnduh(t *testing.T) {
 	}
 	kurang := dataLengkap()
 	kurang.TempatLahir, kurang.TanggalLahir = "", ""
-	if it := evaluasiSurat(pesananDP(), kurang, true, nil)[0]; it.Bisa || it.Alasan != "Lengkapi tempat lahir dan tanggal lahir terlebih dahulu." {
+	if it := evaluasiSurat(pesananDP(), kurang, true, nil)[0]; it.Bisa || it.Alasan != "Lengkapi tempat lahir dan tanggal lahir terlebih dahulu." || len(it.Kurang) != 2 || it.Kurang[0] != "tempat_lahir" || it.Kurang[1] != "tanggal_lahir" {
 		t.Errorf("data kurang: %+v", it)
 	}
 	batal := &orderSummary{Tab: "batal", MinimalDP: 10000000, Terbayar: 10500000}
