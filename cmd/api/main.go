@@ -39,6 +39,7 @@ import (
 	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
+	"erp-azhan/api/internal/pengumuman"
 	"erp-azhan/api/internal/perlengkapan"
 	"erp-azhan/api/internal/rbac"
 	"erp-azhan/api/internal/schedule"
@@ -190,6 +191,7 @@ func main() {
 	customerRepo := customer.NewRepository(db)
 	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
 	jamaahAkunHandler := customer.NewJamaahAkun(db, customerRepo, mailer.NewFromEnv())
+	pengumumanHandler := pengumuman.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
 	agenRepo := agen.NewRepository(db)
@@ -278,6 +280,7 @@ func main() {
 		r.Get("/bank-accounts", customerOrders.BankAccounts)
 		r.Get("/travelers", customerOrders.Travelers)
 		r.Get("/jamaah", jamaahAkunHandler.Daftar)
+		r.Get("/pengumuman", pengumumanHandler.Akun)
 		r.Get("/jamaah/{id}", jamaahAkunHandler.Detail)
 		r.Put("/jamaah/{id}", jamaahAkunHandler.Simpan)
 		r.Get("/bookings", customerOrders.List)
@@ -498,6 +501,15 @@ func main() {
 			r.With(identity.RequirePermission("akun.edit")).Put("/{id}", adminAkunHandler.UbahProfil)
 			// Izin NIK agen (agen.approve atau agen.kaitan.edit) diperiksa di handler menurut status akun.
 			r.Put("/{id}/nik-agen", adminAkunHandler.UbahNIK)
+		})
+
+		// Pengumuman untuk pelanggan (tampil di dashboard akun web).
+		r.Route("/pengumuman", func(r chi.Router) {
+			r.Use(identity.RequirePermission("pengumuman.manage"))
+			r.Get("/", pengumumanHandler.DaftarAdmin)
+			r.Post("/", pengumumanHandler.Buat)
+			r.Put("/{id}", pengumumanHandler.Ubah)
+			r.Delete("/{id}", pengumumanHandler.Hapus)
 		})
 
 		// Persetujuan perubahan data jamaah dari pelanggan (halaman Data Jamaah di akun).
