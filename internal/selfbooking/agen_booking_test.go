@@ -202,9 +202,9 @@ func TestBookingAgenJamaahIDHarusCocokNIKDanNama(t *testing.T) {
 	}
 }
 
-// K13: "Saya sendiri" memicu komisi langsung atas agen itu sendiri walau jamaahnya terkunci ke agen lain
-// (A), dan A mendapat bonus pembinaan sebagai upline agen.
-func TestBookingAgenSayaSendiriKomisiUntukAgen(t *testing.T) {
+// K13 (diubah 2026-11-09): agen tidak mendapat komisi dari booking dirinya sendiri. "Saya sendiri" menandai booking pribadi, jadi
+// komisi langsung mengalir ke upline agen (A), bukan ke agen (X). A tidak punya upline di sini, jadi tidak ada bonus pembinaan.
+func TestBookingAgenSayaSendiriKomisiUntukUpline(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
 	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
@@ -240,11 +240,16 @@ func TestBookingAgenSayaSendiriKomisiUntukAgen(t *testing.T) {
 	if err := komisi.ProcessBookingLunas(ctx, tx, resp.Booking.BookingID); err != nil {
 		t.Fatal(err)
 	}
-	var langsungX, pembinaanA float64
-	tx.QueryRow(`SELECT COALESCE(SUM(nominal),0) FROM transaksi_komisi WHERE booking_id=? AND akun_penerima_id=? AND jenis='langsung'`, resp.Booking.BookingID, x).Scan(&langsungX)
-	tx.QueryRow(`SELECT COALESCE(SUM(nominal),0) FROM transaksi_komisi WHERE booking_id=? AND akun_penerima_id=? AND jenis='pembinaan'`, resp.Booking.BookingID, a).Scan(&pembinaanA)
-	if langsungX != 1_000_000 || pembinaanA != 300_000 {
-		t.Fatalf("komisi: X langsung=%.0f A pembinaan=%.0f, want 1000000 dan 300000", langsungX, pembinaanA)
+	jumlah := func(akun int64, jenis string) float64 {
+		var v float64
+		tx.QueryRow(`SELECT COALESCE(SUM(nominal),0) FROM transaksi_komisi WHERE booking_id=? AND akun_penerima_id=? AND jenis=?`, resp.Booking.BookingID, akun, jenis).Scan(&v)
+		return v
+	}
+	if jumlah(x, "langsung") != 0 || jumlah(x, "pembinaan") != 0 {
+		t.Fatalf("agen X tidak boleh mendapat komisi dari booking dirinya: langsung=%.0f pembinaan=%.0f", jumlah(x, "langsung"), jumlah(x, "pembinaan"))
+	}
+	if jumlah(a, "langsung") != 1_000_000 || jumlah(a, "pembinaan") != 0 {
+		t.Fatalf("komisi A: langsung=%.0f pembinaan=%.0f, want 1000000 dan 0", jumlah(a, "langsung"), jumlah(a, "pembinaan"))
 	}
 }
 
