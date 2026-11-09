@@ -81,6 +81,8 @@ Contoh: hari 1 Z klik link W; hari 2 Z klik link X lalu daftar akun; hari 3 Z kl
 - Aturan first-set-wins tetap: hanya jamaah berstatus `belum_ditentukan` yang boleh diikat (`internal/agen/kaitan.go:62`).
 - Saat booking dibuat dan jamaah barunya belum terikat, jamaah itu diikat ke agen yang mengikat akun pemesan. Pada booking portal agen, jamaah baru diikat ke agen pembuat booking.
 - Jamaah yang sudah terikat agen lain tidak diubah.
+- Jamaah yang NIK-nya sama dengan NIK agen (diri agen) pada booking portal agen dikunci ke upline aktif agen itu, bukan ke agen sendiri; agen tanpa upline aktif: tidak dikunci ke siapa pun (diubah 2026-11-09, sejalan dengan K13).
+- Penyamaan akun dan jamaah (2026-11-09): pada booking web publik, bila pemesan ikut berangkat, akunnya belum punya pengikat, dan NIK-nya cocok dengan jamaah yang sudah dikunci agen aktif X, akun itu diikat ke X (`agen.IkatAkunDariJamaah`). Hasilnya jamaah yang pernah dibookingkan agen menjadi downline agen begitu ia memesan dari akunnya sendiri. Akun yang sudah punya pengikat tidak diubah; pemesan yang tidak ikut berangkat tidak mengikat akunnya. Yang tercatat lebih dulu menang (first-set wins).
 
 Prioritas penentu agen untuk jamaah baru:
 1. Booking lewat portal agen: agen pembuat booking.

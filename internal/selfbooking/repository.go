@@ -185,6 +185,10 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		if picJamaahID, err = resolvePIC(ctx, tx, brandID, ini.accountID, req.PIC); err != nil {
 			return nil, err
 		}
+		// Pemesan ikut berangkat: bila jamaahnya (NIK cocok) sudah dikunci agen X dan akunnya belum punya pengikat, akun menjadi downline X.
+		if err := agen.IkatAkunDariJamaah(ctx, tx, ini.accountID, picJamaahID); err != nil {
+			return nil, err
+		}
 	}
 
 	// 3. Duplikasi check
@@ -282,7 +286,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	// Tanpa keduanya, jamaah tetap belum_ditentukan.
 	semuaJamaah := append([]int64{picJamaahID}, anggotaJamaahIDs...)
 	if modeAgen {
-		if err := agen.IkatRombongan(ctx, tx, semuaJamaah, ini.agenID, agen.SumberJalur1); err != nil {
+		if err := ikatJamaahAgen(ctx, tx, semuaJamaah, ini.agenID); err != nil {
 			return nil, err
 		}
 	} else {

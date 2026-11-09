@@ -97,6 +97,25 @@ func IkatAkunDariReferral(ctx context.Context, q querier, brandID int64, kode st
 	return ResolveKodeReferral(ctx, q, brandID, kode)
 }
 
+// IkatAkunDariJamaah menyamakan pengikat akun dengan pemilik kunci jamaah milik akun itu sendiri: akun pemesan yang ikut berangkat
+// (jamaahID = dirinya) dan belum punya pengikat menjadi downline agen aktif yang lebih dulu mengunci jamaah itu (first-set wins,
+// docs/spek/SPEK-KEAGENAN-AKUN-2026-11-03.md). Akun yang sudah punya pengikat tidak diubah; kunci jamaah juga tidak pernah diubah.
+func IkatAkunDariJamaah(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64) error {
+	if akunID <= 0 || jamaahID <= 0 {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `
+		UPDATE customer_accounts c
+		JOIN jamaah j ON j.id = ? AND j.kaitan_status = 'terikat_agen'
+		JOIN customer_accounts a ON a.id = j.direkrut_oleh_akun_id AND a.brand_id = c.brand_id AND a.status_agen = 'aktif' AND a.id <> c.id
+		SET c.direkrut_oleh_akun_id = a.id
+		WHERE c.id = ? AND c.direkrut_oleh_akun_id IS NULL`, jamaahID, akunID)
+	if err != nil {
+		return fmt.Errorf("agen: ikat akun dari jamaah: %w", err)
+	}
+	return nil
+}
+
 // IkatRombongan mengikat semua jamaah yang masih 'belum_ditentukan' ke akun
 // agen (auto-bind multi-pax). Jamaah yang sudah terikat tidak diubah. Prioritas
 // penentu agen ditetapkan pemanggil: portal agen memakai agen pembuat booking,
