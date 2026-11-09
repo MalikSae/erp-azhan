@@ -75,11 +75,16 @@ func TestPerubahanJamaahAlurLengkap(t *testing.T) {
 	}
 
 	// Isian kosong (alamat) langsung tersimpan di kedua baris; isian terisi (tempat_lahir) hanya menjadi pengajuan.
-	h, err := simpanPerubahanPelanggan(ctx, tx, akun, grup, map[string]string{"alamat": "Jl. Mawar 1", "tempat_lahir": "Cirebon"})
+	h, err := simpanPerubahanPelanggan(ctx, tx, akun, grup, map[string]string{"alamat": "Jl. Mawar 1", "tempat_lahir": "Cirebon", "tanggal_lahir": "1992-05-24"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h.Langsung != 1 || h.Pengajuan != 1 || h.PengajuanID == 0 {
+	for _, id := range []int64{lama, baru} {
+		if got := nilaiKolom(t, tx, id, "tanggal_lahir"); got != "1992-05-24" {
+			t.Errorf("tanggal_lahir baris %d = %q (isian tanggal kosong harus langsung terisi)", id, got)
+		}
+	}
+	if h.Langsung != 2 || h.Pengajuan != 1 || h.PengajuanID == 0 {
 		t.Fatalf("hasil = %+v", h)
 	}
 	for _, id := range []int64{lama, baru} {

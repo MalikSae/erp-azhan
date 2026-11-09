@@ -332,7 +332,12 @@ func nilaiNull(s string) any {
 func terapkanKolom(ctx context.Context, q dbq, ids []int64, k kolomJamaah, nilai string, hanyaKosong bool) error {
 	sql := fmt.Sprintf("UPDATE jamaah SET %s=? WHERE id IN (%s)", k.Key, placeholders(len(ids)))
 	if hanyaKosong {
-		sql += fmt.Sprintf(" AND (%s IS NULL OR %s='')", k.Key, k.Key)
+		// Kolom tanggal tidak boleh dibandingkan dengan '' (galat 1292 pada mode ketat); kosong di sana selalu NULL.
+		if k.Tanggal {
+			sql += fmt.Sprintf(" AND %s IS NULL", k.Key)
+		} else {
+			sql += fmt.Sprintf(" AND (%s IS NULL OR %s='')", k.Key, k.Key)
+		}
 	}
 	args := append([]any{nilaiNull(nilai)}, argsID(ids)...)
 	_, err := q.ExecContext(ctx, sql, args...)
