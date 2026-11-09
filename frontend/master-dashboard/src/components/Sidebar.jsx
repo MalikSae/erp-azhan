@@ -20,8 +20,11 @@ import {
   UserCheck,
   UserRound,
   Wallet,
+  FilePenLine,
+  Megaphone,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { listPerubahanJamaah } from 'shared';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
 const Sidebar = ({ isOpen, closeDrawer }) => {
@@ -46,6 +49,16 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     if (aktif) setOpenGroup(aktif.name);
   }, [location.pathname]);
 
+  // Jumlah perubahan data jamaah yang menunggu persetujuan, tampil sebagai angka kecil di menunya.
+  const bolehSetujui = hasPermission('jamaah.perubahan.approve');
+  const [menungguJamaah, setMenungguJamaah] = useState(0);
+  useEffect(() => {
+    if (!bolehSetujui) return;
+    let batal = false;
+    listPerubahanJamaah().then((d) => { if (!batal) setMenungguJamaah(d.length); }).catch(() => {});
+    return () => { batal = true; };
+  }, [bolehSetujui, location.pathname]);
+
   const toggleGroup = (groupName) => {
     setOpenGroup((prev) => (prev === groupName ? null : groupName));
   };
@@ -58,6 +71,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       items: [
         { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
         { name: 'Akun Pelanggan', path: '/akun', icon: UserRound, perm: 'akun.view' },
+        { name: 'Persetujuan Data Jamaah', path: '/jamaah/perubahan', icon: FilePenLine, perm: 'jamaah.perubahan.approve' },
+        { name: 'Pengumuman', path: '/pengumuman', icon: Megaphone, perm: 'pengumuman.manage' },
         { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
         { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
       ],
@@ -202,6 +217,9 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                             {Icon && <Icon className="w-4 h-4 shrink-0" />}
                             <span className="truncate">{item.name}</span>
                           </div>
+                          {item.path === '/jamaah/perubahan' && menungguJamaah > 0 && (
+                            <span className="text-[10px] bg-warning-100 text-warning-800 px-1.5 py-0.5 rounded-full font-semibold" aria-label={`${menungguJamaah} menunggu`}>{menungguJamaah}</span>
+                          )}
                           {isInactive && (
                             <span className="text-[10px] bg-neutral-100 text-neutral-400 px-1.5 py-0.5 rounded font-mono">
                               Soon

@@ -106,3 +106,35 @@ Setelah transfer, unggah bukti pembayaran lewat halaman detail booking:
 %s`, nama, brandName, kodeBooking, paket, tglBerangkat, total, dp, batasBayar, b.String(), link, brandName)
 	return
 }
+
+// PerubahanDataJamaah memberi tahu pemilik akun bahwa pengajuan perubahan data jamaahnya disetujui atau ditolak.
+// catatan: alasan penolakan dari admin (dipakai bila ditolak).
+func PerubahanDataJamaah(brandName, nama, namaJamaah string, disetujui bool, catatan, link string) (subject, text string) {
+	brandName, nama, namaJamaah, link = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(namaJamaah, maxInlineNama), inline(link, maxInlineTautan)
+	if disetujui {
+		subject = "Perubahan data jamaah " + namaJamaah + " disetujui"
+		text = fmt.Sprintf(`Halo %s,
+
+Perubahan data jamaah %s yang Anda ajukan sudah disetujui dan kini tersimpan.
+
+Lihat data jamaah:
+
+%s
+
+%s`, nama, namaJamaah, link, brandName)
+		return
+	}
+	subject = "Perubahan data jamaah " + namaJamaah + " belum dapat disetujui"
+	text = fmt.Sprintf(`Halo %s,
+
+Perubahan data jamaah %s yang Anda ajukan belum dapat disetujui.
+
+Alasan: %s
+
+Data lama tetap berlaku. Anda dapat mengajukan perubahan lagi dari halaman berikut:
+
+%s
+
+%s`, nama, namaJamaah, inline(catatan, maxInlineTeks), link, brandName)
+	return
+}

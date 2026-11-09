@@ -49,6 +49,8 @@ export * from './api/perlengkapan';
 export * from './api/schedules';
 export * from './api/agen';
 export * from './api/akun';
+export * from './api/perubahanJamaah';
+export * from './api/pengumuman';
 
 // Data & Utils
 export * from './data/indonesianCities';
