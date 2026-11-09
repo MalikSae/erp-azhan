@@ -10,6 +10,7 @@ import DashboardHome from './pages/DashboardHome';
 import BrandDashboardPage from './pages/BrandDashboardPage';
 import PersetujuanAgenPage from './pages/PersetujuanAgenPage';
 import PersetujuanDataJamaahPage from './pages/PersetujuanDataJamaahPage';
+import PengumumanPage from './pages/PengumumanPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
 import HotelsPage from './pages/HotelsPage';
 import AirlinesPage from './pages/AirlinesPage';
@@ -96,6 +97,7 @@ function AppRoutes() {
           {/* Agen & komisi */}
           <Route path="/komisi" element={<RequireAccess holdingOnly><KomisiReferralPage /></RequireAccess>} />
           <Route path="/komisi/ganti-kaitan" element={<RequireAccess holdingOnly><GantiKaitanAgenPage /></RequireAccess>} />
+          <Route path="/pengumuman" element={<RequireAccess perm="pengumuman.manage"><PengumumanPage /></RequireAccess>} />
           <Route path="/jamaah/perubahan" element={<RequireAccess perm="jamaah.perubahan.approve"><PersetujuanDataJamaahPage /></RequireAccess>} />
           <Route path="/agen/pengajuan" element={<RequireAccess perm="agen.approve"><PersetujuanAgenPage /></RequireAccess>} />
           <Route path="/agen" element={<RequireAccess perm="agen.view"><DaftarAgenPage showBrandColumn={showBrandColumn} /></RequireAccess>} />

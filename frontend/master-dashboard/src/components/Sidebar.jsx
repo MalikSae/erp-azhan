@@ -21,6 +21,7 @@ import {
   UserRound,
   Wallet,
   FilePenLine,
+  Megaphone,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { listPerubahanJamaah } from 'shared';
@@ -71,6 +72,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
         { name: 'Akun Pelanggan', path: '/akun', icon: UserRound, perm: 'akun.view' },
         { name: 'Persetujuan Data Jamaah', path: '/jamaah/perubahan', icon: FilePenLine, perm: 'jamaah.perubahan.approve' },
+        { name: 'Pengumuman', path: '/pengumuman', icon: Megaphone, perm: 'pengumuman.manage' },
         { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
         { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
       ],
