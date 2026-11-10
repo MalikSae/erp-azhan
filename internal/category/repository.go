@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -195,7 +196,57 @@ func (r *Repository) Create(ctx context.Context, req CreateCategoryRequest) (*Ca
 	return r.GetByID(ctx, catID)
 }
 
+// ErrConflict: perubahan kategori ditolak karena aturan bisnis; pesannya ditampilkan ke pengguna (409).
+var ErrConflict = errors.New("perubahan kategori ditolak")
+
+// ErrForbidden: admin yang terikat satu brand mencoba mengubah kategori yang bukan khusus brand-nya (403).
+var ErrForbidden = errors.New("kategori ini dipakai brand lain atau berlaku untuk semua brand; hanya admin holding yang dapat mengubahnya")
+
+// BrandIDs mengembalikan brand yang ditautkan ke kategori. Kosong berarti kategori berlaku untuk semua brand.
+func (r *Repository) BrandIDs(ctx context.Context, id int64) ([]int64, error) {
+	var ada bool
+	if err := r.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM package_categories WHERE id = ?)", id).Scan(&ada); err != nil {
+		return nil, err
+	}
+	if !ada {
+		return nil, ErrNotFound
+	}
+	rows, err := r.db.QueryContext(ctx, "SELECT brand_id FROM category_brands WHERE category_id = ? ORDER BY brand_id", id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var b int64
+		if err := rows.Scan(&b); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// paketDiLuarBrandTx menghitung paket yang memakai kategori ini tetapi brand-nya tidak ada di daftar brand
+// baru. Daftar kosong berarti kategori berlaku untuk semua brand, jadi tidak ada paket yang tertinggal.
+func paketDiLuarBrandTx(ctx context.Context, tx *sql.Tx, id int64, brandIDs []int64) (int, error) {
+	if len(brandIDs) == 0 {
+		return 0, nil
+	}
+	q := "SELECT COUNT(*) FROM schedules WHERE category_id = ? AND brand_id NOT IN (?" + strings.Repeat(",?", len(brandIDs)-1) + ")"
+	args := make([]any, 0, len(brandIDs)+1)
+	args = append(args, id)
+	for _, b := range brandIDs {
+		args = append(args, b)
+	}
+	var n int
+	err := tx.QueryRowContext(ctx, q, args...).Scan(&n)
+	return n, err
+}
+
 // Update memperbarui data kategori dan relasi brand-nya (replace-all).
+// Description nil berarti deskripsi tidak diubah; string kosong menghapusnya (audit menu Paket S-07).
+// Melepas brand dari kategori yang masih dipakai paket brand itu ditolak (S-08).
 func (r *Repository) Update(ctx context.Context, id int64, req UpdateCategoryRequest) (*Category, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -203,13 +254,29 @@ func (r *Repository) Update(ctx context.Context, id int64, req UpdateCategoryReq
 	}
 	defer tx.Rollback()
 
-	var exists bool
-	err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM package_categories WHERE id = ?)", id).Scan(&exists)
+	var kunci int64
+	err = tx.QueryRowContext(ctx, "SELECT id FROM package_categories WHERE id = ? FOR UPDATE", id).Scan(&kunci)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
-		return nil, ErrNotFound
+
+	tertinggal, err := paketDiLuarBrandTx(ctx, tx, id, req.BrandIDs)
+	if err != nil {
+		return nil, fmt.Errorf("category.Update cek paket brand: %w", err)
+	}
+	if tertinggal > 0 {
+		return nil, fmt.Errorf("%w: %d paket dari brand yang dilepas masih memakai kategori ini; pindahkan paketnya dulu", ErrConflict, tertinggal)
+	}
+
+	ubahDeskripsi := req.Description != nil
+	var deskripsi *string
+	if ubahDeskripsi {
+		if t := strings.TrimSpace(*req.Description); t != "" {
+			deskripsi = &t
+		}
 	}
 
 	isActive := true
@@ -218,8 +285,8 @@ func (r *Repository) Update(ctx context.Context, id int64, req UpdateCategoryReq
 	}
 
 	_, err = tx.ExecContext(ctx,
-		`UPDATE package_categories SET name = ?, slug = ?, seo_tier = ?, description = ?, badge_color = ?, is_active = ? WHERE id = ?`,
-		req.Name, req.Slug, req.SEOTier, req.Description, req.BadgeColor, isActive, id,
+		`UPDATE package_categories SET name = ?, slug = ?, seo_tier = ?, description = IF(?, ?, description), badge_color = ?, is_active = ? WHERE id = ?`,
+		req.Name, req.Slug, req.SEOTier, ubahDeskripsi, deskripsi, req.BadgeColor, isActive, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("category.Update update: %w", err)

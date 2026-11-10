@@ -61,6 +61,9 @@ type Schedule struct {
 	// KomisiAktif: jumlah baris komisi aktif dari booking jadwal ini. Hanya diisi pada detail jadwal, untuk
 	// peringatan saat tanggal berangkat diubah (ketersediaan komisi mengikuti tanggal berangkat).
 	KomisiAktif int `json:"komisi_aktif"`
+	// BookingAktif: jumlah booking aktif (baru/dp/lunas) jadwal ini. Hanya diisi pada detail jadwal; form
+	// memakainya untuk meminta alasan saat tanggal berangkat diubah.
+	BookingAktif int `json:"booking_aktif"`
 	MaskapaiID               *int64          `json:"maskapai_id"`
 	Maskapai                 *MaskapaiRef    `json:"maskapai"`
 	BerangkatTanggal         string          `json:"berangkat_tanggal"`
@@ -205,6 +208,10 @@ type ScheduleListItem struct {
 
 // ScheduleInput adalah parameter yang sudah divalidasi, diteruskan ke repository.
 type ScheduleInput struct {
+	// AlasanUbahTanggal wajib bila tanggal berangkat diubah pada paket yang punya booking aktif.
+	AlasanUbahTanggal string
+	// ActorID: admin yang menyimpan, untuk riwayat perubahan tanggal.
+	ActorID           int64
 	ExpectedSeatTotal        *int
 	BrandID                  int64
 	CategoryID               *int64
@@ -248,6 +255,7 @@ type ScheduleInput struct {
 // CreateScheduleRequest adalah payload untuk POST /api/admin/schedules.
 // SeatSisa pakai pointer untuk membedakan "tidak dikirim" (nil) vs "dikirim sebagai 0".
 type CreateScheduleRequest struct {
+	AlasanUbahTanggal        string   `json:"alasan_ubah_tanggal"` // hanya dipakai saat update
 	ExpectedSeatTotal        *int     `json:"expected_seat_total"`
 	BrandID                  *int64   `json:"brand_id"` // Opsional bagi admin biasa, Wajib bagi Super Admin
 	CategoryID               *int64   `json:"category_id"`

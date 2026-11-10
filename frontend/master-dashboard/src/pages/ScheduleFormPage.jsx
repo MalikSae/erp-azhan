@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import PageHeader from 'shared/ui/PageHeader';
 import FormField from 'shared/ui/FormField';
 import Input from 'shared/ui/Input';
@@ -59,6 +59,7 @@ const SECTION_LINKS = [
 const ScheduleFormPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEditMode = !!id;
   // Duplikat paket: /schedules/new?from=<id> memuat data paket sumber sebagai draft baru.
   const [searchParams] = useSearchParams();
@@ -79,6 +80,10 @@ const ScheduleFormPage = () => {
   }, [formError]);
 
   const [notFound, setNotFound] = useState(false);
+  // Data paket gagal dimuat saat edit: form tidak ditampilkan, supaya isian kosong tidak menimpa paket.
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Paket tersimpan tetapi set perlengkapan khususnya gagal disimpan (dua panggilan terpisah).
+  const [peringatanSimpan, setPeringatanSimpan] = useState(location.state?.peringatanSimpan || null);
 
   // Lookups
   const [hotelOptions, setHotelOptions] = useState([]);
@@ -291,6 +296,11 @@ const ScheduleFormPage = () => {
             // Untuk peringatan: tanggal berangkat menentukan kapan komisi agen jadwal ini tersedia.
             berangkat_tanggal_awal: scheduleData.berangkat_tanggal ? scheduleData.berangkat_tanggal.split('T')[0] : '',
             komisi_aktif: scheduleData.komisi_aktif || 0,
+            booking_aktif: scheduleData.booking_aktif || 0,
+            alasan_ubah_tanggal: '',
+            // Status saat dimuat: status hanya dikirim bila diubah di form ini, supaya simpan dari form yang
+            // sudah lama terbuka tidak membatalkan perubahan status oleh admin lain.
+            status_awal: scheduleData.status || 'draft',
             berangkat_jam: scheduleData.berangkat_jam || '',
             berangkat_kode_penerbangan: parsedBerangkat.fullValue || scheduleData.berangkat_kode_penerbangan || '',
             berangkat_bandara_asal: scheduleData.berangkat_bandara_asal || '',
@@ -343,6 +353,8 @@ const ScheduleFormPage = () => {
       } catch (err) {
         if (isEditMode && err.response?.status === 404) {
           setNotFound(true);
+        } else if (isEditMode) {
+          setLoadFailed(true);
         } else {
           setFormError("Gagal memuat data awal (hotel/maskapai/itinerary). Pastikan server backend menyala.");
         }
@@ -683,6 +695,10 @@ const ScheduleFormPage = () => {
     }));
   }, [airportOptions]);
 
+  // Tanggal berangkat paket yang punya booking aktif diubah: server mewajibkan alasan (audit menu Paket S-04).
+  const butuhAlasanTanggal = isEditMode && formData.booking_aktif > 0 && !!formData.berangkat_tanggal_awal
+    && formData.berangkat_tanggal !== formData.berangkat_tanggal_awal;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -704,6 +720,7 @@ const ScheduleFormPage = () => {
 if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal = 'Tanggal pulang harus setelah tanggal berangkat.';
       if (formData.program_slug === 'plus' && !formData.destination_id) errors.destination_id = 'Program Plus wajib memilih Destinasi.';
       if (hargaInfant === null) errors.harga_infant = 'Harga bayi wajib diisi.';
+      if (butuhAlasanTanggal && !(formData.alasan_ubah_tanggal || '').trim()) errors.alasan_ubah_tanggal = 'Alasan ubah tanggal berangkat wajib diisi.';
       if (hargaTriple < hargaQuad) errors.harga_triple = 'Harga Triple tidak boleh lebih murah dari harga Quad.';
       if (hargaDouble < hargaTriple) errors.harga_double = 'Harga Double tidak boleh lebih murah dari harga Triple.';
       if (Object.keys(errors).length) {
@@ -744,7 +761,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         jadwal_nama: (formData.jadwal_nama || '').trim(),
         brand_id: parseInt(formData.brand_id, 10),
         category_id: formData.category_id ? parseInt(formData.category_id, 10) : null,
-        status: formData.status || 'draft',
+        ...(isEditMode && formData.status === formData.status_awal ? {} : { status: formData.status || 'draft' }),
+        ...(butuhAlasanTanggal ? { alasan_ubah_tanggal: (formData.alasan_ubah_tanggal || '').trim() } : {}),
         journey_type: formData.journey_type || 'umroh',
         program_slug: formData.program_slug || null,
         destination_id: formData.destination_id ? parseInt(formData.destination_id, 10) : null,
@@ -789,13 +807,29 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
       }
       // Set perlengkapan khusus paket disimpan terpisah; mengikuti kategori = hapus set khusus.
       if (savedId && (perlCustom || perlWasCustom)) {
-        await putSchedulePerlengkapan(
-          savedId,
-          perlCustom,
-          perlCustom
-            ? perlItems.map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: Number(r.qty) || 1, untuk: r.untuk || 'semua' }))
-            : [],
-        );
+        try {
+          await putSchedulePerlengkapan(
+            savedId,
+            perlCustom,
+            perlCustom
+              ? perlItems.map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: Number(r.qty) || 1, untuk: r.untuk || 'semua' }))
+              : [],
+          );
+        } catch (err) {
+          // Paketnya sendiri sudah tersimpan. Pesan harus mengatakan itu, dan paket baru dibuka di mode edit
+          // supaya simpan ulang tidak membuat paket kedua (ditolak 409 karena nama dan tanggal sama).
+          const sebab = err.response?.data?.error;
+          const pesan = `Paket sudah tersimpan, tetapi set perlengkapan khusus gagal disimpan${sebab ? `: ${sebab}` : '.'} Periksa set perlengkapan lalu simpan lagi.`;
+          submittedRef.current = true;
+          if (isEditMode) {
+            setPeringatanSimpan(pesan);
+            setFormData(prev => ({ ...prev, status_awal: prev.status, berangkat_tanggal_awal: prev.berangkat_tanggal, alasan_ubah_tanggal: '' }));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            navigate(`/schedules/${savedId}/edit`, { replace: true, state: { peringatanSimpan: pesan } });
+          }
+          return;
+        }
       }
       submittedRef.current = true;
       const namaPaket = (formData.jadwal_nama || '').trim();
@@ -840,6 +874,22 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
     );
   }
 
+  if (loadFailed) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Edit Paket Umroh" onBack={() => navigate('/schedules')} />
+        <Alert variant="error">
+          Data paket gagal dimuat, jadi form tidak ditampilkan agar isian kosong tidak menimpa paket. Periksa koneksi
+          atau server, lalu muat ulang.
+        </Alert>
+        <div className="flex gap-3">
+          <Button variant="primary" onClick={() => window.location.reload()}>Muat Ulang</Button>
+          <Button variant="ghost" onClick={() => navigate('/schedules')}>Kembali ke Data Paket</Button>
+        </div>
+      </div>
+    );
+  }
+
   if (notFound) {
     return (
       <div className="space-y-6">
@@ -858,6 +908,9 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
       />
 
       <form onSubmit={handleSubmit}>
+        {peringatanSimpan && (
+          <Alert variant="warning" onClose={() => setPeringatanSimpan(null)} className="mb-4">{peringatanSimpan}</Alert>
+        )}
         {formError && (
           <div
             ref={errorRef}
@@ -1062,6 +1115,28 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   <div className="flex items-center gap-2 text-neutral-600 text-[13px] font-semibold font-heading">
                     <span>Penerbangan Berangkat</span>
                   </div>
+
+                  {butuhAlasanTanggal && (
+                    <div className="space-y-3">
+                      <Alert variant="warning">
+                        Paket ini punya {formData.booking_aktif} booking aktif. Tanggal berangkat berubah dari{' '}
+                        {formData.berangkat_tanggal_awal} menjadi {formData.berangkat_tanggal || '(kosong)'}. Jamaah tidak
+                        diberi tahu otomatis; kabari mereka sendiri. Alasan perubahan wajib diisi dan tersimpan di riwayat.
+                      </Alert>
+                      <Textarea
+                        label="Alasan Ubah Tanggal Berangkat"
+                        name="alasan_ubah_tanggal"
+                        value={formData.alasan_ubah_tanggal || ''}
+                        onChange={handleChange}
+                        error={fieldErrors.alasan_ubah_tanggal}
+                        placeholder="mis. Maskapai memundurkan jadwal penerbangan"
+                        rows={2}
+                        maxLength={500}
+                        required
+                        className="!mb-0"
+                      />
+                    </div>
+                  )}
 
                   {formData.komisi_aktif > 0 && formData.berangkat_tanggal_awal && formData.berangkat_tanggal !== formData.berangkat_tanggal_awal && (
                     <Alert variant="warning">

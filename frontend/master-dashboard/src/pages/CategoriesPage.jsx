@@ -53,6 +53,9 @@ const CategoriesPage = () => {
   // Isi perlengkapan bawaan kategori (dipakai semua paket kategori ini, kecuali ditimpa per paket).
   const [perlCatalog, setPerlCatalog] = useState([]);
   const [perlItems, setPerlItems] = useState([]);
+  // Status pemuatan set perlengkapan di modal: 'siap' | 'memuat' | 'gagal'. Set hanya disimpan saat 'siap',
+  // supaya set yang belum atau gagal dimuat tidak tertimpa daftar kosong.
+  const [perlStatus, setPerlStatus] = useState('siap');
 
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -103,7 +106,12 @@ const CategoriesPage = () => {
     setPerlItems([]);
     listPerlengkapanItems().then((d) => setPerlCatalog(d || [])).catch(() => setPerlCatalog([]));
     if (cat) {
-      getCategoryPerlengkapan(cat.id).then((d) => setPerlItems(toSetRows(d?.items))).catch(() => setPerlItems([]));
+      setPerlStatus('memuat');
+      getCategoryPerlengkapan(cat.id)
+        .then((d) => { setPerlItems(toSetRows(d?.items)); setPerlStatus('siap'); })
+        .catch(() => { setPerlItems([]); setPerlStatus('gagal'); });
+    } else {
+      setPerlStatus('siap');
     }
     if (cat) {
       setEditingCategory(cat);
@@ -180,12 +188,23 @@ const CategoriesPage = () => {
       } else {
         const created = await createCategory(payload);
         categoryId = created?.id;
+        // Kategori sudah tersimpan: simpan berikutnya di modal ini harus mengubahnya, bukan membuat lagi.
+        if (created) setEditingCategory(created);
       }
-      if (categoryId) {
-        await putCategoryPerlengkapan(
-          categoryId,
-          perlItems.map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: Number(r.qty) || 1, untuk: r.untuk || 'semua' })),
-        );
+      // Set perlengkapan disimpan lewat panggilan kedua. Bila gagal, kategorinya sendiri sudah tersimpan,
+      // jadi pesannya harus mengatakan itu dan modal tetap terbuka untuk dicoba lagi.
+      if (categoryId && perlStatus === 'siap') {
+        try {
+          await putCategoryPerlengkapan(
+            categoryId,
+            perlItems.map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: Number(r.qty) || 1, untuk: r.untuk || 'semua' })),
+          );
+        } catch (error) {
+          const sebab = error.response?.data?.error;
+          setFormErrors(`Kategori sudah tersimpan, tetapi set perlengkapan gagal disimpan${sebab ? `: ${sebab}` : '.'} Klik simpan lagi untuk mencoba ulang.`);
+          fetchData();
+          return;
+        }
       }
 
       handleCloseModal();
@@ -435,7 +454,18 @@ const CategoriesPage = () => {
                 Dibagikan ke tiap jamaah pada paket kategori ini. Bisa diubah khusus per paket di form Paket.
               </p>
             </div>
-            <PerlengkapanSetEditor catalog={perlCatalog} value={perlItems} onChange={setPerlItems} />
+            {perlStatus === 'memuat' && (
+              <p className="text-[11px] font-body text-neutral-500">Memuat set perlengkapan...</p>
+            )}
+            {perlStatus === 'gagal' && (
+              <Alert variant="warning">
+                Set perlengkapan gagal dimuat. Menyimpan tidak akan mengubah set yang sudah ada. Tutup lalu buka lagi
+                untuk mengubah set.
+              </Alert>
+            )}
+            {perlStatus === 'siap' && (
+              <PerlengkapanSetEditor catalog={perlCatalog} value={perlItems} onChange={setPerlItems} />
+            )}
           </div>
 
           <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
@@ -460,7 +490,7 @@ const CategoriesPage = () => {
             <Button
               type="submit"
               variant="primary"
-              disabled={isSubmitting}
+              disabled={isSubmitting || perlStatus === 'memuat'}
             >
               {isSubmitting ? 'Menyimpan...' : (editingCategory ? 'Simpan Perubahan' : 'Simpan')}
             </Button>
