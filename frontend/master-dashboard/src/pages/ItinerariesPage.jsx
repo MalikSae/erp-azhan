@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CalendarDays, Pencil, Trash2 } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
@@ -19,6 +20,9 @@ const formatDate = (dateStr) => {
 };
 
 const ItinerariesPage = () => {
+  // Peran lihat-saja (masterdata.view) boleh membuka halaman ini; tombol ubah hanya untuk masterdata.edit.
+  const { hasPermission } = useContext(AuthContext);
+  const canEdit = hasPermission('masterdata.edit');
   const navigate = useNavigate();
   const location = useLocation();
   const [successMessage, setSuccessMessage] = useState(null);
@@ -84,7 +88,7 @@ const ItinerariesPage = () => {
     { header: 'Kategori', key: 'category_name', sortable: true },
     { header: 'Durasi', key: 'day_count', sortable: true },
     { header: 'Dibuat', key: 'created_at', sortable: true },
-    { header: 'Aksi', key: 'aksi' },
+    ...(canEdit ? [{ header: 'Aksi', key: 'aksi' }] : []),
   ];
 
   const renderCell = (row, key) => {
@@ -92,8 +96,9 @@ const ItinerariesPage = () => {
       return (
         <button
           type="button"
-          onClick={() => navigate(`/itineraries/${row.id}/edit`)}
-          className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          disabled={!canEdit}
+            onClick={() => navigate(`/itineraries/${row.id}/edit`)}
+          className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
         >
           {row.title}
         </button>
@@ -134,8 +139,7 @@ const ItinerariesPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Kelola Itinerary"
-        actionLabel="+ Tambah Itinerary"
-        onAction={() => navigate('/itineraries/new')}
+        {...(canEdit ? { actionLabel: "+ Tambah Itinerary", onAction: () => navigate('/itineraries/new') } : {})}
       />
 
       {successMessage && (
@@ -153,7 +157,7 @@ const ItinerariesPage = () => {
           columns={columns}
           data={itineraries}
           itemsPerPage={10}
-          emptyMessage='Belum ada itinerary. Klik "+ Tambah Itinerary" untuk menambahkan.'
+          emptyMessage={canEdit ? 'Belum ada itinerary. Klik "+ Tambah Itinerary" untuk menambahkan.' : 'Belum ada itinerary.'}
           searchPlaceholder="Cari judul itinerary..."
           renderCell={renderCell}
         />

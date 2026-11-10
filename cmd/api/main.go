@@ -362,6 +362,8 @@ func main() {
 		masterEdit.Put("/categories/{id}/perlengkapan", perlengkapanHandler.PutCategorySet)
 
 		r.Route("/brands", func(r chi.Router) {
+			// Daftar ringkas untuk dropdown dan label: cukup login, tanpa brand.view (audit menu Paket T-02).
+			r.Get("/options", brandHandler.ListBrandOptions)
 			r.With(identity.RequirePermission("brand.view")).Get("/", brandHandler.ListBrands)
 			r.With(identity.RequirePermission("brand.view")).Get("/{id}", brandHandler.GetBrand)
 			r.With(identity.RequirePermission("brand.view")).Get("/{id}/surat", suratHandler.Get)

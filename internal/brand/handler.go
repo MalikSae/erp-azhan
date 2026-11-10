@@ -55,6 +55,42 @@ func (h *Handler) ListBrands(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, brands)
 }
 
+// BrandOption adalah data ringkas brand untuk dropdown, label, dan nilai bawaan di form paket.
+type BrandOption struct {
+	ID             uint64  `json:"id"`
+	KodeBrand      *string `json:"kode_brand"`
+	Name           string  `json:"name"`
+	LogoURL        *string `json:"logo_url"`
+	IconURL        *string `json:"icon_url"`
+	PrimaryColor   *string `json:"primary_color"`
+	MinimalDP      float64 `json:"minimal_dp"`
+	UjrohClosing   float64 `json:"ujroh_closing"`
+	UjrohPembinaan float64 `json:"ujroh_pembinaan"`
+}
+
+// ListBrandOptions GET /api/admin/brands/options. Terbuka untuk semua admin yang login, tanpa brand.view:
+// halaman paket, kategori, dan booking butuh nama brand walau perannya tidak boleh membuka pengaturan
+// brand (audit menu Paket T-02). Hanya data ringkas; admin yang terikat satu brand hanya melihat brand-nya.
+func (h *Handler) ListBrandOptions(w http.ResponseWriter, r *http.Request) {
+	brands, err := h.repo.List(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "gagal mengambil data brands")
+		return
+	}
+	scoped := identity.GetBrandID(r.Context())
+	out := make([]BrandOption, 0, len(brands))
+	for _, b := range brands {
+		if scoped != nil && int64(b.ID) != *scoped {
+			continue
+		}
+		out = append(out, BrandOption{
+			ID: b.ID, KodeBrand: b.KodeBrand, Name: b.Name, LogoURL: b.LogoURL, IconURL: b.IconURL,
+			PrimaryColor: b.PrimaryColor, MinimalDP: b.MinimalDP, UjrohClosing: b.UjrohClosing, UjrohPembinaan: b.UjrohPembinaan,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (h *Handler) GetBrand(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

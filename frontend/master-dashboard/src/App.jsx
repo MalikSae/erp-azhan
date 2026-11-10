@@ -62,11 +62,11 @@ function AppRoutes() {
           <Route path="/pengaturan" element={<AccountSettingsPage />} />
 
           {/* Master paket */}
-          <Route path="/hotels" element={<RequireAccess perm="masterdata.edit"><HotelsPage /></RequireAccess>} />
-          <Route path="/airlines" element={<RequireAccess perm="masterdata.edit"><AirlinesPage /></RequireAccess>} />
-          <Route path="/categories" element={<RequireAccess perm="masterdata.edit"><CategoriesPage /></RequireAccess>} />
+          <Route path="/hotels" element={<RequireAccess perm="masterdata.view"><HotelsPage /></RequireAccess>} />
+          <Route path="/airlines" element={<RequireAccess perm="masterdata.view"><AirlinesPage /></RequireAccess>} />
+          <Route path="/categories" element={<RequireAccess perm="masterdata.view"><CategoriesPage /></RequireAccess>} />
           <Route path="/destinations" element={<RequireAccess perm="masterdata.view"><DestinationsPage /></RequireAccess>} />
-          <Route path="/itineraries" element={<RequireAccess perm="masterdata.edit"><ItinerariesPage /></RequireAccess>} />
+          <Route path="/itineraries" element={<RequireAccess perm="masterdata.view"><ItinerariesPage /></RequireAccess>} />
           <Route path="/itineraries/new" element={<RequireAccess perm="masterdata.edit"><ItineraryFormPage /></RequireAccess>} />
           <Route path="/itineraries/:id/edit" element={<RequireAccess perm="masterdata.edit"><ItineraryFormPage /></RequireAccess>} />
           <Route path="/schedules" element={<RequireAccess perm="schedule.view"><SchedulesPage /></RequireAccess>} />

@@ -27,7 +27,7 @@ import { listAirports } from '../api/airports';
 import { listCategories } from '../api/categories';
 import { listDestinations } from '../api/destinations';
 import { listItineraries } from '../api/itineraries';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 import { uploadMediaWithOptions } from '../api/media';
 
 // Nama field yang dipakai backend di awal pesan error ("harga_quad wajib ...").
@@ -158,7 +158,7 @@ const ScheduleFormPage = () => {
           listAirlines(),
           listCategories(),
           listItineraries(),
-          listBrands(),
+          listBrandOptions(),
           listAirports(),
           listDestinations().catch(() => [])
         ];

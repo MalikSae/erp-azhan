@@ -118,11 +118,11 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'PAKET',
       items: [
         { name: 'Kelola Paket', path: '/schedules', icon: Package, perm: 'schedule.view' },
-        { name: 'Kelola Kategori', path: '/categories', icon: FolderTree, perm: 'masterdata.edit' },
-        { name: 'Kelola Hotel', path: '/hotels', icon: Hotel, perm: 'masterdata.edit' },
-        { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, perm: 'masterdata.edit' },
+        { name: 'Kelola Kategori', path: '/categories', icon: FolderTree, perm: 'masterdata.view' },
+        { name: 'Kelola Hotel', path: '/hotels', icon: Hotel, perm: 'masterdata.view' },
+        { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, perm: 'masterdata.view' },
         { name: 'Kelola Destinasi', path: '/destinations', icon: Globe, perm: 'masterdata.view' },
-        { name: 'Kelola Itinerary', path: '/itineraries', icon: MapPin, perm: 'masterdata.edit' },
+        { name: 'Kelola Itinerary', path: '/itineraries', icon: MapPin, perm: 'masterdata.view' },
       ],
     },
     {

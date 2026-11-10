@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import BrandLabel from 'shared/ui/BrandLabel';
 import { Pencil, Trash2 } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
@@ -13,7 +14,7 @@ import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import ActionMenu from 'shared/ui/ActionMenu';
 import { listCategories, createCategory, updateCategory, deleteCategory } from '../api/categories';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 import { listPerlengkapanItems, getCategoryPerlengkapan, putCategoryPerlengkapan } from '../api/perlengkapan';
 import PerlengkapanSetEditor from '../components/PerlengkapanSetEditor';
 import { StatusChip } from '../components/penggunaUi';
@@ -35,6 +36,9 @@ const SEO_TIER_LABELS = { hemat: 'Hemat', reguler: 'Reguler', comfort: 'Comfort'
 const BrandChip = ({ name, color }) => <BrandLabel name={name} color={color} />;
 
 const CategoriesPage = () => {
+  // Peran lihat-saja (masterdata.view) boleh membuka halaman ini; tombol ubah hanya untuk masterdata.edit.
+  const { hasPermission } = useContext(AuthContext);
+  const canEdit = hasPermission('masterdata.edit');
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,7 +63,8 @@ const CategoriesPage = () => {
     try {
       const [catData, brandData] = await Promise.all([
         listCategories(),
-        listBrands()
+        // Gagal memuat brand tidak boleh menggagalkan daftar kategori.
+        listBrandOptions().catch(() => [])
       ]);
       setCategories(catData || []);
       setBrands(brandData || []);
@@ -216,7 +221,7 @@ const CategoriesPage = () => {
     { header: 'Brand Berlaku', key: 'brands' },
     { header: 'Jumlah Paket', key: 'package_count', sortable: true },
     { header: 'Status', key: 'is_active', sortable: true },
-    { header: 'Aksi', key: 'aksi' },
+    ...(canEdit ? [{ header: 'Aksi', key: 'aksi' }] : []),
   ];
 
   const renderCell = (row, key) => {
@@ -225,8 +230,9 @@ const CategoriesPage = () => {
         <div className="min-w-0">
           <button
             type="button"
+            disabled={!canEdit}
             onClick={() => handleOpenModal(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
           >
             {row.name}
           </button>
@@ -297,8 +303,7 @@ const CategoriesPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Kelola Kategori"
-        actionLabel="+ Tambah Kategori"
-        onAction={() => handleOpenModal()}
+        {...(canEdit ? { actionLabel: "+ Tambah Kategori", onAction: () => handleOpenModal() } : {})}
       />
 
       {errorMessage && (
@@ -314,7 +319,7 @@ const CategoriesPage = () => {
           columns={columns}
           data={rows}
           itemsPerPage={15}
-          emptyMessage='Belum ada data kategori paket. Klik "+ Tambah Kategori" untuk menambahkan.'
+          emptyMessage={canEdit ? 'Belum ada data kategori paket. Klik "+ Tambah Kategori" untuk menambahkan.' : 'Belum ada data kategori paket.'}
           searchPlaceholder="Cari nama, slug, atau brand..."
           toolbarLeading={<SegmentedTabs tabs={tabs} value={activeTab} onChange={setActiveTab} />}
           renderCell={renderCell}
