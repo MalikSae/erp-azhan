@@ -22,6 +22,8 @@ var (
 	ErrKeputusanTidakBisa      = errors.New("aksi ini tidak bisa dilakukan pada status pengajuan saat ini")
 	ErrNIKAgenTidakValid       = errors.New("NIK harus 16 digit angka")
 	ErrNIKAgenTidakBisaDipakai = errors.New("NIK ini tidak dapat dipakai untuk pendaftaran. Periksa kembali atau hubungi admin")
+	ErrAlasanStatusWajib       = errors.New("alasan perubahan status wajib diisi (5 sampai 500 karakter)")
+	ErrStatusSama              = errors.New("status agen sudah seperti itu")
 	ErrBuktiBelumAda           = errors.New("bukti transfer belum diunggah, pilih bebaskan biaya, setujui bayar menyusul, atau minta unggah ulang")
 )
 
@@ -40,6 +42,25 @@ type Pembayaran struct {
 	CatatanAdmin      *string    `json:"catatan_admin"`
 	CreatedAt         time.Time  `json:"created_at"`
 	Uploads           []Upload   `json:"uploads"`
+	// RiwayatKeputusan hanya diisi untuk layar admin (antrean pengajuan); portal pemohon tidak menerimanya.
+	RiwayatKeputusan []KeputusanLog `json:"riwayat_keputusan,omitempty"`
+}
+
+// KeputusanLog adalah satu keputusan admin atas siklus pengajuan (keputusan_agen_log).
+type KeputusanLog struct {
+	Aksi      string    `json:"aksi"`
+	Catatan   *string   `json:"catatan"`
+	OlehNama  *string   `json:"oleh_nama"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// StatusLog adalah satu perubahan status agen antara aktif dan nonaktif (agen_status_log).
+type StatusLog struct {
+	StatusLama string    `json:"status_lama"`
+	StatusBaru string    `json:"status_baru"`
+	Alasan     string    `json:"alasan"`
+	OlehNama   *string   `json:"oleh_nama"`
+	DiubahAt   time.Time `json:"diubah_at"`
 }
 
 type Upload struct {
@@ -53,7 +74,7 @@ type Upload struct {
 type StatusPortal struct {
 	StatusAgen           string      `json:"status_agen"`
 	KodeReferral         *string     `json:"kode_referral"`
-	FotoURL          *string     `json:"foto_url"`
+	FotoURL              *string     `json:"foto_url"`
 	Domisili             *string     `json:"domisili"`
 	BrandName            string      `json:"brand_name"`
 	BiayaPendaftaranAgen float64     `json:"biaya_pendaftaran_agen"`
@@ -68,7 +89,7 @@ type Pengajuan struct {
 	NamaLengkap  string      `json:"nama_lengkap"`
 	NoHP         *string     `json:"no_hp"`
 	StatusAgen   string      `json:"status_agen"` // 'pengajuan', atau 'aktif'/'nonaktif' bila tinggal pembayaran
-	FotoURL  *string     `json:"foto_url"`
+	FotoURL      *string     `json:"foto_url"`
 	Domisili     *string     `json:"domisili"`
 	JenisKelamin *string     `json:"jenis_kelamin"`
 	TanggalLahir *string     `json:"tanggal_lahir"` // YYYY-MM-DD
@@ -99,4 +120,5 @@ type AlasanRequest struct {
 
 type StatusRequest struct {
 	Status string `json:"status"`
+	Alasan string `json:"alasan"`
 }

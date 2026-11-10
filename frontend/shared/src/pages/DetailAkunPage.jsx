@@ -127,7 +127,7 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
             <p className="text-sm font-heading font-semibold text-neutral-900">
               {akun.upline_akun_id ? <Link to={`/agen/${akun.upline_akun_id}`} className="text-primary-600 hover:underline">{akun.upline_nama}</Link> : 'Tanpa upline'}
             </p>
-            {showBrandColumn && <Button variant="secondary" size="sm" onClick={() => navigate(gantiUpline)}>Ganti upline</Button>}
+            {izin.gantiUpline && <Button variant="secondary" size="sm" onClick={() => navigate(gantiUpline)}>Ganti upline</Button>}
           </MetaBox>
 
           <MetaBox

@@ -21,9 +21,11 @@ import {
   UserRound,
   Wallet,
   Megaphone,
+  Banknote,
+  Trophy,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
-import { listPerubahanJamaah, EVENT_PERUBAHAN_JAMAAH } from 'shared';
+import { listPerubahanJamaah, EVENT_PERUBAHAN_JAMAAH, listPencairanAdmin, EVENT_PENCAIRAN_KOMISI } from 'shared';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
 const Sidebar = ({ isOpen, closeDrawer }) => {
@@ -65,6 +67,27 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     };
   }, [bolehSetujui, location.pathname]);
 
+  // Jumlah pengajuan pencairan komisi yang menunggu keputusan, tampil di menu Pencairan Komisi.
+  const bolehCairkan = hasPermission('agen.payout.approve');
+  const [menungguPencairan, setMenungguPencairan] = useState(0);
+  useEffect(() => {
+    if (!bolehCairkan) return;
+    let batal = false;
+    const hitung = () => listPencairanAdmin({ status: 'pending' }).then((d) => { if (!batal) setMenungguPencairan((d || []).length); }).catch(() => {});
+    hitung();
+    window.addEventListener(EVENT_PENCAIRAN_KOMISI, hitung);
+    return () => {
+      batal = true;
+      window.removeEventListener(EVENT_PENCAIRAN_KOMISI, hitung);
+    };
+  }, [bolehCairkan, location.pathname]);
+
+  // Angka kecil di kanan item menu: path -> { jumlah, keterangan }.
+  const penanda = {
+    '/jamaah': { jumlah: menungguJamaah, keterangan: 'perubahan data menunggu persetujuan' },
+    '/komisi': { jumlah: menungguPencairan, keterangan: 'pengajuan pencairan menunggu keputusan' },
+  };
+
   const toggleGroup = (groupName) => {
     setOpenGroup((prev) => (prev === groupName ? null : groupName));
   };
@@ -87,6 +110,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         { name: 'Daftar Agen', path: '/agen', icon: Users, perm: 'agen.view' },
         { name: 'Riwayat Komisi', path: '/agen/komisi', icon: Wallet, perm: 'komisi.view' },
         { name: 'Pengajuan Agen', path: '/agen/pengajuan', icon: UserCheck, perm: 'agen.approve' },
+        { name: 'Pencairan Komisi', path: '/komisi', icon: Banknote, perm: 'agen.payout.approve' },
+        { name: 'Peringkat Agen', path: '/analytics/peringkat-agen', icon: Trophy, perm: 'agen.view' },
       ],
     },
     {
@@ -228,8 +253,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                             {Icon && <Icon className="w-4 h-4 shrink-0" />}
                             <span className="truncate">{item.name}</span>
                           </div>
-                          {item.path === '/jamaah' && menungguJamaah > 0 && (
-                            <span className="text-[10px] bg-warning-100 text-warning-800 px-1.5 py-0.5 rounded-full font-semibold" title="Perubahan data menunggu persetujuan" aria-label={`${menungguJamaah} perubahan data menunggu persetujuan`}>{menungguJamaah}</span>
+                          {penanda[item.path]?.jumlah > 0 && (
+                            <span className="text-[10px] bg-warning-100 text-warning-800 px-1.5 py-0.5 rounded-full font-semibold" title={penanda[item.path].keterangan} aria-label={`${penanda[item.path].jumlah} ${penanda[item.path].keterangan}`}>{penanda[item.path].jumlah}</span>
                           )}
                           {isInactive && (
                             <span className="text-[10px] bg-neutral-100 text-neutral-400 px-1.5 py-0.5 rounded font-mono">

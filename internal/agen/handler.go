@@ -165,7 +165,7 @@ func (h *Handler) Tolak(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.repo.Tolak(r.Context(), id, identity.GetBrandID(r.Context()), alasan); err != nil {
+	if err := h.repo.Tolak(r.Context(), id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), alasan); err != nil {
 		handleError(w, err)
 		return
 	}
@@ -184,7 +184,7 @@ func (h *Handler) UbahStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
-	if err := h.repo.UbahStatus(r.Context(), id, identity.GetBrandID(r.Context()), strings.TrimSpace(req.Status)); err != nil {
+	if err := h.repo.UbahStatus(r.Context(), id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), strings.TrimSpace(req.Status), req.Alasan); err != nil {
 		handleError(w, err)
 		return
 	}
@@ -277,11 +277,11 @@ func handleError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrTidakAdaPengajuan), errors.Is(err, ErrAksiTidakValid), errors.Is(err, ErrCatatanWajib),
 		errors.Is(err, ErrNIKAgenTidakValid), errors.Is(err, ErrNIKAgenTidakBisaDipakai):
 		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrStatusTidakValid):
+	case errors.Is(err, ErrStatusTidakValid), errors.Is(err, ErrAlasanStatusWajib):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrSudahMengajukan), errors.Is(err, ErrBukanPengajuan),
 		errors.Is(err, ErrPembayaranFinal), errors.Is(err, ErrPembayaranBukanMenunggu),
-		errors.Is(err, ErrSiklusDitutup), errors.Is(err, ErrKeputusanTidakBisa), errors.Is(err, ErrBuktiBelumAda):
+		errors.Is(err, ErrSiklusDitutup), errors.Is(err, ErrKeputusanTidakBisa), errors.Is(err, ErrBuktiBelumAda), errors.Is(err, ErrStatusSama):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] agen: %v", err)

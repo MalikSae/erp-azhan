@@ -34,103 +34,135 @@ type KeputusanRequest struct {
 func keputusanTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, adminID int64, req KeputusanRequest) error {
 	req.Aksi = strings.TrimSpace(req.Aksi)
 	req.Catatan = strings.TrimSpace(req.Catatan)
-	switch req.Aksi {
-	case AksiSetujui:
-	case AksiBebaskan, AksiMintaUnggahUlang, AksiTolak, AksiSetujuiBayarMenyusul:
-		if utf8.RuneCountInString(req.Catatan) < 3 {
-			return ErrCatatanWajib
-		}
-	default:
-		return ErrAksiTidakValid
-	}
-
-	var status string
-	var aBrand int64
-	err := tx.QueryRowContext(ctx, `SELECT status_agen, brand_id FROM customer_accounts WHERE id = ? FOR UPDATE`, akunID).Scan(&status, &aBrand)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != aBrand) {
-		return ErrNotFound
-	}
+	ppaID, err := prosesKeputusanTx(ctx, tx, akunID, brandID, adminID, req)
 	if err != nil {
-		return fmt.Errorf("agen.Keputusan kunci akun: %w", err)
-	}
-	var ppaID int64
-	var payStatus, keputusan string
-	var nominal float64
-	var bukti sql.NullString
-	err = tx.QueryRowContext(ctx, `
-		SELECT id, status, nominal_tagihan, bukti_transfer_url, keputusan_agen FROM pembayaran_pendaftaran_agen
-		WHERE akun_id = ? ORDER BY id DESC LIMIT 1 FOR UPDATE`, akunID).Scan(&ppaID, &payStatus, &nominal, &bukti, &keputusan)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrTidakAdaPengajuan
-	}
-	if err != nil {
-		return fmt.Errorf("agen.Keputusan baca pembayaran: %w", err)
-	}
-	final := payStatus == "terverifikasi" || payStatus == "dibebaskan"
-	pengajuan := status == "pengajuan"
-	susulan := status == "aktif" && keputusan == "disetujui" && !final && nominal > 0
-	if !pengajuan && !susulan {
-		return ErrKeputusanTidakBisa
-	}
-	catatan := func() error {
-		if req.Catatan == "" {
-			return nil
-		}
-		_, err := tx.ExecContext(ctx, `UPDATE pembayaran_pendaftaran_agen SET catatan_admin = ? WHERE id = ?`, req.Catatan, ppaID)
 		return err
 	}
+	return catatRiwayatKeputusan(ctx, tx, ppaID, akunID, adminID, req.Aksi, req.Catatan)
+}
 
-	switch req.Aksi {
-	case AksiSetujui:
-		if !final {
-			if payStatus != "menunggu_verifikasi" || !bukti.Valid || bukti.String == "" {
-				return ErrBuktiBelumAda
+// catatRiwayatKeputusan menyimpan satu keputusan beserta catatan dan pelakunya. Kolom catatan_admin di siklus
+// tagihan hanya memuat catatan terakhir; riwayat ini tidak pernah tertimpa.
+func catatRiwayatKeputusan(ctx context.Context, tx *sql.Tx, ppaID, akunID, adminID int64, aksi, catatan string) error {
+	var pelaku, isi any
+	if adminID > 0 {
+		pelaku = adminID
+	}
+	if catatan != "" {
+		isi = catatan
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO keputusan_agen_log (pembayaran_pendaftaran_agen_id, akun_id, aksi, catatan, admin_id) VALUES (?, ?, ?, ?, ?)`,
+		ppaID, akunID, aksi, isi, pelaku); err != nil {
+		return fmt.Errorf("agen: catat riwayat keputusan: %w", err)
+	}
+	return nil
+}
+
+// prosesKeputusanTx menjalankan aksinya dan mengembalikan id siklus tagihan yang diputuskan.
+func prosesKeputusanTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, adminID int64, req KeputusanRequest) (int64, error) {
+	var ppaID int64
+	err := func() error {
+		switch req.Aksi {
+		case AksiSetujui:
+		case AksiBebaskan, AksiMintaUnggahUlang, AksiTolak, AksiSetujuiBayarMenyusul:
+			if utf8.RuneCountInString(req.Catatan) < 3 {
+				return ErrCatatanWajib
 			}
-			if err := verifikasiPembayaranTx(ctx, tx, ppaID, brandID, adminID); err != nil {
+		default:
+			return ErrAksiTidakValid
+		}
+
+		var status string
+		var aBrand int64
+		err := tx.QueryRowContext(ctx, `SELECT status_agen, brand_id FROM customer_accounts WHERE id = ? FOR UPDATE`, akunID).Scan(&status, &aBrand)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != aBrand) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("agen.Keputusan kunci akun: %w", err)
+		}
+		var payStatus, keputusan string
+		var nominal float64
+		var bukti sql.NullString
+		err = tx.QueryRowContext(ctx, `
+		SELECT id, status, nominal_tagihan, bukti_transfer_url, keputusan_agen FROM pembayaran_pendaftaran_agen
+		WHERE akun_id = ? ORDER BY id DESC LIMIT 1 FOR UPDATE`, akunID).Scan(&ppaID, &payStatus, &nominal, &bukti, &keputusan)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrTidakAdaPengajuan
+		}
+		if err != nil {
+			return fmt.Errorf("agen.Keputusan baca pembayaran: %w", err)
+		}
+		final := payStatus == "terverifikasi" || payStatus == "dibebaskan"
+		pengajuan := status == "pengajuan"
+		// Tagihan agen yang sudah disetujui tetap bisa diselesaikan walau agennya dinonaktifkan: status keagenan
+		// dan utang biaya pendaftaran dua hal terpisah.
+		susulan := (status == "aktif" || status == "nonaktif") && keputusan == "disetujui" && !final && nominal > 0
+		if !pengajuan && !susulan {
+			return ErrKeputusanTidakBisa
+		}
+		catatan := func() error {
+			if req.Catatan == "" {
+				return nil
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE pembayaran_pendaftaran_agen SET catatan_admin = ? WHERE id = ?`, req.Catatan, ppaID)
+			return err
+		}
+
+		switch req.Aksi {
+		case AksiSetujui:
+			if !final {
+				if payStatus != "menunggu_verifikasi" || !bukti.Valid || bukti.String == "" {
+					return ErrBuktiBelumAda
+				}
+				if err := verifikasiPembayaranTx(ctx, tx, ppaID, brandID, adminID); err != nil {
+					return err
+				}
+			}
+			if pengajuan {
+				if err := setujuiTx(ctx, tx, akunID, brandID, adminID); err != nil {
+					return err
+				}
+			}
+			return catatan()
+		case AksiBebaskan:
+			if final {
+				return ErrPembayaranFinal
+			}
+			if _, err := lockPembayaran(ctx, tx, ppaID, brandID); err != nil {
 				return err
 			}
-		}
-		if pengajuan {
+			if _, err := tx.ExecContext(ctx, `
+			UPDATE pembayaran_pendaftaran_agen SET status = 'dibebaskan', catatan_admin = ?, diverifikasi_oleh = ?, diverifikasi_at = NOW()
+			WHERE id = ?`, req.Catatan, adminID, ppaID); err != nil {
+				return fmt.Errorf("agen.Keputusan bebaskan: %w", err)
+			}
+			if pengajuan {
+				return setujuiTx(ctx, tx, akunID, brandID, adminID)
+			}
+			return nil
+		case AksiMintaUnggahUlang:
+			if err := tolakPembayaranTx(ctx, tx, ppaID, brandID, adminID, req.Catatan); err != nil {
+				return err
+			}
+			return nil // status agen tetap; upload baru mengembalikan tagihan ke antrian (insertUpload)
+		case AksiTolak:
+			if !pengajuan {
+				return ErrKeputusanTidakBisa
+			}
+			return tolakTx(ctx, tx, akunID, brandID, adminID, req.Catatan)
+		default: // AksiSetujuiBayarMenyusul
+			if !pengajuan || final || nominal <= 0 {
+				return ErrKeputusanTidakBisa
+			}
 			if err := setujuiTx(ctx, tx, akunID, brandID, adminID); err != nil {
 				return err
 			}
+			return catatan()
 		}
-		return catatan()
-	case AksiBebaskan:
-		if final {
-			return ErrPembayaranFinal
-		}
-		if _, err := lockPembayaran(ctx, tx, ppaID, brandID); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `
-			UPDATE pembayaran_pendaftaran_agen SET status = 'dibebaskan', catatan_admin = ?, diverifikasi_oleh = ?, diverifikasi_at = NOW()
-			WHERE id = ?`, req.Catatan, adminID, ppaID); err != nil {
-			return fmt.Errorf("agen.Keputusan bebaskan: %w", err)
-		}
-		if pengajuan {
-			return setujuiTx(ctx, tx, akunID, brandID, adminID)
-		}
-		return nil
-	case AksiMintaUnggahUlang:
-		if err := tolakPembayaranTx(ctx, tx, ppaID, brandID, adminID, req.Catatan); err != nil {
-			return err
-		}
-		return nil // status agen tetap; upload baru mengembalikan tagihan ke antrian (insertUpload)
-	case AksiTolak:
-		if !pengajuan {
-			return ErrKeputusanTidakBisa
-		}
-		return tolakTx(ctx, tx, akunID, brandID, req.Catatan)
-	default: // AksiSetujuiBayarMenyusul
-		if !pengajuan || final || nominal <= 0 {
-			return ErrKeputusanTidakBisa
-		}
-		if err := setujuiTx(ctx, tx, akunID, brandID, adminID); err != nil {
-			return err
-		}
-		return catatan()
-	}
+	}()
+	return ppaID, err
 }
 
 func (r *Repository) Keputusan(ctx context.Context, akunID int64, brandID *int64, adminID int64, req KeputusanRequest) error {

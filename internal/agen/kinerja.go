@@ -307,6 +307,8 @@ type DetailAgen struct {
 	Pencairan []Pencairan `json:"pencairan"`
 	// g. Riwayat siklus pengajuan (terbaru dulu)
 	Siklus []Pembayaran `json:"siklus"`
+	// h. Riwayat perubahan status aktif dan nonaktif (terbaru dulu)
+	RiwayatStatus []StatusLog `json:"riwayat_status"`
 }
 
 func getDetailAgen(ctx context.Context, q querier, akunID int64, brandID *int64) (*DetailAgen, error) {
@@ -346,6 +348,9 @@ func getDetailAgen(ctx context.Context, q querier, akunID int64, brandID *int64)
 		return nil, err
 	}
 	if d.Siklus, err = listSiklus(ctx, q, akunID); err != nil {
+		return nil, err
+	}
+	if d.RiwayatStatus, err = listRiwayatStatus(ctx, q, akunID); err != nil {
 		return nil, err
 	}
 	return &d, nil

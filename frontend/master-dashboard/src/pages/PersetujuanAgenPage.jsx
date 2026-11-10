@@ -48,12 +48,15 @@ const AKSI_META = {
   [AKSI.SETUJUI]: {
     label: 'Setujui',
     desc: 'Bukti valid atau biaya Rp0. Agen aktif, tagihan lunas, kode referral dibuat.',
+    descSusulan: 'Bukti valid. Tagihan pendaftaran dicatat lunas; status agen tidak berubah.',
     variant: 'primary',
     wajibCatatan: false,
   },
   [AKSI.BEBASKAN]: {
     label: 'Bebaskan biaya',
     desc: 'Agen aktif, tagihan dihapus tanpa pembayaran.',
+    descSusulan: 'Tagihan pendaftaran dihapus tanpa pembayaran; status agen tidak berubah.',
+    labelCatatan: 'Catatan internal (tidak dikirim ke pemohon)',
     variant: 'primary',
     wajibCatatan: true,
     placeholder: 'Mis. keluarga pemilik travel, biaya dibebaskan',
@@ -61,6 +64,8 @@ const AKSI_META = {
   [AKSI.MINTA_UNGGAH_ULANG]: {
     label: 'Minta unggah ulang',
     desc: 'Bukti kurang jelas. Pengajuan tetap menunggu, kembali ke antrean setelah pemohon mengunggah lagi.',
+    descSusulan: 'Bukti kurang jelas. Tagihan tetap terbuka sampai agen mengunggah bukti baru.',
+    labelCatatan: 'Pesan untuk pemohon',
     variant: 'secondary',
     wajibCatatan: true,
     placeholder: 'Mis. foto buram, nominal tidak terbaca (dibaca pemohon di portal)',
@@ -71,6 +76,7 @@ const AKSI_META = {
     variant: 'danger',
     wajibCatatan: true,
     placeholder: 'Alasan penolakan (dibaca pemohon)',
+    labelCatatan: 'Alasan penolakan (dibaca pemohon)',
   },
   [AKSI.SETUJUI_BAYAR_MENYUSUL]: {
     label: 'Setujui, bayar menyusul',
@@ -78,6 +84,7 @@ const AKSI_META = {
     variant: 'primary',
     wajibCatatan: true,
     placeholder: 'Mis. transfer menyusul pekan depan, dikonfirmasi lewat WhatsApp',
+    labelCatatan: 'Catatan internal (tidak dikirim ke pemohon)',
   },
 };
 
@@ -90,14 +97,15 @@ function aksiTersedia(row) {
   const berbayar = Number(p.nominal_tagihan) > 0;
   const adaBukti = p.status === 'menunggu_verifikasi' && Boolean(p.bukti_transfer_url);
   const pengajuan = row.status_agen === 'pengajuan';
-  const susulan = row.status_agen === 'aktif' && p.keputusan_agen === 'disetujui' && !final && berbayar;
+  // Tagihan agen yang sudah disetujui tetap bisa diputuskan walau agennya dinonaktifkan.
+  const susulan = (row.status_agen === 'aktif' || row.status_agen === 'nonaktif') && p.keputusan_agen === 'disetujui' && !final && berbayar;
   if (!pengajuan && !susulan) return [];
 
   const setujui = { aksi: AKSI.SETUJUI };
   if (!final && !adaBukti) setujui.alasanNonaktif = 'Bukti transfer belum ada atau sudah ditolak. Pilih bebaskan, bayar menyusul, atau tunggu unggahan.';
   const daftar = [setujui];
   if (!final) daftar.push({ aksi: AKSI.BEBASKAN });
-  if (pengajuan && !final && berbayar) {
+  if ((pengajuan || susulan) && !final && berbayar) {
     daftar.push({ aksi: AKSI.MINTA_UNGGAH_ULANG, ...(adaBukti ? {} : { alasanNonaktif: 'Hanya untuk bukti yang menunggu verifikasi.' }) });
   }
   if (pengajuan) daftar.push({ aksi: AKSI.TOLAK });
@@ -184,7 +192,8 @@ export default function PersetujuanAgenPage() {
     setSaving(true);
     setActionError('');
     try {
-      await keputusanAgen(selected.akun_id, aksi, catatan.trim());
+      // Catatan hanya dikirim untuk aksi yang memintanya; teks dari pilihan aksi sebelumnya tidak ikut.
+      await keputusanAgen(selected.akun_id, aksi, meta.wajibCatatan ? catatan.trim() : '');
       await refreshSelected();
     } catch (err) {
       setActionError(err.response?.data?.error || 'Keputusan gagal disimpan.');
@@ -256,9 +265,9 @@ export default function PersetujuanAgenPage() {
 
       {!loading && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatTile icon={ClipboardList} variant="primary" value={items.length} label="Total Pengajuan" />
+          <StatTile icon={ClipboardList} variant="primary" value={items.length} label="Total Antrean" />
           <StatTile icon={UserCheck} variant="warning" value={items.filter((it) => it.status_agen === 'pengajuan').length} label="Menunggu Keputusan" />
-          <StatTile icon={Banknote} variant="info" value={items.filter((it) => it.pembayaran?.status === 'menunggu_verifikasi').length} label="Bukti Perlu Diperiksa" />
+          <StatTile icon={Banknote} variant="info" value={items.filter((it) => it.pembayaran?.status === 'menunggu_verifikasi' && it.pembayaran?.bukti_transfer_url).length} label="Bukti Perlu Diperiksa" />
         </div>
       )}
 
@@ -413,6 +422,18 @@ export default function PersetujuanAgenPage() {
               </div>
             </div>
 
+            {selected.pembayaran?.riwayat_keputusan?.length > 0 && (
+              <div className="rounded-xl border border-neutral-200 p-3 space-y-2">
+                <p className="text-xs font-bold text-neutral-700">Riwayat keputusan</p>
+                {selected.pembayaran.riwayat_keputusan.map((k, i) => (
+                  <div key={i} className="text-xs text-neutral-700 border-t border-neutral-100 pt-2 first:border-t-0 first:pt-0">
+                    <p><span className="font-semibold text-neutral-900">{AKSI_META[k.aksi]?.label || k.aksi}</span> oleh {k.oleh_nama || 'admin'} pada {dateLabel(k.created_at)}</p>
+                    {k.catatan && <p className="mt-0.5 text-neutral-500 whitespace-normal">{k.catatan}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {pilihan.length === 0 ? (
               <p className="text-xs text-neutral-500">Tidak ada keputusan yang bisa diambil pada status ini.</p>
             ) : (
@@ -437,12 +458,12 @@ export default function PersetujuanAgenPage() {
                         value={kode}
                         checked={aktif}
                         disabled={Boolean(alasanNonaktif)}
-                        onChange={() => { setAksi(kode); setActionError(''); }}
+                        onChange={() => { setAksi(kode); setCatatan(''); setActionError(''); }}
                         className="mt-0.5 w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500"
                       />
                       <span className="min-w-0">
                         <span className="block font-semibold text-neutral-900">{meta.label}</span>
-                        <span className="block text-neutral-500 mt-0.5">{meta.desc}</span>
+                        <span className="block text-neutral-500 mt-0.5">{selected.status_agen !== 'pengajuan' && meta.descSusulan ? meta.descSusulan : meta.desc}</span>
                         {alasanNonaktif && <span className="block text-neutral-500 mt-0.5 italic">{alasanNonaktif}</span>}
                         {kode === AKSI.SETUJUI && selected.peringatan_nik?.length > 0 && !alasanNonaktif && (
                           <span className="mt-1 flex items-center gap-1 font-semibold text-warning-700"><TriangleAlert size={12} />Ada peringatan NIK di atas. Periksa dulu.</span>
@@ -455,7 +476,7 @@ export default function PersetujuanAgenPage() {
                 {aksiMeta?.wajibCatatan && (
                   <div className="space-y-1.5 pt-1">
                     <label htmlFor="catatan-keputusan" className="block text-xs font-bold text-neutral-700">
-                      {aksi === AKSI.TOLAK ? 'Alasan penolakan' : 'Catatan admin'} <span className="text-danger-600">*</span>
+                      {aksiMeta.labelCatatan || 'Catatan admin'} <span className="text-danger-600">*</span>
                     </label>
                     <textarea
                       id="catatan-keputusan"

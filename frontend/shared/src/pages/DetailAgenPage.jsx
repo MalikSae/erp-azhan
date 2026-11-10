@@ -40,6 +40,7 @@ const StatusDot = ({ variant = 'neutral', children }) => {
 const bayarMeta = {
   menunggu_verifikasi: { label: 'Menunggu verifikasi', variant: 'pending' },
   terverifikasi: { label: 'Terverifikasi', variant: 'success' },
+  dibebaskan: { label: 'Dibebaskan', variant: 'success' },
   ditolak: { label: 'Ditolak', variant: 'danger' },
 };
 const keputusanMeta = {
@@ -64,6 +65,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [alasan, setAlasan] = useState('');
   const fotoSrc = useProtectedImage(agen?.foto_url);
 
   const load = useCallback(async () => {
@@ -81,12 +83,18 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
   useEffect(() => { load(); }, [load]);
 
   const targetStatus = agen?.status_agen === 'aktif' ? 'nonaktif' : 'aktif';
+  const alasanValid = alasan.trim().length >= 5 && alasan.trim().length <= 500;
   const toggle = async () => {
+    if (!alasanValid) {
+      setActionError('Alasan wajib diisi (5 sampai 500 karakter).');
+      return;
+    }
     setSaving(true);
     setActionError('');
     try {
-      await ubahStatusAgen(agen.akun_id, targetStatus);
+      await ubahStatusAgen(agen.akun_id, targetStatus, alasan.trim());
       setConfirmOpen(false);
+      setAlasan('');
       await load();
     } catch (err) {
       setActionError(err.response?.data?.error || 'Status agen gagal diubah.');
@@ -105,7 +113,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
   return (
     <div className="space-y-6">
       <PageHeader title={agen.nama_lengkap} onBack={() => navigate('/agen')}>
-        <Button variant={agen.status_agen === 'aktif' ? 'danger-light' : 'primary'} onClick={() => setConfirmOpen(true)}>
+        <Button variant={agen.status_agen === 'aktif' ? 'danger-light' : 'primary'} onClick={() => { setAlasan(''); setActionError(''); setConfirmOpen(true); }}>
           {agen.status_agen === 'aktif' ? 'Nonaktifkan Agen' : 'Aktifkan Kembali'}
         </Button>
       </PageHeader>
@@ -212,6 +220,23 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
             </div>
           </MetaBox>
 
+          {/* h. Riwayat perubahan status aktif dan nonaktif */}
+          {agen.riwayat_status?.length > 0 && (
+            <MetaBox title="Riwayat Status" icon={<History size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+              <div className="space-y-3">
+                {agen.riwayat_status.map((r, i) => (
+                  <div key={i} className="text-xs text-neutral-700 border-b border-neutral-100 pb-2 last:border-b-0 last:pb-0">
+                    <p className="font-heading font-semibold text-neutral-900">
+                      {STATUS_AGEN[r.status_lama]?.label || r.status_lama} ke {STATUS_AGEN[r.status_baru]?.label || r.status_baru}
+                    </p>
+                    <p className="text-[11px] text-neutral-400">{dateLabel(r.diubah_at)} oleh {r.oleh_nama || 'admin'}</p>
+                    <p className="mt-1">{r.alasan}</p>
+                  </div>
+                ))}
+              </div>
+            </MetaBox>
+          )}
+
           {/* c. Jaringan & d. Performa closing */}
           <MetaBox title="Jaringan & Closing" icon={<Network size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="space-y-2">
@@ -239,7 +264,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
         footer={
           <div className="flex justify-end gap-2 w-full">
             <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={saving}>Batal</Button>
-            <Button variant={targetStatus === 'nonaktif' ? 'danger' : 'primary'} onClick={toggle} isLoading={saving}>
+            <Button variant={targetStatus === 'nonaktif' ? 'danger' : 'primary'} onClick={toggle} isLoading={saving} disabled={!alasanValid}>
               {targetStatus === 'nonaktif' ? 'Nonaktifkan' : 'Aktifkan'}
             </Button>
           </div>
@@ -252,6 +277,20 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
               ? `${agen.nama_lengkap} tidak bisa membuat booking dan tidak menerima komisi baru (termasuk sebagai upline) selama nonaktif.`
               : `${agen.nama_lengkap} kembali bisa membuat booking dan menerima komisi.`}
           </p>
+          <div className="space-y-1.5">
+            <label htmlFor="alasan-status-agen" className="block text-xs font-bold text-neutral-700">Alasan <span className="text-danger-600">*</span></label>
+            <textarea
+              id="alasan-status-agen"
+              value={alasan}
+              onChange={(e) => setAlasan(e.target.value)}
+              rows={3}
+              maxLength={500}
+              disabled={saving}
+              placeholder={targetStatus === 'nonaktif' ? 'Mis. melanggar ketentuan program, atas permintaan agen' : 'Mis. sudah diklarifikasi, agen kembali aktif'}
+              className="w-full rounded-lg border border-neutral-300 bg-white p-2.5 text-xs text-neutral-800 placeholder-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+            <p className="text-[11px] text-neutral-400">Minimal 5 karakter. Alasan, nama Anda, dan waktunya tercatat di riwayat status agen.</p>
+          </div>
         </div>
       </Modal>
     </div>

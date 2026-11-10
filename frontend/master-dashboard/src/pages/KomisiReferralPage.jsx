@@ -4,6 +4,7 @@ import {
   listPencairanAdmin,
   setujuiPencairan,
   tolakPencairan,
+  EVENT_PENCAIRAN_KOMISI,
   uploadMedia,
   openProtectedMedia,
   listBrands,
@@ -122,6 +123,7 @@ export default function KomisiReferralPage() {
       }
       setSelected(null);
       await load();
+      window.dispatchEvent(new Event(EVENT_PENCAIRAN_KOMISI));
     } catch (err) {
       setActionError(err.response?.data?.error || 'Aksi gagal diproses.');
     } finally {
