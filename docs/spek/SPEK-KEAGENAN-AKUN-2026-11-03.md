@@ -137,6 +137,10 @@ Admin Master dapat memindahkan jamaah ke agen lain, dan memasangkan atau menggan
 
 Saldo tersedia: komisi aktif yang sudah lewat 3 hari kalender dari `berangkat_tanggal` (K26), dikurangi pencairan yang pending dan disetujui. Saldo tertahan: komisi aktif yang belum sampai tanggal itu. Komisi batal (K25) tidak dihitung, dan saldo tersedia boleh negatif (K27). Pencairan minimal Rp500.000, satu pengajuan pending, disetujui Admin Master (`agen.payout.approve`). Saldo hanya terdiri dari dua jenis komisi di atas. Penerima dan pemilik saldo adalah akun. Komisi dari booking yang dibatalkan (status `batal`) setelah lunas tetap dihitung dan menjadi saldo tersedia pada waktunya (K20).
 
+Agen berstatus `nonaktif` tidak dapat mengajukan pencairan, karena portal agennya tertutup. Saldonya tidak hangus dan tetap tercatat. Bila saldo itu perlu dibayar, admin mengaktifkan kembali agennya, agen mengajukan pencairan, lalu admin menonaktifkannya lagi (keputusan 2026-11-10).
+
+Dua hal ditunda sampai fitur repeat order dan cashback dinyalakan kembali: apakah komisi repeat order ikut saldo yang bisa dicairkan, dan apakah pemakaian kredit cashback ikut batas diskon 10%. Selama fitur itu mati, rute kredit cashback menolak semua permintaan.
+
 ## 6. Alur pendaftaran agen
 
 ### 6.1 Pintu masuk

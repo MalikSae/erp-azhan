@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/media"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -73,16 +73,19 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 // atau otomatis scoped untuk admin brand.
 func (h *Handler) ListAllPayments(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
-	if status != "" && status != "pending" && status != "confirmed" && status != "rejected" && status != "void" {
-		writeError(w, 400, "status tidak valid")
+	switch status {
+	case "", StatusPending, StatusConfirmed, StatusRejected, StatusVoid:
+	default:
+		writeError(w, http.StatusBadRequest, "status tidak valid")
 		return
 	}
 	items, err := h.repo.ListAll(r.Context(), identity.GetBrandID(r.Context()), status)
 	if err != nil {
-		writeError(w, 500, "gagal mengambil daftar pembayaran")
+		log.Printf("[ERROR] payment: %v", err)
+		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar pembayaran")
 		return
 	}
-	writeJSON(w, 200, items)
+	writeJSON(w, http.StatusOK, items)
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -102,7 +105,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Endpoint admin: sumber selalu "admin" (langsung terkonfirmasi); nilai dari klien diabaikan.
-	req.Source = "admin"
+	req.Source = SourceAdmin
 
 	if req.Jumlah <= 0 {
 		writeError(w, http.StatusBadRequest, "jumlah pembayaran harus lebih dari 0")
@@ -110,13 +113,9 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 	// Pembayaran admin langsung terkonfirmasi; tanggal masa depan merusak laporan (JB-10).
 	// Aturan sama dengan konfirmasi transfer portal (JM-22).
-	if req.Tanggal != nil && strings.TrimSpace(*req.Tanggal) != "" {
-		tgl, err := time.Parse("2006-01-02", strings.TrimSpace(*req.Tanggal))
-		today := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
-		if err != nil || tgl.Format("2006-01-02") > today {
-			writeError(w, http.StatusBadRequest, "tanggal pembayaran tidak valid atau berada di masa depan")
-			return
-		}
+	if req.Tanggal != nil && strings.TrimSpace(*req.Tanggal) != "" && !shared.TanggalTidakDiMasaDepan(*req.Tanggal) {
+		writeError(w, http.StatusBadRequest, "tanggal pembayaran tidak valid atau berada di masa depan")
+		return
 	}
 
 	// Aturan catat pembayaran oleh admin: transfer wajib menyebut rekening tujuan,
@@ -156,7 +155,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		trimmed := strings.TrimSpace(*req.BuktiURL)
 		if trimmed == "" {
 			req.BuktiURL = nil
-		} else if err := media.ValidateAdminPaymentProof(r.Context(), h.repo.db, trimmed, brandID); err != nil {
+		} else if err := h.repo.ValidasiBuktiAdmin(r.Context(), trimmed, brandID); err != nil {
 			var uploadErr *media.UploadError
 			if errors.As(err, &uploadErr) {
 				writeError(w, http.StatusBadRequest, uploadErr.Message)
@@ -181,13 +180,14 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validasi status booking dan nilai tidak boleh melebihi sisa tagihan
+	// Pemeriksaan awal tanpa kunci, hanya supaya admin mendapat pesan yang jelas (sudah lunas, sisa tagihan).
+	// Penentu sebenarnya ada di repo.Create, yang mengulanginya setelah baris booking dikunci.
 	status, totalHarga, totalPaid, err := h.repo.GetBookingTotalAndPaid(r.Context(), bookingID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
-	if status == "draft" {
+	if status == bookingDraft {
 		writeError(w, http.StatusBadRequest, "Booking ini masih berstatus draft, pembayaran belum bisa diproses. Selesaikan/finalisasi booking terlebih dahulu.")
 		return
 	}
@@ -230,11 +230,11 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Status != "confirmed" && req.Status != "rejected" {
+	if req.Status != StatusConfirmed && req.Status != StatusRejected {
 		writeError(w, http.StatusBadRequest, "status harus confirmed atau rejected")
 		return
 	}
-	if req.Status == "rejected" && (req.RejectionReason == nil || len(*req.RejectionReason) < 3) {
+	if req.Status == StatusRejected && (req.RejectionReason == nil || len(*req.RejectionReason) < 3) {
 		writeError(w, http.StatusBadRequest, "alasan penolakan wajib diisi")
 		return
 	}
@@ -350,10 +350,14 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrCannotDelete):
 		writeError(w, http.StatusConflict, "tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
-	case errors.Is(err, ErrSeatUnavailable), errors.Is(err, ErrOverpayment), errors.Is(err, ErrBookingClosed),
-		errors.Is(err, ErrNotVoidable), errors.Is(err, ErrVoidBelowRefund):
-		writeError(w, http.StatusConflict, err.Error())
 	default:
+		// Pesan bisnis ditampilkan apa adanya, tanpa awalan teknis yang ditambahkan saat error dibungkus.
+		for _, bisnis := range []error{ErrSeatUnavailable, ErrOverpayment, ErrBookingClosed, ErrNotVoidable, ErrVoidBelowRefund} {
+			if errors.Is(err, bisnis) {
+				writeError(w, http.StatusConflict, bisnis.Error())
+				return
+			}
+		}
 		log.Printf("[ERROR] payment: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
 	}

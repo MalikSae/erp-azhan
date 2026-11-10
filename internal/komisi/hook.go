@@ -5,12 +5,13 @@ package komisi
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
 
 // OnBookingLunas adalah satu-satunya titik yang dipanggil setiap kali status
 // booking berubah menjadi 'lunas', di dalam transaksi yang sama dengan
 // perubahan status. Pemanggil saat ini:
-//   - payment.syncBookingStatusTx (pembayaran dikonfirmasi/ditolak/dihapus)
+//   - payment.SyncBookingStatusTx (pembayaran dikonfirmasi, ditolak, atau dibatalkan lewat void)
 //   - booking.recalculateTotalTx (add-on/diskon berubah)
 //
 // Booking bisa mundur dari 'lunas' ke 'dp' lalu naik lagi, jadi fungsi ini bisa
@@ -23,8 +24,9 @@ import (
 // di kode produksi.
 var OnBookingLunas = ProcessBookingLunas
 
-// Nominal efektif komisi satu jadwal: nilai jadwal bila diisi (termasuk 0 = sengaja tanpa komisi),
-// selain itu bawaan brand. Bawaan brand 0 berarti brand belum ikut program, sehingga hasilnya NULL.
+// Nominal efektif komisi satu paket (tabel schedules): nilai paket bila diisi (termasuk 0 = sengaja tanpa
+// komisi), selain itu komisi bawaan brand. Bawaan brand kosong (tersimpan 0) berarti brand belum ikut
+// program, sehingga hasilnya NULL.
 // Dipakai dengan alias tabel s (schedules) dan br (brands).
 const (
 	SQLKomisiLangsungEfektif = `COALESCE(s.nominal_komisi_langsung, NULLIF(br.ujroh_closing, 0))`
@@ -43,5 +45,8 @@ func SnapshotNominal(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 		SET b.snapshot_komisi_langsung = `+SQLKomisiLangsungEfektif+`,
 		    b.snapshot_bonus_pembinaan = `+SQLBonusPembinaanEfektif+`
 		WHERE b.id = ?`, bookingID)
-	return err
+	if err != nil {
+		return fmt.Errorf("komisi: snapshot nominal booking %d: %w", bookingID, err)
+	}
+	return nil
 }

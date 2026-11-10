@@ -3,6 +3,7 @@ package komisi
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -22,16 +23,16 @@ func ReadCashback(ctx context.Context, db *sql.DB, id int64) (*CashbackView, err
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT booking_id,nominal,'diterima',created_at FROM transaksi_komisi WHERE akun_penerima_id=? AND jenis='cashback' AND dibatalkan_at IS NULL UNION ALL SELECT booking_id,-nominal,'dipakai',created_at FROM pemakaian_cashback WHERE akun_id=? ORDER BY created_at DESC`, id, id)
+	rows, err := db.QueryContext(ctx, `SELECT booking_id,nominal,'diterima',created_at FROM transaksi_komisi WHERE akun_penerima_id=? AND jenis=? AND dibatalkan_at IS NULL UNION ALL SELECT booking_id,-nominal,'dipakai',created_at FROM pemakaian_cashback WHERE akun_id=? ORDER BY created_at DESC`, id, JenisCashback, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("komisi: baca mutasi cashback: %w", err)
 	}
 	defer rows.Close()
 	v := &CashbackView{Balance: saldo.KreditCashback, Items: []CashbackMutation{}}
 	for rows.Next() {
 		var m CashbackMutation
 		if err = rows.Scan(&m.BookingID, &m.Nominal, &m.Jenis, &m.CreatedAt); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("komisi: scan mutasi cashback: %w", err)
 		}
 		v.Items = append(v.Items, m)
 	}

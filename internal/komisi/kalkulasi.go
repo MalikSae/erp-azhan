@@ -87,7 +87,7 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 			continue
 		}
 
-		// Repeat order: 50% komisi langsung ke agen, 50% cashback ke jamaah.
+		// Repeat order: 50% komisi langsung ke agen, 50% cashback ke akun pemesan booking.
 		if !positive(langsung) {
 			continue
 		}

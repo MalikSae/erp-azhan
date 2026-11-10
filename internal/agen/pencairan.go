@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/komisi"
+	"erp-azhan/api/internal/shared"
 )
 
 // Pencairan saldo agen: A7 (agen mengajukan) dan C1 (Admin Master memproses,
@@ -61,7 +62,7 @@ type PencairanAdmin struct {
 	BrandID        int64     `json:"brand_id"`
 	BrandName      string    `json:"brand_name"`
 	SaldoTersedia  float64   `json:"saldo_tersedia"` // sudah dikurangi pengajuan ini bila pending
-	DiprosesOlehNm *string   `json:"diproses_oleh_nama"`
+	DiprosesOlehNama *string `json:"diproses_oleh_nama"`
 	BuktiURL       *string   `json:"bukti_transfer_keluar_url"`
 	DiajukanAt     time.Time `json:"diajukan_at"`
 }
@@ -77,7 +78,7 @@ func (req *AjukanPencairanRequest) normalize() error {
 	if strings.Trim(req.Nomor, "0123456789 -") != "" {
 		return ErrRekeningTidakLengkap
 	}
-	if req.Nominal < MinimalPencairan || req.Nominal != float64(int64(req.Nominal)) {
+	if req.Nominal < MinimalPencairan || !shared.RupiahBulat(req.Nominal) {
 		return ErrPencairanMinimal
 	}
 	return nil
@@ -192,7 +193,8 @@ func lockPencairan(ctx context.Context, tx *sql.Tx, id int64) (agenID int64, err
 	if status != "pending" {
 		return 0, ErrPencairanBukanPending
 	}
-	if _, err := tx.ExecContext(ctx, `SELECT id FROM customer_accounts WHERE id = ? FOR UPDATE`, agenID); err != nil {
+	var terkunci int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM customer_accounts WHERE id = ? FOR UPDATE`, agenID).Scan(&terkunci); err != nil {
 		return 0, fmt.Errorf("agen: kunci agen: %w", err)
 	}
 	return agenID, nil
@@ -234,13 +236,17 @@ func tolakPencairanTx(ctx context.Context, tx *sql.Tx, id, adminID int64, catata
 	return nil
 }
 
+// batasDaftarPencairan: jumlah baris terbanyak di daftar pencairan admin. Yang menunggu selalu di depan,
+// jadi yang terpotong hanya riwayat lama.
+const batasDaftarPencairan = 500
+
 func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *int64) ([]PencairanAdmin, error) {
 	query := `
 		SELECT p.id, p.nominal_diajukan, p.status, p.diajukan_at, p.diproses_at, p.catatan_penolakan,
 		       p.rekening_bank, p.rekening_nomor, p.rekening_atas_nama, p.bukti_transfer_keluar_url IS NOT NULL,
-		       p.akun_agen_id, j.nama_lengkap, j.kode_referral, p.brand_id, b.name, COALESCE(au.display_name, au.email), p.bukti_transfer_keluar_url
+		       p.akun_agen_id, a.nama_lengkap, a.kode_referral, p.brand_id, b.name, COALESCE(au.display_name, au.email), p.bukti_transfer_keluar_url
 		FROM pengajuan_pencairan p
-		JOIN customer_accounts j ON j.id = p.akun_agen_id
+		JOIN customer_accounts a ON a.id = p.akun_agen_id
 		JOIN brands b ON b.id = p.brand_id
 		LEFT JOIN admin_users au ON au.id = p.diproses_oleh
 		WHERE 1=1`
@@ -254,7 +260,8 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 		args = append(args, *brandID)
 	}
 	// Yang menunggu selalu di depan (terlama dulu) supaya tidak terpotong batas baris; sisanya terbaru dulu.
-	query += ` ORDER BY (p.status = 'pending') DESC, CASE WHEN p.status = 'pending' THEN p.diajukan_at END ASC, p.diajukan_at DESC, p.id DESC LIMIT 500`
+	query += ` ORDER BY (p.status = 'pending') DESC, CASE WHEN p.status = 'pending' THEN p.diajukan_at END ASC, p.diajukan_at DESC, p.id DESC LIMIT ?`
+	args = append(args, batasDaftarPencairan)
 	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("agen: list pencairan admin: %w", err)
@@ -264,7 +271,7 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 		var p PencairanAdmin
 		if err := rows.Scan(&p.ID, &p.NominalDiajukan, &p.Status, &p.DiajukanAt, &p.DiprosesAt, &p.CatatanPenolakan,
 			&p.Bank, &p.Nomor, &p.AtasNama, &p.PunyaBukti,
-			&p.AkunAgenID, &p.NamaAgen, &p.KodeReferral, &p.BrandID, &p.BrandName, &p.DiprosesOlehNm, &p.BuktiURL); err != nil {
+			&p.AkunAgenID, &p.NamaAgen, &p.KodeReferral, &p.BrandID, &p.BrandName, &p.DiprosesOlehNama, &p.BuktiURL); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("agen: scan pencairan admin: %w", err)
 		}
@@ -273,7 +280,7 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("agen: baca pencairan admin: %w", err)
 	}
 	for i := range items {
 		if items[i].Status != "pending" {

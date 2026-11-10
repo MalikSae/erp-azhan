@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 // Catatan pengembalian dana (keputusan audit jamaah-booking 2026-09-30):
@@ -67,7 +68,7 @@ func (r *Repository) ListRefunds(ctx context.Context, bookingID int64) ([]Bookin
 func (r *Repository) CreateRefund(ctx context.Context, bookingID int64, brandID *int64, adminID int64, req CreateRefundRequest) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("booking.CreateRefund tx: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -114,7 +115,10 @@ func (r *Repository) CreateRefund(ctx context.Context, bookingID int64, brandID 
 		VALUES (?, ?, ?, ?, ?, ?)`, bookingID, req.Jumlah, req.Tanggal, req.Metode, req.Catatan, admin); err != nil {
 		return fmt.Errorf("booking.CreateRefund insert: %w", err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("booking.CreateRefund commit: %w", err)
+	}
+	return nil
 }
 
 // ListRefunds godoc
@@ -148,7 +152,7 @@ func (h *Handler) CreateRefund(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
-	if req.Jumlah <= 0 || req.Jumlah != float64(int64(req.Jumlah)) {
+	if req.Jumlah <= 0 || !shared.RupiahBulat(req.Jumlah) {
 		writeError(w, http.StatusBadRequest, "jumlah harus bilangan bulat lebih dari 0")
 		return
 	}
@@ -157,9 +161,7 @@ func (h *Handler) CreateRefund(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Tanggal = strings.TrimSpace(req.Tanggal)
-	tgl, err := time.Parse("2006-01-02", req.Tanggal)
-	today := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
-	if err != nil || tgl.Format("2006-01-02") > today {
+	if !shared.TanggalTidakDiMasaDepan(req.Tanggal) {
 		writeError(w, http.StatusBadRequest, "tanggal pengembalian tidak valid atau berada di masa depan")
 		return
 	}
