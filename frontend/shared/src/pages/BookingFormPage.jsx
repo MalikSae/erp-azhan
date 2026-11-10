@@ -1483,6 +1483,8 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     ? calculateAgeDetails(currentJamaah.tanggal_lahir, selectedSchedule.berangkat_tanggal)
                     : null;
                   const isInfant = Boolean(ageDetails?.isInfant);
+                  // NIK wajib untuk pax reguler (server menolak tanpa NIK); infant dikecualikan.
+                  const isMissingNik = Boolean(pax.jamaah_id && currentJamaah && hasDob && !isInfant && !currentJamaah.nik);
 
                   return (
                     <div
@@ -1558,6 +1560,20 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                             </button>
                             )}
                           </div>
+                          {isMissingNik && (
+                            <div className="-mt-2 mb-0 flex flex-wrap items-center gap-2 text-[11px] text-warning-800 bg-warning-50 border border-warning-200/80 px-3 py-2 rounded-lg">
+                              <AlertCircle size={12} className="shrink-0" />
+                              <span className="font-medium flex-1">NIK belum diisi. Booking tidak bisa diproses tanpa NIK.</span>
+                              <a
+                                href={`/jamaah/${pax.jamaah_id}/edit`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-semibold underline"
+                              >
+                                Lengkapi data jamaah
+                              </a>
+                            </div>
+                          )}
                           {/* Kondisi A: tanggal_lahir kosong — Inline DOB input */}
                           {isMissingDob && (() => {
                             const inlineState = inlineDobMap[pax.jamaah_id] || {};
@@ -1960,13 +1976,13 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
             </div>
             {/* NIK */}
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-neutral-700">NIK</label>
+              <label className="mb-1.5 block text-xs font-medium text-neutral-700">NIK <span className="font-normal text-neutral-400">(wajib kecuali bayi)</span></label>
               <input
                 type="text"
                 inputMode="numeric"
                 value={quickCreateForm.nik}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, nik: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
-                placeholder="16 digit NIK (opsional)"
+                placeholder="16 digit NIK"
                 className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>
