@@ -136,6 +136,41 @@ func TestPerubahanJamaahAlurLengkap(t *testing.T) {
 	}
 }
 
+// T-04: pengajuan tidak boleh disetujui bila data jamaah sudah diubah sesudah pengajuan dibuat.
+func TestSetujuiDitolakBilaDataSudahBerubah(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	akun, lama, baru, admin := fixturePerubahan(t, tx)
+	testdb.Exec(t, tx, `UPDATE jamaah SET kota='Bogor' WHERE id IN (?,?)`, lama, baru)
+	grup, _ := kelompokDari(ctx, tx, akun, lama)
+
+	h, err := simpanPerubahanPelanggan(ctx, tx, akun, grup, map[string]string{"kota": "Depok"})
+	if err != nil || h.Pengajuan != 1 {
+		t.Fatalf("hasil = %+v, err = %v", h, err)
+	}
+	// Admin mengedit isian yang sama sebelum pengajuan diputuskan.
+	testdb.Exec(t, tx, `UPDATE jamaah SET kota='Cimahi' WHERE id IN (?,?)`, lama, baru)
+
+	var berubah errDataBerubah
+	if _, err := setujuiTx(ctx, tx, h.PengajuanID, admin, nil); !errors.As(err, &berubah) || berubah.Label != "Kota" {
+		t.Fatalf("err = %v, want errDataBerubah untuk Kota", err)
+	}
+	for _, id := range []int64{lama, baru} {
+		if got := nilaiKolom(t, tx, id, "kota"); got != "Cimahi" {
+			t.Errorf("kota baris %d = %q, editan admin tidak boleh tertimpa", id, got)
+		}
+	}
+	var status string
+	tx.QueryRow(`SELECT status FROM jamaah_perubahan WHERE id=?`, h.PengajuanID).Scan(&status)
+	if status != "menunggu" {
+		t.Errorf("status pengajuan = %q, harus tetap menunggu", status)
+	}
+	// Pengajuan yang tidak bisa disetujui tetap bisa ditolak.
+	if _, err := tolakTx(ctx, tx, h.PengajuanID, admin, nil, "Data sudah diperbarui admin"); err != nil {
+		t.Fatalf("tolak: %v", err)
+	}
+}
+
 func TestPerubahanJamaahDitolakDanValidasi(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()

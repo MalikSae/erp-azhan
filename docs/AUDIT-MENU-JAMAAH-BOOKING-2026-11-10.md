@@ -180,8 +180,39 @@ Cakupan tes yang belum ada: `CancelPax`, pembatalan booking, blokir dan lepas ku
 |---|---|---|
 | K-01 | Diperbaiki, belum diuji jalan | Endpoint baru `PUT /api/admin/jamaah/{id}/tanggal-lahir` (izin `jamaah.edit`) yang hanya mengubah kolom `tanggal_lahir` dan mencatatnya di riwayat perubahan. Form booking memakai endpoint ini; `updateJamaah` tidak lagi dipanggil dari form booking. Tes baru: `TestValidasiTanggalLahir` |
 | T-01 | Diperbaiki, belum diuji jalan | `JamaahFormPage.jsx`: bila data gagal dimuat, form tidak dirender; yang tampil pesan galat dan tombol "Coba Lagi" |
+| T-05 | Diperbaiki, belum diuji jalan | `BookingDetailPage.jsx`: kegagalan memuat pembayaran tidak lagi menjatuhkan halaman. Bagian Riwayat Pembayaran menampilkan keterangan (tanpa izin, atau gagal muat), tombol Catat Pembayaran disembunyikan, dan sisa tagihan dihitung dari `total_dibayar` milik booking. Pola yang sama di `JamaahDetailPage.jsx` belum diubah |
+| T-06 | Diperbaiki sebagian, belum diuji jalan | Pembatalan booking kini selalu membatalkan semua pax, juga saat kursi sudah dilepas. Penyerahan perlengkapan ditolak pada booking draft dan batal; progress per pax ditolak pada booking batal. Tes baru: `TestTolakPerlengkapanUntukStatus`. Belum dikerjakan: retur stok perlengkapan saat seluruh booking dibatalkan, dan data lama (booking batal yang masih punya pax aktif) |
+| T-04 | Diperbaiki, belum diuji jalan | `setujuiTx` membandingkan nilai "sebelumnya" pada pengajuan dengan data terkini; bila berbeda dijawab 409 dan data tidak berubah. Admin menolak pengajuan itu dan pelanggan mengajukan ulang. Pencocokan orang lewat nama dan tanggal lahir belum diubah |
 
-Verifikasi: `go vet` dan `go test` untuk `internal/jamaah` dan `cmd/api` lulus, build dashboard lulus. Belum diuji terhadap API dan database nyata maupun di browser. S-01 (edit penuh tanpa versi) belum dikerjakan.
+Verifikasi otomatis: `go vet` dan `go test` lulus; build dashboard lulus. Tes integrasi (`ERP_TEST_DB=1 go test -count=1 -p 1`) untuk `internal/booking`, `internal/customer`, `internal/payment`, `internal/jamaah`, dan `internal/komisi` lulus, termasuk dua tes baru: `TestSetujuiDitolakBilaDataSudahBerubah` (T-04) dan `TestBatalBookingTanpaBlokirMembatalkanPax` (T-06).
+
+Uji langsung (instance API kedua di port 9191 dari kode ini, database `erp_azhan_dev`, admin uji sementara):
+
+```text
+[K01-buat]        POST /jamaah (11 isian, tanpa tanggal lahir)        -> 201
+[K01-kosong]      PUT /jamaah/{id}/tanggal-lahir {}                    -> 400 {"error":"tanggal_lahir wajib diisi"}
+[K01-format]      tanggal_lahir "31-12-1990"                           -> 400 {"error":"tanggal_lahir harus berformat YYYY-MM-DD"}
+[K01-masa-depan]  tanggal_lahir "2999-01-01"                           -> 400 {"error":"tanggal_lahir tidak boleh di masa depan"}
+[K01-simpan]      tanggal_lahir "1990-12-31"                           -> 200
+[K01-baca]        GET /jamaah/{id}: tanggal_lahir 1990-12-31, 11 isian lain tidak berubah
+[K01-riwayat]     1 baris riwayat (sumber admin, status langsung)
+[K01-id-tidak-ada] PUT /jamaah/999999999/tanggal-lahir                 -> 404
+[T06-draft-perlengkapan] PUT .../perlengkapan/distribusi pada draft    -> 400 {"error":"booking masih draft, selesaikan booking sebelum menyerahkan perlengkapan"}
+[T06-buat]        POST /bookings (1 pax)                               -> 201, seat_sisa 5 -> 4
+[T06-lepas-blokir] DELETE /bookings/{id}/seat-block                    -> 200, seat_sisa 5
+[T06-batal]       PUT /bookings/{id}/status batal                      -> 200, pax ["batal"], seat_sisa 5
+[T06-progress-pax] PUT .../pax/{pax}/progress                          -> 409 {"error":"booking sudah dibatalkan, data tagihan dan progress tidak dapat diubah"}
+[T06-perlengkapan] PUT .../perlengkapan/distribusi                     -> 400 {"error":"booking sudah dibatalkan, perlengkapan tidak dapat diserahkan"}
+```
+
+Uji browser (dashboard kedua di port 5175):
+
+- T-05: permintaan `GET /bookings/{id}/payments` dialihkan agar gagal. Detail booking tetap tampil, bagian Riwayat Pembayaran menulis "Riwayat pembayaran gagal dimuat. Muat ulang halaman untuk mencoba lagi."
+- T-01: permintaan `GET /jamaah/{id}` dibuat gagal saat membuka form edit. Form tidak dirender, tampil pesan galat dan tombol "Coba Lagi". Setelah permintaan dipulihkan dan tombol ditekan, form terisi data jamaah.
+
+Belum diuji: kotak tanggal lahir di form booking lewat UI (endpoint-nya sudah diuji), cabang 403 pada T-05 dengan peran tanpa `payment.view` (yang diuji cabang gagal muat), dan T-04 lewat API (baru lewat tes integrasi). Data uji (1 jamaah, 1 booking batal, 1 admin) sudah dihapus dan kedua server uji dihentikan. S-01 (edit penuh tanpa versi) belum dikerjakan.
+
+Perubahan perilaku dari T-06: booking yang dibatalkan setelah kursinya dilepas kini tidak lagi punya pax aktif, sama seperti booking yang dibatalkan saat kursinya masih terblokir. Halaman Data Jamaah di akun pelanggan hanya memuat pax aktif, sehingga jamaah dari booking seperti itu tidak lagi muncul di sana.
 
 ## Urutan perbaikan yang disarankan
 

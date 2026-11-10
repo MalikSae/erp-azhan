@@ -1477,18 +1477,22 @@ func updateBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64, new
 	// 4. Logic seat_sisa
 	newIsLocked := lockedStatuses[newStatus]
 
-	if newStatus == "batal" && isSeatBlocked {
-		seatsToRestore := activeRegularPax
-		if seatsToRestore <= 0 {
-			seatsToRestore = seatCount
+	if newStatus == "batal" {
+		if isSeatBlocked {
+			seatsToRestore := activeRegularPax
+			if seatsToRestore <= 0 {
+				seatsToRestore = seatCount
+			}
+			if err = shared.RestoreSeats(ctx, tx, scheduleID, seatsToRestore); err != nil {
+				return fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE,seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID)
+			if err != nil {
+				return fmt.Errorf("booking.UpdateStatus clear seat block: %w", err)
+			}
 		}
-		if err = shared.RestoreSeats(ctx, tx, scheduleID, seatsToRestore); err != nil {
-			return fmt.Errorf("booking.UpdateStatus restore seat: %w", err)
-		}
-		_, err = tx.ExecContext(ctx, `UPDATE bookings SET is_seat_blocked=FALSE,seat_hold_expires_at=NULL,seat_hold_key=NULL WHERE id=?`, bookingID)
-		if err != nil {
-			return fmt.Errorf("booking.UpdateStatus clear seat block: %w", err)
-		}
+		// Pax ikut batal walau kursinya sudah dilepas lebih dulu (lepas blokir manual atau hold habis),
+		// supaya booking batal tidak menyisakan pax aktif yang masih bisa diberi progress atau perlengkapan.
 		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status='batal' WHERE booking_id=?`, bookingID)
 		if err != nil {
 			return fmt.Errorf("booking.UpdateStatus cancel pax: %w", err)
@@ -1897,13 +1901,17 @@ func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, pax
 	}
 
 	// Verify booking existence & brand
-	if _, err := r.GetByID(ctx, bookingID, brandID); err != nil {
+	existing, err := r.GetByID(ctx, bookingID, brandID)
+	if err != nil {
 		return nil, err
+	}
+	if existing.Status == "batal" {
+		return nil, ErrBookingBatal
 	}
 
 	// Verify pax existence & status
 	var paxType, paxStatus string
-	err := r.db.QueryRowContext(ctx, `SELECT pax_type, pax_status FROM booking_pax WHERE id = ? AND booking_id = ?`, paxID, bookingID).Scan(&paxType, &paxStatus)
+	err = r.db.QueryRowContext(ctx, `SELECT pax_type, pax_status FROM booking_pax WHERE id = ? AND booking_id = ?`, paxID, bookingID).Scan(&paxType, &paxStatus)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -2055,6 +2063,18 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 
 // ─── Perlengkapan Distribusi ──────────────────────────────────────────────────
 
+// tolakPerlengkapanUntukStatus menjelaskan mengapa perlengkapan tidak boleh diserahkan pada status
+// booking tertentu ("" = boleh).
+func tolakPerlengkapanUntukStatus(status string) string {
+	switch status {
+	case "draft":
+		return "booking masih draft, selesaikan booking sebelum menyerahkan perlengkapan"
+	case "batal":
+		return "booking sudah dibatalkan, perlengkapan tidak dapat diserahkan"
+	}
+	return ""
+}
+
 // MarkPerlengkapanDiberikan mendistribusikan perlengkapan sesuai template set brand untuk satu jamaah (pax).
 func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID int64, paxID int64, brandID *int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -2065,13 +2085,14 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 
 	// 1. Ambil booking existing & brand_id
 	var scheduleBrandID int64
+	var bookingStatus string
 	qBooking := `
-		SELECT s.brand_id
+		SELECT s.brand_id, b.status
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id = ?
 	`
-	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&scheduleBrandID)
+	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&scheduleBrandID, &bookingStatus)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -2081,6 +2102,11 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 
 	if brandID != nil && *brandID != scheduleBrandID {
 		return nil, ErrNotFound
+	}
+	// Draft bisa disimpan ulang atau dihapus (pax dan log distribusinya ikut terhapus tanpa retur stok),
+	// dan booking batal tidak lagi berhak atas perlengkapan.
+	if msg := tolakPerlengkapanUntukStatus(bookingStatus); msg != "" {
+		return nil, bizErr("%s", msg)
 	}
 
 	// 2. Lock and get pax status
