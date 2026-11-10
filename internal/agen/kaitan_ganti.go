@@ -63,7 +63,7 @@ type KaitanLog struct {
 const qJamaahKaitan = `
 	SELECT j.id, COALESCE(j.id_jamaah,''), j.nama_lengkap, j.no_hp, j.brand_id, b.name,
 	       j.kaitan_status, j.kaitan_sumber, j.direkrut_oleh_akun_id, ag.nama_lengkap,
-	       EXISTS (SELECT 1 FROM transaksi_komisi tk WHERE tk.jamaah_sumber_id = j.id),
+	       EXISTS (SELECT 1 FROM transaksi_komisi tk WHERE tk.jamaah_sumber_id = j.id AND tk.dibatalkan_at IS NULL),
 	       (SELECT COUNT(DISTINCT bp.booking_id) FROM booking_pax bp JOIN bookings bk ON bk.id = bp.booking_id
 	         WHERE bp.jamaah_id = j.id AND bp.pax_status = 'aktif' AND bk.status IN ('draft','baru','dp'))
 	FROM jamaah j

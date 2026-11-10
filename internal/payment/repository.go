@@ -481,6 +481,13 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 		if err != nil {
 			return err
 		}
+		// Komisi mengikuti lunas terakhir (K25): keluar dari lunas membatalkan komisi booking ini, masuk
+		// lunas mencatatnya lagi dengan penerima saat itu.
+		if currentStatus == "lunas" {
+			if _, err := komisi.OnBookingTurunDariLunas(ctx, tx, bookingID); err != nil {
+				return err
+			}
+		}
 		if targetStatus == "lunas" {
 			if err := komisi.OnBookingLunas(ctx, tx, bookingID); err != nil {
 				return err
@@ -495,8 +502,8 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 
 // Void membatalkan pembayaran yang sudah dikonfirmasi (salah nominal, salah booking, atau salah
 // konfirmasi). Baris tidak dihapus: status menjadi 'void' dengan alasan, pelaku, dan waktu, lalu status
-// booking dihitung ulang. Komisi yang sudah tercatat tidak dibalik (K20). Permintaan ulang atas
-// pembayaran yang sudah void tidak mengubah apa pun.
+// booking dihitung ulang. Bila booking turun dari lunas, komisinya batal dan dihitung ulang saat lunas lagi
+// (K25). Permintaan ulang atas pembayaran yang sudah void tidak mengubah apa pun.
 func (r *Repository) Void(ctx context.Context, id int64, alasan string, adminID int64) (*Payment, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -556,7 +563,7 @@ func voidTx(ctx context.Context, tx *sql.Tx, id int64, alasan string, adminID in
 	if _, err = tx.ExecContext(ctx, `UPDATE payments SET status='void', void_reason=?, voided_by=?, voided_at=NOW() WHERE id=?`, alasan, pelaku, id); err != nil {
 		return fmt.Errorf("payment.Void update: %w", err)
 	}
-	if err = SyncBookingStatusTx(ctx, tx, bookingID); err != nil {
+	if err = SyncBookingStatusTx(komisi.DenganSebabBatal(ctx, komisi.SebabVoid), tx, bookingID); err != nil {
 		return fmt.Errorf("payment.Void sync booking: %w", err)
 	}
 	// Booking yang turun status karena pembatalan pembayaran tetap memegang kursinya tanpa batas waktu

@@ -11,6 +11,7 @@ import (
 // pindahkanKomisiTx memindahkan komisi yang sudah tercatat atas satu jamaah ke agen baru: komisi langsung ke
 // agen baru, bonus pembinaan ke upline agen baru. Bonus pembinaan tanpa penerima (agen baru tanpa upline)
 // dihapus; keduanya dihitung di log kaitan. Saldo agen lama tidak boleh negatif sesudahnya (sudah dicairkan).
+// Hanya komisi aktif yang dipindah; baris yang sudah batal tetap pada penerima lamanya sebagai riwayat.
 func pindahkanKomisiTx(ctx context.Context, tx *sql.Tx, jamaahID, agenBaru int64) (dipindah, dihapus int, err error) {
 	var upline sql.NullInt64
 	if err = tx.QueryRowContext(ctx, `SELECT upline_akun_id FROM customer_accounts WHERE id = ?`, agenBaru).Scan(&upline); err != nil {
@@ -18,7 +19,7 @@ func pindahkanKomisiTx(ctx context.Context, tx *sql.Tx, jamaahID, agenBaru int64
 	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, akun_penerima_id, jenis FROM transaksi_komisi
-		WHERE jamaah_sumber_id = ? AND jenis IN ('langsung','pembinaan') FOR UPDATE`, jamaahID)
+		WHERE jamaah_sumber_id = ? AND jenis IN ('langsung','pembinaan') AND dibatalkan_at IS NULL FOR UPDATE`, jamaahID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("agen: baca komisi jamaah: %w", err)
 	}

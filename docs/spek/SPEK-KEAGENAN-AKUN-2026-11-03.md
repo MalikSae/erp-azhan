@@ -58,11 +58,14 @@ Catatan istilah di kode: kode lama menyimpan status agen di tabel `jamaah` dan m
 | K17 | Booking agen dan booking pelanggan memakai satu komponen form dan satu inti backend, di dua alamat. |
 | K18 | Pax bayi tidak menghasilkan komisi apa pun (langsung maupun pembinaan). |
 | K19 | Nominal komisi hanya dari snapshot jadwal. Kolom `ujroh_*` brand tidak dipakai. |
-| K20 | Komisi yang sudah tercatat tetap menjadi hak agen walau booking atau pax kemudian dibatalkan. Tidak ada pembalikan komisi. Secara bisnis tidak ada refund penuh, sehingga komisi yang tercatat tidak menjadi beban travel. |
+| K20 | Komisi yang sudah tercatat tetap menjadi hak agen walau booking atau pax kemudian dibatalkan (status `batal`). Secara bisnis tidak ada refund penuh, sehingga komisi yang tercatat tidak menjadi beban travel. Diubah 2026-11-10: ini tidak berlaku untuk booking yang turun dari lunas, lihat K25. |
 | K21 | "Setujui, bayar menyusul": tagihan tetap tercatat dan dapat dilunasi atau dibebaskan kemudian. |
 | K22 | Akun dibuat lewat endpoint atomik tersendiri. Pengajuan agen dikirim lewat panggilan terpisah setelah sesi ada. |
 | K23 | Landing `/jadi-agen` menampilkan rentang ujroh dari jadwal tayang, bukan satu angka, karena nominal komisi ada di jadwal. |
 | K24 | NIK 16 digit wajib saat mengajukan agen, disimpan di akun (`customer_accounts.nik_agen`, unik per brand). "Saya sendiri" di portal agen hanya diterima bila NIK jamaah pertama sama dengan NIK agen; bila beda, booking ditolak ("Pilihan Saya sendiri hanya untuk data Anda sendiri"). Kartu B1 memperingatkan admin bila NIK pendaftar sudah tercatat atas nama lain atau jamaahnya terkunci ke agen lain. |
+| K25 | Komisi mengikuti lunas terakhir (2026-11-10). Booking yang turun dari lunas ke `dp` atau `baru` (pembayaran dibatalkan, diskon dihapus, tipe kamar diganti) membatalkan semua komisi aktifnya. Baris ledger tidak dihapus: ditandai `dibatalkan_at` dan `sebab_batal`, lalu tidak ikut hitungan apa pun. Saat booking lunas lagi, komisi dicatat sebagai baris baru dengan penerima yang berlaku saat itu. Paling banyak satu baris aktif per pax per jenis komisi (kunci unik `uq_komisi_pax_jenis_aktif`). Baris batal hanya tampil di Riwayat Komisi dashboard lewat filter status; portal agen tidak menerimanya. |
+| K26 | Komisi tersedia 3 hari kalender setelah tanggal berangkat (2026-11-10; semula pada hari keberangkatan). Berangkat tanggal 1, tersedia mulai tanggal 4. Angkanya satu konstanta: `komisi.HariTahanSetelahBerangkat`. |
+| K27 | Saldo tersedia boleh negatif (2026-11-10). Terjadi bila komisi yang sudah dicairkan kemudian batal (K25), atau tanggal berangkat jadwalnya diundur. Sistem tidak memblokir pembatalan pembayaran maupun perubahan jadwal; layar terkait hanya memberi peringatan. Saldo negatif tertutup oleh komisi berikutnya, dan pengajuan pencairan baru ditolak selama saldo tersedia tidak mencukupi nominalnya. |
 
 ## 4. Aturan pengikatan
 
@@ -126,12 +129,12 @@ Admin Master dapat memindahkan jamaah ke agen lain, dan memasangkan atau menggan
 3. Agen X membawa jamaah Y: X komisi langsung, A bonus pembinaan.
 4. Agen X mendaftarkan dirinya lewat portal agen ("Saya sendiri"): X tidak mendapat komisi (K13). Komisi langsung ke A (upline X), bonus pembinaan ke U (upline A). Hasilnya sama dengan skenario 6.
 5. Jamaah Y booking ulang: X komisi langsung, A bonus pembinaan (penuh).
-6. Agen X memesan untuk dirinya lewat web publik: dihitung booking ulang. Komisi langsung ke agen yang mengunci jamaah X (A), bonus pembinaan ke upline A.
+6. Agen X memesan untuk dirinya lewat web publik: X tidak mendapat komisi (K13), dikenali dari NIK jamaah yang sama dengan NIK agen. Komisi langsung ke A (upline X), bonus pembinaan ke U (upline A).
 7. Agen Y mendaftarkan jamaah A yang terkunci ke X: booking jalan dengan peringatan, komisi ke X.
 
 ### 5.3 Saldo dan pencairan
 
-Tidak berubah: saldo tersedia setelah `berangkat_tanggal` lewat, saldo tertahan sebelumnya. Pencairan minimal Rp500.000, satu pengajuan pending, disetujui Admin Master (`agen.payout.approve`). Saldo hanya terdiri dari dua jenis komisi di atas. Penerima dan pemilik saldo adalah akun. Komisi dari booking yang dibatalkan setelah lunas tetap menjadi saldo tersedia setelah tanggal berangkat jadwal lewat.
+Saldo tersedia: komisi aktif yang sudah lewat 3 hari kalender dari `berangkat_tanggal` (K26), dikurangi pencairan yang pending dan disetujui. Saldo tertahan: komisi aktif yang belum sampai tanggal itu. Komisi batal (K25) tidak dihitung, dan saldo tersedia boleh negatif (K27). Pencairan minimal Rp500.000, satu pengajuan pending, disetujui Admin Master (`agen.payout.approve`). Saldo hanya terdiri dari dua jenis komisi di atas. Penerima dan pemilik saldo adalah akun. Komisi dari booking yang dibatalkan (status `batal`) setelah lunas tetap dihitung dan menjadi saldo tersedia pada waktunya (K20).
 
 ## 6. Alur pendaftaran agen
 
@@ -274,7 +277,7 @@ Diputuskan pemilik proyek pada 3 Nov 2026 (sudah tercermin di K18–K22 dan bagi
 - "Bayar menyusul": tagihan tetap tercatat dan dapat dilunasi atau dibebaskan kemudian.
 - `GLOSSARY.md` dibuat di akar repo.
 - Landing `/jadi-agen` menampilkan rentang ujroh dari jadwal tayang (K23).
-- Secara bisnis tidak ada refund penuh, sehingga komisi yang sudah tercatat aman (K20).
+- Secara bisnis tidak ada refund penuh, sehingga komisi booking yang dibatalkan setelah lunas tetap aman (K20). Booking yang turun dari lunas membatalkan komisinya (K25).
 
 Masih terbuka:
 1. Pengiriman pesan WhatsApp untuk hasil keputusan admin: pengirimnya belum diperiksa.

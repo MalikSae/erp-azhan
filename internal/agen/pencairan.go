@@ -253,7 +253,8 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 		query += ` AND p.brand_id = ?`
 		args = append(args, *brandID)
 	}
-	query += ` ORDER BY p.diajukan_at ASC, p.id ASC LIMIT 500`
+	// Yang menunggu selalu di depan (terlama dulu) supaya tidak terpotong batas baris; sisanya terbaru dulu.
+	query += ` ORDER BY (p.status = 'pending') DESC, CASE WHEN p.status = 'pending' THEN p.diajukan_at END ASC, p.diajukan_at DESC, p.id DESC LIMIT 500`
 	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("agen: list pencairan admin: %w", err)
