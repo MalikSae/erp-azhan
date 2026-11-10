@@ -9,7 +9,9 @@ import (
 // Komisi mengikuti lunas terakhir (spek keagenan K25, merevisi K20). Booking yang turun dari 'lunas' ke 'dp'
 // atau 'baru' (pembayaran dibatalkan, diskon dihapus, tipe kamar diganti ke yang lebih mahal) belum lunas,
 // jadi komisinya batal. Saat booking lunas lagi, ProcessBookingLunas mencatat baris baru dengan penerima
-// saat itu. Pembatalan booking atau pax setelah lunas tidak membatalkan komisi.
+// saat itu. Pembatalan booking atau pax setelah lunas tidak membatalkan komisi. Void pembayaran pada booking
+// yang sudah batal membatalkannya bila sisa pembayaran tidak lagi menutup total harga (payment.voidTx):
+// void menyatakan pembayaran itu tidak pernah ada.
 //
 // Baris yang batal tidak dihapus: dibatalkan_at dan sebab_batal diisi, dan baris itu tidak lagi dihitung di
 // saldo, total, dan peringkat. Kunci unik uq_komisi_pax_jenis_aktif menjamin hanya ada satu baris aktif per

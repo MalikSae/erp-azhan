@@ -531,7 +531,8 @@ func voidTx(ctx context.Context, tx *sql.Tx, id int64, alasan string, adminID in
 	}
 	// Booking dikunci sebelum pembayaran, urutan yang sama dengan penulis pembayaran lain.
 	var bookingStatus string
-	if err = tx.QueryRowContext(ctx, `SELECT status FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&bookingStatus); err != nil {
+	var totalHarga float64
+	if err = tx.QueryRowContext(ctx, `SELECT status, COALESCE(total_harga,0) FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&bookingStatus, &totalHarga); err != nil {
 		return fmt.Errorf("payment.Void lock booking: %w", err)
 	}
 	var status string
@@ -565,6 +566,16 @@ func voidTx(ctx context.Context, tx *sql.Tx, id int64, alasan string, adminID in
 	}
 	if err = SyncBookingStatusTx(komisi.DenganSebabBatal(ctx, komisi.SebabVoid), tx, bookingID); err != nil {
 		return fmt.Errorf("payment.Void sync booking: %w", err)
+	}
+	// Booking yang sudah batal tidak disinkronkan lagi, jadi komisinya tidak ikut batal lewat jalur di atas.
+	// K20 mempertahankan komisi booking batal karena uang jamaah sudah masuk; void menyatakan pembayaran
+	// itu tidak pernah ada, sehingga dasar komisinya hilang. Refund tidak lewat sini dan tidak mengubah komisi.
+	// Booking yang dibatalkan setelah dp atau lunas mempertahankan total harganya, jadi pembandingnya sama
+	// dengan booking hidup: komisi batal bila sisa pembayaran terkonfirmasi tidak lagi menutup total harga.
+	if bookingStatus == "batal" && sisaTerkonfirmasi < totalHarga {
+		if _, err = komisi.BatalkanKomisiBookingTx(komisi.DenganSebabBatal(ctx, komisi.SebabVoid), tx, bookingID); err != nil {
+			return fmt.Errorf("payment.Void batalkan komisi booking batal: %w", err)
+		}
 	}
 	// Booking yang turun status karena pembatalan pembayaran tetap memegang kursinya tanpa batas waktu
 	// sampai admin memutuskan; jangan sampai kursinya dilepas otomatis akibat koreksi admin.
