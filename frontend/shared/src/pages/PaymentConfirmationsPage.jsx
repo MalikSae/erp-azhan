@@ -249,8 +249,8 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     }
     if (key === 'schedule_name') {
       return (
-        <div className="min-w-36 max-w-56 whitespace-normal">
-          <p className="text-[13px] font-body font-medium text-neutral-800 leading-tight">{row.schedule_name || '-'}</p>
+        <div className="min-w-36 max-w-56">
+          <p className="truncate text-[13px] font-body font-medium text-neutral-800 leading-tight" title={row.schedule_name || undefined}>{row.schedule_name || '-'}</p>
           {row.departure_date && <p className="mt-0.5 text-[11px] font-body text-neutral-400">{dateLabel(row.departure_date)}</p>}
         </div>
       );
@@ -295,9 +295,10 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     if (key === 'status') {
       const meta = statusMeta[row.status] || { label: row.status || '-', variant: 'archived' };
       return (
-        <div className="max-w-44 whitespace-normal">
+        <div className="max-w-44">
           <Badge variant={meta.variant} hideIcon className={STATUS_STRONG[row.status]}>{meta.label}</Badge>
-          {row.rejection_reason && <p className="mt-1 text-[11px] font-body text-danger-700 leading-tight">{row.rejection_reason}</p>}
+          {/* Alasan satu baris; teks lengkapnya ada di tooltip dan di detail pembayaran. */}
+          {row.rejection_reason && <p className="mt-1 truncate text-[11px] font-body text-danger-700 leading-tight" title={row.rejection_reason}>{row.rejection_reason}</p>}
         </div>
       );
     }

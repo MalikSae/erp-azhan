@@ -2,6 +2,10 @@
 import EmptyState from './EmptyState';
 import LoadingSpinner from './LoadingSpinner';
 
+// Aturan tampilan: satu keterangan tidak turun ke baris kedua. Judul kolom dan isi sel tidak dibungkus;
+// sel yang memuat beberapa keterangan menumpuknya sebagai baris terpisah (satu elemen per baris).
+// Bila kolom melebihi lebar kartu, tabel bergeser mendatar di dalam kartunya. Kolom teks bebas yang
+// panjang (catatan, alamat, alasan) memakai `wrap: true` pada definisi kolom dan membatasi lebarnya sendiri.
 const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell, sortConfig, onSort, loading, onRowClick }) => {
   if (loading) {
     return (
@@ -74,7 +78,7 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
               className={`hover:bg-neutral-50/70 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
             >
               {columns.map((col, colIndex) => (
-                <td key={colIndex} className={`px-4 py-3 ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''}`}>
+                <td key={colIndex} className={`px-4 py-3 ${col.wrap ? '' : 'whitespace-nowrap'} ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : ''}`}>
                   {getCellContent(row, col, rowIndex)}
                 </td>
               ))}

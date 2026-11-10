@@ -132,7 +132,7 @@ export default function PengumumanPage() {
   ];
 
   const renderCell = (row, key) => {
-    if (key === 'judul') return <span className="font-heading font-semibold text-neutral-900">{row.judul}</span>;
+    if (key === 'judul') return <span className="block max-w-[360px] truncate font-heading font-semibold text-neutral-900" title={row.judul}>{row.judul}</span>;
     if (key === 'jadwal_nama') return row.jadwal_nama || <span className="text-neutral-500">Semua pelanggan</span>;
     if (key === 'mulai') return `${tgl(row.mulai)} - ${tgl(row.akhir)}`;
     if (key === 'status') return <StatusDot status={row.status} />;
