@@ -28,6 +28,14 @@ const bayarMeta = {
   ditolak: { label: 'Bukti ditolak, menunggu unggah ulang', dot: 'bg-danger-500' },
 };
 
+// Status pengajuan di kolom Status. Akun yang sudah disetujui tetap ada di daftar ini selama tagihannya
+// belum selesai; keadaan tagihannya terbaca di kolom Pembayaran.
+const statusAgenMeta = {
+  pengajuan: { label: 'Pending', dot: 'bg-warning-500' },
+  aktif: { label: 'Aktif', dot: 'bg-success-500' },
+  nonaktif: { label: 'Nonaktif', dot: 'bg-neutral-400' },
+};
+
 // Status = titik berwarna kecil + teks (bukan badge berwarna).
 const StatusDot = ({ meta }) => (
   <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-neutral-700">
@@ -189,6 +197,7 @@ export default function PersetujuanAgenPage() {
     { header: 'Pemohon', key: 'nama_lengkap', sortable: true },
     { header: 'Domisili', key: 'domisili', sortable: true },
     { header: 'Diajukan', key: 'diajukan_agen_at', sortable: true },
+    { header: 'Status', key: 'status_agen', sortable: true },
     { header: 'Pembayaran', key: 'pembayaran' },
     { header: 'Aksi', key: 'actions' },
   ];
@@ -209,14 +218,12 @@ export default function PersetujuanAgenPage() {
           {row.peringatan_nik?.length > 0 && (
             <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-warning-700"><TriangleAlert size={12} />Periksa NIK</p>
           )}
-          {row.status_agen !== 'pengajuan' && (
-            <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-body text-success-700"><span className="w-1.5 h-1.5 rounded-full bg-success-500" />Agen {row.status_agen} • tinggal pembayaran</div>
-          )}
           {row.direkrut_oleh_nama && <p className="mt-0.5 text-[11px] text-neutral-400">Upline: {row.direkrut_oleh_nama}</p>}
         </div>
       );
     }
     if (key === 'diajukan_agen_at') return dateLabel(row.diajukan_agen_at);
+    if (key === 'status_agen') return <StatusDot meta={statusAgenMeta[row.status_agen] || { label: row.status_agen || '-' }} />;
     if (key === 'pembayaran') {
       const p = row.pembayaran;
       if (!p) return '-';
