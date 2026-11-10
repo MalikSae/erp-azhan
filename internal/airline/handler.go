@@ -176,6 +176,8 @@ func handleAirlineRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrDuplicate):
 		writeError(w, http.StatusConflict, "maskapai dengan nama ini sudah ada")
+	case errors.Is(err, ErrCodeInUse):
+		writeError(w, http.StatusConflict, err.Error())
 	default:
 		// Tangkap MySQL FK constraint violation (error 1451)
 		var mysqlErr *mysql.MySQLError

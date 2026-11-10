@@ -17,6 +17,7 @@ import {
 } from "../api/bookings";
 import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengkapan";
 import { getJamaah } from "../api/jamaah";
+import { getScheduleAdmin } from "../api/schedules";
 import { hariIniWIB } from "../utils/tanggal";
 import { listBrands } from "../api/brands";
 import { uploadMedia, openProtectedMedia } from "../api/media";
@@ -150,6 +151,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [selectedPaxForRoomChange, setSelectedPaxForRoomChange] = useState(null);
   const [newRoomType, setNewRoomType] = useState("Quad");
   const [changeRoomError, setChangeRoomError] = useState(null);
+  // Harga kamar paket saat ini, untuk menampilkan selisih tagihan sebelum ganti kamar disimpan.
+  // null = belum atau gagal dimuat.
+  const [hargaKamar, setHargaKamar] = useState(null);
   const [changeRoomSubmitting, setChangeRoomSubmitting] = useState(false);
 
   const [isCancelPaxModalOpen, setIsCancelPaxModalOpen] = useState(false);
@@ -326,6 +330,13 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     setNewRoomType(pax.room_type || "Quad");
     setChangeRoomError(null);
     setIsChangeRoomModalOpen(true);
+    setHargaKamar(null);
+    const scheduleId = booking?.schedule_id || booking?.schedule?.id;
+    if (scheduleId) {
+      getScheduleAdmin(scheduleId)
+        .then((s) => setHargaKamar({ Quad: Number(s.harga_quad), Triple: Number(s.harga_triple), Double: Number(s.harga_double) }))
+        .catch(() => setHargaKamar(null));
+    }
   };
 
   const handleChangeRoomSubmit = async (e) => {
@@ -1668,6 +1679,30 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               ]}
               required
             />
+            {(() => {
+              const kamar = (newRoomType && typeof newRoomType === 'object' && 'target' in newRoomType) ? newRoomType.target.value : newRoomType;
+              const hargaBaru = hargaKamar ? hargaKamar[kamar] : null;
+              const hargaLama = parseFloat(selectedPaxForRoomChange?.harga_pax) || 0;
+              if (hargaBaru === null || hargaBaru === undefined || Number.isNaN(hargaBaru)) {
+                return (
+                  <p className="mt-3 text-xs text-neutral-500">
+                    Pax yang pindah kamar memakai harga paket saat ini. Pax lain di booking ini tidak berubah.
+                  </p>
+                );
+              }
+              const selisih = hargaBaru - hargaLama;
+              return (
+                <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-700 space-y-1">
+                  <div className="flex justify-between"><span>Harga pax sekarang</span><span>{formatRupiah(hargaLama)}</span></div>
+                  <div className="flex justify-between"><span>Harga kamar {kamar} (harga paket saat ini)</span><span>{formatRupiah(hargaBaru)}</span></div>
+                  <div className="flex justify-between font-semibold text-neutral-900">
+                    <span>Perubahan tagihan</span>
+                    <span>{selisih === 0 ? 'Tidak berubah' : `${selisih > 0 ? '+' : '-'}${formatRupiah(Math.abs(selisih))}`}</span>
+                  </div>
+                  <p className="text-neutral-500 pt-1">Pax lain di booking ini tidak berubah.</p>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-100">
             <Button type="button" variant="ghost" onClick={() => setIsChangeRoomModalOpen(false)}>Batal</Button>

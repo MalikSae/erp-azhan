@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrNotFound dikembalikan saat row tidak ditemukan.
@@ -12,6 +13,9 @@ var ErrNotFound = errors.New("data tidak ditemukan")
 
 // ErrDuplicate dikembalikan saat nama maskapai sudah ada (case-insensitive).
 var ErrDuplicate = errors.New("maskapai dengan nama ini sudah ada")
+
+// ErrCodeInUse dikembalikan saat kode maskapai yang masih dipakai paket hendak diubah.
+var ErrCodeInUse = errors.New("kode maskapai tidak bisa diubah, masih dipakai oleh")
 
 // Repository mengelola semua query ke tabel airlines.
 type Repository struct {
@@ -69,8 +73,27 @@ func (r *Repository) Create(ctx context.Context, name string, code *string, logo
 // Update memperbarui maskapai berdasarkan id.
 func (r *Repository) Update(ctx context.Context, id uint64, name string, code *string, logoURL *string) (*Airline, error) {
 	// Pastikan row ada
-	if _, err := r.getByID(ctx, id); err != nil {
+	lama, err := r.getByID(ctx, id)
+	if err != nil {
 		return nil, err
+	}
+	// Kode maskapai menjadi awalan nomor penerbangan paket. Selama masih dipakai paket, kode tidak boleh
+	// diubah; nama dan logo tetap boleh.
+	kodeLama, kodeBaru := "", ""
+	if lama.Code != nil {
+		kodeLama = strings.TrimSpace(*lama.Code)
+	}
+	if code != nil {
+		kodeBaru = strings.TrimSpace(*code)
+	}
+	if kodeLama != "" && !strings.EqualFold(kodeLama, kodeBaru) {
+		var dipakai int
+		if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schedules WHERE maskapai_id = ?`, id).Scan(&dipakai); err != nil {
+			return nil, fmt.Errorf("airline.Update cek pemakaian: %w", err)
+		}
+		if dipakai > 0 {
+			return nil, fmt.Errorf("%w %d paket", ErrCodeInUse, dipakai)
+		}
 	}
 
 	// Cek duplikat, exclude id sendiri

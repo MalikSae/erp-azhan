@@ -859,8 +859,10 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
     if (!bawaanBrand) return 'Ikut brand';
     return Number(nominal) > 0 ? `Ikut brand: ${formatCurrency(Math.round(Number(nominal)))}` : 'Ikut brand: tidak ada komisi';
   };
+  // Kategori nonaktif tidak ditawarkan, kecuali yang sedang dipakai paket ini: paket lama tetap bisa
+  // disimpan dengan kategorinya (server hanya menolak kategori nonaktif sebagai pilihan baru).
   const filteredCategories = categoryOptions.filter(c => {
-    if (!c.is_active) return false;
+    if (!c.is_active) return String(c.id) === String(formData.category_id);
     if (!c.brands || c.brands.length === 0) return true;
     if (!selectedBrandId) return true;
     return c.brands.some(b => b.id === selectedBrandId);
@@ -1710,7 +1712,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                         }
                       }}
                       placeholder="-- Pilih Kategori --"
-                      options={filteredCategories.map(c => ({ value: c.id, label: c.name }))}
+                      options={filteredCategories.map(c => ({ value: c.id, label: c.is_active ? c.name : `${c.name} (nonaktif)` }))}
                     />
                   </div>
                 </div>

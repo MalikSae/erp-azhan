@@ -17,6 +17,9 @@ var ErrDuplicateCode = errors.New("kode bandara sudah digunakan")
 // ErrInUse dikembalikan saat bandara masih dirujuk paket.
 var ErrInUse = errors.New("tidak bisa dihapus, masih dipakai oleh")
 
+// ErrCodeInUse dikembalikan saat kode bandara yang masih dirujuk paket hendak diubah.
+var ErrCodeInUse = errors.New("kode bandara tidak bisa diubah, masih dipakai oleh")
+
 // Repository mengelola semua query ke tabel airports.
 type Repository struct {
 	db *sql.DB
@@ -93,8 +96,20 @@ func (r *Repository) Create(ctx context.Context, name string, code string, city 
 
 // Update memperbarui bandara berdasarkan id.
 func (r *Repository) Update(ctx context.Context, id uint64, name string, code string, city string) (*Airport, error) {
-	if _, err := r.getByID(ctx, id); err != nil {
+	lama, err := r.getByID(ctx, id)
+	if err != nil {
 		return nil, err
+	}
+	// Paket menyimpan kode bandara sebagai teks. Mengubah kode yang masih dipakai memutus paket itu:
+	// edit paketnya ditolak "tidak terdaftar" dan bandara jadi bisa dihapus (audit menu Paket S-11).
+	if !strings.EqualFold(strings.TrimSpace(lama.Code), strings.TrimSpace(code)) {
+		dipakai, err := r.jumlahPaketPemakai(ctx, lama.Code)
+		if err != nil {
+			return nil, err
+		}
+		if dipakai > 0 {
+			return nil, fmt.Errorf("%w %d paket", ErrCodeInUse, dipakai)
+		}
 	}
 
 	if exists, err := r.codeExists(ctx, code, id); err != nil {
@@ -119,12 +134,9 @@ func (r *Repository) Delete(ctx context.Context, id uint64) error {
 	}
 
 	// Paket menyimpan kode bandara sebagai teks (tanpa FK); tolak hapus bila masih dirujuk (MP-06).
-	var dipakai int
-	if err := r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM schedules
-		WHERE UPPER(?) IN (UPPER(berangkat_bandara_asal), UPPER(berangkat_bandara_tujuan),
-		                   UPPER(pulang_bandara_asal), UPPER(pulang_bandara_tujuan))`, ap.Code).Scan(&dipakai); err != nil {
-		return fmt.Errorf("airport.Delete cek pemakaian: %w", err)
+	dipakai, err := r.jumlahPaketPemakai(ctx, ap.Code)
+	if err != nil {
+		return err
 	}
 	if dipakai > 0 {
 		return fmt.Errorf("%w %d paket", ErrInUse, dipakai)
@@ -136,6 +148,18 @@ func (r *Repository) Delete(ctx context.Context, id uint64) error {
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
+
+// jumlahPaketPemakai menghitung paket yang merujuk kode bandara ini di salah satu dari empat kolom bandaranya.
+func (r *Repository) jumlahPaketPemakai(ctx context.Context, code string) (int, error) {
+	var n int
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM schedules
+		WHERE UPPER(?) IN (UPPER(berangkat_bandara_asal), UPPER(berangkat_bandara_tujuan),
+		                   UPPER(pulang_bandara_asal), UPPER(pulang_bandara_tujuan))`, code).Scan(&n); err != nil {
+		return 0, fmt.Errorf("airport: cek pemakaian kode: %w", err)
+	}
+	return n, nil
+}
 
 func (r *Repository) getByID(ctx context.Context, id uint64) (*Airport, error) {
 	const q = `SELECT id, name, code, city, created_at, updated_at FROM airports WHERE id=?`

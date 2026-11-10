@@ -146,7 +146,7 @@ func handleAirportRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrDuplicateCode):
 		writeError(w, http.StatusConflict, "Kode bandara sudah digunakan")
-	case errors.Is(err, ErrInUse):
+	case errors.Is(err, ErrInUse), errors.Is(err, ErrCodeInUse):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		var mysqlErr *mysql.MySQLError

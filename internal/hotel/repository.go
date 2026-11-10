@@ -12,7 +12,7 @@ import (
 var ErrNotFound = errors.New("data tidak ditemukan")
 
 // ErrDuplicate dikembalikan saat nama hotel sudah ada (case-insensitive).
-var ErrDuplicate = errors.New("hotel dengan nama ini sudah ada")
+var ErrDuplicate = errors.New("hotel dengan nama ini sudah ada di kota yang sama")
 
 // Repository mengelola semua query ke tabel hotels.
 type Repository struct {
@@ -88,14 +88,14 @@ func (r *Repository) normalizeCity(ctx context.Context, city string) string {
 // Create menyisipkan hotel baru. Mengembalikan Hotel lengkap dengan ID & CreatedAt.
 // Cek duplikat case-insensitive dilakukan SEBELUM insert.
 func (r *Repository) Create(ctx context.Context, name, city string, starRating *int, distanceM *int, photoURL *string, videoURL *string) (*Hotel, error) {
+	city = r.normalizeCity(ctx, city)
+
 	// Cek duplikat (exclude tidak diperlukan pada create)
-	if exists, err := r.nameExists(ctx, name, 0); err != nil {
+	if exists, err := r.nameExists(ctx, name, city, 0); err != nil {
 		return nil, err
 	} else if exists {
 		return nil, ErrDuplicate
 	}
-
-	city = r.normalizeCity(ctx, city)
 
 	const q = `INSERT INTO hotels (name, city, star_rating, distance_m, photo_url, video_url) VALUES (?, ?, ?, ?, ?, ?)`
 	res, err := r.db.ExecContext(ctx, q, name, city, starRating, distanceM, photoURL, videoURL)
@@ -119,14 +119,14 @@ func (r *Repository) Update(ctx context.Context, id uint64, name, city string, s
 		return nil, err
 	}
 
-	// Cek duplikat nama, exclude id sendiri
-	if exists, err := r.nameExists(ctx, name, id); err != nil {
+	city = r.normalizeCity(ctx, city)
+
+	// Cek duplikat nama di kota yang sama, exclude id sendiri
+	if exists, err := r.nameExists(ctx, name, city, id); err != nil {
 		return nil, err
 	} else if exists {
 		return nil, ErrDuplicate
 	}
-
-	city = r.normalizeCity(ctx, city)
 
 	const q = `UPDATE hotels SET name=?, city=?, star_rating=?, distance_m=?, photo_url=?, video_url=? WHERE id=?`
 	if _, err := r.db.ExecContext(ctx, q, name, city, starRating, distanceM, photoURL, videoURL, id); err != nil {
@@ -168,12 +168,13 @@ func (r *Repository) getByID(ctx context.Context, id uint64) (*Hotel, error) {
 	return &h, nil
 }
 
-// nameExists mengecek apakah nama hotel (case-insensitive) sudah ada.
+// nameExists mengecek apakah nama hotel (case-insensitive) sudah ada di kota yang sama. Hotel bernama sama
+// di kota berbeda boleh (audit menu Paket S-12).
 // excludeID = 0 berarti tidak ada yang di-exclude (dipakai saat Create).
-func (r *Repository) nameExists(ctx context.Context, name string, excludeID uint64) (bool, error) {
-	const q = `SELECT COUNT(*) FROM hotels WHERE UPPER(name) = UPPER(?) AND id != ?`
+func (r *Repository) nameExists(ctx context.Context, name, city string, excludeID uint64) (bool, error) {
+	const q = `SELECT COUNT(*) FROM hotels WHERE UPPER(name) = UPPER(?) AND UPPER(TRIM(city)) = UPPER(TRIM(?)) AND id != ?`
 	var count int
-	err := r.db.QueryRowContext(ctx, q, name, excludeID).Scan(&count)
+	err := r.db.QueryRowContext(ctx, q, name, city, excludeID).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("hotel.nameExists: %w", err)
 	}
