@@ -30,7 +30,7 @@ import {
   finalizeBooking, 
   getBooking 
 } from "../api/bookings";
-import { listJamaah, updateJamaah, createJamaah } from "../api/jamaah";
+import { listJamaah, updateTanggalLahirJamaah, createJamaah } from "../api/jamaah";
 import KaitanAgenPicker, { EMPTY_KAITAN, validateKaitan, toKaitanPayload } from "../components/KaitanAgenPicker";
 import { listSchedulesAdmin, getScheduleAdmin } from "../api/schedules";
 import { listBrands } from "../api/brands";
@@ -846,19 +846,11 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       setInlineDobMap(prev => ({ ...prev, [jamaahId]: { ...prev[jamaahId], error: 'Pilih tanggal lahir terlebih dahulu' } }));
       return;
     }
-    // Ambil data jamaah saat ini sebagai base untuk update (required: nama_lengkap)
-    const existingJamaah = jamaahMap[jamaahId];
-    if (!existingJamaah) return;
+    if (!jamaahMap[jamaahId]) return;
     setInlineDobMap(prev => ({ ...prev, [jamaahId]: { ...prev[jamaahId], saving: true, error: null } }));
     try {
-      const payload = {
-        nama_lengkap: existingJamaah.nama_lengkap,
-        tanggal_lahir: dob,
-        nik: existingJamaah.nik || null,
-        no_hp: existingJamaah.no_hp || null,
-        status: existingJamaah.status || 'aktif'
-      };
-      await updateJamaah(jamaahId, payload);
+      // Endpoint khusus: hanya tanggal lahir yang berubah, isian jamaah lain tidak tersentuh.
+      await updateTanggalLahirJamaah(jamaahId, dob);
       // Update in-memory jamaahList
       setJamaahList(prev => prev.map(j =>
         String(j.id) === String(jamaahId) ? { ...j, tanggal_lahir: dob } : j

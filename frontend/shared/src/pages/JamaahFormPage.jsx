@@ -29,6 +29,9 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  // Gagal memuat data saat edit: form tidak boleh tampil, karena menyimpan form kosong menimpa data jamaah.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   // Konten dashboard menggulir di container dalam, bukan window; gulir ke pesan error langsung.
   const errorRef = useRef(null);
   useEffect(() => {
@@ -69,23 +72,28 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
 
   // Fetch data jamaah saat mode Edit
   useEffect(() => {
-    if (isEdit) {
-      getJamaah(id)
-        .then((jamaahData) => {
-          setFormData(prev => ({
-            ...prev,
-            ...jamaahData,
-            brand_id: jamaahData.brand_id || prev.brand_id || ""
-          }));
-          setLoading(false);
-        })
-        .catch((err) => {
-          if (err.response?.status === 404) setNotFound(true);
-          else setError("Gagal memuat data jamaah");
-          setLoading(false);
-        });
-    }
-  }, [id, isEdit]);
+    if (!isEdit) return;
+    let batal = false;
+    setLoading(true);
+    setLoadFailed(false);
+    getJamaah(id)
+      .then((jamaahData) => {
+        if (batal) return;
+        setFormData(prev => ({
+          ...prev,
+          ...jamaahData,
+          brand_id: jamaahData.brand_id || prev.brand_id || ""
+        }));
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (batal) return;
+        if (err.response?.status === 404) setNotFound(true);
+        else setLoadFailed(true);
+        setLoading(false);
+      });
+    return () => { batal = true; };
+  }, [id, isEdit, loadAttempt]);
 
   // Fetch daftar Brands jika diakses dari Office Dashboard
   useEffect(() => {
@@ -175,9 +183,19 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     );
   }
 
+  if (loadFailed) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Edit Data Jamaah" onBack={handleBack} />
+        <Alert variant="error">Gagal memuat data jamaah. Form tidak ditampilkan agar data yang tersimpan tidak tertimpa.</Alert>
+        <Button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>Coba Lagi</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader 
+      <PageHeader
         title={isEdit ? "Edit Data Jamaah" : "Tambah Data Jamaah"}
         onBack={handleBack}
       />

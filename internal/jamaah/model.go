@@ -110,6 +110,11 @@ type KaitanAgenInput struct {
 // UpdateJamaahRequest memiliki struktur yang sama dengan Create.
 type UpdateJamaahRequest = CreateJamaahRequest
 
+// UpdateTanggalLahirRequest adalah payload untuk update khusus tanggal lahir.
+type UpdateTanggalLahirRequest struct {
+	TanggalLahir *string `json:"tanggal_lahir"`
+}
+
 // UpdateCatatanRequest adalah payload untuk update khusus field catatan.
 type UpdateCatatanRequest struct {
 	Catatan *string `json:"catatan"`

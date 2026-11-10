@@ -433,6 +433,7 @@ func main() {
 		jamaahEdit.Post("/jamaah", jamaahHandler.CreateJamaah)
 		jamaahEdit.Put("/jamaah/{id}", jamaahHandler.UpdateJamaah)
 		jamaahEdit.Put("/jamaah/{id}/catatan", jamaahHandler.UpdateCatatan)
+		jamaahEdit.Put("/jamaah/{id}/tanggal-lahir", jamaahHandler.UpdateTanggalLahir)
 		jamaahEdit.Delete("/jamaah/{id}", jamaahHandler.DeleteJamaah)
 
 		// Dokumen Jamaah

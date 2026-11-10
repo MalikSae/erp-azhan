@@ -380,6 +380,24 @@ func (r *Repository) UpdateCatatan(ctx context.Context, id int64, brandID *int64
 	return nil
 }
 
+// ─── Update Tanggal Lahir ─────────────────────────────────────────────────────
+
+// UpdateTanggalLahir memperbarui tanggal lahir saja; kolom lain tidak disentuh. Dipakai form booking,
+// yang hanya memegang sebagian data jamaah dan tidak boleh mengirim ulang seluruh baris.
+func (r *Repository) UpdateTanggalLahir(ctx context.Context, id int64, brandID *int64, tanggalLahir string) (*Jamaah, error) {
+	existing, err := r.GetByID(ctx, id, brandID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := r.db.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir=? WHERE id=?`, tanggalLahir, id); err != nil {
+		return nil, fmt.Errorf("jamaah.UpdateTanggalLahir: %w", err)
+	}
+	if lama := tanggal10(nilaiPtr(existing.TanggalLahir)); lama != tanggalLahir {
+		r.catatBeda(ctx, id, []isianLog{{"tanggal_lahir", lama, tanggalLahir}})
+	}
+	return r.GetByID(ctx, id, brandID)
+}
+
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 // Delete menghapus jamaah. Verify brand match + tangkap FK 1451.
