@@ -17,6 +17,7 @@ import {
 } from "../api/bookings";
 import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengkapan";
 import { getJamaah } from "../api/jamaah";
+import { hariIniWIB } from "../utils/tanggal";
 import { listBrands } from "../api/brands";
 import { uploadMedia, openProtectedMedia } from "../api/media";
 import { getSeatLockIcon, getPaymentStatusMeta } from "../utils/bookingStatus";
@@ -119,7 +120,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [paymentForm, setPaymentForm] = useState({
     jumlah: "",
     metode: "transfer",
-    tanggal: new Date().toISOString().split('T')[0],
+    tanggal: hariIniWIB(),
     bank_account_id: "",
     sender_name: "",
     received_by: "",
@@ -652,7 +653,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       setPaymentForm({
         jumlah: "",
         metode: "transfer",
-        tanggal: new Date().toISOString().split('T')[0],
+        tanggal: hariIniWIB(),
         bank_account_id: "",
         sender_name: "",
         received_by: "",

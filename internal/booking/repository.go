@@ -221,13 +221,71 @@ func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64, 
 	if err != nil {
 		return nil, err
 	}
+	// Daftar tidak memuat pax per booking, jadi kelengkapan pax dihitung sekali untuk semua booking.
+	bookingIDs := make([]int64, len(items))
+	for i := range items {
+		bookingIDs[i] = items[i].ID
+	}
+	belumLengkap, err := paxBelumLengkapSet(ctx, r.db, bookingIDs)
+	if err != nil {
+		return nil, err
+	}
 	for i := range items {
 		if items[i].JamaahID != nil {
 			items[i].ProgressPaspor = withPaspor[*items[i].JamaahID]
 		}
-		computeSiapBerangkat(&items[i])
+		b := &items[i]
+		b.SiapBerangkat = b.PaxCount > 0 && b.ProgressTiket && b.ProgressHotel && b.ProgressLandArrangement && !belumLengkap[b.ID]
 	}
 	return items, nil
+}
+
+// paxBelumLengkapSet mengembalikan booking yang punya minimal satu pax aktif dengan progress belum lengkap.
+// Aturannya sama dengan computeSiapBerangkat: paspor terunggah, visa, siskopatuh, vaksin meningitis, dan
+// manasik (manasik tidak berlaku untuk infant).
+func paxBelumLengkapSet(ctx context.Context, q interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}, bookingIDs []int64) (map[int64]bool, error) {
+	out := make(map[int64]bool)
+	const chunk = 1000
+	for start := 0; start < len(bookingIDs); start += chunk {
+		end := start + chunk
+		if end > len(bookingIDs) {
+			end = len(bookingIDs)
+		}
+		part := bookingIDs[start:end]
+		args := make([]any, len(part))
+		for i, id := range part {
+			args[i] = id
+		}
+		query := `SELECT DISTINCT bp.booking_id FROM booking_pax bp
+			WHERE bp.pax_status = 'aktif' AND bp.booking_id IN (?` + strings.Repeat(",?", len(part)-1) + `)
+			AND NOT (
+				COALESCE(bp.progress_visa, FALSE) AND COALESCE(bp.progress_siskopatuh, FALSE)
+				AND COALESCE(bp.progress_vaksin_meningitis, FALSE)
+				AND (bp.pax_type = 'infant' OR COALESCE(bp.progress_manasik, FALSE))
+				AND EXISTS (SELECT 1 FROM dokumen_jamaah d WHERE d.jamaah_id = bp.jamaah_id
+					AND d.jenis = 'paspor' AND d.file_url IS NOT NULL AND d.file_url != '')
+			)`
+		rows, err := q.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("booking.paxBelumLengkapSet: %w", err)
+		}
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("booking.paxBelumLengkapSet scan: %w", err)
+			}
+			out[id] = true
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // pasporUploadedSet mengembalikan himpunan jamaah_id yang sudah mengunggah dokumen paspor.
