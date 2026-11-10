@@ -33,7 +33,8 @@ const ProgressCell = ({ value, title }) => {
   );
 };
 
-export const JamaahPage = ({ showBrandColumn = false }) => {
+// toolbarLeading: isi tambahan di kiri toolbar tabel (mis. pemilih tab Daftar / Menunggu persetujuan).
+export const JamaahPage = ({ showBrandColumn = false, toolbarLeading }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [data, setData] = useState([]);
@@ -145,16 +146,17 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
       const gender = row.jenis_kelamin === "L" ? "Laki-laki" : row.jenis_kelamin === "P" ? "Perempuan" : "";
       const sub = [row.id_jamaah, gender].filter(Boolean).join(" · ");
       return (
-        <div className="min-w-0">
+        // Nama satu baris, ID dan jenis kelamin satu baris; nama yang sangat panjang dipotong, lengkapnya di tooltip.
+        <div className="min-w-0 max-w-[280px]">
           <button
             type="button"
             onClick={() => navigate(`/jamaah/${row.id}`)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
-            title="Lihat Detail Jamaah"
+            className="block max-w-full truncate font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            title={row.nama_lengkap}
           >
             {row.nama_lengkap}
           </button>
-          {sub && <div className="mt-0.5 text-[11px] font-body text-neutral-400">{sub}</div>}
+          {sub && <div className="mt-0.5 truncate whitespace-nowrap text-[11px] font-body text-neutral-400">{sub}</div>}
         </div>
       );
     }
@@ -212,6 +214,7 @@ export const JamaahPage = ({ showBrandColumn = false }) => {
           itemsPerPage={15}
           searchPlaceholder="Cari nama, NIK, atau nomor HP..."
           emptyMessage='Belum ada data jamaah. Klik "+ Tambah Jamaah" untuk menambahkan.'
+          toolbarLeading={toolbarLeading}
           toolbarActions={
             <div className="flex flex-wrap items-center gap-2">
               <CustomDropdown
