@@ -11,6 +11,7 @@ import (
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/komisi"
+	"erp-azhan/api/internal/shared"
 )
 
 // Pakai Kredit Cashback (screen B5, agen-azhan.md 7.13, keputusan D4):
@@ -23,6 +24,8 @@ var (
 	ErrCashbackMelebihiTagihan = errors.New("nominal melebihi sisa tagihan booking")
 	ErrCashbackTanpaAkun       = errors.New("booking ini tidak punya akun pemesan, kredit cashback tidak bisa dipakai")
 	ErrCashbackStatusBooking   = errors.New("kredit cashback hanya bisa dipakai pada booking yang belum lunas atau batal")
+	// ErrCashbackNonaktif: fitur kredit cashback dimatikan di tahap awal (spek keagenan bagian 1).
+	ErrCashbackNonaktif = errors.New("fitur kredit cashback belum diaktifkan")
 )
 
 type KreditCashbackAkun struct {
@@ -70,28 +73,41 @@ func cashbackBisaDipakai(status string) bool {
 	return status == "baru" || status == "dp"
 }
 
+// akunPemesan mengembalikan akun pemesan booking. ok false bila booking tidak punya akun pemesan.
+func akunPemesan(ctx context.Context, q cashbackQuerier, bookingID int64) (akunID int64, nama string, ok bool, err error) {
+	var id sql.NullInt64
+	var n sql.NullString
+	err = q.QueryRowContext(ctx, `
+		SELECT a.id, a.nama_lengkap FROM bookings b JOIN customer_accounts a ON a.id = b.customer_account_id
+		WHERE b.id = ?`, bookingID).Scan(&id, &n)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", false, nil
+	}
+	if err != nil {
+		return 0, "", false, fmt.Errorf("booking cashback: akun pemesan: %w", err)
+	}
+	return id.Int64, n.String, id.Valid, nil
+}
+
 func kreditCashbackBooking(ctx context.Context, q cashbackQuerier, bookingID int64, brandID *int64) (*KreditCashbackBooking, error) {
 	status, _, sisa, err := bookingTagihan(ctx, q, bookingID, brandID, false)
 	if err != nil {
 		return nil, err
 	}
 	res := &KreditCashbackBooking{SisaTagihan: sisa, BisaDipakai: cashbackBisaDipakai(status) && sisa > 0}
-	var akunID sql.NullInt64
-	var nama sql.NullString
-	if err := q.QueryRowContext(ctx, `
-		SELECT a.id, a.nama_lengkap FROM bookings b JOIN customer_accounts a ON a.id = b.customer_account_id
-		WHERE b.id = ?`, bookingID).Scan(&akunID, &nama); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("booking cashback: akun pemesan: %w", err)
+	akunID, nama, ada, err := akunPemesan(ctx, q, bookingID)
+	if err != nil {
+		return nil, err
 	}
-	if !akunID.Valid {
+	if !ada {
 		return res, nil
 	}
-	saldo, err := komisi.HitungSaldo(ctx, q, akunID.Int64)
+	saldo, err := komisi.HitungSaldo(ctx, q, akunID)
 	if err != nil {
 		return nil, err
 	}
 	if saldo.KreditCashback > 0 {
-		res.Akun = &KreditCashbackAkun{AkunID: akunID.Int64, NamaLengkap: nama.String, KreditCashback: saldo.KreditCashback}
+		res.Akun = &KreditCashbackAkun{AkunID: akunID, NamaLengkap: nama, KreditCashback: saldo.KreditCashback}
 	}
 	return res, nil
 }
@@ -104,22 +120,19 @@ func pakaiCashbackTx(ctx context.Context, tx *sql.Tx, r *Repository, bookingID i
 	if !cashbackBisaDipakai(status) {
 		return ErrCashbackStatusBooking
 	}
-	var akunID sql.NullInt64
-	var nama string
-	err = tx.QueryRowContext(ctx, `
-		SELECT a.id, a.nama_lengkap FROM bookings b JOIN customer_accounts a ON a.id = b.customer_account_id
-		WHERE b.id = ?`, bookingID).Scan(&akunID, &nama)
-	if errors.Is(err, sql.ErrNoRows) {
+	akunID, nama, ada, err := akunPemesan(ctx, tx, bookingID)
+	if err != nil {
+		return err
+	}
+	if !ada {
 		return ErrCashbackTanpaAkun
 	}
-	if err != nil {
-		return fmt.Errorf("booking cashback: cek akun: %w", err)
-	}
 	// Kunci baris akun supaya kredit tidak terpakai dua kali secara bersamaan.
-	if _, err := tx.ExecContext(ctx, `SELECT id FROM customer_accounts WHERE id = ? FOR UPDATE`, akunID.Int64); err != nil {
+	var terkunci int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM customer_accounts WHERE id = ? FOR UPDATE`, akunID).Scan(&terkunci); err != nil {
 		return fmt.Errorf("booking cashback: kunci akun: %w", err)
 	}
-	saldo, err := komisi.HitungSaldo(ctx, tx, akunID.Int64)
+	saldo, err := komisi.HitungSaldo(ctx, tx, akunID)
 	if err != nil {
 		return err
 	}
@@ -134,10 +147,13 @@ func pakaiCashbackTx(ctx context.Context, tx *sql.Tx, r *Repository, bookingID i
 	if err != nil {
 		return fmt.Errorf("booking cashback: diskon: %w", err)
 	}
-	discountID, _ := res.LastInsertId()
+	discountID, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("booking cashback: id diskon: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO pemakaian_cashback (brand_id, akun_id, booking_id, booking_discount_id, nominal, dipakai_oleh)
-		VALUES (?, ?, ?, ?, ?, ?)`, bookingBrand, akunID.Int64, bookingID, discountID, req.Nominal, adminID); err != nil {
+		VALUES (?, ?, ?, ?, ?, ?)`, bookingBrand, akunID, bookingID, discountID, req.Nominal, adminID); err != nil {
 		return fmt.Errorf("booking cashback: pemakaian: %w", err)
 	}
 	return r.recalculateTotalTx(ctx, tx, bookingID)
@@ -150,17 +166,35 @@ func (r *Repository) KreditCashback(ctx context.Context, bookingID int64, brandI
 func (r *Repository) PakaiCashback(ctx context.Context, bookingID int64, brandID *int64, adminID int64, req PakaiCashbackRequest) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("booking cashback: mulai transaksi: %w", err)
 	}
 	defer tx.Rollback()
 	if err := pakaiCashbackTx(ctx, tx, r, bookingID, brandID, adminID, req); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("booking cashback: commit: %w", err)
+	}
+	return nil
+}
+
+// cashbackAktif menolak permintaan selama fitur kredit cashback dimatikan (komisi.KomisiRepeatCashbackAktif).
+// Tanpa ini rute tetap bisa dipanggil langsung, dan pemakaian kredit menambah diskon tanpa melewati batas
+// diskon 10% (audit Jamaah & Booking T-02). Saat fitur dinyalakan, putuskan dulu apakah kredit cashback
+// ikut batas itu.
+func cashbackAktif(w http.ResponseWriter) bool {
+	if komisi.KomisiRepeatCashbackAktif {
+		return true
+	}
+	writeError(w, http.StatusConflict, ErrCashbackNonaktif.Error())
+	return false
 }
 
 // GetKreditCashback GET /api/admin/bookings/{id}/cashback
 func (h *Handler) GetKreditCashback(w http.ResponseWriter, r *http.Request) {
+	if !cashbackAktif(w) {
+		return
+	}
 	id, ok := parseID(w, r)
 	if !ok {
 		return
@@ -175,6 +209,9 @@ func (h *Handler) GetKreditCashback(w http.ResponseWriter, r *http.Request) {
 
 // PakaiKreditCashback POST /api/admin/bookings/{id}/cashback
 func (h *Handler) PakaiKreditCashback(w http.ResponseWriter, r *http.Request) {
+	if !cashbackAktif(w) {
+		return
+	}
 	id, ok := parseID(w, r)
 	if !ok {
 		return
@@ -184,7 +221,7 @@ func (h *Handler) PakaiKreditCashback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
-	if req.Nominal <= 0 || req.Nominal != float64(int64(req.Nominal)) {
+	if req.Nominal <= 0 || !shared.RupiahBulat(req.Nominal) {
 		writeError(w, http.StatusBadRequest, "nominal harus bilangan bulat lebih dari 0")
 		return
 	}

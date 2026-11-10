@@ -31,7 +31,8 @@ type Payment struct {
 	ScheduleName             string     `json:"schedule_name,omitempty"`
 	DepartureDate            *string    `json:"departure_date,omitempty"`
 	BrandName                string     `json:"brand_name,omitempty"`
-	BookingIDBooking         string     `json:"booking_id_booking,omitempty"`
+	// KodeBooking: kode booking yang dilihat pengguna (bookings.id_booking), bukan id baris.
+	KodeBooking              string     `json:"booking_id_booking,omitempty"`
 	CreatedAt                time.Time  `json:"created_at"`
 }
 

@@ -54,7 +54,10 @@ func BatalkanKomisiBookingTx(ctx context.Context, tx *sql.Tx, bookingID int64) (
 	if err != nil {
 		return 0, fmt.Errorf("komisi: batalkan komisi booking %d: %w", bookingID, err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("komisi: jumlah komisi batal booking %d: %w", bookingID, err)
+	}
 	return n, nil
 }
 

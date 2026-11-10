@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/komisi"
+	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/shared"
 )
 
@@ -81,14 +82,38 @@ func (r *Repository) ListDailyBrandTransactions(ctx context.Context, brandID *in
 	return items, rows.Err()
 }
 
+// kolomPayment: kolom tabel payments beralias p, urutannya sama dengan tujuanScan.
+const kolomPayment = `p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,
+	p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.created_at`
+
+// tujuanScan mengembalikan tujuan Scan untuk kolomPayment, diikuti kolom tambahan bila ada.
+func tujuanScan(p *Payment, tambahan ...any) []any {
+	dasar := []any{&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID,
+		&p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank,
+		&p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.VoidReason, &p.VoidedBy,
+		&p.VoidedAt, &p.CreatedAt}
+	return append(dasar, tambahan...)
+}
+
+// totalTerkonfirmasiTx menjumlahkan pembayaran terkonfirmasi sebuah booking. kecualiID > 0 mengeluarkan
+// satu pembayaran dari hitungan (pembayaran yang sedang dikonfirmasi atau dibatalkan).
+func totalTerkonfirmasiTx(ctx context.Context, tx *sql.Tx, bookingID, kecualiID int64) (float64, error) {
+	var total float64
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status=? AND id<>?`,
+		bookingID, StatusConfirmed, kecualiID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("payment: total terkonfirmasi booking %d: %w", bookingID, err)
+	}
+	return total, nil
+}
+
 // ─── List ─────────────────────────────────────────────────────────────────────
 
 // ListByBookingID mengambil list payment untuk sebuah booking.
 // Memverifikasi brand via 2-hop JOIN: payments -> bookings -> schedules.
 func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brandID *int64) ([]Payment, error) {
 	q := `
-		SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,
-			p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.created_at
+		SELECT ` + kolomPayment + `
 		FROM payments p
 		JOIN bookings b ON b.id = p.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
@@ -105,15 +130,15 @@ func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brand
 
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("payment.List: %w", err)
+		return nil, fmt.Errorf("payment.ListByBookingID: %w", err)
 	}
 	defer rows.Close()
 
 	items := make([]Payment, 0)
 	for rows.Next() {
 		var p Payment
-		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.VoidReason, &p.VoidedBy, &p.VoidedAt, &p.CreatedAt); err != nil {
-			return nil, fmt.Errorf("payment.List scan: %w", err)
+		if err := rows.Scan(tujuanScan(&p)...); err != nil {
+			return nil, fmt.Errorf("payment.ListByBookingID scan: %w", err)
 		}
 		items = append(items, p)
 	}
@@ -126,8 +151,7 @@ func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brand
 // Memverifikasi brand via 2-hop JOIN.
 func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Payment, error) {
 	q := `
-		SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,
-			p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.created_at
+		SELECT ` + kolomPayment + `
 		FROM payments p
 		JOIN bookings b ON b.id = p.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
@@ -142,7 +166,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Pa
 	}
 
 	var p Payment
-	err := r.db.QueryRowContext(ctx, q, args...).Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.VoidReason, &p.VoidedBy, &p.VoidedAt, &p.CreatedAt)
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(tujuanScan(&p)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -153,7 +177,9 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Pa
 }
 
 func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string) ([]Payment, error) {
-	q := `SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.created_at,j.nama_lengkap,s.jadwal_nama,br.name,COALESCE(b.id_booking, '') FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN jamaah j ON j.id=b.pic_jamaah_id JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE b.status != 'draft'`
+	q := `SELECT ` + kolomPayment + `,j.nama_lengkap,s.jadwal_nama,br.name,COALESCE(b.id_booking, '')
+		FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN jamaah j ON j.id=b.pic_jamaah_id
+		JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE b.status != 'draft'`
 	args := []any{}
 	if brandID != nil {
 		q += " AND s.brand_id=?"
@@ -167,18 +193,14 @@ func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string)
 	args = append(args, shared.DefaultListCap)
 	rows, err := r.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("payment.ListAll: %w", err)
 	}
 	defer rows.Close()
 	items := []Payment{}
 	for rows.Next() {
 		var p Payment
-		var bookingIDBooking sql.NullString
-		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.VoidReason, &p.VoidedBy, &p.VoidedAt, &p.CreatedAt, &p.JamaahName, &p.ScheduleName, &p.BrandName, &bookingIDBooking); err != nil {
-			return nil, err
-		}
-		if bookingIDBooking.Valid {
-			p.BookingIDBooking = bookingIDBooking.String
+		if err := rows.Scan(tujuanScan(&p, &p.JamaahName, &p.ScheduleName, &p.BrandName, &p.KodeBooking)...); err != nil {
+			return nil, fmt.Errorf("payment.ListAll scan: %w", err)
 		}
 		items = append(items, p)
 	}
@@ -203,15 +225,14 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 	if err != nil {
 		return nil, fmt.Errorf("payment.Create check booking: %w", err)
 	}
-	if bookingStatus == "batal" || bookingStatus == "draft" {
+	if bookingTertutup(bookingStatus) {
 		return nil, ErrBookingClosed
 	}
-	if req.Source == "portal" && (!blocked || (expires.Valid && expires.Time.Before(time.Now()))) {
+	if req.Source == SourcePortal && (!blocked || (expires.Valid && expires.Time.Before(time.Now()))) {
 		return nil, ErrBookingClosed
 	}
-	err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id=? AND status='confirmed'`, bookingID).Scan(&totalPaid)
-	if err != nil {
-		return nil, fmt.Errorf("payment.Create check paid: %w", err)
+	if totalPaid, err = totalTerkonfirmasiTx(ctx, tx, bookingID, 0); err != nil {
+		return nil, err
 	}
 	if totalHarga.Valid && totalHarga.Float64 > 0 {
 		sisaTagihan := totalHarga.Float64 - totalPaid
@@ -233,8 +254,13 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 			JOIN bookings b ON b.id = ?
 			JOIN schedules s ON s.id = b.schedule_id AND s.brand_id = ba.brand_id
 			WHERE ba.id = ? AND ba.is_active = TRUE`, bookingID, *req.BankAccountID).Scan(&n, &no, &h)
-		if err != nil {
+		// Hanya "tidak ada baris" yang berarti rekening tidak ditemukan; gangguan database harus tetap
+		// terlihat sebagai kesalahan, bukan sebagai data yang tidak ada.
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
+		}
+		if err != nil {
+			return nil, fmt.Errorf("payment.Create cek rekening: %w", err)
 		}
 		bankName = &n
 		accountNumber = &no
@@ -243,21 +269,22 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 
 	source := req.Source
 	if source == "" {
-		source = "admin"
+		source = SourceAdmin
 	}
 
-	status := "pending"
-	var vBy *int64
+	// Pembayaran yang dicatat admin langsung terkonfirmasi; dari portal menunggu verifikasi.
+	status := StatusPending
+	var diverifikasiOleh *int64
 	var verifiedAt any
-	if source == "admin" {
-		status = "confirmed"
-		vBy = verifiedBy
+	if source == SourceAdmin {
+		status = StatusConfirmed
+		diverifikasiOleh = verifiedBy
 		verifiedAt = time.Now().UTC()
 	}
 
 	const q = `INSERT INTO payments (booking_id,bank_account_id,destination_bank_name,destination_account_number,destination_account_holder,jumlah,metode,sender_name,sender_bank,received_by,tanggal,status,bukti_url,notes,source,verified_by,verified_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 
-	res, err := tx.ExecContext(ctx, q, bookingID, req.BankAccountID, bankName, accountNumber, accountHolder, req.Jumlah, req.Metode, req.SenderName, req.SenderBank, req.ReceivedBy, req.Tanggal, status, req.BuktiURL, req.Notes, source, vBy, verifiedAt)
+	res, err := tx.ExecContext(ctx, q, bookingID, req.BankAccountID, bankName, accountNumber, accountHolder, req.Jumlah, req.Metode, req.SenderName, req.SenderBank, req.ReceivedBy, req.Tanggal, status, req.BuktiURL, req.Notes, source, diverifikasiOleh, verifiedAt)
 	if err != nil {
 		return nil, fmt.Errorf("payment.Create: %w", err)
 	}
@@ -267,12 +294,12 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 		return nil, fmt.Errorf("payment.Create LastInsertId: %w", err)
 	}
 
-	if status == "confirmed" {
+	if status == StatusConfirmed {
 		if err := r.syncBookingStatusTx(ctx, tx, bookingID); err != nil {
 			return nil, fmt.Errorf("payment.Create sync booking: %w", err)
 		}
 	}
-	if status == "pending" && expires.Valid && expires.Time.After(time.Now()) {
+	if status == StatusPending && expires.Valid && expires.Time.After(time.Now()) {
 		if err := extendPendingReviewTx(ctx, tx, bookingID); err != nil {
 			return nil, err
 		}
@@ -286,7 +313,7 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 }
 
 // GetBookingTotalAndPaid mengambil status, total_harga booking dan total pembayaran yang sudah dikonfirmasi.
-func (r *Repository) GetBookingTotalAndPaid(ctx context.Context, bookingID int64) (string, *float64, float64, error) {
+func (r *Repository) GetBookingTotalAndPaid(ctx context.Context, bookingID int64) (statusBooking string, totalHargaBooking *float64, terbayar float64, err error) {
 	q := `
 		SELECT b.status, b.total_harga, COALESCE(SUM(p.jumlah), 0)
 		FROM bookings b
@@ -296,7 +323,7 @@ func (r *Repository) GetBookingTotalAndPaid(ctx context.Context, bookingID int64
 	var status string
 	var totalHarga sql.NullFloat64
 	var totalPaid float64
-	err := r.db.QueryRowContext(ctx, q, bookingID).Scan(&status, &totalHarga, &totalPaid)
+	err = r.db.QueryRowContext(ctx, q, bookingID).Scan(&status, &totalHarga, &totalPaid)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil, 0, ErrNotFound
 	}
@@ -331,26 +358,26 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 	var bookingStatus string
 	var total float64
 	if err = tx.QueryRowContext(ctx, `SELECT status,COALESCE(total_harga,0) FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&bookingStatus, &total); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("payment.UpdateStatus lock booking: %w", err)
 	}
 	// Booking batal/draft tidak boleh menerima konfirmasi, tetapi pembayaran pending yang
 	// tersisa harus tetap bisa ditolak agar tidak menggantung di inbox.
-	if (bookingStatus == "batal" || bookingStatus == "draft") && newStatus != "rejected" {
+	if bookingTertutup(bookingStatus) && newStatus != StatusRejected {
 		return nil, ErrBookingClosed
 	}
 	var amount float64
 	var oldStatus string
 	if err = tx.QueryRowContext(ctx, `SELECT jumlah,status FROM payments WHERE id=? FOR UPDATE`, id).Scan(&amount, &oldStatus); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("payment.UpdateStatus lock payment: %w", err)
 	}
 	// A concurrent verifier may have finished after the HTTP handler read pending.
-	if oldStatus != "pending" {
+	if oldStatus != StatusPending {
 		if err := tx.Commit(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("payment.UpdateStatus commit: %w", err)
 		}
 		return r.GetByID(ctx, id, nil)
 	}
-	if newStatus == "confirmed" {
+	if newStatus == StatusConfirmed {
 		if err := checkConfirmationBalanceTx(ctx, tx, bookingID, id, amount, total); err != nil {
 			return nil, err
 		}
@@ -374,8 +401,8 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 
 // Caller holds the booking lock, so concurrent confirmations cannot share a balance.
 func checkConfirmationBalanceTx(ctx context.Context, tx *sql.Tx, bookingID, paymentID int64, amount, total float64) error {
-	var otherPaid float64
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status='confirmed' AND id<>?`, bookingID, paymentID).Scan(&otherPaid); err != nil {
+	otherPaid, err := totalTerkonfirmasiTx(ctx, tx, bookingID, paymentID)
+	if err != nil {
 		return err
 	}
 	if amount+otherPaid > total {
@@ -387,23 +414,28 @@ func checkConfirmationBalanceTx(ctx context.Context, tx *sql.Tx, bookingID, paym
 func extendPendingReviewTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	result, err := tx.ExecContext(ctx, `UPDATE booking_checkout SET review_extended=TRUE WHERE booking_id=? AND review_extended=FALSE AND original_expires_at>=NOW()`, bookingID)
 	if err != nil {
-		return err
+		return fmt.Errorf("payment: tandai perpanjangan tinjauan: %w", err)
 	}
 	changed, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("payment: tandai perpanjangan tinjauan: %w", err)
 	}
-	if changed > 0 {
-		_, err = tx.ExecContext(ctx, `UPDATE bookings b JOIN booking_checkout c ON c.booking_id=b.id SET b.seat_hold_expires_at=DATE_ADD(c.original_expires_at,INTERVAL 24 HOUR) WHERE b.id=?`, bookingID)
+	if changed == 0 {
+		return nil
 	}
-	return err
+	if _, err = tx.ExecContext(ctx, `UPDATE bookings b JOIN booking_checkout c ON c.booking_id=b.id SET b.seat_hold_expires_at=DATE_ADD(c.original_expires_at,INTERVAL 24 HOUR) WHERE b.id=?`, bookingID); err != nil {
+		return fmt.Errorf("payment: perpanjang hold kursi: %w", err)
+	}
+	return nil
 }
 
 func (r *Repository) syncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	return SyncBookingStatusTx(ctx, tx, bookingID)
 }
 
-// Shared with price recalculation so payment and booking edits use one state machine.
+// SyncBookingStatusTx menghitung ulang status booking (baru/dp/lunas) dari pembayaran terkonfirmasi, lalu
+// menyesuaikan kursi dan komisi. Dipakai juga oleh perhitungan ulang harga, supaya pembayaran dan perubahan
+// booking memakai satu mesin status. Booking draft dan batal tidak disentuh.
 func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	var totalHarga sql.NullFloat64
 	var currentStatus string
@@ -413,21 +445,16 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	err := tx.QueryRowContext(ctx, `SELECT total_harga,status,schedule_id,is_seat_blocked,seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID).
 		Scan(&totalHarga, &currentStatus, &scheduleID, &isSeatBlocked, &seatCount)
 	if err != nil {
-		return err
+		return fmt.Errorf("payment: sinkron status, kunci booking %d: %w", bookingID, err)
 	}
-
-	// Jangan ubah jika booking sudah dibatalkan
-	if currentStatus == "batal" || currentStatus == "draft" {
+	if bookingTertutup(currentStatus) {
 		return nil
 	}
 
-	var totalPaid float64
-	err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah), 0) FROM payments WHERE booking_id=? AND status='confirmed'`, bookingID).
-		Scan(&totalPaid)
+	totalPaid, err := totalTerkonfirmasiTx(ctx, tx, bookingID, 0)
 	if err != nil {
 		return err
 	}
-
 	// Snapshot terms remain stable when the package or brand changes.
 	targetHarga := 0.0
 	if totalHarga.Valid {
@@ -435,66 +462,74 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	}
 	requiredDP, err := shared.RequiredBookingDP(ctx, tx, bookingID, targetHarga)
 	if err != nil {
-		return err
+		return fmt.Errorf("payment: sinkron status, DP wajib: %w", err)
 	}
-	targetStatus := "baru"
-	if targetHarga > 0 && totalPaid >= targetHarga {
-		targetStatus = "lunas"
-	} else if totalPaid > 0 && totalPaid >= requiredDP {
-		targetStatus = "dp"
-	}
-	if targetStatus != currentStatus {
-		// Kursi diambil setiap kali booking akan ditandai memegang kursi (dp/lunas) tetapi
-		// belum terblokir. Tidak cukup untuk status "baru": booking dp/lunas yang kursinya
-		// dilepas manual lalu naik status juga harus mengambil kursi lagi (SM-01).
-		if (targetStatus == "dp" || targetStatus == "lunas") && !isSeatBlocked {
-			var activeRegularPax int
-			if err = tx.QueryRowContext(ctx, `
-				SELECT COUNT(*) FROM booking_pax
-				WHERE booking_id=? AND counts_for_seat=TRUE AND pax_status='aktif'`, bookingID,
-			).Scan(&activeRegularPax); err != nil {
-				return err
-			}
-			if activeRegularPax > seatCount {
-				seatCount = activeRegularPax
-			}
-			var seatRemaining int
-			if err = tx.QueryRowContext(ctx, `SELECT seat_sisa FROM schedules WHERE id=? FOR UPDATE`, scheduleID).Scan(&seatRemaining); err != nil {
-				return err
-			}
-			if seatRemaining < seatCount {
-				return ErrSeatUnavailable
-			}
-			_, err = tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=seat_sisa-? WHERE id=?`, seatCount, scheduleID)
-			if err != nil {
-				return err
-			}
-		}
-		// Hold 24 jam hanya untuk reservasi tanpa pembayaran terkonfirmasi. Booking
-		// yang sudah dibayar lalu turun ke 'baru' (mis. koreksi diskon/add-on) tetap
-		// memegang kursi tanpa batas waktu sampai admin memutuskan (JB-03).
-		_, err = tx.ExecContext(ctx,
-			`UPDATE bookings SET status=?,is_seat_blocked=IF(? IN ('dp','lunas'),TRUE,is_seat_blocked),
-			 seat_hold_expires_at=IF(? IN ('dp','lunas') OR ? > 0,NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
-			 seat_hold_key=IF(? IN ('dp','lunas'),NULL,seat_hold_key) WHERE id=?`,
-			targetStatus, targetStatus, targetStatus, totalPaid, targetStatus, bookingID)
-		if err != nil {
-			return err
-		}
-		// Komisi mengikuti lunas terakhir (K25): keluar dari lunas membatalkan komisi booking ini, masuk
-		// lunas mencatatnya lagi dengan penerima saat itu.
-		if currentStatus == "lunas" {
-			if _, err := komisi.OnBookingTurunDariLunas(ctx, tx, bookingID); err != nil {
-				return err
-			}
-		}
-		if targetStatus == "lunas" {
-			if err := komisi.OnBookingLunas(ctx, tx, bookingID); err != nil {
-				return err
-			}
-		}
+	targetStatus := statusBookingDari(targetHarga, totalPaid, requiredDP)
+	if targetStatus == currentStatus {
+		return nil
 	}
 
+	// Kursi diambil setiap kali booking akan ditandai memegang kursi (dp/lunas) tetapi
+	// belum terblokir. Tidak cukup untuk status "baru": booking dp/lunas yang kursinya
+	// dilepas manual lalu naik status juga harus mengambil kursi lagi (SM-01).
+	if memegangKursi(targetStatus) && !isSeatBlocked {
+		if err := ambilKursiTx(ctx, tx, bookingID, scheduleID, seatCount); err != nil {
+			return err
+		}
+	}
+	// Hold 24 jam hanya untuk reservasi tanpa pembayaran terkonfirmasi. Booking
+	// yang sudah dibayar lalu turun ke 'baru' (mis. koreksi diskon/add-on) tetap
+	// memegang kursi tanpa batas waktu sampai admin memutuskan (JB-03).
+	pegang := memegangKursi(targetStatus)
+	if _, err = tx.ExecContext(ctx,
+		`UPDATE bookings SET status=?,is_seat_blocked=IF(?,TRUE,is_seat_blocked),
+		 seat_hold_expires_at=IF(? OR ? > 0,NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
+		 seat_hold_key=IF(?,NULL,seat_hold_key) WHERE id=?`,
+		targetStatus, pegang, pegang, totalPaid, pegang, bookingID); err != nil {
+		return fmt.Errorf("payment: sinkron status, simpan status %s: %w", targetStatus, err)
+	}
+	return sinkronKomisiTx(ctx, tx, bookingID, currentStatus, targetStatus)
+}
+
+// ambilKursiTx mengurangi sisa kursi jadwal sebanyak kursi booking. Jumlah kursi diambil dari pax aktif
+// bila lebih besar dari seat_count yang tersimpan.
+func ambilKursiTx(ctx context.Context, tx *sql.Tx, bookingID, scheduleID int64, seatCount int) error {
+	var activeRegularPax int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM booking_pax
+		WHERE booking_id=? AND counts_for_seat=TRUE AND pax_status='aktif'`, bookingID,
+	).Scan(&activeRegularPax); err != nil {
+		return fmt.Errorf("payment: ambil kursi, hitung pax: %w", err)
+	}
+	if activeRegularPax > seatCount {
+		seatCount = activeRegularPax
+	}
+	var seatRemaining int
+	if err := tx.QueryRowContext(ctx, `SELECT seat_sisa FROM schedules WHERE id=? FOR UPDATE`, scheduleID).Scan(&seatRemaining); err != nil {
+		return fmt.Errorf("payment: ambil kursi, kunci jadwal: %w", err)
+	}
+	if seatRemaining < seatCount {
+		return ErrSeatUnavailable
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=seat_sisa-? WHERE id=?`, seatCount, scheduleID); err != nil {
+		return fmt.Errorf("payment: ambil kursi, kurangi sisa: %w", err)
+	}
+	return nil
+}
+
+// sinkronKomisiTx: komisi mengikuti lunas terakhir (K25). Keluar dari lunas membatalkan komisi booking ini,
+// masuk lunas mencatatnya lagi dengan penerima saat itu.
+func sinkronKomisiTx(ctx context.Context, tx *sql.Tx, bookingID int64, statusLama, statusBaru string) error {
+	if statusLama == bookingLunas {
+		if _, err := komisi.OnBookingTurunDariLunas(ctx, tx, bookingID); err != nil {
+			return err
+		}
+	}
+	if statusBaru == bookingLunas {
+		if err := komisi.OnBookingLunas(ctx, tx, bookingID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -539,18 +574,19 @@ func voidTx(ctx context.Context, tx *sql.Tx, id int64, alasan string, adminID in
 	if err = tx.QueryRowContext(ctx, `SELECT status FROM payments WHERE id=? FOR UPDATE`, id).Scan(&status); err != nil {
 		return fmt.Errorf("payment.Void lock payment: %w", err)
 	}
-	if status == "void" {
+	if status == StatusVoid {
 		return nil
 	}
-	if status != "confirmed" {
+	if status != StatusConfirmed {
 		return ErrNotVoidable
 	}
 	// Dana yang sudah dikembalikan tidak boleh melebihi pembayaran terkonfirmasi yang tersisa.
-	var sisaTerkonfirmasi, refund float64
-	if err = tx.QueryRowContext(ctx, `
-		SELECT (SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status='confirmed' AND id<>?),
-		       (SELECT COALESCE(SUM(jumlah),0) FROM booking_refunds WHERE booking_id=?)`, bookingID, id, bookingID).
-		Scan(&sisaTerkonfirmasi, &refund); err != nil {
+	sisaTerkonfirmasi, err := totalTerkonfirmasiTx(ctx, tx, bookingID, id)
+	if err != nil {
+		return err
+	}
+	var refund float64
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah),0) FROM booking_refunds WHERE booking_id=?`, bookingID).Scan(&refund); err != nil {
 		return fmt.Errorf("payment.Void cek refund: %w", err)
 	}
 	if refund > sisaTerkonfirmasi {
@@ -561,7 +597,7 @@ func voidTx(ctx context.Context, tx *sql.Tx, id int64, alasan string, adminID in
 	if adminID > 0 {
 		pelaku = adminID
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE payments SET status='void', void_reason=?, voided_by=?, voided_at=NOW() WHERE id=?`, alasan, pelaku, id); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE payments SET status=?, void_reason=?, voided_by=?, voided_at=NOW() WHERE id=?`, StatusVoid, alasan, pelaku, id); err != nil {
 		return fmt.Errorf("payment.Void update: %w", err)
 	}
 	if err = SyncBookingStatusTx(komisi.DenganSebabBatal(ctx, komisi.SebabVoid), tx, bookingID); err != nil {
@@ -572,7 +608,7 @@ func voidTx(ctx context.Context, tx *sql.Tx, id int64, alasan string, adminID in
 	// itu tidak pernah ada, sehingga dasar komisinya hilang. Refund tidak lewat sini dan tidak mengubah komisi.
 	// Booking yang dibatalkan setelah dp atau lunas mempertahankan total harganya, jadi pembandingnya sama
 	// dengan booking hidup: komisi batal bila sisa pembayaran terkonfirmasi tidak lagi menutup total harga.
-	if bookingStatus == "batal" && sisaTerkonfirmasi < totalHarga {
+	if bookingStatus == bookingBatal && sisaTerkonfirmasi < totalHarga {
 		if _, err = komisi.BatalkanKomisiBookingTx(komisi.DenganSebabBatal(ctx, komisi.SebabVoid), tx, bookingID); err != nil {
 			return fmt.Errorf("payment.Void batalkan komisi booking batal: %w", err)
 		}
@@ -594,7 +630,11 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 	if err != nil {
 		return fmt.Errorf("payment.Delete: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n > 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("payment.Delete jumlah baris: %w", err)
+	}
+	if n > 0 {
 		return nil
 	}
 	var status string
@@ -622,4 +662,9 @@ func (r *Repository) BookingExistsForBrand(ctx context.Context, bookingID int64,
 	var count int
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(&count)
 	return count > 0, err
+}
+
+// ValidasiBuktiAdmin memastikan bukti pembayaran adalah unggahan admin resmi di brand ini, bukan URL bebas.
+func (r *Repository) ValidasiBuktiAdmin(ctx context.Context, url string, brandID *int64) error {
+	return media.ValidateAdminPaymentProof(ctx, r.db, url, brandID)
 }
