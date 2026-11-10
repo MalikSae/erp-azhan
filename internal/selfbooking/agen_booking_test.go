@@ -454,7 +454,7 @@ func TestBookingPublikMengikatAkunKeAgenPemilikKunciJamaah(t *testing.T) {
 	akunZ := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AkunZ"})
 	resp, err := processBookingTx(ctx, tx, brand, BookingRequest{
 		ScheduleID: sched,
-		PIC:        PICInput{NamaLengkap: "Z Terkunci", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikZ)},
+		PIC:        PICInput{NamaLengkap: "Z Terkunci (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikZ)},
 		Anggota:    []AnggotaInput{{PaxType: "reguler", NamaLengkap: "Anak Z", JenisKelamin: "L", RoomType: quad(), NIK: nikp(nikUji())}},
 	}, inisiator{accountID: akunZ})
 	if err != nil {
@@ -477,7 +477,7 @@ func TestBookingPublikMengikatAkunKeAgenPemilikKunciJamaah(t *testing.T) {
 	akunV := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AkunV", Direkrut: y})
 	if _, err := processBookingTx(ctx, tx, brand, BookingRequest{
 		ScheduleID: sched,
-		PIC:        PICInput{NamaLengkap: "V Terkunci", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikV)},
+		PIC:        PICInput{NamaLengkap: "V Terkunci (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikV)},
 	}, inisiator{accountID: akunV}); err != nil {
 		t.Fatalf("booking V: %v", err)
 	}
@@ -492,7 +492,7 @@ func TestBookingPublikMengikatAkunKeAgenPemilikKunciJamaah(t *testing.T) {
 	if _, err := processBookingTx(ctx, tx, brand, BookingRequest{
 		ScheduleID:       sched,
 		PemesanTidakIkut: true,
-		PIC:              PICInput{NamaLengkap: "U Terkunci", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikU)},
+		PIC:              PICInput{NamaLengkap: "U Terkunci (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikU)},
 	}, inisiator{accountID: akunPemesan}); err != nil {
 		t.Fatalf("booking pemesan tidak ikut: %v", err)
 	}
