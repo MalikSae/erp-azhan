@@ -1,7 +1,7 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Search, HelpCircle, Bell, ChevronDown, LogOut, ShieldCheck, Menu, KeyRound } from 'lucide-react';
+import { Search, Bell, ChevronDown, LogOut, ShieldCheck, Menu, KeyRound } from 'lucide-react';
 
 const Topbar = ({ toggleSidebar }) => {
   const { logout, user, brandInfo, isHolding } = useContext(AuthContext);
@@ -44,15 +44,6 @@ const Topbar = ({ toggleSidebar }) => {
 
       {/* Right Side - Actions & User Profile */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Help Button — ikon kotak berbingkai ala SmartHR */}
-        <button
-          type="button"
-          className="w-9 h-9 flex items-center justify-center text-neutral-500 hover:text-neutral-800 bg-white hover:bg-neutral-50 border border-neutral-200 rounded-lg transition-colors"
-          title="Pusat Bantuan & Panduan"
-        >
-          <HelpCircle className="w-[18px] h-[18px]" />
-        </button>
-
         {/* Notification Bell with Badge */}
         <button
           type="button"
