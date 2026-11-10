@@ -25,7 +25,9 @@ _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lam
 
 **Pax**: satu kursi dalam booking (`booking_pax`). Jenis: reguler atau bayi (infant).
 
-**Lunas**: status booking yang memicu pencatatan komisi.
+**Lunas**: status booking yang memicu pencatatan komisi. Komisi mengikuti lunas terakhir: booking yang turun dari lunas membatalkan komisinya, dan komisi dihitung ulang saat booking lunas lagi.
+
+**Komisi batal**: baris komisi yang ditandai batal karena bookingnya turun dari lunas. Tidak dihapus dan tidak dihitung di saldo, total, maupun peringkat.
 
 **Jadwal**: keberangkatan paket pada tanggal tertentu (`schedules`). Sumber nominal komisi.
 
@@ -47,7 +49,7 @@ _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lam
 
 **Snapshot komisi**: salinan nominal komisi jadwal ke booking saat booking dibuat. Perubahan jadwal tidak memengaruhi booking lama.
 
-**Saldo tersedia / tertahan**: komisi yang jadwal keberangkatannya sudah / belum lewat, dikurangi pencairan.
+**Saldo tersedia / tertahan**: komisi aktif yang sudah / belum lewat 3 hari kalender dari tanggal berangkat jadwalnya. Saldo tersedia dikurangi pencairan dan boleh negatif.
 
 **Ujroh**: istilah untuk komisi agen di sisi pengguna.
 

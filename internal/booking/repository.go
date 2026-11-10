@@ -1451,7 +1451,7 @@ func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, pax
 	}
 
 	// 5. Recalculate total_harga
-	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
+	if err := r.recalculateTotalTx(komisi.DenganSebabBatal(ctx, komisi.SebabGantiKamar), tx, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.UpdatePaxRoomType recalc: %w", err)
 	}
 	if err := ensureTotalCoversPaidTx(ctx, tx, bookingID); err != nil {
@@ -1872,7 +1872,7 @@ func (r *Repository) DeleteDiscount(ctx context.Context, bookingID int64, discou
 		return ErrNotFound
 	}
 
-	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
+	if err := r.recalculateTotalTx(komisi.DenganSebabBatal(ctx, komisi.SebabDiskonDihapus), tx, bookingID); err != nil {
 		return fmt.Errorf("booking.DeleteDiscount recalc: %w", err)
 	}
 

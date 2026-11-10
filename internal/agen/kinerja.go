@@ -27,10 +27,14 @@ type KomisiItem struct {
 	PenerimaNama     string    `json:"penerima_nama"`
 	SumberNama       string    `json:"sumber_nama"`
 	BerangkatTanggal time.Time `json:"berangkat_tanggal"`
-	// Ketersediaan (D4, D6): "kredit" untuk cashback, "tersedia" bila booking
-	// sumbernya sudah berangkat, selain itu "tertahan".
-	Ketersediaan string    `json:"ketersediaan"`
-	CreatedAt    time.Time `json:"created_at"`
+	// Ketersediaan: "batal" bila komisinya dibatalkan, "kredit" untuk cashback, "tersedia" bila sudah lewat
+	// komisi.HariTahanSetelahBerangkat hari dari tanggal berangkat, selain itu "tertahan".
+	Ketersediaan string `json:"ketersediaan"`
+	// TersediaMulai: tanggal komisi ini menjadi tersedia (tanggal berangkat + hari tahan).
+	TersediaMulai time.Time  `json:"tersedia_mulai"`
+	DibatalkanAt  *time.Time `json:"dibatalkan_at"`
+	SebabBatal    *string    `json:"sebab_batal"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 // KomisiFilter untuk list ledger. BrandID nil = semua brand (super admin).
@@ -40,15 +44,42 @@ type KomisiFilter struct {
 	Jenis      string
 	Dari       string // YYYY-MM-DD, tanggal transaksi
 	Sampai     string
-	Limit      int
-	Offset     int
+	// Cari: teks bebas, dicocokkan dengan nama penerima, nama jamaah sumber, dan kode booking.
+	Cari string
+	// Status: "" hanya komisi aktif (bawaan, juga untuk portal agen), "batal" hanya yang batal, "semua" keduanya.
+	Status string
+	Limit  int
+	Offset int
+}
+
+// RingkasanKomisi: hitungan server atas seluruh baris yang cocok dengan filter, bukan hanya halaman yang tampil.
+// Total, Matang, dan BelumMatang hanya menjumlah komisi aktif (tanpa cashback).
+type RingkasanKomisi struct {
+	Jumlah      int     `json:"jumlah"`
+	Total       float64 `json:"total"`
+	Matang      float64 `json:"matang"`
+	BelumMatang float64 `json:"belum_matang"`
+}
+
+// HalamanKomisi adalah jawaban Riwayat Komisi admin: satu halaman baris beserta ringkasannya.
+type HalamanKomisi struct {
+	Items     []KomisiItem    `json:"items"`
+	Ringkasan RingkasanKomisi `json:"ringkasan"`
 }
 
 var jenisKomisi = map[string]bool{"langsung": true, "pembinaan": true, "repeat_order": true, "cashback": true}
 
-func listKomisi(ctx context.Context, q querier, f KomisiFilter) ([]KomisiItem, error) {
+// syaratKomisi menyusun WHERE dan argumennya dari filter; dipakai daftar dan ringkasan supaya selalu sama.
+func syaratKomisi(f KomisiFilter) (string, []any) {
 	where := []string{"1=1"}
 	args := []any{}
+	switch f.Status {
+	case "semua":
+	case "batal":
+		where = append(where, "tk.dibatalkan_at IS NOT NULL")
+	default:
+		where = append(where, "tk.dibatalkan_at IS NULL")
+	}
 	if f.BrandID != nil {
 		where = append(where, "tk.brand_id = ?")
 		args = append(args, *f.BrandID)
@@ -69,6 +100,16 @@ func listKomisi(ctx context.Context, q querier, f KomisiFilter) ([]KomisiItem, e
 		where = append(where, "tk.created_at < DATE_ADD(?, INTERVAL 1 DAY)")
 		args = append(args, f.Sampai)
 	}
+	if c := strings.TrimSpace(f.Cari); c != "" {
+		where = append(where, "(pn.nama_lengkap LIKE ? OR sb.nama_lengkap LIKE ? OR b.id_booking LIKE ?)")
+		like := "%" + c + "%"
+		args = append(args, like, like, like)
+	}
+	return strings.Join(where, " AND "), args
+}
+
+func listKomisi(ctx context.Context, q querier, f KomisiFilter) ([]KomisiItem, error) {
+	syarat, args := syaratKomisi(f)
 	if f.Limit <= 0 || f.Limit > 200 {
 		f.Limit = 50
 	}
@@ -80,13 +121,14 @@ func listKomisi(ctx context.Context, q querier, f KomisiFilter) ([]KomisiItem, e
 	rows, err := q.QueryContext(ctx, `
 		SELECT tk.id, tk.jenis, tk.nominal, tk.booking_id, b.id_booking,
 		       tk.akun_penerima_id, pn.nama_lengkap, sb.nama_lengkap, s.berangkat_tanggal,
-		       s.berangkat_tanggal <= CURRENT_DATE, tk.created_at
+		       `+komisi.SQLTersediaMulai+` <= CURRENT_DATE, `+komisi.SQLTersediaMulai+`,
+		       tk.dibatalkan_at, tk.sebab_batal, tk.created_at
 		FROM transaksi_komisi tk
 		JOIN bookings b ON b.id = tk.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
 		JOIN customer_accounts pn ON pn.id = tk.akun_penerima_id
 		JOIN jamaah sb ON sb.id = tk.jamaah_sumber_id
-		WHERE `+strings.Join(where, " AND ")+`
+		WHERE `+syarat+`
 		ORDER BY tk.created_at DESC, tk.id DESC
 		LIMIT ? OFFSET ?`, args...)
 	if err != nil {
@@ -96,15 +138,18 @@ func listKomisi(ctx context.Context, q querier, f KomisiFilter) ([]KomisiItem, e
 	items := []KomisiItem{}
 	for rows.Next() {
 		var k KomisiItem
-		var sudahBerangkat bool
+		var sudahMatang bool
 		if err := rows.Scan(&k.ID, &k.Jenis, &k.Nominal, &k.BookingID, &k.BookingCode,
-			&k.PenerimaID, &k.PenerimaNama, &k.SumberNama, &k.BerangkatTanggal, &sudahBerangkat, &k.CreatedAt); err != nil {
+			&k.PenerimaID, &k.PenerimaNama, &k.SumberNama, &k.BerangkatTanggal, &sudahMatang, &k.TersediaMulai,
+			&k.DibatalkanAt, &k.SebabBatal, &k.CreatedAt); err != nil {
 			return nil, fmt.Errorf("agen: scan komisi: %w", err)
 		}
 		switch {
+		case k.DibatalkanAt != nil:
+			k.Ketersediaan = "batal"
 		case k.Jenis == "cashback":
 			k.Ketersediaan = "kredit"
-		case sudahBerangkat:
+		case sudahMatang:
 			k.Ketersediaan = "tersedia"
 		default:
 			k.Ketersediaan = "tertahan"
@@ -114,7 +159,29 @@ func listKomisi(ctx context.Context, q querier, f KomisiFilter) ([]KomisiItem, e
 	return items, rows.Err()
 }
 
-// TotalPerJenis: total komisi sepanjang waktu per jenis.
+// ringkasanKomisi menghitung jumlah baris dan total komisi untuk seluruh hasil filter.
+func ringkasanKomisi(ctx context.Context, q querier, f KomisiFilter) (RingkasanKomisi, error) {
+	var r RingkasanKomisi
+	syarat, args := syaratKomisi(f)
+	aktif := "tk.dibatalkan_at IS NULL AND tk.jenis <> 'cashback'"
+	err := q.QueryRowContext(ctx, `
+		SELECT COUNT(*),
+		       COALESCE(SUM(CASE WHEN `+aktif+` THEN tk.nominal END), 0),
+		       COALESCE(SUM(CASE WHEN `+aktif+` AND `+komisi.SQLTersediaMulai+` <= CURRENT_DATE THEN tk.nominal END), 0),
+		       COALESCE(SUM(CASE WHEN `+aktif+` AND `+komisi.SQLTersediaMulai+` > CURRENT_DATE THEN tk.nominal END), 0)
+		FROM transaksi_komisi tk
+		JOIN bookings b ON b.id = tk.booking_id
+		JOIN schedules s ON s.id = b.schedule_id
+		JOIN customer_accounts pn ON pn.id = tk.akun_penerima_id
+		JOIN jamaah sb ON sb.id = tk.jamaah_sumber_id
+		WHERE `+syarat, args...).Scan(&r.Jumlah, &r.Total, &r.Matang, &r.BelumMatang)
+	if err != nil {
+		return r, fmt.Errorf("agen: ringkasan komisi: %w", err)
+	}
+	return r, nil
+}
+
+// TotalPerJenis: total komisi aktif sepanjang waktu per jenis.
 type TotalPerJenis struct {
 	Langsung    float64 `json:"langsung"`
 	Pembinaan   float64 `json:"pembinaan"`
@@ -129,7 +196,7 @@ func totalPerJenis(ctx context.Context, q querier, akunID int64) (TotalPerJenis,
 		       COALESCE(SUM(CASE WHEN jenis='pembinaan' THEN nominal END),0),
 		       COALESCE(SUM(CASE WHEN jenis='repeat_order' THEN nominal END),0),
 		       COALESCE(SUM(CASE WHEN jenis='cashback' THEN nominal END),0)
-		FROM transaksi_komisi WHERE akun_penerima_id = ?`, akunID).
+		FROM transaksi_komisi WHERE akun_penerima_id = ? AND dibatalkan_at IS NULL`, akunID).
 		Scan(&t.Langsung, &t.Pembinaan, &t.RepeatOrder, &t.Cashback)
 	if err != nil {
 		return t, fmt.Errorf("agen: total komisi: %w", err)
@@ -211,6 +278,8 @@ func (r *Repository) ListKomisiAgen(ctx context.Context, akunID int64, f KomisiF
 	}
 	f.BrandID = nil
 	f.PenerimaID = akunID
+	// Portal agen hanya menerima komisi aktif sampai tampilannya siap menampilkan baris batal.
+	f.Status = ""
 	return listKomisi(ctx, r.db, f)
 }
 
@@ -237,7 +306,7 @@ func listAgen(ctx context.Context, q querier, brandID *int64, cari string) ([]Ag
 		SELECT j.id, j.brand_id, b.name, j.nama_lengkap, j.kode_referral, j.status_agen, j.disetujui_agen_at,
 		       (SELECT COUNT(*) FROM jamaah r WHERE r.direkrut_oleh_akun_id = j.id),
 		       (SELECT COALESCE(SUM(tk.nominal),0) FROM transaksi_komisi tk
-		         WHERE tk.akun_penerima_id = j.id AND tk.jenis <> 'cashback')
+		         WHERE tk.akun_penerima_id = j.id AND tk.jenis <> 'cashback' AND tk.dibatalkan_at IS NULL)
 		FROM customer_accounts j JOIN brands b ON b.id = j.brand_id
 		WHERE j.status_agen IN ('aktif','nonaktif')`
 	args := []any{}
@@ -280,12 +349,12 @@ type Pencairan struct {
 // DetailAgen berisi 8 kelompok data screen B2a (screen-agen.md).
 type DetailAgen struct {
 	// a. Identitas & data profil
-	AkunID       int64      `json:"akun_id"`
+	AkunID      int64      `json:"akun_id"`
 	BrandID     int64      `json:"brand_id"`
 	BrandName   string     `json:"brand_name"`
 	NamaLengkap string     `json:"nama_lengkap"`
 	NoHP        *string    `json:"no_hp"`
-	FotoURL *string    `json:"foto_url"`
+	FotoURL     *string    `json:"foto_url"`
 	Domisili    *string    `json:"domisili"`
 	SetujuSKAt  *time.Time `json:"menyetujui_syarat_ketentuan_agen_at"`
 	// b. Status keagenan
@@ -411,6 +480,19 @@ func (r *Repository) ListKomisiBrand(ctx context.Context, f KomisiFilter) ([]Kom
 	return listKomisi(ctx, r.db, f)
 }
 
+// HalamanKomisiBrand: satu halaman Riwayat Komisi admin beserta ringkasan seluruh hasil filter.
+func (r *Repository) HalamanKomisiBrand(ctx context.Context, f KomisiFilter) (*HalamanKomisi, error) {
+	items, err := listKomisi(ctx, r.db, f)
+	if err != nil {
+		return nil, err
+	}
+	ringkasan, err := ringkasanKomisi(ctx, r.db, f)
+	if err != nil {
+		return nil, err
+	}
+	return &HalamanKomisi{Items: items, Ringkasan: ringkasan}, nil
+}
+
 // ─── Peringkat agen per periode (Laporan & Analytics) ────────────────────────
 
 // PeringkatItem: kinerja satu agen dalam periode, dihitung dari ledger
@@ -419,7 +501,7 @@ func (r *Repository) ListKomisiBrand(ctx context.Context, f KomisiFilter) ([]Kom
 // atau repeat order untuk agen ini.
 type PeringkatItem struct {
 	Peringkat      int     `json:"peringkat"`
-	AkunID          int64   `json:"akun_id"`
+	AkunID         int64   `json:"akun_id"`
 	BrandID        int64   `json:"brand_id"`
 	BrandName      string  `json:"brand_name"`
 	NamaLengkap    string  `json:"nama_lengkap"`
@@ -452,7 +534,7 @@ func peringkatAgen(ctx context.Context, q querier, brandID *int64, dari, sampai 
 		FROM transaksi_komisi tk
 		JOIN customer_accounts j ON j.id = tk.akun_penerima_id
 		JOIN brands b ON b.id = j.brand_id
-		WHERE tk.jenis <> 'cashback'
+		WHERE tk.jenis <> 'cashback' AND tk.dibatalkan_at IS NULL
 		  AND tk.created_at >= ? AND tk.created_at < DATE_ADD(?, INTERVAL 1 DAY)`
 	args := []any{dari, sampai}
 	if brandID != nil {

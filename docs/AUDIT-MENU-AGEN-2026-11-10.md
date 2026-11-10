@@ -158,6 +158,25 @@ Migrasi `125_riwayat_keputusan_dan_status_agen.sql` (dua tabel riwayat) harus di
 
 Verifikasi PR 1: `go vet` bersih; tes integrasi `internal/agen`, `internal/komisi`, dan `internal/customer` lulus; build dashboard lulus. Dicek di browser sebagai Super Admin: lima item di grup AGEN, halaman Pencairan Komisi dan Peringkat Agen terbuka dengan item menunya aktif; kartu ringkasan Pengajuan Agen 4 / 4 / 1; label isian berganti sesuai aksi dan teksnya kosong setelah berganti aksi; modal ubah status agen menolak alasan kosong dan alasan 3 karakter. Belum diuji di browser: mengirim keputusan dan perubahan status (hanya lewat tes integrasi, supaya data dev tidak berubah), angka di menu Pencairan Komisi saat lebih dari 0, dan tampilan untuk peran selain Super Admin.
 
+PR 2 (aturan komisi):
+
+| ID | Status | Perubahan |
+|---|---|---|
+| T-01 | Diperbaiki | Komisi mengikuti lunas terakhir (spek K25). Booking yang turun dari lunas membatalkan komisi aktifnya (`dibatalkan_at`, `sebab_batal`); lunas lagi mencatat baris baru. Kunci unik ledger diganti menjadi satu baris aktif per pax per jenis, sehingga komisi ganda tidak bisa tersimpan. Modal pembatalan pembayaran menjelaskan akibatnya. Tes: `TestKomisiBatalSaatTurunDariLunasLaluDihitungUlang`, `TestBookingBatalSetelahLunasKomisiTetap` |
+| S-08 | Diputuskan, diberi peringatan | Saldo tersedia boleh negatif (spek K27); tidak ada pemblokiran. Form jadwal memperingatkan saat tanggal berangkat diubah pada jadwal yang punya komisi aktif. Tes: `TestSaldoHPlus3DanNegatif` |
+| S-12 | Diperbaiki | Riwayat Komisi dipaginasi di server (20 baris per halaman); pencarian dan kartu ringkasan dihitung server atas seluruh hasil filter. Filter status baru: komisi aktif, dibatalkan, semua. Tes: `TestDaftarKomisiPaginasiRingkasanDanBatal` |
+| S-13 | Diperbaiki | Daftar pencairan mengurutkan pengajuan pending lebih dulu (terlama di atas), lalu sisanya dari yang terbaru, sehingga batas 500 baris tidak memotong pengajuan yang menunggu |
+| R-13 | Diperbaiki | Komisi tersedia 3 hari kalender setelah tanggal berangkat (spek K26), satu konstanta di backend. Riwayat Komisi menampilkan tanggal "tersedia mulai" per baris. Spek dan glosarium disamakan |
+| R-16 | Sebagian | Kunci unik ledger tidak lagi memuat penerima, jadi pemindahan komisi tidak bertabrakan. Pemindahan hanya menyentuh komisi aktif. Nominal yang dipindahkan belum dicatat di log |
+
+Migrasi `126_komisi_batal_dan_lunas_terakhir.sql` harus dijalankan sebelum kode PR 2 dirilis; aman diulang. Migrasi menandai batal komisi lama dari booking yang kini berstatus `dp` atau `baru`, dan komisi ganda lama (baris terbaru dipertahankan).
+
+Perubahan bentuk API: `GET /api/admin/agen/komisi` kini mengembalikan `{ items, ringkasan }`, bukan larik. Daftar komisi portal agen tetap larik dan tidak memuat baris batal. Detail jadwal mendapat kolom `komisi_aktif`.
+
+Verifikasi PR 2: `go vet` bersih; tes integrasi `internal/agen`, `internal/komisi`, `internal/payment`, `internal/booking`, `internal/schedule`, dan `internal/customer` lulus; build dashboard lulus. Dicek di browser sebagai Super Admin: Riwayat Komisi memuat 4 baris dengan kartu ringkasan dari server, tanggal "tersedia mulai" 3 hari setelah berangkat, filter status "Dibatalkan" (kosong di data dev), dan pencarian "Zakariyya" menyaring menjadi 2 baris dengan ringkasan ikut berubah. Belum diuji di browser: pembatalan pembayaran sampai komisi batal dan peringatan di form jadwal (logikanya hanya lewat tes integrasi, supaya data dev tidak berubah), serta paginasi dengan lebih dari 20 baris.
+
+Belum dikerjakan (di luar PR 2): portal agen di repo `azhan-booking` belum menampilkan aturan H+3 dan saldo negatif; S-07, S-11, dan temuan rendah lain.
+
 ## Urutan perbaikan yang disarankan
 
 1. T-02: kembalikan item sidebar Pencairan Komisi dan Peringkat Agen. Perubahan kecil, dan menutup risiko pengajuan pencairan tidak terlihat.

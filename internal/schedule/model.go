@@ -58,6 +58,9 @@ type Schedule struct {
 	SeatTotal                int             `json:"seat_total"`
 	SeatSisa                 int             `json:"seat_sisa"`
 	BookingCount             int             `json:"booking_count"`
+	// KomisiAktif: jumlah baris komisi aktif dari booking jadwal ini. Hanya diisi pada detail jadwal, untuk
+	// peringatan saat tanggal berangkat diubah (ketersediaan komisi mengikuti tanggal berangkat).
+	KomisiAktif int `json:"komisi_aktif"`
 	MaskapaiID               *int64          `json:"maskapai_id"`
 	Maskapai                 *MaskapaiRef    `json:"maskapai"`
 	BerangkatTanggal         string          `json:"berangkat_tanggal"`

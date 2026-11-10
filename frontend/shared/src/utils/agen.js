@@ -22,11 +22,26 @@ export const JENIS_KOMISI_FILTER = Object.fromEntries(
   Object.entries(JENIS_KOMISI).filter(([jenis]) => KOMISI_REPEAT_CASHBACK_AKTIF || (jenis !== 'repeat_order' && jenis !== 'cashback')),
 );
 
+// Komisi tersedia sekian hari kalender setelah tanggal berangkat (spek K26; sama dengan
+// komisi.HariTahanSetelahBerangkat di backend).
+export const HARI_TAHAN_KOMISI = 3;
+
+// Sebab komisi batal (transaksi_komisi.sebab_batal). Komisi mengikuti lunas terakhir: booking yang turun
+// dari lunas membatalkan komisinya (spek K25).
+export const SEBAB_BATAL_KOMISI = {
+  void_pembayaran: 'Pembayaran dibatalkan',
+  diskon_dihapus: 'Diskon dihapus',
+  ganti_kamar: 'Tipe kamar diganti',
+  status_turun: 'Booking turun dari lunas',
+  penyesuaian_aturan: 'Penyesuaian aturan',
+};
+
 // Ketersediaan per baris ledger (keputusan D4 & D6).
 export const KETERSEDIAAN = {
   tersedia: { label: 'Tersedia', variant: 'success' },
   tertahan: { label: 'Tertahan', variant: 'pending' },
   kredit: { label: 'Kredit cashback', variant: 'neutral' },
+  batal: { label: 'Dibatalkan', variant: 'neutral' },
 };
 
 export const STATUS_AGEN = {

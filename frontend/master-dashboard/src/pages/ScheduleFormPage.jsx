@@ -288,6 +288,9 @@ const ScheduleFormPage = () => {
             kuota_terisi: (scheduleData.seat_total !== undefined && scheduleData.seat_sisa !== undefined) ? (scheduleData.seat_total - scheduleData.seat_sisa) : '',
             maskapai_id: scheduleData.maskapai?.id || scheduleData.maskapai_id || '',
             berangkat_tanggal: scheduleData.berangkat_tanggal ? scheduleData.berangkat_tanggal.split('T')[0] : '',
+            // Untuk peringatan: tanggal berangkat menentukan kapan komisi agen jadwal ini tersedia.
+            berangkat_tanggal_awal: scheduleData.berangkat_tanggal ? scheduleData.berangkat_tanggal.split('T')[0] : '',
+            komisi_aktif: scheduleData.komisi_aktif || 0,
             berangkat_jam: scheduleData.berangkat_jam || '',
             berangkat_kode_penerbangan: parsedBerangkat.fullValue || scheduleData.berangkat_kode_penerbangan || '',
             berangkat_bandara_asal: scheduleData.berangkat_bandara_asal || '',
@@ -1006,6 +1009,14 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   <div className="flex items-center gap-2 text-neutral-600 text-[13px] font-semibold font-heading">
                     <span>Penerbangan Berangkat</span>
                   </div>
+
+                  {formData.komisi_aktif > 0 && formData.berangkat_tanggal_awal && formData.berangkat_tanggal !== formData.berangkat_tanggal_awal && (
+                    <Alert variant="warning">
+                      Jadwal ini punya {formData.komisi_aktif} komisi agen yang tercatat. Komisi tersedia 3 hari setelah tanggal
+                      berangkat, jadi mengubah tanggal ikut menggeser kapan komisi itu bisa dicairkan. Bila tanggal diundur dan
+                      komisinya sudah dicairkan, saldo agen menjadi minus sampai tertutup komisi berikutnya.
+                    </Alert>
+                  )}
 
                   {/* Baris 1: Waktu & Kode Penerbangan */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

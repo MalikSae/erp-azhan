@@ -72,7 +72,8 @@ export async function getDetailAgen(akunId) {
 export async function listRiwayatKomisi(filter = {}) {
   const params = Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== '' && v != null));
   const { data } = await client.get('/api/admin/agen/komisi', { params });
-  return data || [];
+  // { items, ringkasan: { jumlah, total, matang, belum_matang } }, dihitung server atas seluruh hasil filter.
+  return { items: data?.items || [], ringkasan: data?.ringkasan || { jumlah: 0, total: 0, matang: 0, belum_matang: 0 } };
 }
 
 // B5 Pakai Kredit Cashback di detail booking (dimatikan, lihat KOMISI_REPEAT_CASHBACK_AKTIF).

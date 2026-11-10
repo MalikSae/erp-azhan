@@ -47,7 +47,8 @@ const VoidPaymentModal = ({ payment, onClose, onDone }) => {
           <div className="rounded-xl border border-warning-200 bg-warning-50 px-3.5 py-3 text-xs text-warning-900 leading-relaxed">
             Pembayaran sebesar <span className="font-semibold">{rupiah(payment.jumlah)}</span> tidak lagi dihitung sebagai dana masuk.
             Status booking dihitung ulang dan bisa turun dari Lunas atau DP. Kursi booking tetap terkunci.
-            Komisi agen yang sudah tercatat tidak ikut dibatalkan. Tindakan ini tidak dapat dibalik;
+            Bila booking turun dari Lunas, komisi agen booking ini dibatalkan dan dihitung ulang saat booking
+            lunas lagi; komisi yang sudah dicairkan menjadi saldo minus agen. Tindakan ini tidak dapat dibalik;
             bila keliru, catat ulang pembayarannya.
           </div>
           <div>

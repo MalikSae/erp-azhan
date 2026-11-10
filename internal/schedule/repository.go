@@ -287,7 +287,16 @@ func transitHotelsBySchedule(ctx context.Context, q rowsQuerier, scheduleIDs []i
 
 // GetByID mengambil schedule lengkap beserta ref hotel/airline.
 func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Schedule, error) {
-	return r.fetchFull(ctx, id, brandID)
+	s, err := r.fetchFull(ctx, id, brandID)
+	if err != nil || s == nil {
+		return s, err
+	}
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM transaksi_komisi tk JOIN bookings b ON b.id = tk.booking_id
+		WHERE b.schedule_id = ? AND tk.dibatalkan_at IS NULL`, id).Scan(&s.KomisiAktif); err != nil {
+		return nil, fmt.Errorf("schedule.GetByID komisi aktif: %w", err)
+	}
+	return s, nil
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────

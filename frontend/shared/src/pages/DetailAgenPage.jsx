@@ -9,7 +9,7 @@ import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import StatTile from '../components/ui/StatTile';
 import useProtectedImage from '../utils/useProtectedImage';
-import { dateLabel, money, STATUS_AGEN } from '../utils/agen';
+import { dateLabel, HARI_TAHAN_KOMISI, money, STATUS_AGEN } from '../utils/agen';
 
 const Row = ({ label, children }) => (
   <div className="flex justify-between gap-3 border-b border-neutral-100 pb-2 last:border-b-0 last:pb-0 text-sm">
@@ -120,8 +120,8 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
 
       {/* e. Ringkasan komisi & saldo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <StatTile icon={Wallet} variant="success" value={money(agen.saldo.saldo_tersedia)} label="Saldo tersedia" hint="Dari booking yang sudah berangkat" />
-        <StatTile icon={Clock3} variant="warning" value={money(agen.saldo.saldo_tertahan)} label="Saldo tertahan" />
+        <StatTile icon={Wallet} variant="success" value={money(agen.saldo.saldo_tersedia)} label="Saldo tersedia" hint={`Komisi yang sudah lewat H+${HARI_TAHAN_KOMISI} berangkat, dikurangi pencairan`} />
+        <StatTile icon={Clock3} variant="warning" value={money(agen.saldo.saldo_tertahan)} label="Saldo tertahan" hint={`Sampai H+${HARI_TAHAN_KOMISI} setelah berangkat`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">

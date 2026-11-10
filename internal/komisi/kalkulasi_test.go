@@ -18,7 +18,7 @@ func rp(v float64) *float64 { return &v }
 // "penerima:jenis:nominal", terurut, supaya mudah dibandingkan. Penerima adalah akun.
 func ledger(t *testing.T, tx *sql.Tx, bookingID int64, nama map[int64]string) []string {
 	t.Helper()
-	rows, err := tx.Query(`SELECT akun_penerima_id, jenis, nominal FROM transaksi_komisi WHERE booking_id=?`, bookingID)
+	rows, err := tx.Query(`SELECT akun_penerima_id, jenis, nominal FROM transaksi_komisi WHERE booking_id=? AND dibatalkan_at IS NULL`, bookingID)
 	if err != nil {
 		t.Fatalf("baca ledger: %v", err)
 	}

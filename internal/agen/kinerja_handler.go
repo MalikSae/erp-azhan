@@ -18,6 +18,8 @@ func komisiFilterFromQuery(r *http.Request) KomisiFilter {
 		Jenis:      q.Get("jenis"),
 		Dari:       q.Get("dari"),
 		Sampai:     q.Get("sampai"),
+		Status:     q.Get("status"),
+		Cari:       q.Get("q"),
 		Limit:      limit,
 		Offset:     offset,
 	}
@@ -103,14 +105,16 @@ func (h *Handler) PeringkatAgen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
-// RiwayatKomisiAdmin GET /api/admin/agen/komisi?agen_id=&jenis=&dari=&sampai= (B3)
+// RiwayatKomisiAdmin GET /api/admin/agen/komisi?agen_id=&jenis=&dari=&sampai=&status=&limit=&offset= (B3)
+// Jawaban: {items, ringkasan}. Ringkasan dihitung server atas seluruh hasil filter, bukan halaman yang tampil.
+// status: kosong = komisi aktif, "batal" = yang dibatalkan, "semua" = keduanya.
 func (h *Handler) RiwayatKomisiAdmin(w http.ResponseWriter, r *http.Request) {
 	f := komisiFilterFromQuery(r)
 	f.BrandID = adminBrandScope(r)
-	items, err := h.repo.ListKomisiBrand(r.Context(), f)
+	halaman, err := h.repo.HalamanKomisiBrand(r.Context(), f)
 	if err != nil {
 		handleError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	writeJSON(w, http.StatusOK, halaman)
 }
