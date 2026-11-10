@@ -12,6 +12,19 @@ func (f fixture) keputusan(akun int64, aksi, catatan string) error {
 	return keputusanTx(context.Background(), f.tx, akun, &f.brandID, f.adminID, KeputusanRequest{Aksi: aksi, Catatan: catatan})
 }
 
+// catatanAdmin membaca catatan internal dari sisi admin. Tampilan portal (f.status) tidak memuatnya.
+func (f fixture) catatanAdmin(t *testing.T, akun int64) string {
+	t.Helper()
+	p, err := latestPembayaran(context.Background(), f.tx, akun)
+	if err != nil || p == nil {
+		t.Fatalf("latestPembayaran: %v", err)
+	}
+	if p.CatatanAdmin == nil {
+		return ""
+	}
+	return *p.CatatanAdmin
+}
+
 func (f fixture) pengajuanBaru(t *testing.T, nama string, denganBukti bool) int64 {
 	t.Helper()
 	ctx := context.Background()
@@ -55,8 +68,8 @@ func TestKeputusanBebaskanBiaya(t *testing.T) {
 	mustErr(t, "tanpa catatan", f.keputusan(id, AksiBebaskan, " "), ErrCatatanWajib)
 	must(t, "bebaskan", f.keputusan(id, AksiBebaskan, "kerabat pemilik, biaya dibebaskan"))
 	s := f.status(t, id)
-	if s.StatusAgen != "aktif" || s.Pembayaran.Status != "dibebaskan" || s.Pembayaran.CatatanAdmin == nil ||
-		*s.Pembayaran.CatatanAdmin != "kerabat pemilik, biaya dibebaskan" || s.Pembayaran.DiverifikasiAt == nil {
+	if s.StatusAgen != "aktif" || s.Pembayaran.Status != "dibebaskan" ||
+		f.catatanAdmin(t, id) != "kerabat pemilik, biaya dibebaskan" || s.Pembayaran.DiverifikasiAt == nil {
 		t.Fatalf("setelah bebaskan: %+v / %+v", s, s.Pembayaran)
 	}
 	if row := findPengajuan(t, f, id); row != nil {
@@ -101,7 +114,7 @@ func TestKeputusanSetujuiBayarMenyusul(t *testing.T) {
 	mustErr(t, "tanpa catatan", f.keputusan(id, AksiSetujuiBayarMenyusul, ""), ErrCatatanWajib)
 	must(t, "bayar menyusul", f.keputusan(id, AksiSetujuiBayarMenyusul, "bayar setelah kopdar"))
 	s := f.status(t, id)
-	if s.StatusAgen != "aktif" || s.Pembayaran.Status != "menunggu_verifikasi" || *s.Pembayaran.CatatanAdmin != "bayar setelah kopdar" {
+	if s.StatusAgen != "aktif" || s.Pembayaran.Status != "menunggu_verifikasi" || f.catatanAdmin(t, id) != "bayar setelah kopdar" {
 		t.Fatalf("setelah bayar menyusul: %+v / %+v", s, s.Pembayaran)
 	}
 	if row := findPengajuan(t, f, id); row == nil {

@@ -33,7 +33,8 @@ const BrandChip = ({ name, color }) => <BrandLabel name={name} color={color} />;
 
 // Peringkat agen per periode (Laporan & Analytics). Sumber: ledger
 // transaksi_komisi, tanggal = saat booking pertama kali lunas.
-export default function PeringkatAgenPage() {
+// showBrandColumn: pengguna holding (lintas brand). Admin brand selalu dibatasi backend ke brand-nya sendiri.
+export default function PeringkatAgenPage({ showBrandColumn = false }) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [defaultDari, defaultSampai] = presetRange('bulan_ini');
@@ -48,8 +49,8 @@ export default function PeringkatAgenPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    listBrands().then((b) => setBrands(b || [])).catch(() => {});
-  }, []);
+    if (showBrandColumn) listBrands().then((b) => setBrands(b || [])).catch(() => {});
+  }, [showBrandColumn]);
 
   useEffect(() => {
     if (!dari || !sampai || dari > sampai) {
@@ -139,14 +140,16 @@ export default function PeringkatAgenPage() {
         ]}
         className="!mb-0 w-full sm:w-44"
       />
-      <CustomDropdown
-        name="brand_id"
-        value={brandId}
-        onChange={(val) => update({ brand_id: val?.target ? val.target.value : val })}
-        placeholder="Semua brand"
-        options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
-        className="!mb-0 w-full sm:w-44"
-      />
+      {showBrandColumn && (
+        <CustomDropdown
+          name="brand_id"
+          value={brandId}
+          onChange={(val) => update({ brand_id: val?.target ? val.target.value : val })}
+          placeholder="Semua brand"
+          options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
+          className="!mb-0 w-full sm:w-44"
+        />
+      )}
     </div>
   );
   const toolbarPanel = preset === 'kustom' && (

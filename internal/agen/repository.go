@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-sql-driver/mysql"
 
@@ -60,12 +61,12 @@ func (r *Repository) Setujui(ctx context.Context, akunID int64, brandID *int64, 
 	return r.withTx(ctx, func(tx *sql.Tx) error { return setujuiTx(ctx, tx, akunID, brandID, adminID) })
 }
 
-func (r *Repository) Tolak(ctx context.Context, akunID int64, brandID *int64, alasan string) error {
-	return r.withTx(ctx, func(tx *sql.Tx) error { return tolakTx(ctx, tx, akunID, brandID, alasan) })
+func (r *Repository) Tolak(ctx context.Context, akunID int64, brandID *int64, adminID int64, alasan string) error {
+	return r.withTx(ctx, func(tx *sql.Tx) error { return tolakTx(ctx, tx, akunID, brandID, adminID, alasan) })
 }
 
-func (r *Repository) UbahStatus(ctx context.Context, akunID int64, brandID *int64, status string) error {
-	return r.withTx(ctx, func(tx *sql.Tx) error { return ubahStatusTx(ctx, tx, akunID, brandID, status) })
+func (r *Repository) UbahStatus(ctx context.Context, akunID int64, brandID *int64, adminID int64, status, alasan string) error {
+	return r.withTx(ctx, func(tx *sql.Tx) error { return ubahStatusTx(ctx, tx, akunID, brandID, adminID, status, alasan) })
 }
 
 func (r *Repository) VerifikasiPembayaran(ctx context.Context, ppaID int64, brandID *int64, adminID int64) error {
@@ -100,6 +101,11 @@ func getStatusPortal(ctx context.Context, q querier, akunID int64) (*StatusPorta
 	}
 	if s.Pembayaran, err = latestPembayaran(ctx, q, akunID); err != nil {
 		return nil, err
+	}
+	// catatan_admin adalah catatan internal (alasan pembebasan biaya, bayar menyusul). Pesan untuk pemohon
+	// ada di catatan_penolakan (minta unggah ulang) dan alasan_ditolak_agen (tolak).
+	if s.Pembayaran != nil {
+		s.Pembayaran.CatatanAdmin = nil
 	}
 	return &s, nil
 }
@@ -214,6 +220,11 @@ func listPengajuan(ctx context.Context, db querier, brandID *int64) ([]Pengajuan
 		if items[i].Pembayaran, err = latestPembayaran(ctx, db, items[i].AkunID); err != nil {
 			return nil, err
 		}
+		if items[i].Pembayaran != nil {
+			if items[i].Pembayaran.RiwayatKeputusan, err = listRiwayatKeputusan(ctx, db, items[i].Pembayaran.ID); err != nil {
+				return nil, err
+			}
+		}
 		items[i].NIKMasked = maskNIK(niks[i])
 		if items[i].PeringatanNIK, err = peringatanNIK(ctx, db, items[i].BrandID, items[i].AkunID, items[i].NamaLengkap, niks[i]); err != nil {
 			return nil, err
@@ -281,20 +292,40 @@ func setujuiTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, ad
 
 // tolakTx mengembalikan status ke 'tidak_aktif' (identik dengan belum pernah
 // mengajukan, 3.6.4-B) dan mencatat alasannya di siklus pembayaran.
-func tolakTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, alasan string) error {
+//
+// NIK agen dikosongkan: pemohon yang ditolak belum agen, jadi tidak menahan NIK itu (unik per brand) dari
+// pemilik aslinya. Pemohon mengisinya lagi saat mengajukan ulang. Pelepasan NIK dicatat di akun_data_log
+// bila pelakunya diketahui.
+func tolakTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, adminID int64, alasan string) error {
 	if err := lockPengajuan(ctx, tx, akunID, brandID, nil); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE customer_accounts SET status_agen = 'tidak_aktif' WHERE id = ?`, akunID); err != nil {
+	var nik sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT nik_agen FROM customer_accounts WHERE id = ?`, akunID).Scan(&nik); err != nil {
+		return fmt.Errorf("agen.Tolak baca NIK: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE customer_accounts SET status_agen = 'tidak_aktif', nik_agen = NULL WHERE id = ?`, akunID); err != nil {
 		return fmt.Errorf("agen.Tolak update: %w", err)
+	}
+	if nik.Valid && nik.String != "" && adminID > 0 {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO akun_data_log (akun_id, kolom, nilai_lama, nilai_baru, diubah_oleh, alasan) VALUES (?, 'nik_agen', ?, NULL, ?, ?)`,
+			akunID, maskNIK(nik.String), adminID, "Pengajuan agen ditolak: "+alasan); err != nil {
+			return fmt.Errorf("agen.Tolak log NIK: %w", err)
+		}
 	}
 	return catatKeputusan(ctx, tx, akunID, "ditolak", &alasan)
 }
 
 // ubahStatusTx men-toggle agen antara 'aktif' dan 'nonaktif' (screen B2a).
-func ubahStatusTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, status string) error {
+// Alasan wajib, dan tiap perubahan dicatat di agen_status_log beserta pelakunya.
+func ubahStatusTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, adminID int64, status, alasan string) error {
 	if status != "aktif" && status != "nonaktif" {
 		return ErrStatusTidakValid
+	}
+	alasan = strings.TrimSpace(alasan)
+	if n := utf8.RuneCountInString(alasan); n < 5 || n > 500 {
+		return ErrAlasanStatusWajib
 	}
 	var cur string
 	var jBrand int64
@@ -308,8 +339,20 @@ func ubahStatusTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64,
 	if cur != "aktif" && cur != "nonaktif" {
 		return ErrStatusTidakValid
 	}
+	if cur == status {
+		return ErrStatusSama
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE customer_accounts SET status_agen = ? WHERE id = ?`, status, akunID); err != nil {
 		return fmt.Errorf("agen.UbahStatus update: %w", err)
+	}
+	var pelaku any
+	if adminID > 0 {
+		pelaku = adminID
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO agen_status_log (akun_id, status_lama, status_baru, alasan, diubah_oleh) VALUES (?, ?, ?, ?, ?)`,
+		akunID, cur, status, alasan, pelaku); err != nil {
+		return fmt.Errorf("agen.UbahStatus log: %w", err)
 	}
 	return nil
 }

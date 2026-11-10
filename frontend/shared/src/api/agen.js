@@ -21,8 +21,9 @@ export async function keputusanAgen(akunId, aksi, catatan = '') {
   return data;
 }
 
-export async function ubahStatusAgen(akunId, status) {
-  const { data } = await client.put(`/api/admin/agen/${akunId}/status`, { status });
+// alasan wajib (5 sampai 500 karakter); tercatat di riwayat status agen.
+export async function ubahStatusAgen(akunId, status, alasan) {
+  const { data } = await client.put(`/api/admin/agen/${akunId}/status`, { status, alasan });
   return data;
 }
 
@@ -84,6 +85,9 @@ export async function pakaiKreditCashback(bookingId, jamaahId, nominal) {
   const { data } = await client.post(`/api/admin/bookings/${bookingId}/cashback`, { jamaah_id: jamaahId, nominal });
   return data;
 }
+
+// Dikirim setelah pengajuan pencairan diputuskan, supaya angka "menunggu" di sidebar ikut berubah.
+export const EVENT_PENCAIRAN_KOMISI = 'pencairan-komisi-diputuskan';
 
 // C1 Persetujuan Pencairan (Admin Master, lintas brand).
 export async function listPencairanAdmin({ status, brandId } = {}) {

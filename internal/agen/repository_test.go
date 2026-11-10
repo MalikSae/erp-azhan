@@ -127,7 +127,7 @@ func TestLangkah18DitolakLaluAjukanUlang(t *testing.T) {
 	must(t, "upload", uploadBuktiAkunTx(ctx, f.tx, yunus, bukti("1")))
 	ppa1 := f.status(t, yunus).Pembayaran.ID
 	must(t, "verifikasi", verifikasiPembayaranTx(ctx, f.tx, ppa1, &f.brandID, f.adminID))
-	must(t, "tolak keagenan", tolakTx(ctx, f.tx, yunus, &f.brandID, "domisili di luar area layanan"))
+	must(t, "tolak keagenan", tolakTx(ctx, f.tx, yunus, &f.brandID, f.adminID, "domisili di luar area layanan"))
 
 	s := f.status(t, yunus)
 	if s.StatusAgen != "tidak_aktif" || s.Pembayaran.KeputusanAgen != "ditolak" ||
@@ -156,7 +156,7 @@ func TestUploadKeSiklusDitolak(t *testing.T) {
 	ctx := context.Background()
 	x := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "X"})
 	must(t, "ajukan", ajukanTx(ctx, f.tx, x, ajuan))
-	must(t, "tolak", tolakTx(ctx, f.tx, x, &f.brandID, "data tidak lengkap"))
+	must(t, "tolak", tolakTx(ctx, f.tx, x, &f.brandID, f.adminID, "data tidak lengkap"))
 	mustErr(t, "upload", uploadBuktiAkunTx(ctx, f.tx, x, bukti("1")), ErrSiklusDitutup)
 }
 
@@ -238,11 +238,11 @@ func TestAdminUploadDanBrandScope(t *testing.T) {
 	}
 
 	// Toggle status hanya untuk agen yang pernah aktif.
-	mustErr(t, "nonaktifkan pengajuan", ubahStatusTx(ctx, f.tx, x, &f.brandID, "nonaktif"), ErrStatusTidakValid)
+	mustErr(t, "nonaktifkan pengajuan", ubahStatusTx(ctx, f.tx, x, &f.brandID, f.adminID, "nonaktif", "melanggar ketentuan"), ErrStatusTidakValid)
 	must(t, "setujui", setujuiTx(ctx, f.tx, x, &f.brandID, f.adminID))
-	must(t, "nonaktifkan", ubahStatusTx(ctx, f.tx, x, &f.brandID, "nonaktif"))
-	must(t, "aktifkan", ubahStatusTx(ctx, f.tx, x, &f.brandID, "aktif"))
-	mustErr(t, "status lain", ubahStatusTx(ctx, f.tx, x, &f.brandID, "pengajuan"), ErrStatusTidakValid)
+	must(t, "nonaktifkan", ubahStatusTx(ctx, f.tx, x, &f.brandID, f.adminID, "nonaktif", "melanggar ketentuan"))
+	must(t, "aktifkan", ubahStatusTx(ctx, f.tx, x, &f.brandID, f.adminID, "aktif", "sudah diklarifikasi"))
+	mustErr(t, "status lain", ubahStatusTx(ctx, f.tx, x, &f.brandID, f.adminID, "pengajuan", "uji status lain"), ErrStatusTidakValid)
 }
 
 // K24: NIK agen disimpan saat mengajukan, unik antar akun per brand, dan kartu B1 memperingatkan admin
