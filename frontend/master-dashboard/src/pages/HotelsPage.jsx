@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import { Hotel, MapPin, Star, Play, Pencil, Trash2 } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import DataTable from 'shared/ui/DataTable';
@@ -50,6 +51,9 @@ const PhotoCell = ({ url, name }) => {
 };
 
 const HotelsPage = () => {
+  // Peran lihat-saja (masterdata.view) boleh membuka halaman ini; tombol ubah hanya untuk masterdata.edit.
+  const { hasPermission } = useContext(AuthContext);
+  const canEdit = hasPermission('masterdata.edit');
   const [hotels, setHotels] = useState([]);
   const [cities, setCities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -265,7 +269,7 @@ const HotelsPage = () => {
       sortFn: (a, b) => (a.distance_m ?? Infinity) - (b.distance_m ?? Infinity),
     },
     { header: 'Video', key: 'video_url' },
-    { header: 'Aksi', key: 'aksi' },
+    ...(canEdit ? [{ header: 'Aksi', key: 'aksi' }] : []),
   ];
 
   const renderCell = (row, key) => {
@@ -275,8 +279,9 @@ const HotelsPage = () => {
           <PhotoCell url={row.photo_url} name={row.name} />
           <button
             type="button"
+            disabled={!canEdit}
             onClick={() => handleOpenModal(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
           >
             {row.name}
           </button>
@@ -346,8 +351,7 @@ const HotelsPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Kelola Hotel"
-        actionLabel="+ Tambah Hotel"
-        onAction={() => handleOpenModal()}
+        {...(canEdit ? { actionLabel: "+ Tambah Hotel", onAction: () => handleOpenModal() } : {})}
       />
 
       {errorMessage && (
@@ -361,7 +365,7 @@ const HotelsPage = () => {
           columns={columns}
           data={rows}
           itemsPerPage={10}
-          emptyMessage='Belum ada hotel. Klik "+ Tambah Hotel" untuk menambahkan.'
+          emptyMessage={canEdit ? 'Belum ada hotel. Klik "+ Tambah Hotel" untuk menambahkan.' : 'Belum ada hotel.'}
           searchPlaceholder="Cari nama hotel atau kota..."
           toolbarActions={
             <CustomDropdown

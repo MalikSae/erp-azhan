@@ -145,12 +145,19 @@ Rencana pengerjaan, empat PR berurutan:
 
 | PR | Isi | Status |
 |---|---|---|
-| 1 | Komisi bawaan brand, isian komisi dan DP di form paket, isi susulan booking belum lunas, rentang komisi portal agen | Dikerjakan (migrasi 127) |
-| 2 | Akses halaman: T-02 dan halaman master untuk peran lihat-saja | Belum |
+| 1 | Komisi bawaan brand, isian komisi dan DP di form paket, isi susulan booking belum lunas, rentang komisi portal agen | Selesai, PR #29 (migrasi 127) |
+| 2 | Akses halaman: T-02 dan halaman master untuk peran lihat-saja | Dikerjakan |
 | 3 | Pengaman simpan paket dan kategori: S-01, S-02, S-03, S-06, S-07, S-08, S-13, serta aturan ubah tanggal berangkat | Belum |
 | 4 | Aturan master nonaktif, kode terkunci, hotel unik per kota, harga ganti kamar dan draft | Belum |
 
-Temuan rendah R-01 sampai R-20 ditunda.
+Temuan rendah R-01 sampai R-20 ditunda, kecuali R-19 yang masuk PR 2.
+
+Catatan PR 2:
+
+- T-02 ternyata lebih luas dari yang tercatat: form paket memuat daftar brand bersama data lain, sehingga `product_manager` (punya `schedule.edit`, tanpa `brand.view`) tidak bisa membuka form tambah atau edit paket sama sekali.
+- Perbaikannya endpoint baru `GET /api/admin/brands/options`: daftar ringkas brand (id, nama, kode, logo, warna, DP dan komisi bawaan) untuk semua admin yang login, tetap dibatasi ke brand sendiri bagi admin yang terikat satu brand. Halaman Kelola Paket, form paket, detail paket, dan Kelola Kategori memakainya. `GET /api/admin/brands` (data lengkap) tetap butuh `brand.view`.
+- Kategori, Hotel, Maskapai & Bandara, dan Itinerary kini bisa dibuka dengan `masterdata.view`. Tombol tambah, kolom aksi, dan klik nama hanya untuk `masterdata.edit`. Form itinerary tetap butuh `masterdata.edit`.
+- Di luar lingkup, belum diperbaiki: ringkasan Dashboard dan halaman booking masih memuat `GET /api/admin/brands` dan data master lain yang tidak dimiliki semua peran.
 
 ## Urutan perbaikan yang disarankan
 

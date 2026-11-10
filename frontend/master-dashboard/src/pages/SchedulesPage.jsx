@@ -11,7 +11,7 @@ import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import ActionMenu from 'shared/ui/ActionMenu';
 import { listSchedulesAdmin, deleteSchedule, updateScheduleStatus } from '../api/schedules';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 import { AuthContext } from '../context/AuthContext';
 
 const STATUS_LABEL = { published: 'Published', draft: 'Draft', archived: 'Archived' };
@@ -110,7 +110,8 @@ const SchedulesPage = () => {
       const data = await listSchedulesAdmin();
       setSchedules(data || []);
 
-      const brandsData = await listBrands();
+      // Nama brand hanya pelengkap tabel dan filter: gagal memuatnya tidak boleh menggagalkan daftar paket.
+      const brandsData = await listBrandOptions().catch(() => []);
       setBrands(brandsData || []);
       const bMap = {};
       (brandsData || []).forEach(b => {

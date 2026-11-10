@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import { Plane, MapPin, Pencil, Trash2 } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import DataTable from 'shared/ui/DataTable';
@@ -54,6 +55,9 @@ const CodeText = ({ code }) => (
 );
 
 const AirlinesPage = () => {
+  // Peran lihat-saja (masterdata.view) boleh membuka halaman ini; tombol ubah hanya untuk masterdata.edit.
+  const { hasPermission } = useContext(AuthContext);
+  const canEdit = hasPermission('masterdata.edit');
   const [activeTab, setActiveTab] = useState('airlines'); // 'airlines' | 'airports'
 
   // ─── Airlines State ──────────────────────────────────────────────────────────
@@ -290,7 +294,7 @@ const AirlinesPage = () => {
   const airlineColumns = [
     { header: 'Maskapai', key: 'name', sortable: true },
     { header: 'Kode IATA', key: 'code', sortable: true },
-    { header: 'Aksi', key: 'aksi' },
+    ...(canEdit ? [{ header: 'Aksi', key: 'aksi' }] : []),
   ];
 
   const renderAirlineCell = (row, key) => {
@@ -300,8 +304,9 @@ const AirlinesPage = () => {
           <LogoCell url={row.logo_url} name={row.name} />
           <button
             type="button"
+            disabled={!canEdit}
             onClick={() => handleOpenAirlineModal(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
           >
             {row.name}
           </button>
@@ -323,7 +328,7 @@ const AirlinesPage = () => {
     { header: 'Bandara', key: 'name', sortable: true },
     { header: 'Kode', key: 'code', sortable: true },
     { header: 'Kota', key: 'city', sortable: true },
-    { header: 'Aksi', key: 'aksi' },
+    ...(canEdit ? [{ header: 'Aksi', key: 'aksi' }] : []),
   ];
 
   const renderAirportCell = (row, key) => {
@@ -331,8 +336,9 @@ const AirlinesPage = () => {
       return (
         <button
           type="button"
-          onClick={() => handleOpenAirportModal(row)}
-          className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          disabled={!canEdit}
+            onClick={() => handleOpenAirportModal(row)}
+          className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
         >
           {row.name}
         </button>
@@ -363,14 +369,13 @@ const AirlinesPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Maskapai & Bandara"
-        actionLabel={activeTab === 'airlines' ? "+ Tambah Maskapai" : "+ Tambah Bandara"}
-        onAction={() => {
+        {...(canEdit ? { actionLabel: activeTab === 'airlines' ? "+ Tambah Maskapai" : "+ Tambah Bandara", onAction: () => {
           if (activeTab === 'airlines') {
             handleOpenAirlineModal();
           } else {
             handleOpenAirportModal();
           }
-        }}
+        } } : {})}
       />
 
       {airlineErrorMessage && (
@@ -389,7 +394,7 @@ const AirlinesPage = () => {
           data={airlines}
           itemsPerPage={10}
           searchPlaceholder="Cari maskapai..."
-          emptyMessage='Belum ada maskapai. Klik "+ Tambah Maskapai" untuk menambahkan.'
+          emptyMessage={canEdit ? 'Belum ada maskapai. Klik "+ Tambah Maskapai" untuk menambahkan.' : 'Belum ada maskapai.'}
           toolbarLeading={tabSwitcher}
           renderCell={renderAirlineCell}
         />
@@ -400,7 +405,7 @@ const AirlinesPage = () => {
           data={airports}
           itemsPerPage={10}
           searchPlaceholder="Cari bandara (nama, kode, kota)..."
-          emptyMessage='Belum ada bandara. Klik "+ Tambah Bandara" untuk menambahkan.'
+          emptyMessage={canEdit ? 'Belum ada bandara. Klik "+ Tambah Bandara" untuk menambahkan.' : 'Belum ada bandara.'}
           toolbarLeading={tabSwitcher}
           renderCell={renderAirportCell}
         />

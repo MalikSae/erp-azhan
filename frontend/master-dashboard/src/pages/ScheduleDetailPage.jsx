@@ -23,7 +23,7 @@ import SeatManagement from '../components/SeatManagement';
 import { AuthContext } from '../context/AuthContext';
 import { getSchedule } from '../api/schedules';
 import { getItinerary } from '../api/itineraries';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 
 const formatRupiah = (amount) => {
   if (amount === undefined || amount === null || amount === '') return '-';
@@ -301,7 +301,7 @@ const ScheduleDetailPage = () => {
 
         // Fetch Brands to display Brand Name
         promises.push(
-          listBrands()
+          listBrandOptions()
             .then(brands => {
               const found = (brands || []).find(b => b.id === scheduleData.brand_id);
               setBrand(found || null);
