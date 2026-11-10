@@ -41,6 +41,7 @@ import BrandCell from "../components/BrandCell";
 import KreditCashbackPanel from "../components/KreditCashbackPanel";
 import { KOMISI_REPEAT_CASHBACK_AKTIF } from "../utils/agen";
 import RefundPanel from "../components/RefundPanel";
+import VoidPaymentModal from "../components/VoidPaymentModal";
 import { CheckCircle, ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
 
 const formatRupiah = (angka) => {
@@ -160,6 +161,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
   const [rejectError, setRejectError] = useState("");
+
+  // Pembayaran terkonfirmasi yang sedang dibatalkan (void)
+  const [selectedPaymentForVoid, setSelectedPaymentForVoid] = useState(null);
 
   // Confirm Payment Modal State
   const [selectedPaymentForConfirm, setSelectedPaymentForConfirm] = useState(null);
@@ -1217,10 +1221,31 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                             Alasan: {p.rejection_reason}
                           </span>
                         )}
+                        {p.status === "void" && p.void_reason && (
+                          <span className="text-[11px] text-neutral-500 italic font-body max-w-[180px] leading-tight" title={p.void_reason}>
+                            Alasan: {p.void_reason}
+                          </span>
+                        )}
                       </div>
                     );
                   }
                   if (key === "aksi") {
+                    if (p.status === "confirmed") {
+                      return (
+                        <ActionMenu
+                          align="right"
+                          items={[
+                            {
+                              label: "Batalkan Pembayaran",
+                              icon: X,
+                              danger: true,
+                              tooltip: "Batalkan pembayaran yang salah catat",
+                              onClick: () => setSelectedPaymentForVoid(p),
+                            },
+                          ]}
+                        />
+                      );
+                    }
                     if (p.status === "pending") {
                       return (
                         <ActionMenu
@@ -1735,6 +1760,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </div>
         </form>
       </Modal>
+
+      <VoidPaymentModal
+        payment={selectedPaymentForVoid}
+        onClose={() => setSelectedPaymentForVoid(null)}
+        onDone={() => { setSelectedPaymentForVoid(null); fetchAll(); }}
+      />
 
       {/* Modal: Konfirmasi Pembayaran */}
       <Modal

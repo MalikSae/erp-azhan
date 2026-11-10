@@ -1791,8 +1791,36 @@ func (r *Repository) ListDiscounts(ctx context.Context, bookingID int64) ([]Book
 	return items, rows.Err()
 }
 
+// BatasDiskonPersen: total diskon satu booking di atas persentase ini dari jumlah harga pax hanya boleh
+// ditambahkan oleh pemegang izin booking.diskon.besar (audit 10 November 2026, T-02). Diskon besar bisa
+// membuat booking lunas tanpa uang masuk, dan komisi yang tercatat saat lunas tidak dibalik.
+const BatasDiskonPersen = 10
+
+// melebihiBatasDiskon: apakah total diskon melewati BatasDiskonPersen dari jumlah harga pax.
+func melebihiBatasDiskon(hargaPax, totalDiskon float64) bool {
+	return totalDiskon*100 > hargaPax*BatasDiskonPersen
+}
+
+// cekBatasDiskonTx menolak total diskon di atas batas. Dipanggil setelah diskon baru disisipkan, di dalam
+// transaksi yang sama, sehingga penolakan membatalkan penyisipan itu.
+func cekBatasDiskonTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	var hargaPax, totalDiskon float64
+	err := tx.QueryRowContext(ctx, `
+		SELECT (SELECT COALESCE(SUM(harga_pax), 0) FROM booking_pax WHERE booking_id = ?),
+		       (SELECT COALESCE(SUM(nominal), 0) FROM booking_discounts WHERE booking_id = ?)`, bookingID, bookingID).Scan(&hargaPax, &totalDiskon)
+	if err != nil {
+		return fmt.Errorf("booking.cekBatasDiskon: %w", err)
+	}
+	if melebihiBatasDiskon(hargaPax, totalDiskon) {
+		return bizErr("total diskon (%s) melebihi batas %d%% dari harga (%s); diskon sebesar ini hanya dapat ditambahkan oleh pengguna dengan izin diskon besar",
+			formatRupiah(totalDiskon), BatasDiskonPersen, formatRupiah(hargaPax))
+	}
+	return nil
+}
+
 // AddDiscount menambahkan diskon baru dan menghitung ulang total_harga.
-func (r *Repository) AddDiscount(ctx context.Context, bookingID int64, nama string, nominal float64) error {
+// bolehDiskonBesar: pemanggil memegang izin booking.diskon.besar.
+func (r *Repository) AddDiscount(ctx context.Context, bookingID int64, nama string, nominal float64, bolehDiskonBesar bool) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -1806,6 +1834,11 @@ func (r *Repository) AddDiscount(ctx context.Context, bookingID int64, nama stri
 	_, err = tx.ExecContext(ctx, `INSERT INTO booking_discounts (booking_id, nama, nominal) VALUES (?, ?, ?)`, bookingID, nama, nominal)
 	if err != nil {
 		return fmt.Errorf("booking.AddDiscount insert: %w", err)
+	}
+	if !bolehDiskonBesar {
+		if err := cekBatasDiskonTx(ctx, tx, bookingID); err != nil {
+			return err
+		}
 	}
 
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {

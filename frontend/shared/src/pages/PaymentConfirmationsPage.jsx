@@ -13,6 +13,7 @@ import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import ActionMenu from '../components/ui/ActionMenu';
+import VoidPaymentModal from '../components/VoidPaymentModal';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${String(value).slice(0, 10)}T00:00:00`));
@@ -43,6 +44,8 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
   const [rejectionReason, setRejectionReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
+  // Pembayaran terkonfirmasi yang sedang dibatalkan (void)
+  const [voidTarget, setVoidTarget] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -141,6 +144,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       { value: 'pending', label: `Menunggu (${count('pending')})` },
       { value: 'confirmed', label: `Terkonfirmasi (${count('confirmed')})` },
       { value: 'rejected', label: `Ditolak (${count('rejected')})` },
+      { value: 'void', label: `Dibatalkan (${count('void')})` },
     ];
   }, [items, filters.brand, filters.bank, filters.from, filters.to]);
 
@@ -383,6 +387,16 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
         toolbarPanel={toolbarPanel}
       />
 
+      <VoidPaymentModal
+        payment={voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onDone={() => {
+          setSuccessMessage(`Pembayaran ${voidTarget?.jamaah_name || ''} sebesar ${money(voidTarget?.jumlah)} dibatalkan.`.replace('  ', ' '));
+          setVoidTarget(null);
+          load();
+        }}
+      />
+
       {/* Modal Detail Pembayaran & Verifikasi */}
       <Modal
         isOpen={Boolean(selectedPayment)}
@@ -433,6 +447,20 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                 </>
               )}
 
+              {selectedPayment?.status === 'confirmed' && (
+                <Button
+                  variant="danger-light"
+                  onClick={() => {
+                    const target = selectedPayment;
+                    closeDetail();
+                    setVoidTarget(target);
+                  }}
+                  disabled={saving}
+                >
+                  Batalkan Pembayaran
+                </Button>
+              )}
+
               {selectedPayment?.status === 'pending' && rejectMode && (
                 <Button variant="danger" onClick={handleRejectPayment} isLoading={saving}>
                   Konfirmasi Tolak Pembayaran
@@ -457,6 +485,12 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                 </span>
                 {selectedMeta && <Badge variant={selectedMeta.variant} hideIcon className={STATUS_STRONG[selectedPayment.status]}>{selectedMeta.label}</Badge>}
               </div>
+
+              {selectedPayment.status === 'void' && (
+                <p className="mt-2 text-xs font-body text-neutral-600">
+                  <span className="font-semibold">Dibatalkan{selectedPayment.voided_at ? ` pada ${dateLabel(selectedPayment.voided_at)}` : ''}:</span> {selectedPayment.void_reason || '-'}
+                </p>
+              )}
 
               {selectedPayment.status === 'rejected' && selectedPayment.rejection_reason && (
                 <p className="mt-2 text-xs font-body text-danger-700">

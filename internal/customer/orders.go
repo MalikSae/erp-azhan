@@ -260,9 +260,7 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil riwayat pembayaran")
 		return
 	}
-	if payments == nil {
-		payments = []payment.Payment{}
-	}
+	payments = pembayaranUntukPelanggan(payments)
 	banks, err := o.banks(r.Context(), acc.BrandID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil rekening")
@@ -345,9 +343,7 @@ func (o *Orders) ListPayments(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil riwayat pembayaran")
 		return
 	}
-	if payments == nil {
-		payments = []payment.Payment{}
-	}
+	payments = pembayaranUntukPelanggan(payments)
 	writeJSON(w, http.StatusOK, payments)
 }
 

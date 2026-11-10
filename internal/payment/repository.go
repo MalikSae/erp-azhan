@@ -19,6 +19,8 @@ var (
 	ErrSeatUnavailable = errors.New("seat tidak mencukupi untuk mengonfirmasi pembayaran")
 	ErrOverpayment     = errors.New("pembayaran melebihi sisa tagihan; periksa kemungkinan transfer ganda atau proses pengembalian dana")
 	ErrBookingClosed   = errors.New("booking tidak aktif; hubungi admin untuk memastikan seat sebelum pembayaran")
+	ErrNotVoidable     = errors.New("hanya pembayaran yang sudah dikonfirmasi yang dapat dibatalkan")
+	ErrVoidBelowRefund = errors.New("pembayaran tidak dapat dibatalkan karena dana booking ini sudah dikembalikan melebihi sisa pembayaran lainnya")
 )
 
 // Repository mengelola semua query ke tabel payments.
@@ -86,7 +88,7 @@ func (r *Repository) ListDailyBrandTransactions(ctx context.Context, brandID *in
 func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brandID *int64) ([]Payment, error) {
 	q := `
 		SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,
-			p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.created_at
+			p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.created_at
 		FROM payments p
 		JOIN bookings b ON b.id = p.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
@@ -110,7 +112,7 @@ func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brand
 	items := make([]Payment, 0)
 	for rows.Next() {
 		var p Payment
-		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.VoidReason, &p.VoidedBy, &p.VoidedAt, &p.CreatedAt); err != nil {
 			return nil, fmt.Errorf("payment.List scan: %w", err)
 		}
 		items = append(items, p)
@@ -125,7 +127,7 @@ func (r *Repository) ListByBookingID(ctx context.Context, bookingID int64, brand
 func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Payment, error) {
 	q := `
 		SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,
-			p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.created_at
+			p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.created_at
 		FROM payments p
 		JOIN bookings b ON b.id = p.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
@@ -140,7 +142,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Pa
 	}
 
 	var p Payment
-	err := r.db.QueryRowContext(ctx, q, args...).Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.CreatedAt)
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.VoidReason, &p.VoidedBy, &p.VoidedAt, &p.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -151,7 +153,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Pa
 }
 
 func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string) ([]Payment, error) {
-	q := `SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.created_at,j.nama_lengkap,s.jadwal_nama,br.name,COALESCE(b.id_booking, '') FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN jamaah j ON j.id=b.pic_jamaah_id JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE b.status != 'draft'`
+	q := `SELECT p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.created_at,j.nama_lengkap,s.jadwal_nama,br.name,COALESCE(b.id_booking, '') FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN jamaah j ON j.id=b.pic_jamaah_id JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE b.status != 'draft'`
 	args := []any{}
 	if brandID != nil {
 		q += " AND s.brand_id=?"
@@ -172,7 +174,7 @@ func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string)
 	for rows.Next() {
 		var p Payment
 		var bookingIDBooking sql.NullString
-		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.CreatedAt, &p.JamaahName, &p.ScheduleName, &p.BrandName, &bookingIDBooking); err != nil {
+		if err := rows.Scan(&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID, &p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank, &p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.VoidReason, &p.VoidedBy, &p.VoidedAt, &p.CreatedAt, &p.JamaahName, &p.ScheduleName, &p.BrandName, &bookingIDBooking); err != nil {
 			return nil, err
 		}
 		if bookingIDBooking.Valid {
@@ -486,6 +488,82 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 		}
 	}
 
+	return nil
+}
+
+// ─── Void ─────────────────────────────────────────────────────────────────────
+
+// Void membatalkan pembayaran yang sudah dikonfirmasi (salah nominal, salah booking, atau salah
+// konfirmasi). Baris tidak dihapus: status menjadi 'void' dengan alasan, pelaku, dan waktu, lalu status
+// booking dihitung ulang. Komisi yang sudah tercatat tidak dibalik (K20). Permintaan ulang atas
+// pembayaran yang sudah void tidak mengubah apa pun.
+func (r *Repository) Void(ctx context.Context, id int64, alasan string, adminID int64) (*Payment, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("payment.Void tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if err := voidTx(ctx, tx, id, alasan, adminID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("payment.Void commit: %w", err)
+	}
+	return r.GetByID(ctx, id, nil)
+}
+
+func voidTx(ctx context.Context, tx *sql.Tx, id int64, alasan string, adminID int64) error {
+	var bookingID int64
+	err := tx.QueryRowContext(ctx, `SELECT booking_id FROM payments WHERE id=?`, id).Scan(&bookingID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("payment.Void get booking_id: %w", err)
+	}
+	// Booking dikunci sebelum pembayaran, urutan yang sama dengan penulis pembayaran lain.
+	var bookingStatus string
+	if err = tx.QueryRowContext(ctx, `SELECT status FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&bookingStatus); err != nil {
+		return fmt.Errorf("payment.Void lock booking: %w", err)
+	}
+	var status string
+	if err = tx.QueryRowContext(ctx, `SELECT status FROM payments WHERE id=? FOR UPDATE`, id).Scan(&status); err != nil {
+		return fmt.Errorf("payment.Void lock payment: %w", err)
+	}
+	if status == "void" {
+		return nil
+	}
+	if status != "confirmed" {
+		return ErrNotVoidable
+	}
+	// Dana yang sudah dikembalikan tidak boleh melebihi pembayaran terkonfirmasi yang tersisa.
+	var sisaTerkonfirmasi, refund float64
+	if err = tx.QueryRowContext(ctx, `
+		SELECT (SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status='confirmed' AND id<>?),
+		       (SELECT COALESCE(SUM(jumlah),0) FROM booking_refunds WHERE booking_id=?)`, bookingID, id, bookingID).
+		Scan(&sisaTerkonfirmasi, &refund); err != nil {
+		return fmt.Errorf("payment.Void cek refund: %w", err)
+	}
+	if refund > sisaTerkonfirmasi {
+		return ErrVoidBelowRefund
+	}
+
+	var pelaku any
+	if adminID > 0 {
+		pelaku = adminID
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE payments SET status='void', void_reason=?, voided_by=?, voided_at=NOW() WHERE id=?`, alasan, pelaku, id); err != nil {
+		return fmt.Errorf("payment.Void update: %w", err)
+	}
+	if err = SyncBookingStatusTx(ctx, tx, bookingID); err != nil {
+		return fmt.Errorf("payment.Void sync booking: %w", err)
+	}
+	// Booking yang turun status karena pembatalan pembayaran tetap memegang kursinya tanpa batas waktu
+	// sampai admin memutuskan; jangan sampai kursinya dilepas otomatis akibat koreksi admin.
+	if _, err = tx.ExecContext(ctx, `UPDATE bookings SET seat_hold_expires_at=NULL WHERE id=? AND is_seat_blocked=TRUE AND status<>'batal'`, bookingID); err != nil {
+		return fmt.Errorf("payment.Void keep seat: %w", err)
+	}
 	return nil
 }
 

@@ -187,6 +187,9 @@ Cakupan tes yang belum ada: `CancelPax`, pembatalan booking, blokir dan lepas ku
 | S-03 | Diperbaiki | Daftar booking menghitung kelengkapan pax lewat satu kueri tambahan per 1.000 booking (`paxBelumLengkapSet`). Tes: `TestPaxBelumLengkapSet`, dan `TestListBookingSiapBerangkatSamaDenganDetail` yang membandingkan daftar dengan detail pada 40 booking nyata |
 | S-12 | Diperbaiki, belum diuji di browser | Form booking membaca `direkrut_oleh_akun_id`, sehingga default kaitan "Sama seperti PIC" aktif lagi |
 | S-15 | Diperbaiki, belum diuji pada jam 00.00–06.59 WIB | Tanggal bawaan pembayaran dan batas tanggal lahir di form booking memakai `hariIniWIB()` dari `frontend/shared/src/utils/tanggal.js`; `RefundPanel` memakai helper yang sama |
+| T-02 | Diperbaiki | Keputusan: total diskon satu booking di atas 10% jumlah harga pax hanya boleh ditambahkan pemegang izin baru `booking.diskon.besar` (diberikan ke Super Admin). Pemeriksaan di `AddDiscount`, dalam transaksi yang sama dengan penyisipan diskon. Aturan lama tetap berlaku: total tagihan tidak boleh di bawah pembayaran terkonfirmasi. Tes: `TestMelebihiBatasDiskon`, `TestCekBatasDiskonTx` |
+| T-03 | Diperbaiki | Keputusan: pembayaran terkonfirmasi bisa dibatalkan lewat `POST /api/admin/payments/{id}/void` dengan izin baru `payment.void` (Super Admin dan Finance) dan alasan wajib 5 sampai 500 karakter. Baris tidak dihapus: status `void`, alasan, pelaku, dan waktu tersimpan. Status booking dihitung ulang, kursi tetap terkunci tanpa batas waktu, komisi tidak dibalik (K20). Ditolak bila refund yang sudah dicatat melebihi sisa pembayaran terkonfirmasi. Tombol "Batalkan Pembayaran" ada di Detail Booking dan layar Pembayaran. Portal pelanggan menerima pembayaran void sebagai ditolak dengan keterangan umum, tanpa alasan internal. Migrasi `124_void_pembayaran_izin_diskon.sql`. Tes: `TestVoidPembayaran`, `TestVoidDitolakBilaMelebihiRefund`, `TestValidasiAlasanVoid`, `TestPembayaranUntukPelanggan` |
+| T-07 | Diperbaiki | Keputusan: form Tambah Jamaah menampilkan pemilih kaitan (agen aktif atau tanpa agen) yang wajib diisi. Berganti brand mengosongkan agen yang sudah dipilih. Form edit tidak berubah; kaitan tetap hanya bisa diganti lewat override admin |
 
 Verifikasi otomatis: `go vet` dan `go test` lulus; build dashboard lulus. Tes integrasi (`ERP_TEST_DB=1 go test -count=1 -p 1`) untuk `internal/booking`, `internal/customer`, `internal/payment`, `internal/jamaah`, dan `internal/komisi` lulus, termasuk dua tes baru: `TestSetujuiDitolakBilaDataSudahBerubah` (T-04) dan `TestBatalBookingTanpaBlokirMembatalkanPax` (T-06).
 
@@ -213,6 +216,27 @@ Uji browser (dashboard kedua di port 5175):
 
 - T-05: permintaan `GET /bookings/{id}/payments` dialihkan agar gagal. Detail booking tetap tampil, bagian Riwayat Pembayaran menulis "Riwayat pembayaran gagal dimuat. Muat ulang halaman untuk mencoba lagi."
 - T-01: permintaan `GET /jamaah/{id}` dibuat gagal saat membuka form edit. Form tidak dirender, tampil pesan galat dan tombol "Coba Lagi". Setelah permintaan dipulihkan dan tombol ditekan, form terisi data jamaah.
+
+Uji langsung T-02, T-03, T-07 (API kedua di port 9191, dua admin uji: Super Admin dan Admin Travel tanpa izin baru):
+
+```text
+[T02-tanpa-izin-10%]    POST /bookings/{id}/discounts tepat 10%        -> 200
+[T02-tanpa-izin-lewat]  tambah Rp 1.000 lagi                           -> 400 {"error":"total diskon (Rp 3.500.900) melebihi batas 10% dari harga (Rp 34.999.000); diskon sebesar ini hanya dapat ditambahkan oleh pengguna dengan izin diskon besar"}
+[T02-setelah-ditolak]   diskon tetap 1 baris, total tidak berubah
+[T02-dengan-izin-lewat] permintaan yang sama oleh Super Admin          -> 200
+[T03-booking]           dua pembayaran tunai -> status lunas
+[T03-tanpa-izin]        POST /payments/{id}/void oleh Admin Travel     -> 403
+[T03-tanpa-alasan]      alasan kosong                                  -> 400 {"error":"alasan pembatalan wajib diisi (minimal 5 karakter)"}
+[T03-void-pelunasan]    -> 200, status void, alasan, pelaku, dan waktu terisi; booking menjadi dp, kursi terkunci, tanpa batas hold
+[T03-void-ulang]        permintaan ulang dengan alasan lain            -> 200, alasan pertama tidak tertimpa
+[T03-void-dp]           -> 200; booking menjadi baru, total_dibayar 0, kursi tetap terkunci, tanpa batas hold
+[T03-daftar-void]       GET /payments?status=void memuat kedua pembayaran
+[T03-bayar-lagi]        pembayaran baru                                -> 201, booking kembali dp
+```
+
+Uji browser: form Tambah Jamaah menolak simpan tanpa kaitan ("Pilih kaitan agen: kaitkan ke agen atau tanpa agen") dan menyimpan setelah "Tanpa Agen" dipilih. Di Detail Booking, pembayaran void tampil "Dibatalkan" beserta alasannya; modal "Batalkan Pembayaran" menonaktifkan tombol kirim sampai alasan terisi, dan pembatalan dari modal tersimpan.
+
+Belum diuji untuk T-02, T-03, T-07: pilihan "Kaitkan ke Agen" beserta pencarian agen di form jamaah, tombol void di layar Pembayaran (memakai komponen yang sama dengan Detail Booking), tampilan pembayaran void di portal pelanggan (repo `azhan-booking`, hanya fungsi pemetaannya yang diuji), dan void oleh peran Finance. Migrasi 124 sudah dijalankan dua kali di `erp_azhan_dev`; di server lain harus dijalankan sebelum kode ini dirilis.
 
 Belum diuji: kotak tanggal lahir di form booking lewat UI (endpoint-nya sudah diuji), cabang 403 pada T-05 dengan peran tanpa `payment.view` (yang diuji cabang gagal muat), dan T-04 lewat API (baru lewat tes integrasi). Data uji (1 jamaah, 1 booking batal, 1 admin) sudah dihapus dan kedua server uji dihentikan. S-01 (edit penuh tanpa versi) belum dikerjakan.
 
