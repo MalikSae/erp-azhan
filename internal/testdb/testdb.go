@@ -182,6 +182,9 @@ func Schedule(t *testing.T, tx *sql.Tx, o ScheduleOpts) (scheduleID, brandID int
 	mustExec(t, tx, `UPDATE schedules SET nominal_komisi_langsung=?, nominal_bonus_pembinaan=?,
 		berangkat_tanggal=?, minimal_dp=0, seat_sisa=seat_sisa+100 WHERE id=?`,
 		o.KomisiLangsung, o.BonusPembinaan, o.BerangkatTanggal, scheduleID)
+	// Komisi bawaan brand dinolkan supaya nominal jadwal di atas satu-satunya sumber; test yang menguji
+	// bawaan brand mengisinya sendiri.
+	mustExec(t, tx, `UPDATE brands SET ujroh_closing=0, ujroh_pembinaan=0 WHERE id=?`, brandID)
 	return scheduleID, brandID
 }
 

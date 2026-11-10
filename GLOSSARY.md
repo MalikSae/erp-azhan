@@ -47,7 +47,11 @@ _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lam
 
 **Bonus pembinaan**: nominal flat per pax berangkat untuk upline agen pemilik kunci.
 
-**Snapshot komisi**: salinan nominal komisi jadwal ke booking saat booking dibuat. Perubahan jadwal tidak memengaruhi booking lama.
+**Komisi bawaan brand**: nominal komisi langsung dan bonus pembinaan yang diatur per brand. Berlaku untuk paket yang nominalnya dikosongkan. Bawaan kosong berarti brand belum ikut program agen.
+
+**Nominal efektif komisi**: nominal yang benar-benar dipakai sebuah paket: nilai paket bila diisi (0 berarti sengaja tanpa komisi), selain itu komisi bawaan brand.
+
+**Snapshot komisi**: salinan nominal efektif komisi ke booking saat booking dibuat. Perubahan paket atau bawaan brand tidak memengaruhi booking lama.
 
 **Saldo tersedia / tertahan**: komisi aktif yang sudah / belum lewat 3 hari kalender dari tanggal berangkat jadwalnya. Saldo tersedia dikurangi pencairan dan boleh negatif.
 

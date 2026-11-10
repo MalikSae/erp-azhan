@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/komisi"
 )
 
 // Portal agen berbasis akun email (spek 10 butir 10): memakai sesi akun pelanggan (customer.RequireCustomer).
@@ -48,8 +49,9 @@ type Rentang struct {
 	Max float64 `json:"max"`
 }
 
-// UjrohPublik: rentang komisi dari jadwal tayang (published, belum berangkat) satu brand. Rentang null bila
-// tidak ada jadwal yang ikut program (nominal > 0).
+// UjrohPublik: rentang komisi dari jadwal tayang (published, belum berangkat) satu brand, memakai nominal
+// efektif (nilai jadwal, selain itu bawaan brand). Rentang null bila tidak ada jadwal yang ikut program
+// (nominal efektif > 0).
 type UjrohPublik struct {
 	BrandID              int64    `json:"brand_id"`
 	JumlahJadwal         int      `json:"jumlah_jadwal"`
@@ -72,13 +74,17 @@ func rentangUjroh(ctx context.Context, q querier, brandID int64) (*UjrohPublik, 
 	var minL, maxL, minB, maxB sql.NullFloat64
 	err = q.QueryRowContext(ctx, `
 		SELECT COUNT(*),
-		       MIN(CASE WHEN nominal_komisi_langsung > 0 THEN nominal_komisi_langsung END),
-		       MAX(CASE WHEN nominal_komisi_langsung > 0 THEN nominal_komisi_langsung END),
-		       MIN(CASE WHEN nominal_bonus_pembinaan > 0 THEN nominal_bonus_pembinaan END),
-		       MAX(CASE WHEN nominal_bonus_pembinaan > 0 THEN nominal_bonus_pembinaan END)
-		FROM schedules
-		WHERE brand_id = ? AND status = 'published' AND berangkat_tanggal >= CURRENT_DATE
-		  AND (nominal_komisi_langsung > 0 OR nominal_bonus_pembinaan > 0)`, brandID).
+		       MIN(CASE WHEN langsung > 0 THEN langsung END),
+		       MAX(CASE WHEN langsung > 0 THEN langsung END),
+		       MIN(CASE WHEN pembinaan > 0 THEN pembinaan END),
+		       MAX(CASE WHEN pembinaan > 0 THEN pembinaan END)
+		FROM (
+			SELECT `+komisi.SQLKomisiLangsungEfektif+` AS langsung,
+			       `+komisi.SQLBonusPembinaanEfektif+` AS pembinaan
+			FROM schedules s JOIN brands br ON br.id = s.brand_id
+			WHERE s.brand_id = ? AND s.status = 'published' AND s.berangkat_tanggal >= CURRENT_DATE
+		) efektif
+		WHERE langsung > 0 OR pembinaan > 0`, brandID).
 		Scan(&u.JumlahJadwal, &minL, &maxL, &minB, &maxB)
 	if err != nil {
 		return nil, fmt.Errorf("agen: rentang ujroh: %w", err)

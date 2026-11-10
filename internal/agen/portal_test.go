@@ -44,6 +44,22 @@ func TestRentangUjrohDariJadwalTayang(t *testing.T) {
 		t.Fatalf("dua jadwal: %+v", u)
 	}
 
+	// Bawaan brand (audit Paket T-01): jadwal tayang yang kosong ikut brand, jadwal 0 tidak dihitung.
+	testdb.Exec(t, tx, `UPDATE schedules SET nominal_komisi_langsung=NULL, nominal_bonus_pembinaan=NULL WHERE id=?`, s1)
+	testdb.Exec(t, tx, `UPDATE brands SET ujroh_closing=400000, ujroh_pembinaan=50000 WHERE id=?`, brand)
+	u, err = rentangUjroh(ctx, tx, brand)
+	must(t, "rentang bawaan brand", err)
+	if u.KomisiLangsung == nil || u.KomisiLangsung.Min != 400_000 || u.BonusPembinaan == nil || u.BonusPembinaan.Min != 50_000 {
+		t.Fatalf("jadwal kosong harus ikut brand: %+v", u)
+	}
+	testdb.Exec(t, tx, `UPDATE schedules SET nominal_komisi_langsung=0, nominal_bonus_pembinaan=0 WHERE id=?`, s1)
+	u, err = rentangUjroh(ctx, tx, brand)
+	must(t, "rentang jadwal nol", err)
+	if u.KomisiLangsung != nil && u.KomisiLangsung.Min == 0 {
+		t.Fatalf("jadwal 0 tidak boleh masuk rentang: %+v", u)
+	}
+	testdb.Exec(t, tx, `UPDATE brands SET ujroh_closing=0, ujroh_pembinaan=0 WHERE id=?`, brand)
+
 	// Tidak tayang atau sudah berangkat: tidak dihitung, rentang kosong.
 	testdb.Exec(t, tx, `UPDATE schedules SET status='draft' WHERE brand_id=?`, brand)
 	u, err = rentangUjroh(ctx, tx, brand)
