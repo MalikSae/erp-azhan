@@ -53,6 +53,39 @@ func bizErr(format string, args ...any) error {
 	return &BusinessError{Message: fmt.Sprintf(format, args...)}
 }
 
+// NIK wajib untuk pax reguler di booking dashboard (audit menu Agen S-10, spek K14). Pengenalan "diri agen"
+// (K13) dan pencocokan jamaah yang sama bergantung pada NIK; tanpa NIK, agen bisa menerima komisi atas
+// dirinya sendiri. Pax infant dikecualikan.
+const pesanNIKWajib = "Jamaah %s belum memiliki NIK. Lengkapi NIK di data jamaah sebelum booking dapat diproses."
+
+// wajibNIKPaxRegulerTx menolak finalisasi draft bila ada pax reguler aktif yang jamaahnya belum punya NIK.
+func wajibNIKPaxRegulerTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT j.nama_lengkap FROM booking_pax bp JOIN jamaah j ON j.id = bp.jamaah_id
+		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
+		  AND (j.nik IS NULL OR TRIM(j.nik) = '')
+		ORDER BY bp.id`, bookingID)
+	if err != nil {
+		return fmt.Errorf("booking cek NIK pax: %w", err)
+	}
+	defer rows.Close()
+	var nama []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return fmt.Errorf("booking cek NIK pax scan: %w", err)
+		}
+		nama = append(nama, n)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("booking cek NIK pax: %w", err)
+	}
+	if len(nama) > 0 {
+		return bizErr(pesanNIKWajib, strings.Join(nama, ", "))
+	}
+	return nil
+}
+
 type ErrStokKurang struct {
 	Message string
 }
@@ -691,8 +724,8 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 		var roomTypeVal *string
 
 		var namaLengkap string
-		var tanggalLahir sql.NullString
-		err := tx.QueryRowContext(ctx, `SELECT nama_lengkap, DATE_FORMAT(tanggal_lahir, '%Y-%m-%d') FROM jamaah WHERE id = ?`, p.JamaahID).Scan(&namaLengkap, &tanggalLahir)
+		var tanggalLahir, nik sql.NullString
+		err := tx.QueryRowContext(ctx, `SELECT nama_lengkap, DATE_FORMAT(tanggal_lahir, '%Y-%m-%d'), nik FROM jamaah WHERE id = ?`, p.JamaahID).Scan(&namaLengkap, &tanggalLahir, &nik)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, bizErr("jamaah tidak ditemukan: ID %d", p.JamaahID)
@@ -724,6 +757,9 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 				if infant, _ := isInfantEligible(&tanggalLahir.String, &berangkatTanggal.String); infant {
 					return nil, bizErr("Jamaah %s berusia di bawah 2 tahun pada tanggal keberangkatan, harus didaftarkan sebagai infant", namaLengkap)
 				}
+			}
+			if strings.TrimSpace(nik.String) == "" {
+				return nil, bizErr(pesanNIKWajib, namaLengkap)
 			}
 			countsForSeat = true
 			if p.RoomType == nil {
@@ -1059,6 +1095,10 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 			return nil, bizErr("Minimal 1 jamaah reguler wajib didaftarkan dalam booking")
 		}
 		return nil, bizErr("Booking harus memiliki minimal 1 pax reguler (tidak boleh hanya infant)")
+	}
+
+	if err := wajibNIKPaxRegulerTx(ctx, tx, bookingID); err != nil {
+		return nil, err
 	}
 
 	// Validasi PIC bukan infant
