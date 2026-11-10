@@ -1217,12 +1217,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                           {getPaymentStatusMeta(p.status).label}
                         </Badge>
                         {p.status === "rejected" && p.rejection_reason && (
-                          <span className="text-[11px] text-danger-600 italic font-body max-w-[180px] leading-tight" title={p.rejection_reason}>
+                          <span className="block truncate text-[11px] text-danger-600 italic font-body max-w-[180px] leading-tight" title={p.rejection_reason}>
                             Alasan: {p.rejection_reason}
                           </span>
                         )}
                         {p.status === "void" && p.void_reason && (
-                          <span className="text-[11px] text-neutral-500 italic font-body max-w-[180px] leading-tight" title={p.void_reason}>
+                          <span className="block truncate text-[11px] text-neutral-500 italic font-body max-w-[180px] leading-tight" title={p.void_reason}>
                             Alasan: {p.void_reason}
                           </span>
                         )}

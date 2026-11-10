@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { getJamaah, updateCatatan } from "../api/jamaah";
+import PerubahanJamaahPanel from "../components/PerubahanJamaahPanel";
 import { listDokumen, upsertDokumen } from "../api/dokumen";
 import { uploadMedia, openProtectedMedia } from "../api/media";
 import { listBookings } from "../api/bookings";
@@ -115,7 +116,9 @@ const AGEN_STATUS_STYLE = {
   neutral: NEUTRAL_STATUS,
 };
 
-export const JamaahDetailPage = ({ showBrandColumn = false }) => {
+// bolehLihatPerubahan: pengguna memegang izin jamaah.perubahan.approve, sehingga riwayat perubahan data dan
+// pengajuan yang menunggu untuk jamaah ini bisa ditampilkan dan diputuskan dari halaman ini.
+export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -178,6 +181,15 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
   useEffect(() => {
     fetchAllData();
   }, [id, showBrandColumn]);
+
+  // Setelah pengajuan disetujui dari panel riwayat, profil dimuat ulang tanpa mengganti halaman dengan spinner.
+  const muatUlangJamaah = async () => {
+    try {
+      setJamaah(await getJamaah(id));
+    } catch {
+      // Profil lama tetap tampil; muat ulang halaman akan mengambil data terbaru.
+    }
+  };
 
   const handleTriggerUpload = (jenis) => {
     setActiveUploadJenis(jenis);
@@ -588,6 +600,13 @@ export const JamaahDetailPage = ({ showBrandColumn = false }) => {
         )}
       </TableCard>
 
+      {/* Riwayat perubahan data: editan admin, isian langsung pelanggan, dan pengajuan yang menunggu keputusan */}
+      {bolehLihatPerubahan && (
+        <div>
+          <h3 className="mb-3 font-heading text-sm font-bold text-neutral-900">Riwayat Perubahan Data</h3>
+          <PerubahanJamaahPanel jamaahId={id} onChanged={(aksi) => { if (aksi === 'setujui') muatUlangJamaah(); }} />
+        </div>
+      )}
 
     </div>
   );

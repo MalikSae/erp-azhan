@@ -9,7 +9,7 @@ import Login from './pages/Login';
 import DashboardHome from './pages/DashboardHome';
 import BrandDashboardPage from './pages/BrandDashboardPage';
 import PersetujuanAgenPage from './pages/PersetujuanAgenPage';
-import PersetujuanDataJamaahPage from './pages/PersetujuanDataJamaahPage';
+import KelolaJamaahPage from './pages/KelolaJamaahPage';
 import PengumumanPage from './pages/PengumumanPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
 import HotelsPage from './pages/HotelsPage';
@@ -34,7 +34,6 @@ import BrandsPage from './pages/BrandsPage';
 import BrandFormPage from './pages/BrandFormPage';
 
 import {
-  JamaahPage,
   JamaahDetailPage,
   JamaahFormPage,
   BookingsPage,
@@ -78,9 +77,9 @@ function AppRoutes() {
           {/* Jamaah & Booking (halaman bersama) */}
           <Route path="/akun" element={<RequireAccess perm="akun.view"><DaftarAkunPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/akun/:id" element={<RequireAccess perm="akun.view"><DetailAkunPage showBrandColumn={showBrandColumn} izin={{ ubahProfil: hasPermission('akun.edit'), nikPengajuan: hasPermission('agen.approve'), nikAktif: hasPermission('agen.kaitan.edit') }} /></RequireAccess>} />
-          <Route path="/jamaah" element={<RequireAccess perm="jamaah.view"><JamaahPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
+          <Route path="/jamaah" element={<RequireAccess perm="jamaah.view"><KelolaJamaahPage tab="daftar" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/new" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
-          <Route path="/jamaah/:id" element={<RequireAccess perm="jamaah.view"><JamaahDetailPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
+          <Route path="/jamaah/:id" element={<RequireAccess perm="jamaah.view"><JamaahDetailPage showBrandColumn={showBrandColumn} bolehLihatPerubahan={hasPermission('jamaah.perubahan.approve')} /></RequireAccess>} />
           <Route path="/jamaah/:id/edit" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/bookings" element={<RequireAccess perm="booking.view"><BookingsPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/bookings/new" element={<RequireAccess perm="booking.edit"><BookingFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
@@ -98,7 +97,7 @@ function AppRoutes() {
           <Route path="/komisi" element={<RequireAccess holdingOnly><KomisiReferralPage /></RequireAccess>} />
           <Route path="/komisi/ganti-kaitan" element={<RequireAccess holdingOnly><GantiKaitanAgenPage /></RequireAccess>} />
           <Route path="/pengumuman" element={<RequireAccess perm="pengumuman.manage"><PengumumanPage /></RequireAccess>} />
-          <Route path="/jamaah/perubahan" element={<RequireAccess perm="jamaah.perubahan.approve"><PersetujuanDataJamaahPage /></RequireAccess>} />
+          <Route path="/jamaah/perubahan" element={<RequireAccess perm="jamaah.perubahan.approve"><KelolaJamaahPage tab="persetujuan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/pengajuan" element={<RequireAccess perm="agen.approve"><PersetujuanAgenPage /></RequireAccess>} />
           <Route path="/agen" element={<RequireAccess perm="agen.view"><DaftarAgenPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/komisi" element={<RequireAccess perm="komisi.view"><RiwayatKomisiPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
