@@ -77,7 +77,6 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       items: [
         { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
         { name: 'Akun Pelanggan', path: '/akun', icon: UserRound, perm: 'akun.view' },
-        { name: 'Pengumuman', path: '/pengumuman', icon: Megaphone, perm: 'pengumuman.manage' },
         { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
         { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
       ],
@@ -106,6 +105,13 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       items: [
         { name: 'Perlengkapan', path: '/inventory/perlengkapan', icon: Boxes, perm: 'perlengkapan.view' },
         { name: 'Riwayat Stok', path: '/inventory/riwayat-stok', icon: History, perm: 'perlengkapan.view' },
+      ],
+    },
+    {
+      // Pesan dari travel ke akun pelanggan (tampil di web publik), bukan data jamaah atau booking.
+      name: 'KOMUNIKASI',
+      items: [
+        { name: 'Pengumuman', path: '/pengumuman', icon: Megaphone, perm: 'pengumuman.manage' },
       ],
     },
     {
