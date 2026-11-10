@@ -330,7 +330,7 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "DP brand melebihi harga paket yang mengikuti DP brand")
 		return
 	}
-	b, err := h.repo.Update(r.Context(), id, req)
+	b, err := h.repo.Update(r.Context(), id, req, identity.GetAdminUserID(r.Context()))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			writeError(w, http.StatusNotFound, "brand tidak ditemukan")

@@ -19,7 +19,7 @@ Dalam lingkup tahap awal:
 Di luar lingkup tahap awal (dinonaktifkan, kode tidak dihapus):
 - **Cashback** (kredit potongan booking) dan layar "pakai kredit cashback" (B5).
 - **Komisi repeat order** dengan pemisahan 50/50. Booking ulang dihitung seperti booking biasa (lihat bagian 5).
-- Kolom brand `ujroh_closing`, `ujroh_pembinaan`, dan `ujroh_repeat_booking` tidak dipakai: nominal komisi hanya dari jadwal.
+- Kolom brand `ujroh_repeat_booking` tidak dipakai. (Revisi 10 November 2026: `ujroh_closing` dan `ujroh_pembinaan` kini dipakai sebagai komisi bawaan brand; jadwal yang nominalnya kosong mengikutinya, jadwal yang diisi menimpanya, dan jadwal berisi 0 berarti sengaja tanpa komisi. Lihat `docs/AUDIT-MENU-PAKET-2026-11-10.md`.)
 - Verifikasi pelanggan lewat captcha dan verifikasi email untuk alur pendaftaran agen.
 - Migrasi data: tidak ada. Sistem belum pernah deploy production, tidak ada agen lama, tidak ada skema PIN.
 

@@ -695,7 +695,7 @@ const ScheduleFormPage = () => {
       const hargaDouble = parseCurrency(formData.harga_double);
       const hargaInfant = formData.harga_infant !== '' ? parseCurrency(formData.harga_infant) : null;
       const minimalDP = formData.minimal_dp !== '' ? parseCurrency(formData.minimal_dp) : null;
-      // Kosong = jadwal tidak ikut program Syiar (NULL), 0 tetap disimpan sebagai 0.
+      // Kosong = ikut komisi bawaan brand (NULL); 0 tetap disimpan sebagai 0 = sengaja tanpa komisi.
       const komisiLangsung = formData.nominal_komisi_langsung !== '' ? parseCurrency(formData.nominal_komisi_langsung) : null;
       const bonusPembinaan = formData.nominal_bonus_pembinaan !== '' ? parseCurrency(formData.nominal_bonus_pembinaan) : null;
 
@@ -819,6 +819,12 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
   const madinahHotels = hotelOptions.filter(h => (h.city || '').toUpperCase() === 'MADINAH');
 
   const selectedBrandId = parseInt(formData.brand_id, 10);
+  // Bawaan brand terpilih untuk DP dan komisi. Null bila brand belum dipilih atau daftar brand tidak termuat.
+  const bawaanBrand = brandOptions.find(b => b.id === selectedBrandId) || null;
+  const teksIkutBrand = (nominal) => {
+    if (!bawaanBrand) return 'Ikut brand';
+    return Number(nominal) > 0 ? `Ikut brand: ${formatCurrency(Math.round(Number(nominal)))}` : 'Ikut brand: tidak ada komisi';
+  };
   const filteredCategories = categoryOptions.filter(c => {
     if (!c.is_active) return false;
     if (!c.brands || c.brands.length === 0) return true;
@@ -971,6 +977,53 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 <p className="text-xs text-neutral-500 font-body">
                   Harga per orang. Dewasa mengikuti isi kamar; bayi memakai harga sendiri.
                 </p>
+
+                <div className="border-t border-neutral-200 pt-4 mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Input
+                    label="Minimal DP (Rp/pax)"
+                    className="!mb-0"
+                    type="text"
+                    name="minimal_dp"
+                    error={fieldErrors.minimal_dp}
+                    value={formatCurrency(formData.minimal_dp)}
+                    onChange={handleCurrencyChange}
+                    placeholder={bawaanBrand ? `Ikut brand: ${formatCurrency(bawaanBrand.minimal_dp) || '0'}` : 'Ikut brand'}
+                    inputMode="numeric"
+                    helpText="Kosong = ikut DP brand. Isi 0 untuk tanpa DP. Tidak boleh melebihi harga kamar termurah."
+                  />
+                </div>
+
+                {/* Komisi agen per pax, dicatat saat booking lunas. Kosong = ikut bawaan brand; 0 = tanpa komisi. */}
+                <div className="border-t border-neutral-200 pt-4 mt-4 space-y-2">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Input
+                      label="Komisi Langsung Agen (Rp/pax)"
+                      className="!mb-0"
+                      type="text"
+                      name="nominal_komisi_langsung"
+                      error={fieldErrors.nominal_komisi_langsung}
+                      value={formatCurrency(formData.nominal_komisi_langsung)}
+                      onChange={handleCurrencyChange}
+                      placeholder={teksIkutBrand(bawaanBrand?.ujroh_closing)}
+                      inputMode="numeric"
+                    />
+                    <Input
+                      label="Bonus Pembinaan Upline (Rp/pax)"
+                      className="!mb-0"
+                      type="text"
+                      name="nominal_bonus_pembinaan"
+                      error={fieldErrors.nominal_bonus_pembinaan}
+                      value={formatCurrency(formData.nominal_bonus_pembinaan)}
+                      onChange={handleCurrencyChange}
+                      placeholder={teksIkutBrand(bawaanBrand?.ujroh_pembinaan)}
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <p className="text-xs text-neutral-500 font-body">
+                    Kosong = ikut komisi bawaan brand. Isi 0 bila paket ini sengaja tanpa komisi. Perubahan hanya berlaku
+                    untuk booking baru; booking yang sudah ada memakai nominal saat booking dibuat.
+                  </p>
+                </div>
               </div>
             </FormSection>
             <FormSection id="sec-penerbangan" title="Penerbangan">

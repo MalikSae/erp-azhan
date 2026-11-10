@@ -696,6 +696,32 @@ const BrandFormPage = () => {
                 )}
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Komisi Langsung Bawaan (Rp/pax)"
+                  name="ujroh_closing"
+                  value={formData.ujroh_closing ? Number(formData.ujroh_closing).toLocaleString('id-ID') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ujroh_closing: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="mis. 500.000"
+                  inputMode="numeric"
+                  className="!mb-0"
+                />
+                <Input
+                  label="Bonus Pembinaan Bawaan (Rp/pax)"
+                  name="ujroh_pembinaan"
+                  value={formData.ujroh_pembinaan ? Number(formData.ujroh_pembinaan).toLocaleString('id-ID') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ujroh_pembinaan: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="mis. 100.000"
+                  inputMode="numeric"
+                  className="!mb-0"
+                />
+              </div>
+              <p className="text-xs text-neutral-500 font-body">
+                Berlaku untuk semua paket brand ini yang komisinya tidak diisi sendiri. Kosongkan bila brand belum ikut
+                program agen. Perubahan hanya berlaku untuk booking baru; booking yang sudah ada memakai nominal saat
+                booking dibuat.
+              </p>
+
               <Textarea
                 label="Syarat & Ketentuan"
                 name="syarat_ketentuan_agen"

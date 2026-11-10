@@ -166,9 +166,23 @@ func (r *Repository) Create(ctx context.Context, req CreateBrandRequest) (*Brand
 	return r.GetByID(ctx, uint64(id))
 }
 
-func (r *Repository) Update(ctx context.Context, id uint64, req UpdateBrandRequest) (*Brand, error) {
-	if _, err := r.GetByID(ctx, id); err != nil {
-		return nil, err
+// Update menyimpan brand. Bila komisi bawaan (ujroh_closing, ujroh_pembinaan) berubah, perubahannya
+// dicatat di brand_komisi_log dalam transaksi yang sama; adminID 0 dicatat sebagai NULL.
+func (r *Repository) Update(ctx context.Context, id uint64, req UpdateBrandRequest, adminID int64) (*Brand, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("brand.Update Begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	var langsungLama, pembinaanLama float64
+	err = tx.QueryRowContext(ctx, `SELECT ujroh_closing, ujroh_pembinaan FROM brands WHERE id = ? FOR UPDATE`, id).
+		Scan(&langsungLama, &pembinaanLama)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("brand.Update baca komisi lama: %w", err)
 	}
 
 	const q = `
@@ -182,7 +196,7 @@ func (r *Repository) Update(ctx context.Context, id uint64, req UpdateBrandReque
 		    biaya_pendaftaran_agen = ?, ujroh_closing = ?, ujroh_pembinaan = ?, ujroh_repeat_booking = ?, syarat_ketentuan_agen = ?, no_wa_admin_travel = ?
 		WHERE id = ?
 	`
-	_, err := r.db.ExecContext(ctx, q,
+	_, err = tx.ExecContext(ctx, q,
 		req.KodeBrand, req.Name, req.Domain, req.WhatsappNumber, req.Email, req.Phone, req.Address, req.City, req.Province, req.GmapsURL, req.Legalitas, req.PPIUNumber, req.PIHKNumber, req.Akreditasi,
 		req.BankName, req.BankAccountNumber, req.BankAccountHolder,
 		req.SocialFacebook, req.SocialInstagram, req.SocialTiktok, req.SocialYoutube,
@@ -194,6 +208,23 @@ func (r *Repository) Update(ctx context.Context, id uint64, req UpdateBrandReque
 	)
 	if err != nil {
 		return nil, fmt.Errorf("brand.Update Exec: %w", err)
+	}
+
+	if langsungLama != req.UjrohClosing || pembinaanLama != req.UjrohPembinaan {
+		var oleh any
+		if adminID > 0 {
+			oleh = adminID
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO brand_komisi_log
+			  (brand_id, komisi_langsung_lama, komisi_langsung_baru, bonus_pembinaan_lama, bonus_pembinaan_baru, diubah_oleh)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			id, langsungLama, req.UjrohClosing, pembinaanLama, req.UjrohPembinaan, oleh); err != nil {
+			return nil, fmt.Errorf("brand.Update catat log komisi: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("brand.Update Commit: %w", err)
 	}
 
 	return r.GetByID(ctx, id)

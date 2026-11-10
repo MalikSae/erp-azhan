@@ -23,14 +23,25 @@ import (
 // di kode produksi.
 var OnBookingLunas = ProcessBookingLunas
 
-// SnapshotNominal menyalin nominal komisi jadwal ke booking (keputusan D9).
+// Nominal efektif komisi satu jadwal: nilai jadwal bila diisi (termasuk 0 = sengaja tanpa komisi),
+// selain itu bawaan brand. Bawaan brand 0 berarti brand belum ikut program, sehingga hasilnya NULL.
+// Dipakai dengan alias tabel s (schedules) dan br (brands).
+const (
+	SQLKomisiLangsungEfektif = `COALESCE(s.nominal_komisi_langsung, NULLIF(br.ujroh_closing, 0))`
+	SQLBonusPembinaanEfektif = `COALESCE(s.nominal_bonus_pembinaan, NULLIF(br.ujroh_pembinaan, 0))`
+)
+
+// SnapshotNominal menyalin nominal efektif komisi jadwal ke booking (keputusan D9).
 // Dipanggil saat booking resmi dibuat (bukan draft) di semua jalur: booking
-// admin, finalisasi draft, self-booking, dan CRM deal.
+// admin, finalisasi draft, self-booking, dan CRM deal. Perubahan nominal jadwal atau
+// bawaan brand setelahnya tidak mengubah booking yang sudah ada.
 func SnapshotNominal(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	_, err := tx.ExecContext(ctx, `
-		UPDATE bookings b JOIN schedules s ON s.id = b.schedule_id
-		SET b.snapshot_komisi_langsung = s.nominal_komisi_langsung,
-		    b.snapshot_bonus_pembinaan = s.nominal_bonus_pembinaan
+		UPDATE bookings b
+		JOIN schedules s ON s.id = b.schedule_id
+		JOIN brands br ON br.id = s.brand_id
+		SET b.snapshot_komisi_langsung = `+SQLKomisiLangsungEfektif+`,
+		    b.snapshot_bonus_pembinaan = `+SQLBonusPembinaanEfektif+`
 		WHERE b.id = ?`, bookingID)
 	return err
 }
