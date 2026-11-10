@@ -45,6 +45,7 @@ import (
 	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/selfbooking"
 	"erp-azhan/api/internal/shared"
+	"erp-azhan/api/internal/topbar"
 )
 
 func main() {
@@ -192,6 +193,7 @@ func main() {
 	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
 	jamaahAkunHandler := customer.NewJamaahAkun(db, customerRepo, mailer.NewFromEnv())
 	pengumumanHandler := pengumuman.NewHandler(db)
+	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
 	agenRepo := agen.NewRepository(db)
@@ -307,6 +309,11 @@ func main() {
 		// Identitas, brand, dan izin dari token yang sudah divalidasi: dipakai CMS (cms.<domain brand>).
 		r.Get("/me", identityHandler.Me)
 		r.Get("/my-brand", brandHandler.GetMyBrand)
+
+		// Topbar dashboard: pencarian global dan ringkasan pekerjaan menunggu. Cukup login admin;
+		// izin per jenis dan batas brand diperiksa di paket topbar (jenis tanpa izin dikembalikan kosong).
+		r.Get("/cari", topbarHandler.Cari)
+		r.Get("/notifikasi", topbarHandler.Notifikasi)
 		r.With(identity.RequireAdminRole).Put("/account/password", adminuserHandler.ChangeOwnPassword)
 
 		// RBAC Fase 1: manajemen role & permission (SPEK-RBAC-2026-10-02.md).

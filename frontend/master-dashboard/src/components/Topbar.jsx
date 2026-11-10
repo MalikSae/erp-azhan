@@ -1,7 +1,9 @@
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Search, Bell, ChevronDown, LogOut, ShieldCheck, Menu, KeyRound } from 'lucide-react';
+import { ChevronDown, LogOut, ShieldCheck, Menu, KeyRound } from 'lucide-react';
+import TopbarSearch from './TopbarSearch';
+import TopbarNotifikasi from './TopbarNotifikasi';
 
 const Topbar = ({ toggleSidebar }) => {
   const { logout, user, brandInfo, isHolding } = useContext(AuthContext);
@@ -33,26 +35,13 @@ const Topbar = ({ toggleSidebar }) => {
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* Desktop Quick Search Placeholder */}
-      <div className="hidden md:flex items-center gap-2 bg-neutral-50 border border-neutral-200/80 rounded-xl px-3.5 py-1.5 w-72 text-neutral-400 text-sm hover:border-neutral-300 transition-colors cursor-pointer">
-        <Search className="w-4 h-4 text-neutral-400" />
-        <span className="text-xs text-neutral-500 font-body">Cari paket, booking, jamaah...</span>
-        <kbd className="ml-auto text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-neutral-200 text-neutral-400 shadow-2xs">
-          ⌘K
-        </kbd>
-      </div>
+      {/* Pencarian global (desktop): paket, booking, jamaah. Ctrl+K / ⌘K. */}
+      <TopbarSearch />
 
       {/* Right Side - Actions & User Profile */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Notification Bell with Badge */}
-        <button
-          type="button"
-          className="w-9 h-9 flex items-center justify-center text-neutral-500 hover:text-neutral-800 bg-white hover:bg-neutral-50 border border-neutral-200 rounded-lg transition-colors relative"
-          title="Notifikasi & Peringatan"
-        >
-          <Bell className="w-[18px] h-[18px]" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-danger-500 rounded-full ring-2 ring-white" />
-        </button>
+        {/* Lonceng: pekerjaan yang menunggu keputusan */}
+        <TopbarNotifikasi />
 
         <div className="h-6 w-[1px] bg-neutral-200 mx-1 hidden sm:block" />
 
