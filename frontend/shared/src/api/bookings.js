@@ -90,6 +90,12 @@ export const verifyPayment = async (paymentId, status, rejectionReason = null) =
   return data;
 };
 
+// Membatalkan pembayaran yang sudah dikonfirmasi (butuh izin payment.void). Baris tidak dihapus.
+export const voidPayment = async (paymentId, alasan) => {
+  const { data } = await api.post(`/api/admin/payments/${paymentId}/void`, { alasan });
+  return data;
+};
+
 export const deletePayment = async (paymentId) => {
   const { data } = await api.delete(`/api/admin/payments/${paymentId}`);
   return data;

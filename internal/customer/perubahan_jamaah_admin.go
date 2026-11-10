@@ -149,6 +149,13 @@ var (
 	errCatatanWajib     = errors.New("catatan penolakan wajib diisi (minimal 3 karakter)")
 )
 
+// errDataBerubah: isian jamaah sudah berbeda dari nilai "sebelumnya" yang tercatat pada pengajuan.
+type errDataBerubah struct{ Label string }
+
+func (e errDataBerubah) Error() string {
+	return "data jamaah sudah berubah sejak pengajuan ini dibuat (" + e.Label + "); pengajuan tidak dapat disetujui. Tolak pengajuan ini dan minta pelanggan mengajukan ulang bila masih perlu"
+}
+
 type putusRequest struct {
 	Catatan string `json:"catatan"`
 }
@@ -185,7 +192,10 @@ func kunciPengajuan(ctx context.Context, tx *sql.Tx, id int64, brand *int64) (*p
 func tulisGalatPutus(w http.ResponseWriter, err error) {
 	var val *ErrValidasi
 	var hp errBentrokHP
+	var berubah errDataBerubah
 	switch {
+	case errors.As(err, &berubah):
+		writeError(w, http.StatusConflict, berubah.Error())
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "perubahan tidak ditemukan")
 	case errors.Is(err, errPerubahanSelesai):
@@ -215,6 +225,20 @@ func setujuiTx(ctx context.Context, tx *sql.Tx, id, adminID int64, brand *int64)
 	items, err := muatItem(ctx, tx, id, false)
 	if err != nil {
 		return nil, err
+	}
+	// Nilai "sebelumnya" pada pengajuan harus masih sama dengan data sekarang. Bila data sudah diubah
+	// sesudah pengajuan dibuat (mis. diedit admin), menyetujui akan menimpa perubahan yang lebih baru.
+	if _, err := tx.ExecContext(ctx, `SELECT id FROM jamaah WHERE id = ? FOR UPDATE`, p.JamaahID); err != nil {
+		return nil, err
+	}
+	sekarang, err := muatDataOrang(ctx, tx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range items {
+		if k, ok := kolomIndeks[it.Kolom]; ok && sekarang.Nilai[it.Kolom] != it.Lama {
+			return nil, errDataBerubah{Label: k.Label}
+		}
 	}
 	for _, it := range items {
 		k, ok := kolomIndeks[it.Kolom]

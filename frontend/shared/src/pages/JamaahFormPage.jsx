@@ -11,6 +11,7 @@ import Textarea from "../components/ui/Textarea";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import KaitanAgenPicker, { EMPTY_KAITAN, validateKaitan, toKaitanPayload } from "../components/KaitanAgenPicker";
 import { INDONESIAN_CITIES } from "../data/indonesianCities";
 
 const SECTION_LINKS = [
@@ -29,6 +30,12 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  // Gagal memuat data saat edit: form tidak boleh tampil, karena menyimpan form kosong menimpa data jamaah.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  // Kaitan agen jamaah baru: wajib dipilih eksplisit (agen aktif atau tanpa agen).
+  const [kaitan, setKaitan] = useState(EMPTY_KAITAN);
+  const [kaitanError, setKaitanError] = useState(null);
   // Konten dashboard menggulir di container dalam, bukan window; gulir ke pesan error langsung.
   const errorRef = useRef(null);
   useEffect(() => {
@@ -69,23 +76,28 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
 
   // Fetch data jamaah saat mode Edit
   useEffect(() => {
-    if (isEdit) {
-      getJamaah(id)
-        .then((jamaahData) => {
-          setFormData(prev => ({
-            ...prev,
-            ...jamaahData,
-            brand_id: jamaahData.brand_id || prev.brand_id || ""
-          }));
-          setLoading(false);
-        })
-        .catch((err) => {
-          if (err.response?.status === 404) setNotFound(true);
-          else setError("Gagal memuat data jamaah");
-          setLoading(false);
-        });
-    }
-  }, [id, isEdit]);
+    if (!isEdit) return;
+    let batal = false;
+    setLoading(true);
+    setLoadFailed(false);
+    getJamaah(id)
+      .then((jamaahData) => {
+        if (batal) return;
+        setFormData(prev => ({
+          ...prev,
+          ...jamaahData,
+          brand_id: jamaahData.brand_id || prev.brand_id || ""
+        }));
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (batal) return;
+        if (err.response?.status === 404) setNotFound(true);
+        else setLoadFailed(true);
+        setLoading(false);
+      });
+    return () => { batal = true; };
+  }, [id, isEdit, loadAttempt]);
 
   // Fetch daftar Brands jika diakses dari Office Dashboard
   useEffect(() => {
@@ -110,6 +122,8 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     const actualVal = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
     setFormData(prev => ({ ...prev, brand_id: actualVal ? Number(actualVal) : "" }));
     if (brandError) setBrandError(null);
+    // Agen terikat pada brand; ganti brand mengosongkan agen yang sudah dipilih.
+    setKaitan(prev => (prev.mode === 'agen' && prev.agen ? { mode: 'agen', agen: null } : prev));
   };
 
   const sanitizePayload = (data) => {
@@ -133,6 +147,15 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
       return;
     }
 
+    if (!isEdit) {
+      const kaitanErr = validateKaitan(kaitan);
+      if (kaitanErr) {
+        setKaitanError(kaitanErr);
+        setError(kaitanErr);
+        return;
+      }
+    }
+
     setSubmitting(true);
 
     try {
@@ -149,7 +172,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
         await updateJamaah(id, payload);
         navigate(`/jamaah/${id}`, { state: { success: `Data jamaah "${payload.nama_lengkap}" berhasil diperbarui.` } });
       } else {
-        const res = await createJamaah({ ...payload, kaitan_agen: { mode: "tanpa_agen" } });
+        const res = await createJamaah({ ...payload, kaitan_agen: toKaitanPayload(kaitan) });
         const newJamaahId = res?.id;
         navigate(newJamaahId ? `/jamaah/${newJamaahId}` : "/jamaah", { state: { success: `Jamaah "${payload.nama_lengkap}" berhasil ditambahkan.` } });
       }
@@ -175,9 +198,19 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     );
   }
 
+  if (loadFailed) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Edit Data Jamaah" onBack={handleBack} />
+        <Alert variant="error">Gagal memuat data jamaah. Form tidak ditampilkan agar data yang tersimpan tidak tertimpa.</Alert>
+        <Button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>Coba Lagi</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader 
+      <PageHeader
         title={isEdit ? "Edit Data Jamaah" : "Tambah Data Jamaah"}
         onBack={handleBack}
       />
@@ -441,6 +474,24 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   />
                   <p className="text-[11px] text-neutral-400 font-body">
                     Data jamaah akan terdaftar dan dikelola di bawah unit biro travel yang dipilih.
+                  </p>
+                </div>
+              </SidebarSection>
+            )}
+
+            {/* Kaitan agen: wajib dipilih saat membuat jamaah. Sesudah itu hanya bisa diganti lewat override admin. */}
+            {!isEdit && (
+              <SidebarSection title="Agen Pembawa Jamaah">
+                <div className="space-y-2">
+                  <KaitanAgenPicker
+                    value={kaitan}
+                    onChange={(v) => { setKaitan(v); setKaitanError(null); }}
+                    brandId={formData.brand_id || undefined}
+                    brandRequired={showBrandColumn}
+                    error={kaitanError}
+                  />
+                  <p className="text-[11px] text-neutral-400 font-body">
+                    Agen yang membawa jamaah ini menerima komisinya. Pilihan ini tidak bisa diubah dari form edit.
                   </p>
                 </div>
               </SidebarSection>

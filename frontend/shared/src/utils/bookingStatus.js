@@ -22,6 +22,8 @@ export const PAYMENT_STATUS_META = {
   pending: { label: 'Menunggu', variant: 'pending', className: '!bg-warning-100 !border-warning-300 !text-warning-800' },
   confirmed: { label: 'Terkonfirmasi', variant: 'success', className: '!bg-success-100 !border-success-300 !text-success-800' },
   rejected: { label: 'Ditolak', variant: 'danger', className: '!bg-danger-100 !border-danger-200 !text-danger-700' },
+  // void: pembayaran terkonfirmasi yang dibatalkan admin (salah catat); tidak ikut dihitung sebagai dana masuk.
+  void: { label: 'Dibatalkan', variant: 'neutral', className: '!bg-neutral-100 !border-neutral-300 !text-neutral-700' },
 };
 
 export function getPaymentStatusMeta(status) {

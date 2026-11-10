@@ -17,6 +17,7 @@ import {
 } from "../api/bookings";
 import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengkapan";
 import { getJamaah } from "../api/jamaah";
+import { hariIniWIB } from "../utils/tanggal";
 import { listBrands } from "../api/brands";
 import { uploadMedia, openProtectedMedia } from "../api/media";
 import { getSeatLockIcon, getPaymentStatusMeta } from "../utils/bookingStatus";
@@ -40,6 +41,7 @@ import BrandCell from "../components/BrandCell";
 import KreditCashbackPanel from "../components/KreditCashbackPanel";
 import { KOMISI_REPEAT_CASHBACK_AKTIF } from "../utils/agen";
 import RefundPanel from "../components/RefundPanel";
+import VoidPaymentModal from "../components/VoidPaymentModal";
 import { CheckCircle, ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
 
 const formatRupiah = (angka) => {
@@ -119,7 +121,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [paymentForm, setPaymentForm] = useState({
     jumlah: "",
     metode: "transfer",
-    tanggal: new Date().toISOString().split('T')[0],
+    tanggal: hariIniWIB(),
     bank_account_id: "",
     sender_name: "",
     received_by: "",
@@ -160,6 +162,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
   const [rejectError, setRejectError] = useState("");
 
+  // Pembayaran terkonfirmasi yang sedang dibatalkan (void)
+  const [selectedPaymentForVoid, setSelectedPaymentForVoid] = useState(null);
+
   // Confirm Payment Modal State
   const [selectedPaymentForConfirm, setSelectedPaymentForConfirm] = useState(null);
   const [confirmSubmitting, setConfirmSubmitting] = useState(false);
@@ -175,15 +180,21 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [blockSeatLoading, setBlockSeatLoading] = useState(false);
   const [blockSeatKey, setBlockSeatKey] = useState("");
 
+  // null = pembayaran termuat; "izin" = tanpa izin lihat pembayaran; "muat" = gagal karena sebab lain.
+  const [paymentsGagal, setPaymentsGagal] = useState(null);
+
   const fetchAll = async () => {
     try {
       setLoading(true);
+      // Pembayaran dimuat terpisah: gagal memuatnya (mis. tanpa izin payment.view) tidak boleh
+      // membuat booking yang ada tampil sebagai "tidak ditemukan".
       const [bookRes, payRes] = await Promise.all([
         getBooking(id),
-        listPayments(id)
+        listPayments(id).catch((err) => ({ gagal: err.response?.status === 403 ? "izin" : "muat" }))
       ]);
       setBooking(bookRes);
-      setPayments(payRes || []);
+      setPaymentsGagal(payRes?.gagal || null);
+      setPayments(Array.isArray(payRes) ? payRes : []);
 
       if (bookRes?.jamaah_id) {
         try {
@@ -365,9 +376,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const totalDiskon = discounts.reduce((sum, d) => sum + (parseFloat(d.nominal) || 0), 0);
   const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, hargaDasar - totalDiskon);
 
-  const totalPaid = payments
-    .filter((p) => p.status === "confirmed")
-    .reduce((sum, p) => sum + (parseFloat(p.jumlah) || 0), 0);
+  // Bila riwayat pembayaran tidak termuat, pakai total terkonfirmasi dari data booking agar sisa tagihan tetap benar.
+  const totalPaid = paymentsGagal
+    ? (parseFloat(booking?.total_dibayar) || 0)
+    : payments
+      .filter((p) => p.status === "confirmed")
+      .reduce((sum, p) => sum + (parseFloat(p.jumlah) || 0), 0);
   const sisaTagihan = Math.max(0, totalHarga - totalPaid);
 
   // ─── Cetak / PDF Invoice ──────────────────────────────────────────────────────
@@ -643,7 +657,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       setPaymentForm({
         jumlah: "",
         metode: "transfer",
-        tanggal: new Date().toISOString().split('T')[0],
+        tanggal: hariIniWIB(),
         bank_account_id: "",
         sender_name: "",
         received_by: "",
@@ -1149,7 +1163,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           <TableCard
             title="Riwayat Pembayaran"
             aside={
-              sisaTagihan > 0 && booking.status !== "batal" ? (
+              !paymentsGagal && sisaTagihan > 0 && booking.status !== "batal" ? (
                 <Button size="sm" variant="primary" onClick={() => setIsPaymentModalOpen(true)} className="text-xs flex items-center gap-1">
                   <Plus size={14} strokeWidth={1.75} />
                   <span>Catat Pembayaran</span>
@@ -1157,7 +1171,13 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               ) : null
             }
           >
-            {payments.length === 0 ? (
+            {paymentsGagal ? (
+              <p className="p-5 text-xs text-neutral-500 font-body">
+                {paymentsGagal === "izin"
+                  ? "Anda tidak memiliki izin untuk melihat pembayaran booking ini."
+                  : "Riwayat pembayaran gagal dimuat. Muat ulang halaman untuk mencoba lagi."}
+              </p>
+            ) : payments.length === 0 ? (
               <p className="p-5 text-xs text-neutral-500 font-body">Belum ada pembayaran. Catat pembayaran dari jamaah di sini.</p>
             ) : (
               <div className="overflow-x-auto">
@@ -1201,10 +1221,31 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                             Alasan: {p.rejection_reason}
                           </span>
                         )}
+                        {p.status === "void" && p.void_reason && (
+                          <span className="text-[11px] text-neutral-500 italic font-body max-w-[180px] leading-tight" title={p.void_reason}>
+                            Alasan: {p.void_reason}
+                          </span>
+                        )}
                       </div>
                     );
                   }
                   if (key === "aksi") {
+                    if (p.status === "confirmed") {
+                      return (
+                        <ActionMenu
+                          align="right"
+                          items={[
+                            {
+                              label: "Batalkan Pembayaran",
+                              icon: X,
+                              danger: true,
+                              tooltip: "Batalkan pembayaran yang salah catat",
+                              onClick: () => setSelectedPaymentForVoid(p),
+                            },
+                          ]}
+                        />
+                      );
+                    }
                     if (p.status === "pending") {
                       return (
                         <ActionMenu
@@ -1719,6 +1760,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </div>
         </form>
       </Modal>
+
+      <VoidPaymentModal
+        payment={selectedPaymentForVoid}
+        onClose={() => setSelectedPaymentForVoid(null)}
+        onDone={() => { setSelectedPaymentForVoid(null); fetchAll(); }}
+      />
 
       {/* Modal: Konfirmasi Pembayaran */}
       <Modal

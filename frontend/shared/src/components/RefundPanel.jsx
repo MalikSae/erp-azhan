@@ -7,9 +7,9 @@ import Alert from './ui/Alert';
 import Input from './ui/Input';
 import Textarea from './ui/Textarea';
 import CurrencyInput from './ui/CurrencyInput';
+import { hariIniWIB } from '../utils/tanggal';
 
 const rupiah = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(v) || 0);
-const hariIniWIB = () => new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 // Pengembalian dana booking batal yang sudah dibayar (keputusan audit 2026-09-30).
 // Panel hanya tampil untuk booking batal yang punya pembayaran terkonfirmasi.

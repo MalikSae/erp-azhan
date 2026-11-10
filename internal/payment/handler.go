@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/media"
@@ -72,7 +73,7 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 // atau otomatis scoped untuk admin brand.
 func (h *Handler) ListAllPayments(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
-	if status != "" && status != "pending" && status != "confirmed" && status != "rejected" {
+	if status != "" && status != "pending" && status != "confirmed" && status != "rejected" && status != "void" {
 		writeError(w, 400, "status tidak valid")
 		return
 	}
@@ -266,6 +267,55 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+// ─── Void ─────────────────────────────────────────────────────────────────────
+
+// validasiAlasanVoid merapikan alasan pembatalan pembayaran. Mengembalikan alasan yang sudah dirapikan
+// dan pesan galat ("" bila valid). Batas atas mengikuti kolom payments.void_reason.
+func validasiAlasanVoid(alasan string) (string, string) {
+	alasan = strings.TrimSpace(alasan)
+	n := utf8.RuneCountInString(alasan)
+	if n < 5 {
+		return "", "alasan pembatalan wajib diisi (minimal 5 karakter)"
+	}
+	if n > 500 {
+		return "", "alasan pembatalan maksimal 500 karakter"
+	}
+	return alasan, ""
+}
+
+// VoidPayment godoc
+// POST /api/admin/payments/{id}/void
+func (h *Handler) VoidPayment(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req VoidPaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
+	alasan, msg := validasiAlasanVoid(req.Alasan)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	// Verifikasi brand sebelum mengubah apa pun.
+	if _, err := h.repo.GetByID(r.Context(), id, identity.GetBrandID(r.Context())); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	adminID := identity.GetAdminUserID(r.Context())
+	updated, err := h.repo.Void(r.Context(), id, alasan, adminID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	log.Printf("[AUDIT] pembayaran %d (booking %d) dibatalkan oleh admin %d", id, updated.BookingID, adminID)
+	writeJSON(w, http.StatusOK, updated)
+}
+
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 // DeletePayment godoc
@@ -300,7 +350,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrCannotDelete):
 		writeError(w, http.StatusConflict, "tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
-	case errors.Is(err, ErrSeatUnavailable), errors.Is(err, ErrOverpayment), errors.Is(err, ErrBookingClosed):
+	case errors.Is(err, ErrSeatUnavailable), errors.Is(err, ErrOverpayment), errors.Is(err, ErrBookingClosed),
+		errors.Is(err, ErrNotVoidable), errors.Is(err, ErrVoidBelowRefund):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] payment: %v", err)

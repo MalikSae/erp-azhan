@@ -646,7 +646,7 @@ func (h *Handler) AddBookingDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.repo.AddDiscount(r.Context(), id, req.Nama, req.Nominal); err != nil {
+	if err := h.repo.AddDiscount(r.Context(), id, req.Nama, req.Nominal, identity.HasPermission(r.Context(), "booking.diskon.besar")); err != nil {
 		handleRepoError(w, err)
 		return
 	}

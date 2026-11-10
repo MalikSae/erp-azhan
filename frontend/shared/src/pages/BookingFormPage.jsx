@@ -30,7 +30,8 @@ import {
   finalizeBooking, 
   getBooking 
 } from "../api/bookings";
-import { listJamaah, updateJamaah, createJamaah } from "../api/jamaah";
+import { listJamaah, updateTanggalLahirJamaah, createJamaah } from "../api/jamaah";
+import { hariIniWIB } from "../utils/tanggal";
 import KaitanAgenPicker, { EMPTY_KAITAN, validateKaitan, toKaitanPayload } from "../components/KaitanAgenPicker";
 import { listSchedulesAdmin, getScheduleAdmin } from "../api/schedules";
 import { listBrands } from "../api/brands";
@@ -764,10 +765,10 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
     setQuickCreateError(null);
     // Jalur 3: default "sama seperti PIC" bila PIC terikat agen.
     const pic = jamaahList.find((j) => String(j.id) === String(picJamaahId));
-    if (pic?.kaitan_status === 'terikat_agen' && pic.direkrut_oleh_jamaah_id) {
+    if (pic?.kaitan_status === 'terikat_agen' && pic.direkrut_oleh_akun_id) {
       setQuickCreateKaitan({
         mode: 'agen',
-        agen: { id: pic.direkrut_oleh_jamaah_id, nama_lengkap: pic.direkrut_oleh_nama || `Agen #${pic.direkrut_oleh_jamaah_id}` },
+        agen: { id: pic.direkrut_oleh_akun_id, nama_lengkap: pic.direkrut_oleh_nama || `Agen #${pic.direkrut_oleh_akun_id}` },
       });
       setQuickCreateKaitanHint(`Sama seperti PIC (${pic.nama_lengkap}). Ganti bila jamaah ini milik agen lain.`);
     } else {
@@ -815,7 +816,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
           no_hp: newJamaah.no_hp,
           status: newJamaah.status,
           kaitan_status: newJamaah.kaitan_status,
-          direkrut_oleh_jamaah_id: newJamaah.direkrut_oleh_jamaah_id,
+          direkrut_oleh_akun_id: newJamaah.direkrut_oleh_akun_id,
           direkrut_oleh_nama: newJamaah.direkrut_oleh_nama,
           created_at: newJamaah.created_at
         }
@@ -846,19 +847,11 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       setInlineDobMap(prev => ({ ...prev, [jamaahId]: { ...prev[jamaahId], error: 'Pilih tanggal lahir terlebih dahulu' } }));
       return;
     }
-    // Ambil data jamaah saat ini sebagai base untuk update (required: nama_lengkap)
-    const existingJamaah = jamaahMap[jamaahId];
-    if (!existingJamaah) return;
+    if (!jamaahMap[jamaahId]) return;
     setInlineDobMap(prev => ({ ...prev, [jamaahId]: { ...prev[jamaahId], saving: true, error: null } }));
     try {
-      const payload = {
-        nama_lengkap: existingJamaah.nama_lengkap,
-        tanggal_lahir: dob,
-        nik: existingJamaah.nik || null,
-        no_hp: existingJamaah.no_hp || null,
-        status: existingJamaah.status || 'aktif'
-      };
-      await updateJamaah(jamaahId, payload);
+      // Endpoint khusus: hanya tanggal lahir yang berubah, isian jamaah lain tidak tersentuh.
+      await updateTanggalLahirJamaah(jamaahId, dob);
       // Update in-memory jamaahList
       setJamaahList(prev => prev.map(j =>
         String(j.id) === String(jamaahId) ? { ...j, tanggal_lahir: dob } : j
@@ -1579,7 +1572,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                                       value={inlineState.value || ''}
                                       onChange={e => handleInlineDobChange(pax.jamaah_id, e.target.value)}
                                       className="h-8 rounded-lg border border-warning-300 bg-white px-2 text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-warning-400/40 font-body flex-1 sm:flex-none sm:w-36"
-                                      max={new Date().toISOString().split('T')[0]}
+                                      max={hariIniWIB()}
                                     />
                                     <button
                                       type="button"
@@ -1987,7 +1980,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 type="date"
                 value={quickCreateForm.tanggal_lahir}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, tanggal_lahir: e.target.value }))}
-                max={new Date().toISOString().split('T')[0]}
+                max={hariIniWIB()}
                 className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>

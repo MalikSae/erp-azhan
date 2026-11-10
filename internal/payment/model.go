@@ -23,6 +23,10 @@ type Payment struct {
 	RejectionReason          *string    `json:"rejection_reason"`
 	VerifiedBy               *int64     `json:"verified_by"`
 	VerifiedAt               *time.Time `json:"verified_at"`
+	// Pembatalan pembayaran terkonfirmasi (status void): alasan, pelaku, dan waktunya.
+	VoidReason               *string    `json:"void_reason"`
+	VoidedBy                 *int64     `json:"voided_by"`
+	VoidedAt                 *time.Time `json:"voided_at"`
 	JamaahName               string     `json:"jamaah_name,omitempty"`
 	ScheduleName             string     `json:"schedule_name,omitempty"`
 	DepartureDate            *string    `json:"departure_date,omitempty"`
@@ -49,6 +53,11 @@ type CreatePaymentRequest struct {
 type UpdatePaymentStatusRequest struct {
 	Status          string  `json:"status"`
 	RejectionReason *string `json:"rejection_reason"`
+}
+
+// VoidPaymentRequest adalah payload untuk POST /api/admin/payments/{id}/void.
+type VoidPaymentRequest struct {
+	Alasan string `json:"alasan"`
 }
 
 // DailyBrandTransaction adalah agregasi pembayaran terkonfirmasi per brand dan hari.

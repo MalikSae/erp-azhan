@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+// K-01: pembaruan khusus tanggal lahir wajib berisi tanggal yang valid.
+func TestValidasiTanggalLahir(t *testing.T) {
+	s := func(v string) *string { return &v }
+	cases := []struct {
+		nama  string
+		nilai *string
+		hasil string
+		pesan string
+	}{
+		{"valid", s(" 1990-12-31 "), "1990-12-31", ""},
+		{"nil", nil, "", "wajib diisi"},
+		{"kosong", s("  "), "", "wajib diisi"},
+		{"format", s("31-12-1990"), "", "harus berformat"},
+		{"masa depan", s("2999-01-01"), "", "tidak boleh di masa depan"},
+	}
+	for _, c := range cases {
+		hasil, pesan := validasiTanggalLahir(c.nilai)
+		if (c.pesan == "" && (pesan != "" || hasil != c.hasil)) || (c.pesan != "" && !strings.Contains(pesan, c.pesan)) {
+			t.Errorf("%s: got (%q, %q), want (%q, %q)", c.nama, hasil, pesan, c.hasil, c.pesan)
+		}
+	}
+}
+
 // JB-05/JB-09: validasi format data jamaah sebelum disimpan.
 func TestValidateJamaahInput(t *testing.T) {
 	s := func(v string) *string { return &v }

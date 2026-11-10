@@ -105,6 +105,15 @@ type ListOpts struct {
 	Offset int
 }
 
+// pctDokumenSQL: persentase jenis dokumen yang sudah terkirim atau disetujui, dari semua 7 jenis
+// (pas foto, paspor, KTP, KK, buku nikah, akta lahir, vaksin meningitis; sama dengan dokumen.validJenis).
+// 100 hanya bila ketujuhnya ada. Pembaginya harus ikut diubah bila jenis dokumen bertambah.
+const pctDokumenSQL = `ROUND(
+			(SELECT COUNT(DISTINCT dj.jenis)
+			 FROM dokumen_jamaah dj
+			 WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status IN ('submitted', 'approved')) / 7.0 * 100
+		)`
+
 // List mengambil semua jamaah, filter brand kalau scoped admin.
 func (r *Repository) List(ctx context.Context, brandID *int64, status string, opts ...ListOpts) ([]JamaahListItem, error) {
 	q := `SELECT id, brand_id, COALESCE(id_jamaah, ''), kode_jamaah, nama_lengkap, jenis_kelamin, nik,
@@ -134,9 +143,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 			IF(emergency_hubungan IS NOT NULL AND emergency_hubungan != '', 1, 0) +
 			IF(emergency_alamat IS NOT NULL AND emergency_alamat != '', 1, 0)
 		) / 22.0 * 100) AS pct_data,
-		ROUND(
-			(SELECT COUNT(*) FROM dokumen_jamaah dj WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status IN ('submitted', 'approved')) / 6.0 * 100
-		) AS pct_dokumen,
+		` + pctDokumenSQL + ` AS pct_dokumen,
 		created_at,
 		kaitan_status, direkrut_oleh_akun_id,
 		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama,
@@ -378,6 +385,24 @@ func (r *Repository) UpdateCatatan(ctx context.Context, id int64, brandID *int64
 		return fmt.Errorf("update catatan: %w", err)
 	}
 	return nil
+}
+
+// ─── Update Tanggal Lahir ─────────────────────────────────────────────────────
+
+// UpdateTanggalLahir memperbarui tanggal lahir saja; kolom lain tidak disentuh. Dipakai form booking,
+// yang hanya memegang sebagian data jamaah dan tidak boleh mengirim ulang seluruh baris.
+func (r *Repository) UpdateTanggalLahir(ctx context.Context, id int64, brandID *int64, tanggalLahir string) (*Jamaah, error) {
+	existing, err := r.GetByID(ctx, id, brandID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := r.db.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir=? WHERE id=?`, tanggalLahir, id); err != nil {
+		return nil, fmt.Errorf("jamaah.UpdateTanggalLahir: %w", err)
+	}
+	if lama := tanggal10(nilaiPtr(existing.TanggalLahir)); lama != tanggalLahir {
+		r.catatBeda(ctx, id, []isianLog{{"tanggal_lahir", lama, tanggalLahir}})
+	}
+	return r.GetByID(ctx, id, brandID)
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────

@@ -243,6 +243,45 @@ func (h *Handler) UpdateCatatan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "catatan berhasil disimpan"})
 }
 
+// ─── Update Tanggal Lahir ─────────────────────────────────────────────────────
+
+// validasiTanggalLahir merapikan dan memeriksa tanggal lahir untuk pembaruan satu isian.
+// Mengembalikan nilai yang sudah dirapikan dan pesan galat ("" bila valid).
+func validasiTanggalLahir(v *string) (string, string) {
+	tgl := isiDari(v)
+	if tgl == "" {
+		return "", "tanggal_lahir wajib diisi"
+	}
+	return tgl, validateJamaahInput(&CreateJamaahRequest{TanggalLahir: &tgl})
+}
+
+// UpdateTanggalLahir godoc
+// PUT /api/admin/jamaah/{id}/tanggal-lahir
+func (h *Handler) UpdateTanggalLahir(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	var req UpdateTanggalLahirRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "format data tidak valid")
+		return
+	}
+	tgl, msg := validasiTanggalLahir(req.TanggalLahir)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	j, err := h.repo.UpdateTanggalLahir(r.Context(), id, identity.GetBrandID(r.Context()), tgl)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, j)
+}
+
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 func handleRepoError(w http.ResponseWriter, err error) {

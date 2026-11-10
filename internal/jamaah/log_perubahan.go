@@ -63,7 +63,11 @@ func bedaIsian(lama *Jamaah, req *UpdateJamaahRequest) []isianLog {
 
 // catatEditAdmin menulis satu baris jamaah_perubahan beserta item-itemnya bila ada isian yang berubah.
 func (r *Repository) catatEditAdmin(ctx context.Context, jamaahID int64, lama *Jamaah, req *UpdateJamaahRequest) {
-	beda := bedaIsian(lama, req)
+	r.catatBeda(ctx, jamaahID, bedaIsian(lama, req))
+}
+
+// catatBeda menulis daftar isian yang berubah sebagai satu baris jamaah_perubahan bersumber admin.
+func (r *Repository) catatBeda(ctx context.Context, jamaahID int64, beda []isianLog) {
 	if len(beda) == 0 {
 		return
 	}

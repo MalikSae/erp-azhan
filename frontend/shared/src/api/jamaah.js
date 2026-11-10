@@ -20,6 +20,12 @@ export const updateJamaah = async (id, payload) => {
   return data;
 };
 
+// Hanya mengubah tanggal lahir. Jangan pakai updateJamaah untuk satu isian: PUT itu menimpa seluruh baris.
+export const updateTanggalLahirJamaah = async (id, tanggalLahir) => {
+  const { data } = await api.put(`/api/admin/jamaah/${id}/tanggal-lahir`, { tanggal_lahir: tanggalLahir });
+  return data;
+};
+
 export const deleteJamaah = async (id) => {
   const { data } = await api.delete(`/api/admin/jamaah/${id}`);
   return data;
