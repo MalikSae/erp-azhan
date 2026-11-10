@@ -595,9 +595,11 @@ func (r *Repository) ItineraryExists(ctx context.Context, id int64) (bool, error
 }
 
 // CategoryExists memeriksa apakah category dengan id tersebut ada.
-func (r *Repository) CategoryAvailable(ctx context.Context, id int64, brandID int64) (bool, error) {
+// CategoryAvailable: kategori ada, berlaku untuk brand ini, dan aktif. bolehNonaktif melewati syarat aktif;
+// dipakai saat paket tetap memakai kategori yang sudah dipilihnya sebelum kategori itu dinonaktifkan.
+func (r *Repository) CategoryAvailable(ctx context.Context, id int64, brandID int64, bolehNonaktif bool) (bool, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories c WHERE c.id=? AND (NOT EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id) OR EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id AND cb.brand_id=?))`, id, brandID).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories c WHERE c.id=? AND (c.is_active=TRUE OR ?) AND (NOT EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id) OR EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id AND cb.brand_id=?))`, id, bolehNonaktif, brandID).Scan(&count)
 	return count > 0, err
 }
 

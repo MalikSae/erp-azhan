@@ -1052,6 +1052,40 @@ func (r *Repository) UpdateDraftBooking(ctx context.Context, bookingID int64, re
 }
 
 // FinalizeBooking mengubah booking draft menjadi booking resmi ('baru') dengan row-lock, kuota validasi, pengurangan seat_sisa, dan generate id_booking.
+// hargaPaxSaatIniTx menyamakan harga tiap pax aktif dengan harga paket saat ini (audit menu Paket S-05).
+// Draft belum mengikat harga: harga yang berlaku adalah harga paket saat booking difinalisasi, bukan saat
+// draft dibuat. Dipanggil setelah baris jadwal dikunci.
+func hargaPaxSaatIniTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	const hargaSekarang = `CASE
+		WHEN bp.pax_type = 'infant' THEN s.harga_infant
+		WHEN LOWER(bp.room_type) = 'quad' THEN s.harga_quad
+		WHEN LOWER(bp.room_type) = 'triple' THEN s.harga_triple
+		WHEN LOWER(bp.room_type) = 'double' THEN s.harga_double
+	END`
+	var tanpaHarga sql.NullString
+	if err := tx.QueryRowContext(ctx, `
+		SELECT MIN(j.nama_lengkap)
+		FROM booking_pax bp
+		JOIN bookings b ON b.id = bp.booking_id
+		JOIN schedules s ON s.id = b.schedule_id
+		JOIN jamaah j ON j.id = bp.jamaah_id
+		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND `+hargaSekarang+` IS NULL`, bookingID).Scan(&tanpaHarga); err != nil {
+		return fmt.Errorf("booking.Finalize cek harga pax: %w", err)
+	}
+	if tanpaHarga.Valid {
+		return bizErr("Harga untuk jamaah %s belum tersedia di paket (harga bayi atau tipe kamar). Lengkapi harga paket terlebih dahulu.", tanpaHarga.String)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE booking_pax bp
+		JOIN bookings b ON b.id = bp.booking_id
+		JOIN schedules s ON s.id = b.schedule_id
+		SET bp.harga_pax = `+hargaSekarang+`
+		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif'`, bookingID); err != nil {
+		return fmt.Errorf("booking.Finalize harga pax saat ini: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1213,6 +1247,10 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 	}
 	if err := komisi.SnapshotNominal(ctx, tx, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.Finalize snapshot komisi: %w", err)
+	}
+
+	if err := hargaPaxSaatIniTx(ctx, tx, bookingID); err != nil {
+		return nil, err
 	}
 
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {

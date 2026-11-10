@@ -147,8 +147,8 @@ Rencana pengerjaan, empat PR berurutan:
 |---|---|---|
 | 1 | Komisi bawaan brand, isian komisi dan DP di form paket, isi susulan booking belum lunas, rentang komisi portal agen | Selesai, PR #29 (migrasi 127) |
 | 2 | Akses halaman: T-02 dan halaman master untuk peran lihat-saja | Selesai, PR #30 |
-| 3 | Pengaman simpan paket dan kategori: S-01, S-02, S-03, S-06, S-07, S-08, S-13, serta aturan ubah tanggal berangkat | Dikerjakan (migrasi 128) |
-| 4 | Aturan master nonaktif, kode terkunci, hotel unik per kota, harga ganti kamar dan draft | Belum |
+| 3 | Pengaman simpan paket dan kategori: S-01, S-02, S-03, S-06, S-07, S-08, S-13, serta aturan ubah tanggal berangkat | Selesai, PR #31 (migrasi 128) |
+| 4 | Aturan master nonaktif, kode terkunci, hotel unik per kota, harga ganti kamar dan draft | Dikerjakan (migrasi 129) |
 
 Temuan rendah R-01 sampai R-20 ditunda, kecuali R-19 yang masuk PR 2.
 
@@ -169,6 +169,15 @@ Catatan PR 3:
 - S-07: server tidak mengubah deskripsi kategori bila payload tidak memuatnya. Form kategori tetap belum punya isian deskripsi.
 - S-08: brand tidak bisa dilepas dari kategori selama paket brand itu masih memakainya. Admin yang terikat satu brand hanya boleh mengubah atau menghapus kategori yang khusus milik brand-nya.
 - S-13: simpan paket dan kategori tetap dua panggilan. Bila panggilan kedua (set perlengkapan) gagal, pesannya menyebut data utama sudah tersimpan, dan paket atau kategori baru langsung berpindah ke mode edit sehingga simpan ulang tidak ditolak karena kembar.
+
+Catatan PR 4:
+
+- S-09, S-10: kategori dan destinasi nonaktif ditolak server hanya sebagai pilihan baru. Paket yang sudah memakainya tetap bisa disimpan. Form paket tetap menampilkan kategori nonaktif milik paket itu dengan label "(nonaktif)".
+- Hotel, maskapai, dan bandara tidak punya status aktif/nonaktif di skema, jadi aturan nonaktif tidak berlaku untuk ketiganya.
+- S-11: kode bandara dan kode maskapai tidak bisa diubah selama masih dipakai paket. Nama, kota, dan logo tetap bisa.
+- S-12: nama hotel unik per kota (kunci unik `name, city`, migrasi 129).
+- S-05, ganti kamar: perilaku server tidak berubah (pax yang pindah memakai harga paket saat ini). Modal ganti kamar kini menampilkan harga lama, harga baru, dan perubahan tagihan sebelum disimpan.
+- S-05, draft: temuan awal tidak sepenuhnya tepat. Dashboard menyimpan ulang draft sebelum finalisasi, sehingga harga sudah ikut harga paket saat itu. Yang tertinggal hanya finalisasi langsung lewat API tanpa simpan ulang; server kini menyamakan harga pax dengan harga paket saat finalisasi, dan menolak bila harga bayi atau tipe kamar belum ada di paket. Pemberitahuan khusus "harga berubah sejak draft dibuat" tidak ditambahkan.
 
 ## Urutan perbaikan yang disarankan
 

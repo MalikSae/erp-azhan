@@ -593,11 +593,14 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 15.2: category_id opsional, jika dikirim harus ada di DB
 	if req.CategoryID != nil && *req.CategoryID > 0 {
-		if exists, err := h.repo.CategoryAvailable(ctx, *req.CategoryID, finalBrandID); err != nil {
+		// Kategori nonaktif tidak bisa dipilih untuk paket baru atau saat mengganti kategori, tetapi paket yang
+		// sudah memakainya tetap bisa disimpan (audit menu Paket S-09, S-10).
+		tetap := existing != nil && existing.CategoryID != nil && *existing.CategoryID == *req.CategoryID
+		if exists, err := h.repo.CategoryAvailable(ctx, *req.CategoryID, finalBrandID, tetap); err != nil {
 			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 			return nil, false
 		} else if !exists {
-			writeError(w, http.StatusBadRequest, "category_id tidak valid")
+			writeError(w, http.StatusBadRequest, "category_id tidak valid atau kategori tidak aktif")
 			return nil, false
 		}
 	}
@@ -613,7 +616,10 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		writeError(w, http.StatusBadRequest, err.Error())
 		return nil, false
 	}
-	if klasifikasi != nil && klasifikasi.DestinationID != nil {
+	// Destinasi nonaktif hanya ditolak untuk pilihan baru; paket yang sudah memakainya tetap bisa disimpan.
+	destinasiTetap := existing != nil && klasifikasi != nil && klasifikasi.DestinationID != nil &&
+		existing.DestinationID != nil && *existing.DestinationID == *klasifikasi.DestinationID
+	if klasifikasi != nil && klasifikasi.DestinationID != nil && !destinasiTetap {
 		aktif, err := h.repo.DestinationActive(ctx, *klasifikasi.DestinationID)
 		if err != nil {
 			log.Printf("[ERROR] schedule: cek destinasi: %v", err)
