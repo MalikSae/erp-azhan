@@ -101,7 +101,12 @@ func TestPrepareUpdateKeepsLatestSeatsAndBookingBrand(t *testing.T) {
 	}
 	testdb.Exec(t, tx, `UPDATE schedules SET seat_total=45, seat_sisa=44 WHERE id=?`, booking.ScheduleID)
 	oldTotal := 45
-	inp := ScheduleInput{SeatTotal: 45, SeatSisa: 45, ExpectedSeatTotal: &oldTotal}
+	// Tanggal berangkat disamakan dengan yang tersimpan: test ini bukan tentang ubah tanggal.
+	var berangkat string
+	if err := tx.QueryRow(`SELECT DATE_FORMAT(berangkat_tanggal, '%Y-%m-%d') FROM schedules WHERE id=?`, booking.ScheduleID).Scan(&berangkat); err != nil {
+		t.Fatal(err)
+	}
+	inp := ScheduleInput{SeatTotal: 45, SeatSisa: 45, ExpectedSeatTotal: &oldTotal, BerangkatTanggal: berangkat}
 	if err := prepareScheduleUpdate(ctx, tx, booking.ScheduleID, &inp, &brand, brand); err != nil {
 		t.Fatal(err)
 	}

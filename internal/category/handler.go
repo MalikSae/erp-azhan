@@ -87,6 +87,10 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "kategori tidak ditemukan")
 	case errors.Is(err, ErrSlugDuplicate):
 		writeError(w, http.StatusConflict, "slug kategori sudah digunakan")
+	case errors.Is(err, ErrConflict):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, ErrForbidden):
+		writeError(w, http.StatusForbidden, err.Error())
 	default:
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
@@ -277,6 +281,11 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.bolehUbah(r, id, req.BrandIDs); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
 	cat, err := h.repo.Update(r.Context(), id, req)
 	if err != nil {
 		handleRepoError(w, err)
@@ -286,10 +295,36 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cat)
 }
 
+// bolehUbah membatasi admin yang terikat satu brand (audit menu Paket S-08): ia hanya boleh mengubah atau
+// menghapus kategori yang khusus milik brand-nya, dan tidak boleh menautkannya ke brand lain atau
+// menjadikannya berlaku untuk semua brand. Admin holding tidak dibatasi. brandBaru nil = hapus.
+func (h *Handler) bolehUbah(r *http.Request, id int64, brandBaru []int64) error {
+	scoped := identity.GetBrandID(r.Context())
+	if scoped == nil {
+		return nil
+	}
+	lama, err := h.repo.BrandIDs(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	if len(lama) != 1 || lama[0] != *scoped {
+		return ErrForbidden
+	}
+	if brandBaru != nil && (len(brandBaru) != 1 || brandBaru[0] != *scoped) {
+		return ErrForbidden
+	}
+	return nil
+}
+
 // DeleteCategory DELETE /api/admin/categories/{id}
 func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
+		return
+	}
+
+	if err := h.bolehUbah(r, id, nil); err != nil {
+		handleRepoError(w, err)
 		return
 	}
 

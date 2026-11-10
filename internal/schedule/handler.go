@@ -215,10 +215,14 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if finalStatus == "archived" && existing.Status != "archived" {
-		if !h.bolehArsip(r.Context(), w, id, inp.BerangkatTanggal) {
+		// Tanggal tersimpan, bukan tanggal dari request: mengirim tanggal lampau bersama status arsip
+		// tidak boleh melewati pemeriksaan booking aktif (audit menu Paket S-01).
+		if !h.bolehArsip(r.Context(), w, id, existing.BerangkatTanggal) {
 			return
 		}
 	}
+	inp.AlasanUbahTanggal = strings.TrimSpace(req.AlasanUbahTanggal)
+	inp.ActorID = identity.GetAdminUserID(r.Context())
 
 	// 3. Panggil repository Update dengan finalBrandID sebagai parameter
 	s, err := h.repo.Update(r.Context(), id, *inp, ctxBrandID, finalBrandID)

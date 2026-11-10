@@ -146,8 +146,8 @@ Rencana pengerjaan, empat PR berurutan:
 | PR | Isi | Status |
 |---|---|---|
 | 1 | Komisi bawaan brand, isian komisi dan DP di form paket, isi susulan booking belum lunas, rentang komisi portal agen | Selesai, PR #29 (migrasi 127) |
-| 2 | Akses halaman: T-02 dan halaman master untuk peran lihat-saja | Dikerjakan |
-| 3 | Pengaman simpan paket dan kategori: S-01, S-02, S-03, S-06, S-07, S-08, S-13, serta aturan ubah tanggal berangkat | Belum |
+| 2 | Akses halaman: T-02 dan halaman master untuk peran lihat-saja | Selesai, PR #30 |
+| 3 | Pengaman simpan paket dan kategori: S-01, S-02, S-03, S-06, S-07, S-08, S-13, serta aturan ubah tanggal berangkat | Dikerjakan (migrasi 128) |
 | 4 | Aturan master nonaktif, kode terkunci, hotel unik per kota, harga ganti kamar dan draft | Belum |
 
 Temuan rendah R-01 sampai R-20 ditunda, kecuali R-19 yang masuk PR 2.
@@ -158,6 +158,17 @@ Catatan PR 2:
 - Perbaikannya endpoint baru `GET /api/admin/brands/options`: daftar ringkas brand (id, nama, kode, logo, warna, DP dan komisi bawaan) untuk semua admin yang login, tetap dibatasi ke brand sendiri bagi admin yang terikat satu brand. Halaman Kelola Paket, form paket, detail paket, dan Kelola Kategori memakainya. `GET /api/admin/brands` (data lengkap) tetap butuh `brand.view`.
 - Kategori, Hotel, Maskapai & Bandara, dan Itinerary kini bisa dibuka dengan `masterdata.view`. Tombol tambah, kolom aksi, dan klik nama hanya untuk `masterdata.edit`. Form itinerary tetap butuh `masterdata.edit`.
 - Di luar lingkup, belum diperbaiki: ringkasan Dashboard dan halaman booking masih memuat `GET /api/admin/brands` dan data master lain yang tidak dimiliki semua peran.
+
+Catatan PR 3:
+
+- S-01: izin arsip lewat edit dinilai dari tanggal berangkat yang tersimpan, bukan tanggal dari request.
+- S-02: bila data paket gagal dimuat saat edit, form tidak ditampilkan; yang tampil pesan dan tombol muat ulang.
+- S-03: form edit hanya mengirim status bila status diubah di form itu. Simpan dari form yang sudah lama terbuka tidak lagi membatalkan perubahan status oleh admin lain. Penjaga edit bersamaan untuk harga dan isian lain belum ada.
+- S-04: aturan ubah tanggal ditegakkan di server dalam transaksi simpan, dan hanya berlaku bila paket punya booking aktif (`baru`, `dp`, `lunas`): paket yang sudah berangkat terkunci, tanggal baru tidak boleh lampau, alasan wajib, dan perubahan tercatat di `schedule_tanggal_log`. Paket tanpa booking aktif tetap bebas diubah, supaya salah ketik pada draft bisa dibetulkan.
+- S-06: set perlengkapan kategori hanya disimpan bila pemuatannya berhasil; tombol simpan nonaktif selama set dimuat.
+- S-07: server tidak mengubah deskripsi kategori bila payload tidak memuatnya. Form kategori tetap belum punya isian deskripsi.
+- S-08: brand tidak bisa dilepas dari kategori selama paket brand itu masih memakainya. Admin yang terikat satu brand hanya boleh mengubah atau menghapus kategori yang khusus milik brand-nya.
+- S-13: simpan paket dan kategori tetap dua panggilan. Bila panggilan kedua (set perlengkapan) gagal, pesannya menyebut data utama sudah tersimpan, dan paket atau kategori baru langsung berpindah ke mode edit sehingga simpan ulang tidak ditolak karena kembar.
 
 ## Urutan perbaikan yang disarankan
 
