@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import BrandLabel from '../components/ui/BrandLabel';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Eye, Pencil, Trash2, SlidersHorizontal } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { listBookings, deleteDraftBooking } from "../api/bookings";
 import { listBrandOptions } from "../api/brands";
-import { getSeatLockIcon } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
 import DataTable from "../components/ui/DataTable";
 import Button from "../components/ui/Button";
@@ -82,9 +81,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
   // Filter State
   const [filterBrandId, setFilterBrandId] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  const [filterSeat, setFilterSeat] = useState("");
   const [filterDate, setFilterDate] = useState("");
-  const [panelOpen, setPanelOpen] = useState(false);
 
   // Tautan dari detail paket: /bookings?schedule=<id> hanya menampilkan booking paket itu.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -182,13 +179,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
         return false;
       }
 
-      // 2. Filter Seat
-      if (filterSeat) {
-        if (filterSeat === 'blocked' && !b.is_seat_blocked) return false;
-        if (filterSeat === 'unblocked' && b.is_seat_blocked) return false;
-      }
-
-      // 3. Filter Tanggal Keberangkatan
+      // 2. Filter Tanggal Keberangkatan
       if (filterDate) {
         const dateVal = b.berangkat_tanggal ? new Date(b.berangkat_tanggal).toISOString().split('T')[0] : '';
         if (dateVal !== filterDate) return false;
@@ -196,7 +187,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
 
       return true;
     });
-  }, [data, showBrandColumn, filterBrandId, filterStatus, filterSeat, filterDate, filterScheduleId]);
+  }, [data, showBrandColumn, filterBrandId, filterStatus, filterDate, filterScheduleId]);
 
   // Hitungan ditampilkan di label filter (bukan kartu KPI); mengikuti filter brand/paket.
   const baseForCounts = useMemo(
@@ -214,17 +205,6 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
       { value: 'batal', label: `Batal (${count('batal')})` },
     ];
   }, [baseForCounts]);
-  const seatOptions = useMemo(() => {
-    const unlocked = baseForCounts.filter(b => ['baru', 'dp', 'lunas'].includes(b.status) && !b.is_seat_blocked).length;
-    return [
-      { value: '', label: 'Semua Seat' },
-      { value: 'blocked', label: 'Seat Di-hold' },
-      { value: 'unblocked', label: `Seat Belum Di-hold (${unlocked})` },
-    ];
-  }, [baseForCounts]);
-
-  // Jumlah filter aktif di panel (status tampil terpisah di toolbar).
-  const panelActive = [showBrandColumn && filterBrandId, filterSeat, filterDate].filter(Boolean).length;
 
   const columns = useMemo(() => {
     const cols = [{ header: "Booking", key: "nama_jamaah", sortable: true }];
@@ -243,7 +223,6 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
         sortFn: (a, b) => (a.total_harga || 0) - (b.total_harga || 0),
       },
       { header: "Status", key: "status" },
-      { header: "Seat", key: "is_seat_blocked" },
       { header: "Aksi", key: "aksi" },
     );
     return cols;
@@ -292,20 +271,6 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
           <StatusPill status={row.status} />
           {row.perlu_refund && <div className="mt-1 text-[11px] font-body text-warning-700">Perlu refund</div>}
         </div>
-      );
-    }
-
-    if (key === "is_seat_blocked") {
-      const lockInfo = getSeatLockIcon(row.status, row.is_seat_blocked);
-      if (!lockInfo) return <span className="text-xs text-neutral-400 font-body">-</span>;
-      return row.is_seat_blocked ? (
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-success-700 whitespace-nowrap">
-          <span className="w-2 h-2 rounded-full bg-success-500" />Di-hold
-        </span>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-warning-700 whitespace-nowrap">
-          <span className="w-2 h-2 rounded-full bg-warning-500" />Belum di-hold
-        </span>
       );
     }
 
@@ -365,74 +330,40 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
           itemsPerPage={15}
           onRowClick={(row) => navigate(row.status === 'draft' ? `/bookings/${row.id}/edit` : `/bookings/${row.id}`)}
           searchPlaceholder="Cari no. booking, nama jamaah, atau paket..."
-          emptyMessage={filterBrandId || filterStatus || filterSeat || filterDate ? "Data booking tidak ditemukan" : "Belum ada data booking. Klik \"+ Buat Booking\" untuk menambahkan."}
+          emptyMessage={filterBrandId || filterStatus || filterDate ? "Data booking tidak ditemukan" : "Belum ada data booking. Klik \"+ Buat Booking\" untuk menambahkan."}
           toolbarActions={
-            <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
               <CustomDropdown
                 value={filterStatus}
                 onChange={(val) => setFilterStatus(val)}
-                className="!mb-0 flex-1 sm:w-52 sm:flex-none"
+                className="!mb-0 w-full sm:w-44"
                 placeholder="Semua Status"
                 options={statusOptions}
               />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setPanelOpen((open) => !open)}
-                className={`h-10 shrink-0 whitespace-nowrap ${panelOpen || panelActive ? '!border-primary-200 !bg-primary-50 !text-primary-700' : ''}`}
-                aria-expanded={panelOpen}
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                <span>Filter{panelActive ? ` (${panelActive})` : ''}</span>
-              </Button>
-            </div>
-          }
-          toolbarPanel={panelOpen && (
-            <div className="space-y-3">
-              <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${showBrandColumn && brands.length > 0 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
-                {showBrandColumn && brands.length > 0 && (
-                  <CustomDropdown
-                    label="Brand"
-                    value={filterBrandId}
-                    onChange={(val) => setFilterBrandId(val)}
-                    placeholder="Semua Brand"
-                    options={[
-                      { value: '', label: 'Semua Brand' },
-                      ...brands.map(b => ({ value: b.id.toString(), label: b.name }))
-                    ]}
-                  />
-                )}
+              {showBrandColumn && brands.length > 0 && (
                 <CustomDropdown
-                  label="Seat"
-                  value={filterSeat}
-                  onChange={(val) => setFilterSeat(val)}
-                  placeholder="Semua Seat"
-                  options={seatOptions}
-                />
-                <CustomDropdown
-                  label="Tanggal Keberangkatan"
-                  value={filterDate}
-                  onChange={(val) => setFilterDate(val)}
-                  placeholder="Semua Tanggal"
+                  value={filterBrandId}
+                  onChange={(val) => setFilterBrandId(val)}
+                  className="!mb-0 w-full sm:w-44"
+                  placeholder="Semua Brand"
                   options={[
-                    { value: '', label: 'Semua Tanggal' },
-                    ...availableDates.map(d => ({ value: d.value, label: d.label }))
+                    { value: '', label: 'Semua Brand' },
+                    ...brands.map(b => ({ value: b.id.toString(), label: b.name }))
                   ]}
                 />
-              </div>
-              {panelActive > 0 && (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => { setFilterBrandId(""); setFilterSeat(""); setFilterDate(""); }}
-                    className="text-sm font-semibold text-neutral-900 underline underline-offset-2 cursor-pointer"
-                  >
-                    Reset filter
-                  </button>
-                </div>
               )}
+              <CustomDropdown
+                value={filterDate}
+                onChange={(val) => setFilterDate(val)}
+                className="!mb-0 w-full sm:w-44"
+                placeholder="Semua Tanggal"
+                options={[
+                  { value: '', label: 'Semua Tanggal' },
+                  ...availableDates.map(d => ({ value: d.value, label: d.label }))
+                ]}
+              />
             </div>
-          )}
+          }
           renderCell={renderCell}
         />
       )}
