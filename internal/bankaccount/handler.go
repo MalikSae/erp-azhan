@@ -3,12 +3,14 @@ package bankaccount
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-sql-driver/mysql"
 )
 
 type Handler struct{ repo *Repository }
@@ -31,6 +33,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	activeOnly := r.URL.Query().Get("active") == "true"
 	items, err := h.repo.List(r.Context(), brandID, activeOnly)
 	if err != nil {
+		log.Printf("[ERROR] bankaccount.List: %v", err)
 		writeError(w, 500, "gagal mengambil rekening")
 		return
 	}
@@ -61,6 +64,7 @@ func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.repo.List(r.Context(), &id, true)
 	if err != nil {
+		log.Printf("[ERROR] bankaccount.List: %v", err)
 		writeError(w, 500, "gagal mengambil rekening")
 		return
 	}
@@ -92,7 +96,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.repo.Create(r.Context(), req)
 	if err != nil {
-		writeError(w, 400, "rekening gagal disimpan atau nomor sudah digunakan")
+		tulisGalatSimpan(w, "Create", err)
 		return
 	}
 	writeJSON(w, 201, item)
@@ -117,13 +121,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, 400, "rekening gagal diperbarui")
+		tulisGalatSimpan(w, "Update", err)
 		return
 	}
 	writeJSON(w, 200, item)
 }
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, 400, "id rekening tidak valid")
+		return
+	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
 		existing, getErr := h.repo.Get(r.Context(), id)
 		if getErr != nil || existing.BrandID != *scoped {
@@ -135,7 +143,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "rekening tidak ditemukan")
 		return
 	} else if err != nil {
-		writeError(w, 409, "rekening masih dipakai transaksi")
+		log.Printf("[ERROR] bankaccount.Delete: %v", err)
+		writeError(w, 500, "gagal menghapus rekening")
 		return
 	}
 	writeJSON(w, 200, map[string]string{"message": "rekening dihapus"})
@@ -147,4 +156,16 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// tulisGalatSimpan membedakan nomor rekening kembar (409) dari gangguan database (500, tercatat di log).
+// Dulu keduanya dijawab 400 dengan pesan yang sama.
+func tulisGalatSimpan(w http.ResponseWriter, aksi string, err error) {
+	var me *mysql.MySQLError
+	if errors.As(err, &me) && me.Number == 1062 {
+		writeError(w, 409, "nomor rekening sudah digunakan")
+		return
+	}
+	log.Printf("[ERROR] bankaccount.%s: %v", aksi, err)
+	writeError(w, 500, "gagal menyimpan rekening")
 }

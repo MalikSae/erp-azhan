@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ func NewHandler(repo *Repository) *Handler {
 func (h *Handler) ListItineraries(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.List(r.Context())
 	if err != nil {
+		log.Printf("[ERROR] itinerary: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data itinerary")
 		return
 	}
@@ -156,6 +158,7 @@ func (h *Handler) validateCategory(w http.ResponseWriter, r *http.Request, categ
 	}
 	exists, err := h.repo.CategoryExists(r.Context(), *categoryID)
 	if err != nil {
+		log.Printf("[ERROR] itinerary: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 		return false
 	}

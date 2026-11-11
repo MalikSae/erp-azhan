@@ -3,6 +3,8 @@ package schedule
 import (
 	"errors"
 	"fmt"
+
+	"erp-azhan/api/internal/shared"
 	"math"
 	"strings"
 	"time"
@@ -25,6 +27,9 @@ func validateDP(dp *float64, prices ...float64) error {
 	if math.IsNaN(*dp) || math.IsInf(*dp, 0) || *dp < 0 {
 		return errors.New("minimal_dp harus berupa angka tidak negatif")
 	}
+	if !shared.RupiahBulat(*dp) {
+		return errors.New("minimal_dp harus bilangan bulat rupiah")
+	}
 	for _, price := range prices {
 		if *dp > price {
 			return errors.New("minimal_dp tidak boleh melebihi harga kamar termurah")
@@ -39,6 +44,7 @@ const (
 	maxKodePenerbangan = 50
 	maxTransitBandara  = 255
 	maxAlasanSeat      = 500 // schedule_seat_adjustments.reason
+	maxAlasanTanggal   = 500 // schedule_tanggal_log.alasan
 )
 
 // validateJam menerima kosong, "HH:MM", atau "HH:MM:SS" (bentuk keluaran kolom TIME).
@@ -72,7 +78,7 @@ func normalizeKota(kota string) string {
 	return k
 }
 
-// seatSisaForCreate: paket baru selalu mulai penuh. Semua kursi terjual lewat booking
+// seatSisaForCreate: paket baru selalu mulai penuh. Semua seat terjual lewat booking
 // di ERP, jadi sisa tidak boleh diisi lebih kecil dari total saat paket dibuat
 // (perubahan kemudian hanya lewat booking atau penyesuaian beralasan).
 func seatSisaForCreate(total int, requested *int) (int, error) {
@@ -80,4 +86,28 @@ func seatSisaForCreate(total int, requested *int) (int, error) {
 		return 0, errors.New("seat_sisa tidak bisa diisi saat membuat paket: seat berkurang otomatis lewat booking")
 	}
 	return total, nil
+}
+
+// Nilai kolom schedules.status.
+const (
+	StatusDraft     = "draft"
+	StatusPublished = "published"
+	StatusArchived  = "archived"
+)
+
+// nominalPaket: satu nominal paket yang masuk dari luar, untuk pemeriksaan bilangan bulat.
+type nominalPaket struct {
+	nama  string
+	nilai *float64
+}
+
+// pesanNominalPaketBulat memeriksa bahwa setiap nominal yang diisi adalah bilangan bulat rupiah (ADR-0001).
+// Mengembalikan pesan untuk pengguna, atau teks kosong bila semuanya sah. Nominal kosong (nil) dilewati.
+func pesanNominalPaketBulat(daftar ...nominalPaket) string {
+	for _, n := range daftar {
+		if n.nilai != nil && !shared.RupiahBulat(*n.nilai) {
+			return n.nama + " harus bilangan bulat rupiah"
+		}
+	}
+	return ""
 }

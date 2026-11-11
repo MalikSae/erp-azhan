@@ -304,7 +304,7 @@ type UpdateStatusRequest struct {
 	Status string `json:"status"`
 }
 
-// SeatAdjustment adalah satu baris riwayat penyesuaian sisa kursi manual.
+// SeatAdjustment adalah satu baris riwayat penyesuaian sisa seat manual.
 type SeatAdjustment struct {
 	ID         int64     `json:"id"`
 	SeatBefore int       `json:"seat_before"`
@@ -314,10 +314,10 @@ type SeatAdjustment struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// SeatOverview merangkum kursi sebuah paket untuk halaman rekonsiliasi.
-// SeatDiLuarBooking = seat_total - seat_sisa - seat_dialokasikan: kursi terpakai yang
+// SeatOverview merangkum seat sebuah paket untuk halaman rekonsiliasi.
+// SeatDiLuarBooking = seat_total - seat_sisa - seat_dialokasikan: seat terpakai yang
 // tidak punya booking (impor, penjualan offline). Negatif berarti seat_sisa lebih besar
-// dari seharusnya (kursi dipegang booking tetapi belum dikurangkan).
+// dari seharusnya (seat dipegang booking tetapi belum dikurangkan).
 type SeatOverview struct {
 	SeatTotal         int              `json:"seat_total"`
 	SeatSisa          int              `json:"seat_sisa"`

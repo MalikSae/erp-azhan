@@ -137,7 +137,12 @@ func parseFilterV1(q map[string][]string) (filterV1, error) {
 		}
 		f.HotelBintang = n
 	}
-	if v := get("harga_maks"); v != "" {
+	// Spek §4.3 menamai filter ini harga_max; harga_maks tetap diterima untuk klien yang sudah memakainya.
+	hargaMax := get("harga_max")
+	if hargaMax == "" {
+		hargaMax = get("harga_maks")
+	}
+	if v := hargaMax; v != "" {
 		n, err := strconv.ParseFloat(v, 64)
 		if err != nil || n <= 0 {
 			return f, fmt.Errorf("harga_maks harus berupa angka lebih dari 0")
@@ -344,11 +349,11 @@ func (h *Handler) GetPackageV1(w http.ResponseWriter, r *http.Request) {
 
 	batas := batasPublikWIB()
 	switch {
-	case s.Status == "archived":
+	case s.Status == StatusArchived:
 		writeJSON(w, http.StatusOK, gonePackage(s, k, "archived"))
-	case s.Status == "published" && s.BerangkatTanggal < batas:
+	case s.Status == StatusPublished && s.BerangkatTanggal < batas:
 		writeJSON(w, http.StatusOK, gonePackage(s, k, "closed"))
-	case s.Status == "published":
+	case s.Status == StatusPublished:
 		writeJSON(w, http.StatusOK, newPackageV1(s.ToPublic(), k, batas))
 	default:
 		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan atau belum dipublikasikan")

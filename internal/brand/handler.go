@@ -3,6 +3,7 @@ package brand
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -39,6 +40,7 @@ func sanitizeString(s *string) *string {
 func (h *Handler) ListBrands(w http.ResponseWriter, r *http.Request) {
 	brands, err := h.repo.List(r.Context())
 	if err != nil {
+		log.Printf("[ERROR] brand: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data brands")
 		return
 	}
@@ -74,6 +76,7 @@ type BrandOption struct {
 func (h *Handler) ListBrandOptions(w http.ResponseWriter, r *http.Request) {
 	brands, err := h.repo.List(r.Context())
 	if err != nil {
+		log.Printf("[ERROR] brand: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data brands")
 		return
 	}
@@ -117,6 +120,11 @@ func (h *Handler) GetBrand(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
+	// Brand baru hanya dibuat pengguna Holding; izin brand.edit saja tidak cukup bagi pengguna ber-brand.
+	if identity.GetBrandID(r.Context()) != nil {
+		writeError(w, http.StatusForbidden, "hanya pengguna Holding yang dapat membuat brand")
+		return
+	}
 	var req CreateBrandRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
@@ -133,6 +141,10 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.UjrohClosing < 0 || req.UjrohPembinaan < 0 || req.UjrohRepeatBooking < 0 {
 		writeError(w, http.StatusBadRequest, "nominal ujroh tidak boleh negatif")
+		return
+	}
+	if !semuaRupiahBulat(req.MinimalDP, req.CashbackAlumni, req.UjrohClosing, req.UjrohPembinaan, req.UjrohRepeatBooking) {
+		writeError(w, http.StatusBadRequest, pesanNominalBulat)
 		return
 	}
 	req.SyaratKetentuanAgen = sanitizeString(req.SyaratKetentuanAgen)
@@ -158,6 +170,7 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 			}
 			existing, err := h.repo.GetByKodeBrand(r.Context(), kb)
 			if err != nil {
+				log.Printf("[ERROR] brand: %v", err)
 				writeError(w, http.StatusInternalServerError, "gagal mengecek kode brand")
 				return
 			}
@@ -187,6 +200,7 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 			}
 			existing, err := h.repo.GetByDomain(r.Context(), domainVal)
 			if err != nil {
+				log.Printf("[ERROR] brand: %v", err)
 				writeError(w, http.StatusInternalServerError, "gagal mengecek domain")
 				return
 			}
@@ -231,6 +245,7 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 
 	b, err := h.repo.Create(r.Context(), req)
 	if err != nil {
+		log.Printf("[ERROR] brand: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal membuat brand")
 		return
 	}
@@ -242,6 +257,11 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "id tidak valid")
+		return
+	}
+	// Pengguna ber-brand hanya boleh mengubah brand-nya sendiri, sama dengan aturan baca di GetBrand.
+	if scoped := identity.GetBrandID(r.Context()); scoped != nil && int64(id) != *scoped {
+		writeError(w, http.StatusNotFound, "brand tidak ditemukan")
 		return
 	}
 
@@ -261,6 +281,10 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.UjrohClosing < 0 || req.UjrohPembinaan < 0 || req.UjrohRepeatBooking < 0 {
 		writeError(w, http.StatusBadRequest, "nominal ujroh tidak boleh negatif")
+		return
+	}
+	if !semuaRupiahBulat(req.MinimalDP, req.CashbackAlumni, req.UjrohClosing, req.UjrohPembinaan, req.UjrohRepeatBooking) {
+		writeError(w, http.StatusBadRequest, pesanNominalBulat)
 		return
 	}
 	req.SyaratKetentuanAgen = sanitizeString(req.SyaratKetentuanAgen)
@@ -286,6 +310,7 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 			}
 			existing, err := h.repo.GetByKodeBrand(r.Context(), kb)
 			if err != nil {
+				log.Printf("[ERROR] brand: %v", err)
 				writeError(w, http.StatusInternalServerError, "gagal mengecek kode brand")
 				return
 			}
@@ -315,6 +340,7 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 			}
 			existing, err := h.repo.GetByDomain(r.Context(), domainVal)
 			if err != nil {
+				log.Printf("[ERROR] brand: %v", err)
 				writeError(w, http.StatusInternalServerError, "gagal mengecek domain")
 				return
 			}
@@ -359,6 +385,7 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 
 	validDP, dpErr := h.repo.ValidateMinimalDP(r.Context(), id, req.MinimalDP)
 	if dpErr != nil {
+		log.Printf("[ERROR] brand: %v", dpErr)
 		writeError(w, http.StatusInternalServerError, "gagal memeriksa DP paket")
 		return
 	}
@@ -383,6 +410,10 @@ func (h *Handler) DeleteBrand(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "id tidak valid")
+		return
+	}
+	if identity.GetBrandID(r.Context()) != nil {
+		writeError(w, http.StatusForbidden, "hanya pengguna Holding yang dapat menghapus brand")
 		return
 	}
 
@@ -412,6 +443,7 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 
 	b, err := h.repo.GetByDomain(r.Context(), domain)
 	if err != nil {
+		log.Printf("[ERROR] brand: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data brand")
 		return
 	}
@@ -527,12 +559,28 @@ func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// pesanNominalBulat: nominal brand yang masuk dari luar harus bilangan bulat rupiah (ADR-0001).
+const pesanNominalBulat = "minimal_dp, cashback_alumni, dan nominal ujroh harus bilangan bulat rupiah"
+
+func semuaRupiahBulat(nilai ...float64) bool {
+	for _, v := range nilai {
+		if !shared.RupiahBulat(v) {
+			return false
+		}
+	}
+	return true
+}
+
 // normalizeAgenSettings memvalidasi pengaturan agen Syiar per brand
 // (agen-azhan.md 7.9). Nomor WA disimpan dalam format 62... agar langsung
 // bisa dipakai untuk tautan wa.me.
 func normalizeAgenSettings(w http.ResponseWriter, biaya *float64, noWA **string) bool {
 	if *biaya < 0 {
 		writeError(w, http.StatusBadRequest, "biaya_pendaftaran_agen tidak boleh kurang dari 0")
+		return false
+	}
+	if !shared.RupiahBulat(*biaya) {
+		writeError(w, http.StatusBadRequest, "biaya_pendaftaran_agen harus bilangan bulat rupiah")
 		return false
 	}
 	*noWA = sanitizeString(*noWA)
