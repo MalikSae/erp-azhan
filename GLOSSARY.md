@@ -20,7 +20,8 @@ _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lam
 
 **Calon agen**: akun yang pengajuannya sedang diproses (status agen `pengajuan`).
 
-**Upline**: agen yang mengajak sebuah akun, lewat tautan atau kode referralnya saat akun dibuat, atau agen yang dipasangkan admin. Berlaku untuk semua akun. Bila akun itu menjadi agen, upline-nya menerima bonus pembinaan darinya. Satu tingkat saja. Override admin memindahkan upline dan penerima bonus bersama-sama; bonus yang sudah tercatat tidak ditarik kembali.
+**Upline**: agen yang mengajak sebuah akun, lewat tautan atau kode referralnya saat akun dibuat, atau agen yang dipasangkan admin. Berlaku untuk semua akun. Bila akun itu menjadi agen, upline-nya menerima bonus pembinaan darinya. Satu tingkat saja. Override admin memindahkan upline dan penerima bonus bersama-sama; bonus yang sudah tercatat tidak ditarik kembali. Disimpan di dua kolom `customer_accounts`: `direkrut_oleh_akun_id` (sejak akun dibuat) dan `upline_akun_id` (disalin saat pengajuan agen disetujui). Keduanya berarti upline.
+_Hindari_: agen pengikat, perekrut, pengajak sebagai istilah tersendiri.
 
 **PIC**: pemesan yang ikut berangkat dalam satu booking, dicocokkan lewat NIK dan nama seperti jamaah lain.
 

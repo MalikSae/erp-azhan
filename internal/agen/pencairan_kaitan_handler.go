@@ -17,7 +17,7 @@ import (
 // terproteksi (sama dengan bukti pembayaran lain).
 var buktiKeluarURL = regexp.MustCompile(`^/api/admin/media/payment-proofs/([0-9a-f-]{36}\.(jpg|png|webp|gif|pdf))$`)
 
-func handleSprint5Error(w http.ResponseWriter, err error) {
+func handlePencairanKaitanError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrBukanAgenAktif):
 		writeError(w, http.StatusForbidden, err.Error())
@@ -40,7 +40,7 @@ func handleSprint5Error(w http.ResponseWriter, err error) {
 func (h *Handler) GetPencairan(w http.ResponseWriter, r *http.Request) {
 	p, err := h.repo.GetPencairanPortal(r.Context(), identity.GetCustomerAccountID(r.Context()))
 	if err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
@@ -56,7 +56,7 @@ func (h *Handler) AjukanPencairan(w http.ResponseWriter, r *http.Request) {
 	agenID := identity.GetCustomerAccountID(r.Context())
 	id, err := h.repo.AjukanPencairan(r.Context(), agenID, req)
 	if err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	log.Printf("[AUDIT] pencairan_diajukan id=%d agen_id=%d nominal=%.0f", id, agenID, req.Nominal)
@@ -71,7 +71,7 @@ func (h *Handler) BuktiPencairanPortal(w http.ResponseWriter, r *http.Request) {
 	}
 	url, err := h.repo.BuktiPencairan(r.Context(), id, identity.GetCustomerAccountID(r.Context()))
 	if err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	m := buktiKeluarURL.FindStringSubmatch(url)
@@ -89,7 +89,7 @@ func (h *Handler) BuktiPencairanPortal(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListPencairanAdmin(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.ListPencairanAdmin(r.Context(), r.URL.Query().Get("status"), adminBrandScope(r))
 	if err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -113,8 +113,8 @@ func (h *Handler) SetujuiPencairan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
-	if err := h.repo.SetujuiPencairan(r.Context(), id, adminID, strings.TrimSpace(req.BuktiURL)); err != nil {
-		handleSprint5Error(w, err)
+	if err := h.repo.SetujuiPencairan(r.Context(), id, adminID, strings.TrimSpace(req.BuktiURL), identity.GetBrandID(r.Context())); err != nil {
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	log.Printf("[AUDIT] pencairan_disetujui id=%d admin_id=%d", id, adminID)
@@ -132,8 +132,8 @@ func (h *Handler) TolakPencairan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
-	if err := h.repo.TolakPencairan(r.Context(), id, adminID, catatan); err != nil {
-		handleSprint5Error(w, err)
+	if err := h.repo.TolakPencairan(r.Context(), id, adminID, catatan, identity.GetBrandID(r.Context())); err != nil {
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	log.Printf("[AUDIT] pencairan_ditolak id=%d admin_id=%d", id, adminID)
@@ -146,7 +146,7 @@ func (h *Handler) TolakPencairan(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CariJamaahKaitan(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.CariJamaahKaitan(r.Context(), adminBrandScope(r), r.URL.Query().Get("q"))
 	if err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -158,9 +158,9 @@ func (h *Handler) LogKaitan(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := h.repo.ListKaitanLog(r.Context(), id)
+	items, err := h.repo.ListKaitanLog(r.Context(), id, identity.GetBrandID(r.Context()))
 	if err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -183,8 +183,8 @@ func (h *Handler) GantiKaitan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
-	if err := h.repo.GantiKaitan(r.Context(), id, adminID, req); err != nil {
-		handleSprint5Error(w, err)
+	if err := h.repo.GantiKaitan(r.Context(), id, adminID, req, identity.GetBrandID(r.Context())); err != nil {
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	log.Printf("[AUDIT] kaitan_diganti jamaah_id=%d mode=%s admin_id=%d", id, req.Mode, adminID)

@@ -90,6 +90,7 @@ Contoh: hari 1 Z klik link W; hari 2 Z klik link X lalu daftar akun; hari 3 Z kl
 Prioritas penentu agen untuk jamaah baru:
 1. Booking lewat portal agen: agen pembuat booking.
 2. Booking lewat web publik: agen yang mengikat akun pemesan. Cookie tidak dibaca.
+   Upline akun pemesan dipakai walau sedang `nonaktif` (keputusan 11 November 2026): jamaah tetap terikat ke upline itu, komisi langsungnya hangus saat lunas, dan bonus pembinaan tetap ke upline di atasnya yang aktif (5.1). Yang diabaikan hanya kode referral agen nonaktif saat akun dibuat (4.1).
 3. Tidak ada keduanya: jamaah tetap `belum_ditentukan`.
 
 Catatan: kode sekarang memprioritaskan cookie saat checkout dan hanya mengikat jamaah. Itu berubah (bagian 10).
@@ -115,6 +116,14 @@ Catatan: kode sekarang memprioritaskan cookie saat checkout dan hanya mengikat j
 ### 4.4 Override admin
 
 Admin Master dapat memindahkan jamaah ke agen lain, dan memasangkan atau mengganti agen akun, untuk semua `kaitan_sumber` (bukan hanya `jalur3` seperti `kaitan.go:18`). Bila komisi atas jamaah itu sudah tercatat, harus ada cara memindahkan komisi yang sudah ada (bagian 10, butir 8); aturan lama yang menolak tanpa jalan keluar tidak dipertahankan. Setiap override dicatat di log kaitan yang sudah ada.
+
+**Pembaruan 11 November 2026 (code review Agen).**
+
+- Saat komisi dipindah, aturannya sama dengan saat lunas: bonus pembinaan hanya pindah ke upline agen baru yang `aktif`. Bila agen baru tidak punya upline atau upline-nya nonaktif, bonus pembinaan itu ditandai batal dengan sebab `ganti_kaitan`; barisnya tidak dihapus. Kolom log `komisi_dihapus` kini berisi jumlah yang dibatalkan.
+- Pemindahan ditolak hanya bila ia sendiri menurunkan saldo tersedia penerima lama sampai di bawah nol (komisi itu sudah dicairkan). Saldo yang sudah negatif sebelumnya dan tidak berubah oleh pemindahan tidak menghalangi (K27).
+- Akun yang ikut berangkat dan jamaah dirinya sudah terikat ke seorang agen otomatis mendapat agen itu sebagai upline, hanya bila akun itu bukan agen. Kejadiannya dicatat di log kaitan akun sebagai "Sistem" (migrasi 132). Upline akun agen hanya berubah lewat Admin Master.
+- Setujui dan tolak pencairan, log kaitan, dan ganti kaitan memeriksa brand pemanggil; pengguna Holding tidak dibatasi.
+- Upline disimpan di dua kolom `customer_accounts`: `direkrut_oleh_akun_id` (sejak akun dibuat; dipakai mengikat jamaah) dan `upline_akun_id` (disalin saat pengajuan agen disetujui; penerima bonus pembinaan). Keduanya satu konsep (K10). Penggabungan menjadi satu kolom ditunda.
 
 ## 5. Aturan komisi
 

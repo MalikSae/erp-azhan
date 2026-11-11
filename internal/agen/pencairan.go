@@ -126,7 +126,7 @@ func getPencairanPortal(ctx context.Context, q querier, agenID int64) (*Pencaira
 		return nil, err
 	}
 	for _, r := range p.Riwayat {
-		if r.Status == "pending" {
+		if r.Status == pencairanPending {
 			p.AdaPending = true
 		}
 	}
@@ -148,7 +148,7 @@ func ajukanPencairanTx(ctx context.Context, tx *sql.Tx, agenID int64, req Ajukan
 	if err != nil {
 		return 0, fmt.Errorf("agen: kunci agen: %w", err)
 	}
-	if status != "aktif" {
+	if status != StatusAgenAktif {
 		return 0, ErrBukanAgenAktif
 	}
 	var pending int
@@ -190,7 +190,7 @@ func lockPencairan(ctx context.Context, tx *sql.Tx, id int64) (agenID int64, err
 	if err != nil {
 		return 0, fmt.Errorf("agen: kunci pencairan: %w", err)
 	}
-	if status != "pending" {
+	if status != pencairanPending {
 		return 0, ErrPencairanBukanPending
 	}
 	var terkunci int64
@@ -251,7 +251,7 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 		LEFT JOIN admin_users au ON au.id = p.diproses_oleh
 		WHERE 1=1`
 	args := []any{}
-	if status == "pending" || status == "disetujui" || status == "ditolak" {
+	if status == pencairanPending || status == pencairanDisetujui || status == pencairanDitolak {
 		query += ` AND p.status = ?`
 		args = append(args, status)
 	}
@@ -283,7 +283,7 @@ func listPencairanAdmin(ctx context.Context, q querier, status string, brandID *
 		return nil, fmt.Errorf("agen: baca pencairan admin: %w", err)
 	}
 	for i := range items {
-		if items[i].Status != "pending" {
+		if items[i].Status != pencairanPending {
 			continue
 		}
 		s, err := komisi.HitungSaldo(ctx, q, items[i].AkunAgenID)
@@ -329,12 +329,39 @@ func (r *Repository) AjukanPencairan(ctx context.Context, agenID int64, req Ajuk
 	return id, err
 }
 
-func (r *Repository) SetujuiPencairan(ctx context.Context, id, adminID int64, buktiURL string) error {
-	return r.withTx(ctx, func(tx *sql.Tx) error { return setujuiPencairanTx(ctx, tx, id, adminID, buktiURL) })
+// brandPencairanTx menolak pengajuan pencairan di luar brand pemanggil. brandID nil berarti pengguna Holding.
+// Pengajuan brand lain dijawab "tidak ditemukan" supaya keberadaannya tidak terbaca.
+func brandPencairanTx(ctx context.Context, tx *sql.Tx, id int64, brandID *int64) error {
+	if brandID == nil {
+		return nil
+	}
+	var brand int64
+	err := tx.QueryRowContext(ctx, `SELECT brand_id FROM pengajuan_pencairan WHERE id = ?`, id).Scan(&brand)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && brand != *brandID) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("agen: cek brand pencairan: %w", err)
+	}
+	return nil
 }
 
-func (r *Repository) TolakPencairan(ctx context.Context, id, adminID int64, catatan string) error {
-	return r.withTx(ctx, func(tx *sql.Tx) error { return tolakPencairanTx(ctx, tx, id, adminID, catatan) })
+func (r *Repository) SetujuiPencairan(ctx context.Context, id, adminID int64, buktiURL string, brandID *int64) error {
+	return r.withTx(ctx, func(tx *sql.Tx) error {
+		if err := brandPencairanTx(ctx, tx, id, brandID); err != nil {
+			return err
+		}
+		return setujuiPencairanTx(ctx, tx, id, adminID, buktiURL)
+	})
+}
+
+func (r *Repository) TolakPencairan(ctx context.Context, id, adminID int64, catatan string, brandID *int64) error {
+	return r.withTx(ctx, func(tx *sql.Tx) error {
+		if err := brandPencairanTx(ctx, tx, id, brandID); err != nil {
+			return err
+		}
+		return tolakPencairanTx(ctx, tx, id, adminID, catatan)
+	})
 }
 
 func (r *Repository) ListPencairanAdmin(ctx context.Context, status string, brandID *int64) ([]PencairanAdmin, error) {

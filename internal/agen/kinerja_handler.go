@@ -3,16 +3,44 @@ package agen
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"erp-azhan/api/internal/identity"
 )
 
-func komisiFilterFromQuery(r *http.Request) KomisiFilter {
+// errFilterKomisi: parameter angka pada filter komisi bukan bilangan bulat tak negatif.
+var errFilterKomisi = errors.New("parameter limit, offset, dan agen_id harus bilangan bulat tak negatif")
+
+// angkaQuery membaca parameter angka opsional. Kosong berarti 0; isi yang bukan bilangan bulat tak negatif
+// ditolak, supaya salah ketik tidak diam-diam menjadi "tanpa batas" atau "semua agen".
+func angkaQuery(q url.Values, nama string) (int64, error) {
+	v := strings.TrimSpace(q.Get(nama))
+	if v == "" {
+		return 0, nil
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 0 {
+		return 0, errFilterKomisi
+	}
+	return n, nil
+}
+
+func komisiFilterFromQuery(r *http.Request) (KomisiFilter, error) {
 	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	offset, _ := strconv.Atoi(q.Get("offset"))
-	penerima, _ := strconv.ParseInt(q.Get("agen_id"), 10, 64)
+	limit, err := angkaQuery(q, "limit")
+	if err != nil {
+		return KomisiFilter{}, err
+	}
+	offset, err := angkaQuery(q, "offset")
+	if err != nil {
+		return KomisiFilter{}, err
+	}
+	penerima, err := angkaQuery(q, "agen_id")
+	if err != nil {
+		return KomisiFilter{}, err
+	}
 	return KomisiFilter{
 		PenerimaID: penerima,
 		Jenis:      q.Get("jenis"),
@@ -20,9 +48,9 @@ func komisiFilterFromQuery(r *http.Request) KomisiFilter {
 		Sampai:     q.Get("sampai"),
 		Status:     q.Get("status"),
 		Cari:       q.Get("q"),
-		Limit:      limit,
-		Offset:     offset,
-	}
+		Limit:      int(limit),
+		Offset:     int(offset),
+	}, nil
 }
 
 // adminBrandScope: Admin Travel selalu brand-nya sendiri; Super Admin boleh
@@ -57,7 +85,12 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 // RiwayatKomisiPortal GET /api/portal/agen/komisi (A6)
 func (h *Handler) RiwayatKomisiPortal(w http.ResponseWriter, r *http.Request) {
-	items, err := h.repo.ListKomisiAgen(r.Context(), identity.GetCustomerAccountID(r.Context()), komisiFilterFromQuery(r))
+	f, err := komisiFilterFromQuery(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	items, err := h.repo.ListKomisiAgen(r.Context(), identity.GetCustomerAccountID(r.Context()), f)
 	if err != nil {
 		handleKinerjaError(w, err)
 		return
@@ -109,7 +142,11 @@ func (h *Handler) PeringkatAgen(w http.ResponseWriter, r *http.Request) {
 // Jawaban: {items, ringkasan}. Ringkasan dihitung server atas seluruh hasil filter, bukan halaman yang tampil.
 // status: kosong = komisi aktif, "batal" = yang dibatalkan, "semua" = keduanya.
 func (h *Handler) RiwayatKomisiAdmin(w http.ResponseWriter, r *http.Request) {
-	f := komisiFilterFromQuery(r)
+	f, err := komisiFilterFromQuery(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	f.BrandID = adminBrandScope(r)
 	halaman, err := h.repo.HalamanKomisiBrand(r.Context(), f)
 	if err != nil {

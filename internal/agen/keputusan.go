@@ -94,11 +94,11 @@ func prosesKeputusanTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *i
 		if err != nil {
 			return fmt.Errorf("agen.Keputusan baca pembayaran: %w", err)
 		}
-		final := payStatus == "terverifikasi" || payStatus == "dibebaskan"
-		pengajuan := status == "pengajuan"
+		final := pembayaranFinal(payStatus)
+		pengajuan := status == StatusAgenPengajuan
 		// Tagihan agen yang sudah disetujui tetap bisa diselesaikan walau agennya dinonaktifkan: status keagenan
 		// dan utang biaya pendaftaran dua hal terpisah.
-		susulan := (status == "aktif" || status == "nonaktif") && keputusan == "disetujui" && !final && nominal > 0
+		susulan := sudahAgen(status) && keputusan == keputusanDisetujui && !final && nominal > 0
 		if !pengajuan && !susulan {
 			return ErrKeputusanTidakBisa
 		}
@@ -113,7 +113,7 @@ func prosesKeputusanTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *i
 		switch req.Aksi {
 		case AksiSetujui:
 			if !final {
-				if payStatus != "menunggu_verifikasi" || !bukti.Valid || bukti.String == "" {
+				if payStatus != bayarMenungguVerifikasi || !bukti.Valid || bukti.String == "" {
 					return ErrBuktiBelumAda
 				}
 				if err := verifikasiPembayaranTx(ctx, tx, ppaID, brandID, adminID); err != nil {

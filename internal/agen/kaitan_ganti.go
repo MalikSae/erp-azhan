@@ -126,9 +126,9 @@ func gantiKaitanTx(ctx context.Context, tx *sql.Tx, jamaahID, adminID int64, req
 	// Komisi dibaca ulang di dalam transaksi (scanJamaahKaitan): bisa tercatat setelah halaman dibuka.
 
 	var agenBaru any
-	statusBaru := "tanpa_agen"
+	statusBaru := kaitanTanpaAgen
 	switch req.Mode {
-	case "agen":
+	case modeKaitanAgen:
 		if req.AgenAkunID == nil {
 			return ErrAgenTidakValid
 		}
@@ -136,12 +136,12 @@ func gantiKaitanTx(ctx context.Context, tx *sql.Tx, jamaahID, adminID int64, req
 			return err
 		}
 		agenBaru = *req.AgenAkunID
-		statusBaru = "terikat_agen"
+		statusBaru = kaitanTerikatAgen
 		if j.AgenID != nil && *j.AgenID == *req.AgenAkunID {
 			return ErrKaitanTidakBerubah
 		}
-	case "tanpa_agen":
-		if j.KaitanStatus == "tanpa_agen" {
+	case modeKaitanTanpaAgen:
+		if j.KaitanStatus == kaitanTanpaAgen {
 			return ErrKaitanTidakBerubah
 		}
 		if j.PunyaKomisi {
@@ -151,6 +151,7 @@ func gantiKaitanTx(ctx context.Context, tx *sql.Tx, jamaahID, adminID int64, req
 		return ErrKaitanModeTidakSah
 	}
 
+	// dihapus: nama lama kolom log; sejak 11 November 2026 isinya jumlah bonus pembinaan yang ditandai batal.
 	var dipindah, dihapus int
 	if j.PunyaKomisi {
 		if !req.PindahkanKomisi {
@@ -209,10 +210,35 @@ func (r *Repository) CariJamaahKaitan(ctx context.Context, brandID *int64, cari 
 	return cariJamaahKaitan(ctx, r.db, brandID, cari)
 }
 
-func (r *Repository) GantiKaitan(ctx context.Context, jamaahID, adminID int64, req GantiKaitanRequest) error {
-	return r.withTx(ctx, func(tx *sql.Tx) error { return gantiKaitanTx(ctx, tx, jamaahID, adminID, req) })
+// brandJamaah menolak jamaah di luar brand pemanggil. brandID nil berarti pengguna Holding. Jamaah brand lain
+// dijawab "tidak ditemukan".
+func brandJamaah(ctx context.Context, q querier, jamaahID int64, brandID *int64) error {
+	if brandID == nil {
+		return nil
+	}
+	var brand int64
+	err := q.QueryRowContext(ctx, `SELECT brand_id FROM jamaah WHERE id = ?`, jamaahID).Scan(&brand)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && brand != *brandID) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("agen: cek brand jamaah: %w", err)
+	}
+	return nil
 }
 
-func (r *Repository) ListKaitanLog(ctx context.Context, jamaahID int64) ([]KaitanLog, error) {
+func (r *Repository) GantiKaitan(ctx context.Context, jamaahID, adminID int64, req GantiKaitanRequest, brandID *int64) error {
+	return r.withTx(ctx, func(tx *sql.Tx) error {
+		if err := brandJamaah(ctx, tx, jamaahID, brandID); err != nil {
+			return err
+		}
+		return gantiKaitanTx(ctx, tx, jamaahID, adminID, req)
+	})
+}
+
+func (r *Repository) ListKaitanLog(ctx context.Context, jamaahID int64, brandID *int64) ([]KaitanLog, error) {
+	if err := brandJamaah(ctx, r.db, jamaahID, brandID); err != nil {
+		return nil, err
+	}
 	return listKaitanLog(ctx, r.db, jamaahID)
 }

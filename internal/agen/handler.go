@@ -202,6 +202,7 @@ func (h *Handler) VerifikasiPembayaran(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
+	log.Printf("[AUDIT] pembayaran_agen_diverifikasi akun_id=%d admin_id=%d", id, identity.GetAdminUserID(r.Context()))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "pembayaran pendaftaran terverifikasi"})
 }
 
@@ -219,6 +220,7 @@ func (h *Handler) TolakPembayaran(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
+	log.Printf("[AUDIT] pembayaran_agen_ditolak akun_id=%d admin_id=%d", id, identity.GetAdminUserID(r.Context()))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "pembayaran pendaftaran ditolak"})
 }
 
@@ -242,6 +244,7 @@ func (h *Handler) UploadBuktiAdmin(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
+	log.Printf("[AUDIT] bukti_pembayaran_agen_diunggah_admin akun_id=%d admin_id=%d", id, identity.GetAdminUserID(r.Context()))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "bukti transfer tersimpan"})
 }
 

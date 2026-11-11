@@ -147,7 +147,7 @@ func listKomisi(ctx context.Context, q querier, f KomisiFilter) ([]KomisiItem, e
 		switch {
 		case k.DibatalkanAt != nil:
 			k.Ketersediaan = "batal"
-		case k.Jenis == "cashback":
+		case k.Jenis == komisi.JenisCashback:
 			k.Ketersediaan = "kredit"
 		case sudahMatang:
 			k.Ketersediaan = "tersedia"
@@ -238,7 +238,7 @@ func requireAgenAktif(ctx context.Context, q querier, akunID int64) (*string, er
 	if err != nil {
 		return nil, fmt.Errorf("agen: cek status: %w", err)
 	}
-	if status != "aktif" {
+	if status != StatusAgenAktif {
 		return nil, ErrBukanAgenAktif
 	}
 	if kode.Valid {
@@ -474,10 +474,6 @@ func (r *Repository) ListAgen(ctx context.Context, brandID *int64, cari string) 
 
 func (r *Repository) GetDetailAgen(ctx context.Context, akunID int64, brandID *int64) (*DetailAgen, error) {
 	return getDetailAgen(ctx, r.db, akunID, brandID)
-}
-
-func (r *Repository) ListKomisiBrand(ctx context.Context, f KomisiFilter) ([]KomisiItem, error) {
-	return listKomisi(ctx, r.db, f)
 }
 
 // HalamanKomisiBrand: satu halaman Riwayat Komisi admin beserta ringkasan seluruh hasil filter.

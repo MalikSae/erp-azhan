@@ -27,6 +27,7 @@ const (
 	SebabVoid          = "void_pembayaran"
 	SebabDiskonDihapus = "diskon_dihapus"
 	SebabGantiKamar    = "ganti_kamar"
+	SebabGantiKaitan   = "ganti_kaitan" // bonus pembinaan tanpa penerima sah setelah kaitan jamaah diganti
 	SebabAturanBaru    = "penyesuaian_aturan" // migrasi 126
 )
 
@@ -47,7 +48,15 @@ func sebabBatal(ctx context.Context) string {
 
 // BatalkanKomisiBookingTx menandai batal semua baris komisi aktif milik satu booking dan mengembalikan
 // jumlah baris yang berubah. Dipanggil di transaksi yang sama dengan perubahan status booking.
+//
+// Baris komisi dikunci lebih dulu, lalu baris akun tiap penerimanya. Kunci akun membuat pembatalan ini
+// berurutan dengan persetujuan pencairan (yang mengunci akun agen lalu menghitung saldo), sehingga saldo
+// tidak diperiksa di tengah pembatalan. Urutan kunci komisi lalu akun sama dengan pemindahan komisi saat
+// ganti kaitan, supaya keduanya tidak saling menunggu.
 func BatalkanKomisiBookingTx(ctx context.Context, tx *sql.Tx, bookingID int64) (int64, error) {
+	if err := kunciPenerimaKomisiBookingTx(ctx, tx, bookingID); err != nil {
+		return 0, err
+	}
 	res, err := tx.ExecContext(ctx, `
 		UPDATE transaksi_komisi SET dibatalkan_at = NOW(), sebab_batal = ?
 		WHERE booking_id = ? AND dibatalkan_at IS NULL`, sebabBatal(ctx), bookingID)
@@ -64,3 +73,35 @@ func BatalkanKomisiBookingTx(ctx context.Context, tx *sql.Tx, bookingID int64) (
 // OnBookingTurunDariLunas dipanggil setiap kali status booking berubah dari 'lunas' ke 'dp' atau 'baru'.
 // Berupa variabel agar test bisa memverifikasi pemanggilannya. Jangan diganti di kode produksi.
 var OnBookingTurunDariLunas = BatalkanKomisiBookingTx
+
+// kunciPenerimaKomisiBookingTx mengunci baris komisi aktif sebuah booking, lalu baris akun tiap penerimanya
+// (urut id).
+func kunciPenerimaKomisiBookingTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT DISTINCT akun_penerima_id FROM transaksi_komisi
+		WHERE booking_id = ? AND dibatalkan_at IS NULL ORDER BY akun_penerima_id FOR UPDATE`, bookingID)
+	if err != nil {
+		return fmt.Errorf("komisi: kunci komisi booking %d: %w", bookingID, err)
+	}
+	var penerima []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("komisi: kunci komisi booking %d: %w", bookingID, err)
+		}
+		penerima = append(penerima, id)
+	}
+	errRows := rows.Err()
+	rows.Close()
+	if errRows != nil {
+		return fmt.Errorf("komisi: kunci komisi booking %d: %w", bookingID, errRows)
+	}
+	for _, id := range penerima {
+		var terkunci int64
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM customer_accounts WHERE id = ? FOR UPDATE`, id).Scan(&terkunci); err != nil {
+			return fmt.Errorf("komisi: kunci penerima %d: %w", id, err)
+		}
+	}
+	return nil
+}

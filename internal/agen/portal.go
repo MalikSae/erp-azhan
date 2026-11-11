@@ -3,6 +3,7 @@ package agen
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -65,7 +66,7 @@ func rentangUjroh(ctx context.Context, q querier, brandID int64) (*UjrohPublik, 
 	u := UjrohPublik{BrandID: brandID}
 	err := q.QueryRowContext(ctx, `SELECT biaya_pendaftaran_agen, syarat_ketentuan_agen FROM brands WHERE id = ?`, brandID).
 		Scan(&u.BiayaPendaftaranAgen, &u.SyaratKetentuanAgen)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {

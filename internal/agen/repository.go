@@ -126,7 +126,7 @@ func ajukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) 
 	if err != nil {
 		return fmt.Errorf("agen.Ajukan baca akun: %w", err)
 	}
-	if status != "tidak_aktif" {
+	if status != StatusAgenTidakAktif {
 		return ErrSudahMengajukan
 	}
 
@@ -320,7 +320,7 @@ func tolakTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, admi
 // ubahStatusTx men-toggle agen antara 'aktif' dan 'nonaktif' (screen B2a).
 // Alasan wajib, dan tiap perubahan dicatat di agen_status_log beserta pelakunya.
 func ubahStatusTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, adminID int64, status, alasan string) error {
-	if status != "aktif" && status != "nonaktif" {
+	if !sudahAgen(status) {
 		return ErrStatusTidakValid
 	}
 	alasan = strings.TrimSpace(alasan)
@@ -336,7 +336,7 @@ func ubahStatusTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64,
 	if err != nil {
 		return fmt.Errorf("agen.UbahStatus baca: %w", err)
 	}
-	if cur != "aktif" && cur != "nonaktif" {
+	if !sudahAgen(cur) {
 		return ErrStatusTidakValid
 	}
 	if cur == status {
@@ -363,7 +363,7 @@ func verifikasiPembayaranTx(ctx context.Context, tx *sql.Tx, ppaID int64, brandI
 	if err != nil {
 		return err
 	}
-	if status == "terverifikasi" || status == "dibebaskan" {
+	if pembayaranFinal(status) {
 		return ErrPembayaranFinal
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -380,7 +380,7 @@ func tolakPembayaranTx(ctx context.Context, tx *sql.Tx, ppaID int64, brandID *in
 	if err != nil {
 		return err
 	}
-	if status != "menunggu_verifikasi" {
+	if status != bayarMenungguVerifikasi {
 		return ErrPembayaranBukanMenunggu
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -415,7 +415,7 @@ func lockPengajuan(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64
 	if err != nil {
 		return fmt.Errorf("agen: kunci akun: %w", err)
 	}
-	if status != "pengajuan" {
+	if status != StatusAgenPengajuan {
 		return ErrBukanPengajuan
 	}
 	if kode != nil {
@@ -460,10 +460,10 @@ func insertUpload(ctx context.Context, tx *sql.Tx, ppaID int64, url, tipe string
 		Scan(&status, &keputusan); err != nil {
 		return fmt.Errorf("agen: baca siklus: %w", err)
 	}
-	if keputusan == "ditolak" {
+	if keputusan == keputusanDitolak {
 		return ErrSiklusDitutup
 	}
-	if status == "terverifikasi" || status == "dibebaskan" {
+	if pembayaranFinal(status) {
 		return ErrPembayaranFinal
 	}
 	if _, err := tx.ExecContext(ctx, `

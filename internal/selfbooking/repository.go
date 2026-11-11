@@ -290,7 +290,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 			return nil, err
 		}
 	} else {
-		agenAkun, err := agen.AgenPengikatAkun(ctx, tx, ini.accountID)
+		agenAkun, err := agen.UplineAkun(ctx, tx, ini.accountID)
 		if err != nil {
 			return nil, err
 		}

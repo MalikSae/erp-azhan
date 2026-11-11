@@ -103,7 +103,7 @@ func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 // Create membuat akun. kodeReferral (cookie azhan_ref) diselesaikan menjadi agen aktif pemilik kode di brand yang
 // sama dan disimpan sebagai direkrut_oleh_akun_id; kode kosong, tidak dikenal, atau milik agen nonaktif diabaikan.
 func (r *Repository) Create(ctx context.Context, brandID int64, nama, email, noHP, passwordHash, kodeReferral string) (*Account, error) {
-	agenID, err := agen.IkatAkunDariReferral(ctx, r.db, brandID, kodeReferral)
+	agenID, err := agen.ResolveKodeReferral(ctx, r.db, brandID, kodeReferral)
 	if err != nil {
 		return nil, err
 	}

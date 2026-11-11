@@ -51,8 +51,9 @@ func TestOverrideKaitanPindahkanKomisiLangsungDanPembinaan(t *testing.T) {
 	}
 }
 
-// Agen baru tanpa upline: bonus pembinaan lama tidak punya penerima dan dihapus (tercatat di log).
-func TestOverrideKaitanPembinaanTanpaUplineBaruDihapus(t *testing.T) {
+// Agen baru tanpa upline: bonus pembinaan lama tidak punya penerima dan ditandai batal (tercatat di log).
+// Sejak 11 November 2026 barisnya tidak dihapus; kolom log komisi_dihapus berisi jumlah yang dibatalkan.
+func TestOverrideKaitanPembinaanTanpaUplineBaruDibatalkan(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
 	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{KomisiLangsung: rp(1_000_000), BonusPembinaan: rp(300_000), BerangkatTanggal: "2099-01-01"})
@@ -68,10 +69,10 @@ func TestOverrideKaitanPembinaanTanpaUplineBaruDihapus(t *testing.T) {
 
 	must(t, "override", gantiKaitanTx(ctx, tx, j, admin, GantiKaitanRequest{Mode: "agen", AgenAkunID: &baru, Alasan: "pindah agen", PindahkanKomisi: true}))
 	var n int
-	must(t, "hitung", tx.QueryRow(`SELECT COUNT(*) FROM transaksi_komisi WHERE booking_id=? AND jenis='pembinaan'`, b).Scan(&n))
+	must(t, "hitung", tx.QueryRow(`SELECT COUNT(*) FROM transaksi_komisi WHERE booking_id=? AND jenis='pembinaan' AND dibatalkan_at IS NULL`, b).Scan(&n))
 	logs, _ := listKaitanLog(ctx, tx, j)
 	if n != 0 || len(logs) != 1 || logs[0].KomisiDipindah != 1 || logs[0].KomisiDihapus != 1 {
-		t.Fatalf("pembinaan=%d log=%+v, want 0 baris pembinaan, dipindah 1 dihapus 1", n, logs)
+		t.Fatalf("pembinaan=%d log=%+v, want 0 baris pembinaan aktif, dipindah 1 dibatalkan 1", n, logs)
 	}
 }
 
