@@ -90,6 +90,9 @@ func (h *JamaahAkun) Daftar(w http.ResponseWriter, r *http.Request) {
 		terisi, total, _ := kelengkapanOrang(d.Nilai, adaBayi(grup))
 		b := jamaahBaris{ID: grup[0].ID, NamaLengkap: d.Nama, JenisKelamin: d.Nilai["jenis_kelamin"], Bayi: adaBayi(grup),
 			Terisi: terisi, Total: total, Booking: ringkasBooking(grup[0]), JumlahBooking: len(grup), AksesTerbatas: !grup[0].Penuh}
+		if b.AksesTerbatas {
+			b.JenisKelamin = "" // isian jamaah tidak dikirim untuk akses terbatas
+		}
 		for _, a := range grup {
 			if menunggu[a.ID] {
 				b.Menunggu = true
