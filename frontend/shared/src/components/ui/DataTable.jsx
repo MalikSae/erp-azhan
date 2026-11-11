@@ -91,11 +91,12 @@ const DataTable = ({
     <div className="w-full bg-white rounded-2xl border border-neutral-200/80 shadow-card overflow-hidden">
       {/* Header / Toolbar */}
       {(searchable || toolbarActions || toolbarLeading) && (
-        <div className="p-4 border-b border-neutral-200/80 flex flex-col sm:flex-row sm:flex-wrap justify-between items-start sm:items-center bg-white gap-4">
+        <div className="p-4 border-b border-neutral-200/80 flex flex-col sm:flex-row sm:flex-wrap justify-between items-start sm:items-end bg-white gap-4">
           {/* Kiri: elemen pembuka (mis. tab) lalu kolom pencarian */}
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:flex-1 min-w-0">
           {toolbarLeading}
-          <div className="w-full max-w-sm relative">
+          {/* Di layar lebar kolom pencarian menyusut dulu sebelum turun baris, supaya sebaris dengan tab. */}
+          <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[12rem] max-w-sm relative">
             {searchable && (
               <>
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -108,7 +109,7 @@ const DataTable = ({
                   placeholder={searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-200 pl-10 pr-3.5 py-2 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body bg-white transition-all"
+                  className="h-10 w-full rounded-lg border border-neutral-200/90 pl-10 pr-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body bg-white transition-all"
                 />
               </>
             )}

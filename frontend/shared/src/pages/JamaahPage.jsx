@@ -222,7 +222,7 @@ export const JamaahPage = ({ showBrandColumn = false, toolbarLeading }) => {
                 onChange={(val) => setFilterStatus(val)}
                 options={statusOptions}
                 placeholder="Semua Jamaah"
-                className="!mb-0 w-60"
+                className="!mb-0 w-52"
               />
               {showBrandColumn && brands.length > 0 && (
                 <CustomDropdown
@@ -233,7 +233,7 @@ export const JamaahPage = ({ showBrandColumn = false, toolbarLeading }) => {
                     ...brands.map(b => ({ value: b.id.toString(), label: b.name }))
                   ]}
                   placeholder="Semua Brand"
-                  className="!mb-0 w-40"
+                  className="!mb-0 w-52"
                 />
               )}
             </div>
