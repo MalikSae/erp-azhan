@@ -165,7 +165,7 @@ const TopbarSearch = () => {
 
   return (
     <div ref={wadahRef} className="hidden md:block relative w-72 lg:w-96">
-      <label className="flex items-center gap-2 bg-neutral-50 border border-neutral-200/80 rounded-xl px-3.5 py-1.5 text-sm hover:border-neutral-300 focus-within:border-primary-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-primary-100 transition-colors cursor-text">
+      <label className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-xl px-3.5 py-1.5 text-sm hover:border-neutral-300 focus-within:border-primary-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-primary-100 transition-colors cursor-text">
         {memuat
           ? <Loader2 className="w-4 h-4 text-neutral-400 shrink-0 animate-spin" />
           : <Search className="w-4 h-4 text-neutral-400 shrink-0" />}
@@ -188,7 +188,7 @@ const TopbarSearch = () => {
           maxLength={80}
           className="flex-1 min-w-0 bg-transparent text-xs text-neutral-800 placeholder:text-neutral-500 font-body focus:outline-none"
         />
-        <kbd className="ml-auto shrink-0 text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-neutral-200 text-neutral-400 shadow-2xs">
+        <kbd className="ml-auto shrink-0 text-xs font-mono bg-white px-1.5 py-0.5 rounded border border-neutral-200 text-neutral-400">
           {isMac ? '⌘K' : 'Ctrl K'}
         </kbd>
       </label>
@@ -198,7 +198,7 @@ const TopbarSearch = () => {
           id="cari-hasil"
           role="listbox"
           aria-label="Hasil pencarian"
-          className="absolute left-0 right-0 mt-2 bg-white rounded-xl shadow-lg border border-neutral-200/90 z-50 py-1.5 max-h-[70vh] overflow-y-auto"
+          className="absolute left-0 right-0 mt-2 bg-white rounded-3xl shadow-popover border border-neutral-200 z-50 py-1.5 max-h-[70vh] overflow-y-auto"
         >
           {!cukupPanjang && (
             <p className="px-4 py-3 text-xs text-neutral-500 font-body">Ketik minimal {PANJANG_MINIMAL} karakter.</p>
@@ -214,7 +214,7 @@ const TopbarSearch = () => {
           )}
           {kelompok.map((k) => (
             <div key={k.judul} role="group" aria-label={k.judul} className="py-1">
-              <p className="px-4 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-heading flex items-center gap-1.5">
+              <p className="px-4 pt-1.5 pb-1 text-xs font-semibold text-neutral-400 font-heading flex items-center gap-1.5">
                 <k.ikon className="w-3 h-3" />
                 {k.judul}
               </p>
@@ -234,10 +234,10 @@ const TopbarSearch = () => {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-neutral-900 font-body truncate">{b.utama}</p>
-                      {rinci && <p className="text-[11px] text-neutral-500 font-body truncate">{rinci}</p>}
+                      {rinci && <p className="text-xs text-neutral-500 font-body truncate">{rinci}</p>}
                     </div>
                     {b.status && (
-                      <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${b.redup ? 'bg-neutral-100 border-neutral-300 text-neutral-600' : 'bg-white border-neutral-200 text-neutral-700'}`}>
+                      <span className={`shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded-md border ${b.redup ? 'bg-neutral-100 border-neutral-300 text-neutral-600' : 'bg-white border-neutral-200 text-neutral-700'}`}>
                         {b.status}
                       </span>
                     )}

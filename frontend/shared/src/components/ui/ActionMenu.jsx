@@ -67,7 +67,7 @@ const ActionMenu = ({ items = [], align = 'right', label }) => {
         aria-haspopup="menu"
         aria-expanded={isOpen}
         className={`${
-          label ? 'h-[38px] px-4 gap-2 rounded-xl text-sm font-heading font-semibold shadow-2xs' : 'w-[30px] h-[30px] rounded-lg'
+          label ? 'h-9 px-3 gap-2 rounded-2xl text-sm font-heading font-medium shadow-btn-secondary' : 'w-8 h-8 rounded-lg'
         } border flex items-center justify-center transition-colors cursor-pointer ${
           isOpen
             ? 'border-primary-200 bg-primary-50 text-primary-600'
@@ -88,7 +88,7 @@ const ActionMenu = ({ items = [], align = 'right', label }) => {
         <div
           role="menu"
           style={{ position: 'fixed', top: pos.top, left: pos.left, width: MENU_WIDTH }}
-          className="rounded-xl bg-white border border-neutral-200/90 shadow-lg py-1 z-50 animate-in fade-in-0 zoom-in-95 font-body"
+          className="rounded-3xl bg-white border border-neutral-200 shadow-popover py-1 z-50 animate-in fade-in-0 zoom-in-95 font-body"
         >
           {items.map((item, index) => {
             const Icon = item.icon;

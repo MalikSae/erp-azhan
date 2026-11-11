@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Pill = ({ label, variant = 'default', onRemove, className = '' }) => {
-  const baseClasses = 'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-colors border';
+  const baseClasses = 'inline-flex items-center px-2 py-0.5 rounded-sm text-sm font-medium transition-colors border';
   
   const variantClasses = {
     default: 'bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50',

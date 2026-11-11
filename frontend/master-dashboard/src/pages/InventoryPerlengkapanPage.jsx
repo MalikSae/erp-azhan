@@ -40,7 +40,7 @@ const StokValue = ({ value }) => {
       ? 'border-warning-200 bg-warning-50 text-warning-800'
       : 'border-transparent text-neutral-900';
   return (
-    <span className={`inline-flex min-w-12 items-center justify-center rounded-lg border px-2.5 py-1 text-[13px] font-semibold font-body ${tone}`}>
+    <span className={`inline-flex min-w-12 items-center justify-center rounded-lg border px-2.5 py-1 text-sm font-semibold font-body ${tone}`}>
       {value}
     </span>
   );
@@ -324,7 +324,7 @@ const InventoryPerlengkapanPage = () => {
             <button
               type="button"
               onClick={() => handleOpenModal(row)}
-              className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+              className="font-body font-medium text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
             >
               {row.nama}
             </button>
@@ -341,7 +341,7 @@ const InventoryPerlengkapanPage = () => {
     }
 
     if (key === 'total') {
-      return <span className="text-[13px] font-body font-semibold text-neutral-900">{row.total}</span>;
+      return <span className="text-sm font-body font-semibold text-neutral-900">{row.total}</span>;
     }
 
     if (key === 'aksi') {
@@ -384,7 +384,7 @@ const InventoryPerlengkapanPage = () => {
       {successMessage && <Alert variant="success" onClose={() => setSuccessMessage(null)}>{successMessage}</Alert>}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : (
         <DataTable
           columns={columns}
@@ -444,7 +444,7 @@ const InventoryPerlengkapanPage = () => {
             placeholder="Pilih foto item (PNG, JPG, WebP)..."
           />
 
-          <p className="text-[11px] font-body text-neutral-500">
+          <p className="text-xs font-body text-neutral-500">
             Jumlah per jamaah diatur di Kelola Kategori (bawaan) atau di form Paket (khusus paket).
           </p>
 

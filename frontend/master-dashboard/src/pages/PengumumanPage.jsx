@@ -23,7 +23,7 @@ const STATUS = {
 const StatusDot = ({ status }) => {
   const meta = STATUS[status] || { label: status, dot: 'bg-neutral-400' };
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-neutral-700">
+    <span className="inline-flex items-center gap-1.5 text-xs font-body text-neutral-700">
       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
       {meta.label}
     </span>
@@ -132,7 +132,7 @@ export default function PengumumanPage() {
   ];
 
   const renderCell = (row, key) => {
-    if (key === 'judul') return <span className="block max-w-[360px] truncate font-heading font-semibold text-neutral-900" title={row.judul}>{row.judul}</span>;
+    if (key === 'judul') return <span className="block max-w-sm truncate font-heading font-semibold text-neutral-900" title={row.judul}>{row.judul}</span>;
     if (key === 'jadwal_nama') return row.jadwal_nama || <span className="text-neutral-500">Semua pelanggan</span>;
     if (key === 'mulai') return `${tgl(row.mulai)} - ${tgl(row.akhir)}`;
     if (key === 'status') return <StatusDot status={row.status} />;
@@ -146,7 +146,7 @@ export default function PengumumanPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader title="Pengumuman" actionLabel="Tambah pengumuman" onAction={bukaBaru} />
       {error && <Alert variant="error" message={error} />}
 

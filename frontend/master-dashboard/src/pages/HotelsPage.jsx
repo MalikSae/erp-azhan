@@ -280,7 +280,7 @@ const HotelsPage = () => {
             type="button"
             disabled={!canEdit}
             onClick={() => handleOpenModal(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
+            className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
           >
             {row.name}
           </button>
@@ -290,7 +290,7 @@ const HotelsPage = () => {
 
     if (key === 'city') {
       return (
-        <span className="inline-flex items-center gap-1.5 text-[13px] font-body text-neutral-700 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1.5 text-sm font-body text-neutral-700 whitespace-nowrap">
           <MapPin className="w-3.5 h-3.5 text-neutral-400" strokeWidth={1.75} />
           {row.city}
         </span>
@@ -302,7 +302,7 @@ const HotelsPage = () => {
         return <span className="text-xs text-neutral-400 font-body">-</span>;
       }
       return (
-        <span className="inline-flex items-center gap-1 text-[13px] font-body font-medium text-neutral-800">
+        <span className="inline-flex items-center gap-1 text-sm font-body font-medium text-neutral-800">
           <Star className="w-3.5 h-3.5 fill-warning-400 text-warning-400" strokeWidth={1.5} />
           {row.star_rating}
         </span>
@@ -313,7 +313,7 @@ const HotelsPage = () => {
       if (row.distance_m === null || row.distance_m === undefined) {
         return <span className="text-xs text-neutral-400 font-body">-</span>;
       }
-      return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">±{row.distance_m} m</span>;
+      return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">±{row.distance_m} m</span>;
     }
 
     if (key === 'video_url') {
@@ -358,7 +358,7 @@ const HotelsPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : (
         <DataTable
           columns={columns}

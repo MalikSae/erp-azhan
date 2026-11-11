@@ -73,11 +73,11 @@ const STATUS_STYLE = {
 };
 
 
-// Pil status utama: titik berwarna kecil + teks.
+// Badge status utama (bentuk sama dengan komponen Badge): titik berwarna kecil + teks.
 const StatusPill = ({ status, styleMap = STATUS_STYLE }) => {
   const s = styleMap[status] || { label: status, chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' };
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium font-body border ${s.chip}`}>
+    <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading border ${s.chip}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
@@ -93,7 +93,7 @@ const DotText = ({ tone, children }) => {
   };
   const t = tones[tone] || tones.neutral;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${t.text}`}>
+    <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${t.text}`}>
       <span className={`w-2 h-2 rounded-full ${t.dot}`} />
       {children}
     </span>
@@ -770,7 +770,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 {seatLockInfo.label}
               </Badge>
             )}
-            <span className="text-[11px] font-body text-neutral-500">Dibuat pada {formatTanggal(booking.created_at)}</span>
+            <span className="text-xs font-body text-neutral-500">Dibuat pada {formatTanggal(booking.created_at)}</span>
           </span>
         }
         onBack={() => navigate("/bookings")}
@@ -870,7 +870,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                         <button
                           type="button"
                           onClick={() => navigate(`/jamaah/${pax.jamaah_id}`)}
-                          className={`font-heading font-semibold hover:text-primary-600 hover:underline text-left transition-colors ${
+                          className={`font-body font-medium hover:text-primary-600 hover:underline text-left transition-colors ${
                             isBatal ? "line-through text-neutral-500" : "text-neutral-900"
                           }`}
                           title="Lihat Profil Jamaah"
@@ -878,7 +878,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                           {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
                         </button>
                         {(isPic || pax.pax_type === 'infant' || isBatal) && (
-                          <div className="text-[11px] font-body text-neutral-400">
+                          <div className="text-xs font-body text-neutral-400">
                             {[
                               isPic ? "PIC" : null,
                               pax.pax_type === 'infant' ? "Infant (Bayi < 2 thn)" : null,
@@ -931,9 +931,9 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               <p className="p-5 text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-[13px] font-body text-neutral-700 border-collapse">
-                  <thead className="bg-neutral-50 text-neutral-800 font-heading text-[13px] font-semibold border-b border-neutral-200">
-                    <tr className="border-b border-neutral-200/60">
+                <table className="w-full text-left text-sm font-body text-neutral-700 border-collapse">
+                  <thead className="bg-neutral-50 text-neutral-500 font-body text-xs font-medium border-b border-neutral-200">
+                    <tr className="border-b border-neutral-200">
                       <th className="py-2.5 px-4" rowSpan={2}>Nama Jamaah</th>
                       <th className="py-2 px-3 text-center border-x border-neutral-200" colSpan={2}>
                         Dokumen Jamaah
@@ -942,7 +942,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                         Operasional Travel
                       </th>
                     </tr>
-                    <tr className="text-[12px] text-neutral-500">
+                    <tr className="text-xs text-neutral-500">
                       <th className="py-2 px-3 text-center border-l border-neutral-200">Paspor</th>
                       <th className="py-2 px-3 text-center border-r border-neutral-200">Vaksin</th>
                       <th className="py-2 px-3 text-center">Visa</th>
@@ -961,7 +961,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                                 {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
                               </span>
                               {pax.pax_type === 'infant' && (
-                                <span className="block text-[11px] text-neutral-400 font-body">
+                                <span className="block text-xs text-neutral-400 font-body">
                                   Infant (Bayi &lt; 2 thn)
                                 </span>
                               )}
@@ -1063,7 +1063,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                           {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
                         </div>
                         {pax.pax_type === 'infant' && (
-                          <div className="text-[11px] font-body text-neutral-400">
+                          <div className="text-xs font-body text-neutral-400">
                             Infant (Bayi &lt; 2 thn)
                           </div>
                         )}
@@ -1080,7 +1080,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
                   if (key === "tanggal") {
                     return (
-                      <span className="text-[13px] text-neutral-600 whitespace-nowrap">
+                      <span className="text-sm text-neutral-600 whitespace-nowrap">
                         {(pax.pax_type !== 'infant' && pax.perlengkapan_tanggal) ? formatTanggal(pax.perlengkapan_tanggal) : '-'}
                       </span>
                     );
@@ -1134,12 +1134,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             {discounts.length === 0 ? (
               <p className="p-5 text-xs text-neutral-500 font-body">Belum ada diskon. Tambahkan program diskon jika ada.</p>
             ) : (
-              <div className="divide-y divide-neutral-200/80">
+              <div className="divide-y divide-neutral-200">
                 {discounts.map((d) => (
                   <div key={d.id} className="px-5 py-3 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-neutral-900 font-body">{d.nama}</p>
-                      <span className="text-[11px] text-neutral-400 font-body">{formatTanggal(d.created_at)}</span>
+                      <span className="text-xs text-neutral-400 font-body">{formatTanggal(d.created_at)}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold text-success-600 font-body">- {formatRupiah(d.nominal)}</span>
@@ -1224,12 +1224,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                           {getPaymentStatusMeta(p.status).label}
                         </Badge>
                         {p.status === "rejected" && p.rejection_reason && (
-                          <span className="block truncate text-[11px] text-danger-600 italic font-body max-w-[180px] leading-tight" title={p.rejection_reason}>
+                          <span className="block truncate text-xs text-danger-600 italic font-body max-w-44 leading-tight" title={p.rejection_reason}>
                             Alasan: {p.rejection_reason}
                           </span>
                         )}
                         {p.status === "void" && p.void_reason && (
-                          <span className="block truncate text-[11px] text-neutral-500 italic font-body max-w-[180px] leading-tight" title={p.void_reason}>
+                          <span className="block truncate text-xs text-neutral-500 italic font-body max-w-44 leading-tight" title={p.void_reason}>
                             Alasan: {p.void_reason}
                           </span>
                         )}
@@ -1293,7 +1293,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         </div>
 
         {/* Kolom kanan: satu card, menempel saat halaman digulir */}
-        <Surface className="lg:sticky lg:top-4 divide-y divide-neutral-200/80">
+        <Surface className="lg:sticky lg:top-4 divide-y divide-neutral-200">
           {/* Ringkasan Finansial Card */}
           <Section
             title="Ringkasan Pembayaran"
@@ -1309,7 +1309,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   <span className="font-medium text-success-600">- {formatRupiah(totalDiskon)}</span>
                 </div>
               )}
-              <div className="pt-3 border-t border-neutral-200 flex justify-between text-base font-bold">
+              <div className="pt-3 border-t border-neutral-200 flex justify-between text-base font-semibold">
                 <span className="text-neutral-900">Total Tagihan:</span>
                 <span className="text-neutral-900">{formatRupiah(totalHarga)}</span>
               </div>
@@ -1319,7 +1319,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               </div>
               <div className="pt-3 border-t border-neutral-200 flex justify-between items-center">
                 <span className="text-sm font-semibold text-neutral-700">Sisa Tagihan:</span>
-                <span className={`text-base font-bold ${sisaTagihan > 0 ? "text-danger-600" : "text-success-600"}`}>
+                <span className={`text-base font-semibold ${sisaTagihan > 0 ? "text-danger-600" : "text-success-600"}`}>
                   {formatRupiah(sisaTagihan)}
                 </span>
               </div>
@@ -1384,10 +1384,10 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           {paymentFormError && <Alert variant="error">{paymentFormError}</Alert>}
 
           {/* Billing Context Card */}
-          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-0.5">
-              <span className="text-[11px] uppercase tracking-wider text-neutral-500 font-semibold block">Sisa Tagihan</span>
-              <div className={`text-base sm:text-lg font-bold font-heading ${sisaTagihan > 0 ? "text-neutral-900" : "text-success-600"}`}>
+              <span className="text-xs text-neutral-500 font-semibold block">Sisa Tagihan</span>
+              <div className={`text-base sm:text-lg font-semibold font-heading ${sisaTagihan > 0 ? "text-neutral-900" : "text-success-600"}`}>
                 {formatRupiah(sisaTagihan)}
               </div>
             </div>
@@ -1493,7 +1493,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   </div>
                   <div className="truncate">
                     <p className="text-xs font-semibold text-neutral-800 truncate">{paymentForm.bukti_file.name}</p>
-                    <p className="text-[11px] text-neutral-500">{(paymentForm.bukti_file.size / 1024).toFixed(1)} KB</p>
+                    <p className="text-xs text-neutral-500">{(paymentForm.bukti_file.size / 1024).toFixed(1)} KB</p>
                   </div>
                 </div>
                 <button
@@ -1511,7 +1511,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 <span className="text-xs font-medium text-neutral-700">
                   Unggah bukti transfer / kwitansi
                 </span>
-                <span className="text-[11px] text-neutral-400 mt-0.5">
+                <span className="text-xs text-neutral-400 mt-0.5">
                   Klik untuk memilih file
                 </span>
                 <input
@@ -1568,7 +1568,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </div>
         }
       >
-        <div className="flex flex-col items-center justify-center p-3 bg-neutral-900/5 rounded-xl overflow-hidden min-h-[260px] max-h-[70vh]">
+        <div className="flex flex-col items-center justify-center p-3 bg-neutral-900/5 rounded-xl overflow-hidden min-h-64 max-h-[70vh]">
           {selectedBuktiUrl ? (
             selectedBuktiUrl.toLowerCase().endsWith('.pdf') ? (
               <iframe
@@ -1580,7 +1580,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               <img
                 src={selectedBuktiUrl}
                 alt="Bukti Pembayaran"
-                className="max-h-[60vh] w-auto max-w-full object-contain rounded-lg shadow-2xs"
+                className="max-h-[60vh] w-auto max-w-full object-contain rounded-lg"
               />
             )
           ) : null}
@@ -1659,7 +1659,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         title={`Ganti Tipe Kamar - ${selectedPaxForRoomChange?.nama_jamaah || ''}`}
       >
         {changeRoomError && <Alert variant="error" className="mb-4">{changeRoomError}</Alert>}
-        <form onSubmit={handleChangeRoomSubmit} className="space-y-5 font-body min-h-[160px] flex flex-col justify-between">
+        <form onSubmit={handleChangeRoomSubmit} className="space-y-5 font-body min-h-40 flex flex-col justify-between">
           <div>
             <CustomDropdown
               label="Pilih Tipe Kamar Baru"
@@ -1740,10 +1740,10 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         {rejectError && <Alert variant="error" className="mb-4">{rejectError}</Alert>}
 
         {selectedPaymentForReject && (
-          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 mb-4 text-xs space-y-1 font-body">
+          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 mb-4 text-xs space-y-1 font-body">
             <div className="flex justify-between">
               <span className="text-neutral-500">Nominal:</span>
-              <span className="font-bold text-neutral-900">{formatRupiah(selectedPaymentForReject.jumlah)}</span>
+              <span className="font-semibold text-neutral-900">{formatRupiah(selectedPaymentForReject.jumlah)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-neutral-500">Pengirim:</span>
@@ -1754,7 +1754,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
         <form onSubmit={handleRejectPaymentSubmit} className="space-y-4 font-body">
           <div>
-            <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
               Alasan Penolakan <span className="text-danger-500">*</span>
             </label>
             <textarea
@@ -1766,7 +1766,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               required
               disabled={rejectSubmitting}
             />
-            <p className="text-[11px] text-neutral-400 mt-1">
+            <p className="text-xs text-neutral-400 mt-1">
               Minimal 3 karakter. Alasan ini akan tercatat dalam riwayat pembayaran.
             </p>
           </div>
@@ -1808,10 +1808,10 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
         {selectedPaymentForConfirm && (
           <div className="space-y-4 font-body">
-            <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-2 font-body">
+            <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 text-xs space-y-2 font-body">
               <div className="flex justify-between items-center">
                 <span className="text-neutral-500 font-medium">Nominal:</span>
-                <span className="font-bold text-neutral-900 text-sm">{formatRupiah(selectedPaymentForConfirm.jumlah)}</span>
+                <span className="font-semibold text-neutral-900 text-sm">{formatRupiah(selectedPaymentForConfirm.jumlah)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-neutral-500 font-medium">Pengirim:</span>
@@ -1890,7 +1890,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           <p className="text-neutral-600 text-sm leading-relaxed">
             Hold seat untuk booking ini? Kuota seat ({regularActiveCount || booking.seat_count || 1} seat) pada jadwal di-hold sampai seat dilepas secara manual.
           </p>
-          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-1.5 font-body">
+          <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 text-xs space-y-1.5 font-body">
             <div className="flex justify-between items-center">
               <span className="text-neutral-500 font-medium">Jumlah Seat:</span>
               <span className="font-semibold text-neutral-900">{regularActiveCount || booking.seat_count || 1} Seat</span>

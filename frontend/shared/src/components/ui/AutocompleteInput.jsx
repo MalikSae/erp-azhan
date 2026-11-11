@@ -129,7 +129,7 @@ const AutocompleteInput = ({
     }
   }, [highlightedIndex]);
 
-  const inputBaseClasses = 'h-10 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body transition-all';
+  const inputBaseClasses = 'h-9 w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body transition-all';
   const disabledClasses = disabled || readOnly ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : '';
   const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20' : '';
   const paddingLeftClass = prefixIcon ? 'pl-10' : '';
@@ -210,7 +210,7 @@ const AutocompleteInput = ({
         {isOpen && filteredOptions.length > 0 && (
           <ul
             ref={listRef}
-            className="absolute z-50 mt-1.5 max-h-60 w-full overflow-auto rounded-xl bg-white py-1.5 text-xs md:text-sm shadow-card border border-neutral-200/80 focus:outline-none"
+            className="absolute z-50 mt-1.5 max-h-60 w-full overflow-auto rounded-3xl bg-white py-1.5 text-xs md:text-sm shadow-popover border border-neutral-200 focus:outline-none"
             role="listbox"
           >
             {filteredOptions.map((opt, idx) => {
@@ -231,7 +231,7 @@ const AutocompleteInput = ({
                   }}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                   className={`cursor-pointer select-none px-3.5 py-2.5 transition-colors flex items-center justify-between ${
-                    isHighlighted ? 'bg-neutral-100 text-neutral-900 font-bold' : isSelected ? 'bg-primary-50 text-neutral-900 font-medium' : 'text-neutral-700 hover:bg-neutral-50'
+                    isHighlighted ? 'bg-neutral-100 text-neutral-900 font-semibold' : isSelected ? 'bg-primary-50 text-neutral-900 font-medium' : 'text-neutral-700 hover:bg-neutral-50'
                   }`}
                   role="option"
                   aria-selected={isHighlighted}

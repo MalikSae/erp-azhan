@@ -65,7 +65,7 @@ const KreditCashbackPanel = ({ bookingId, refreshKey, onApplied }) => {
       <Surface>
       <Section title="Kredit Cashback">
         <p className="-mt-2 mb-3 text-xs text-neutral-500 font-body">Cashback repeat order milik pax, bisa dipakai sebagai potongan tagihan.</p>
-        <div className="divide-y divide-neutral-200/80">
+        <div className="divide-y divide-neutral-200">
           {info.pax.map((p) => (
             <div key={p.jamaah_id} className="py-2.5 flex flex-wrap items-center justify-between gap-2">
               <div>

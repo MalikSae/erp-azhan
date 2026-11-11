@@ -264,9 +264,9 @@ export default function GantiKaitanAgenPage() {
 
         <div className="lg:col-span-3 min-w-0 space-y-5">
           {!selected ? (
-            <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-card px-6 py-16 sm:py-24 text-center">
+            <div className="rounded-2xl border border-neutral-200 bg-white px-6 py-16 sm:py-24 text-center">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-50 text-neutral-400"><Users size={26} /></div>
-              <h2 className="text-sm font-bold text-neutral-900">{isJamaah ? 'Pilih jamaah terlebih dahulu' : 'Pilih akun terlebih dahulu'}</h2>
+              <h2 className="text-sm font-semibold text-neutral-900">{isJamaah ? 'Pilih jamaah terlebih dahulu' : 'Pilih akun terlebih dahulu'}</h2>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-neutral-500">Detail kaitan dan riwayat akan tampil di sini.</p>
               <p className="mx-auto mt-3 max-w-sm text-xs leading-relaxed text-neutral-400">
                 {isJamaah
@@ -281,7 +281,7 @@ export default function GantiKaitanAgenPage() {
                 title={selected.nama_lengkap}
                 subtitle={isJamaah ? `${selected.brand_name} • ${selected.id_jamaah || '-'}` : `${selected.brand_name} • ${selected.email}`}
               >
-                <div className="space-y-3 rounded-xl border border-neutral-200/80 bg-neutral-50/70 p-4 text-sm">
+                <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50/70 p-4 text-sm">
                   {isJamaah ? (
                     <>
                       <div className="flex justify-between gap-3"><span className="text-neutral-500">Kunci saat ini</span><span className="font-medium text-neutral-900 text-right">{jamaahLabel(selected)}</span></div>
@@ -302,7 +302,7 @@ export default function GantiKaitanAgenPage() {
 
                 <div className="space-y-4 border-t border-neutral-100 pt-5">
                   <div>
-                    <h3 className="text-sm font-bold text-neutral-900">{isJamaah ? 'Kunci baru' : 'Upline baru'}</h3>
+                    <h3 className="text-sm font-semibold text-neutral-900">{isJamaah ? 'Kunci baru' : 'Upline baru'}</h3>
                     <p className="mt-1 text-xs text-neutral-500">Tentukan pengganti dan tulis alasan perubahan. Tercatat di riwayat.</p>
                   </div>
                   {isJamaah && selected.booking_belum_lunas > 0 && (
@@ -361,7 +361,7 @@ export default function GantiKaitanAgenPage() {
                           <p className="mt-0.5 text-xs font-body text-neutral-600">Komisi dipindah: {l.komisi_dipindah}{l.komisi_dihapus > 0 ? ` • dibatalkan: ${l.komisi_dihapus}` : ''}</p>
                         )}
                         {!isJamaah && l.upline_diubah && <p className="mt-0.5 text-xs font-body text-neutral-600">Upline ikut diganti</p>}
-                        <p className="mt-0.5 text-[11px] font-body text-neutral-400">{l.diganti_oleh} · {dateTime(l.diganti_at)}</p>
+                        <p className="mt-0.5 text-xs font-body text-neutral-400">{l.diganti_oleh} · {dateTime(l.diganti_at)}</p>
                       </li>
                     ))}
                   </ol>

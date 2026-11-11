@@ -36,7 +36,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-animated-gradient font-body text-neutral-900 antialiased selection:bg-primary-200 selection:text-neutral-900 lg:p-6">
-      <div className="mx-auto grid min-h-screen max-w-[1280px] overflow-hidden bg-white lg:min-h-[calc(100vh-3rem)] lg:grid-cols-[1.1fr_1fr] lg:rounded-[28px] lg:shadow-card">
+      <div className="mx-auto grid min-h-screen max-w-screen-xl overflow-hidden bg-white lg:min-h-[calc(100vh-3rem)] lg:grid-cols-[1.1fr_1fr] lg:rounded-3xl">
 
         {/* Panel video */}
         <div className="relative hidden bg-neutral-900 lg:block">
@@ -53,13 +53,13 @@ const Login = () => {
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/30" />
           <div className="relative flex h-full flex-col justify-between p-10 text-white">
             <div className="flex items-center gap-3">
-              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500 text-white">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent-500 text-white">
                 <KaabaIcon className="h-5 w-5" />
               </div>
               <span className="text-sm font-semibold tracking-wide">Azhan Corp</span>
             </div>
             <div className="max-w-md space-y-3">
-              <h2 className="font-heading text-4xl font-bold leading-tight tracking-tight">
+              <h2 className="font-heading text-4xl font-semibold leading-tight tracking-tight">
                 Satu tempat untuk seluruh operasional Azhan.
               </h2>
               <p className="text-sm text-white/80">
@@ -71,14 +71,14 @@ const Login = () => {
 
         {/* Panel form */}
         <div className="flex items-center justify-center px-6 py-12 sm:px-12">
-          <div className="w-full max-w-[380px] space-y-8">
+          <div className="w-full max-w-sm space-y-8">
 
             {/* Header */}
             <div className="space-y-4">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500 text-white shadow-card lg:hidden">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-500 text-white lg:hidden">
                 <KaabaIcon className="h-6 w-6" />
               </div>
-              <h1 className="font-heading text-3xl font-bold tracking-tight text-neutral-900">
+              <h1 className="font-heading text-3xl font-semibold tracking-tight text-neutral-900">
                 Office Dashboard
               </h1>
             </div>

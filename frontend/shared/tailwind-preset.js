@@ -1,8 +1,10 @@
 /**
  * Preset Tailwind bersama — identitas UI dashboard internal ERP Azhan.
- * Keputusan 2 Okt 2026: mengikuti referensi SmartHR 100% (palet oranye,
- * latar abu terang, kartu putih, sidebar putih, font Inter). Dibangun ulang
- * sebagai token — tidak menyalin kode/aset template.
+ * Keputusan 11 Nov 2026: gaya dash.cloudflare.com (lihat DESIGN.md di root
+ * repo): hampir monokrom, latar putih, garis tipis, radius 6–8px.
+ * `primary` sengaja skala abu-hitam supaya semua aksen lama ikut monokrom.
+ * Oranye hanya lewat `accent`: tombol primer (gradien), logo, promo, grafik.
+ * Navigasi, tab, link, dan fokus tetap monokrom.
  *
  * Dipakai master-dashboard lewat `presets: [preset]`.
  * JANGAN duplikasi palet di config masing-masing app lagi.
@@ -11,33 +13,43 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Primer oranye SmartHR. 500/600 untuk tombol & aksen utama,
-        // 50–100 untuk tint latar (menu aktif, badge lembut).
+        // Primer monokrom. 50–100 latar terpilih/aktif, 500 ikon & fokus,
+        // 600 isi tombol primer (teks putih 15:1), 700 hover & teks link.
         primary: {
-          50: '#FFF4EE',
-          100: '#FFE6D9',
-          200: '#FFCCB2',
-          300: '#FFA880',
-          400: '#FB8A52',
-          500: '#F26522', // oranye utama (tombol, link aktif)
-          600: '#E05510', // hover
-          700: '#BA460D',
-          800: '#94390F',
-          900: '#78300F',
-          950: '#411605',
+          50: '#F7F7F7',
+          100: '#F0F0F0',
+          200: '#E3E3E3',
+          300: '#CFCFCF',
+          400: '#9E9E9E',
+          500: '#404040',
+          600: '#262626',
+          700: '#171717',
+          800: '#0F0F0F',
+          900: '#0A0A0A',
+          950: '#000000',
         },
-        // Netral abu dingin (gray) khas SmartHR — menggantikan stone hangat.
+        // Oranye Cloudflare (diukur dari tombol "Watch now" dash.cloudflare.com):
+        // tombol primer, logo, promo, seri grafik utama. Bukan navigasi.
+        accent: {
+          50: '#FFF4EE',
+          100: '#FFE4D6',
+          400: '#FF8130', // atas gradien tombol
+          500: '#FF6A00', // bawah gradien tombol, logo
+          600: '#E25A00', // border tombol
+          700: '#C93F08', // teks oranye di latar putih (5.00:1)
+        },
+        // Netral abu murni (Tailwind neutral), mengikuti Cloudflare #262626.
         neutral: {
-          50: '#F9FAFB',
-          100: '#F3F4F6',
-          200: '#E5E7EB',
-          300: '#D1D5DB',
-          400: '#9CA3AF',
-          500: '#6B7280',
-          600: '#4B5563',
-          700: '#374151',
-          800: '#1F2937',
-          900: '#111827',
+          50: '#FAFAFA',
+          100: '#F5F5F5',
+          200: '#E5E5E5',
+          300: '#D4D4D4',
+          400: '#A3A3A3',
+          500: '#737373',
+          600: '#595959',
+          700: '#404040',
+          800: '#262626',
+          900: '#171717',
         },
         success: {
           50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac',
@@ -54,40 +66,62 @@ export default {
           400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c',
           800: '#991b1b', 900: '#7f1d1d',
         },
-        // Aksen sekunder untuk stat tile & chart (ungu/biru/teal ala referensi).
+        // Warna data (seri grafik). Bukan untuk tombol atau navigasi.
         info: {
           50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb',
         },
         violet: {
           50: '#f5f3ff', 100: '#ede9fe', 500: '#8b5cf6', 600: '#7c3aed',
         },
-        // Sidebar SmartHR: putih, teks abu, item aktif tint oranye.
+        // Sidebar putih; item aktif latar abu, teks hitam, tanpa garis warna.
         sidebar: {
           bg: '#FFFFFF',
-          surface: '#F9FAFB',
-          hover: '#F3F4F6',
-          active: 'rgba(242, 101, 34, 0.10)',
-          activeText: '#F26522',
-          muted: '#6B7280',
-          border: '#E5E7EB',
+          surface: '#FAFAFA',
+          hover: '#F5F5F5',
+          active: '#F0F0F0',
+          activeText: '#171717',
+          muted: '#404040',
+          label: '#737373',
+          border: '#E5E5E5',
         },
         page: {
-          bg: '#F7F7F9',
+          bg: '#FFFFFF',
         },
       },
+      // Radius mengikuti dash.cloudflare.com. Nilai juga dikunci di
+      // src/corner-radius.css supaya build dev dan prod seragam.
       borderRadius: {
-        lg: '0.5rem',    // 8px: kontrol kompak
-        xl: '0.625rem',  // 10px: tombol & field
-        '2xl': '0.75rem',// 12px: kartu
-        '3xl': '1rem',   // 16px: panel besar
+        sm: '4px',       // badge, chip
+        md: '6px',       // tombol, field, item menu
+        lg: '6px',
+        xl: '6px',
+        '2xl': '8px',    // kartu, tabel, kolom cari besar
+        '3xl': '8px',    // modal, popover, dropdown
       },
+      // Datar: kartu tanpa bayangan, batas lewat border 1px.
+      // Bayangan hanya untuk lapisan mengambang.
       boxShadow: {
-        card: '0 1px 2px 0 rgba(16, 24, 40, 0.04), 0 1px 3px 0 rgba(16, 24, 40, 0.06)',
-        'card-hover': '0 12px 16px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03)',
+        card: 'none',
+        'card-hover': 'none',
+        popover: '0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04)',
+        modal: '0 16px 48px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04)',
+        // Tombol gaya Cloudflare: kilap tipis di tepi atas + bayangan lembut.
+        'btn-primary': 'inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 6px -1px rgba(255, 106, 0, 0.30)',
+        'btn-secondary': '0 1px 2px rgba(0, 0, 0, 0.05)',
       },
+      backgroundImage: {
+        'btn-primary': 'linear-gradient(180deg, #FF8130 0%, #FF6A00 100%)',
+        'btn-primary-hover': 'linear-gradient(180deg, #FF7520 0%, #F25F00 100%)',
+      },
+      transitionTimingFunction: {
+        cf: 'cubic-bezier(0.19, 1, 0.22, 1)',
+      },
+      // Inter untuk judul, angka statistik, tombol, badge (font-heading);
+      // Roboto untuk teks isi: body, tabel, field, menu (font-body).
       fontFamily: {
-        heading: ['Inter', 'system-ui', 'sans-serif'],
-        body: ['Inter', 'system-ui', 'sans-serif'],
+        heading: ['Inter', 'Roboto', 'system-ui', 'sans-serif'],
+        body: ['Roboto', 'system-ui', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
     },
   },

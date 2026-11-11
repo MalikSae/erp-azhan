@@ -7,10 +7,10 @@ import Badge from './Badge';
 //     <SummaryItem label="…" value="…" hint="…" />
 //   </Surface>
 //   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-//     <Surface className="lg:col-span-2 divide-y divide-neutral-200/80">
+//     <Surface className="lg:col-span-2 divide-y divide-neutral-200">
 //       <Section title="…">…<Field label="…">nilai</Field>…</Section>
 //     </Surface>
-//     <Surface className="divide-y divide-neutral-200/80">…</Surface>
+//     <Surface className="divide-y divide-neutral-200">…</Surface>
 //   </div>
 //
 // Satu card per kolom, section dipisah garis tipis; tanpa kotak bersarang dan tanpa ikon di judul.
@@ -23,7 +23,7 @@ export const Surface = ({ children, className = '' }) => (
 export const Section = ({ title, aside, children }) => (
   <section className="p-5 sm:p-6">
     <div className="flex items-center justify-between gap-3 mb-4">
-      <h3 className="font-heading text-sm font-bold text-neutral-900 flex items-center gap-2">
+      <h3 className="font-heading text-sm font-semibold text-neutral-900 flex items-center gap-2">
         {title}
       </h3>
       {aside}
@@ -35,7 +35,7 @@ export const Section = ({ title, aside, children }) => (
 // Pasangan label kecil + nilai.
 export const Field = ({ label, children, className = '' }) => (
   <div className={className}>
-    <span className="block text-[11px] text-neutral-400 font-body mb-0.5">{label}</span>
+    <span className="block text-xs text-neutral-400 font-body mb-0.5">{label}</span>
     <div className="text-sm font-medium font-body text-neutral-900 break-words">{children}</div>
   </div>
 );
@@ -44,9 +44,9 @@ export const Field = ({ label, children, className = '' }) => (
 export const SummaryItem = ({ label, value, hint, onClick }) => {
   const body = (
     <>
-      <span className="block text-[11px] text-neutral-400 font-body">{label}</span>
-      <span className="block font-heading text-xl font-bold text-neutral-900 mt-0.5 truncate">{value}</span>
-      {hint && <span className={`block text-[11px] font-body mt-0.5 ${onClick ? 'text-primary-600' : 'text-neutral-500'}`}>{hint}</span>}
+      <span className="block text-xs text-neutral-400 font-body">{label}</span>
+      <span className="block font-heading text-xl font-semibold text-neutral-900 mt-0.5 truncate">{value}</span>
+      {hint && <span className={`block text-xs font-body mt-0.5 ${onClick ? 'text-primary-600' : 'text-neutral-500'}`}>{hint}</span>}
     </>
   );
   if (!onClick) return <div className="px-5 py-4 min-w-0">{body}</div>;
@@ -65,7 +65,7 @@ export const BrandBadge = ({ name, color }) => (
   <Badge
     variant="neutral"
     className={PILL_STRONG}
-    icon={<span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color || '#9CA3AF' }} />}
+    icon={<span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color || '#A3A3A3' }} />}
   >
     {name}
   </Badge>
@@ -75,7 +75,7 @@ export const BrandBadge = ({ name, color }) => (
 export const TableCard = ({ title, aside, children }) => (
   <div>
     <div className="mb-3 flex items-center justify-between gap-3">
-      <h3 className="font-heading text-sm font-bold text-neutral-900">{title}</h3>
+      <h3 className="font-heading text-sm font-semibold text-neutral-900">{title}</h3>
       {aside}
     </div>
     <Surface className="overflow-hidden">{children}</Surface>

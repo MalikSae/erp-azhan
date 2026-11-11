@@ -147,16 +147,16 @@ export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
       const sub = [row.id_jamaah, gender].filter(Boolean).join(" · ");
       return (
         // Nama satu baris, ID dan jenis kelamin satu baris; nama yang sangat panjang dipotong, lengkapnya di tooltip.
-        <div className="min-w-0 max-w-[280px]">
+        <div className="min-w-0 max-w-72">
           <button
             type="button"
             onClick={() => navigate(`/jamaah/${row.id}`)}
-            className="block max-w-full truncate font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            className="block max-w-full truncate font-body font-medium text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
             title={row.nama_lengkap}
           >
             {row.nama_lengkap}
           </button>
-          {sub && <div className="mt-0.5 truncate whitespace-nowrap text-[11px] font-body text-neutral-400">{sub}</div>}
+          {sub && <div className="mt-0.5 truncate whitespace-nowrap text-xs font-body text-neutral-400">{sub}</div>}
         </div>
       );
     }
@@ -166,7 +166,7 @@ export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
     if (key === "total_booking") {
       const total = Number(row.total_booking) || 0;
       return (
-        <span className={`text-[13px] font-body whitespace-nowrap ${total > 0 ? "font-semibold text-neutral-900" : "text-neutral-400"}`}>
+        <span className={`text-sm font-body whitespace-nowrap ${total > 0 ? "font-semibold text-neutral-900" : "text-neutral-400"}`}>
           {total > 0 ? `${total} booking` : "Belum ada"}
         </span>
       );
@@ -174,8 +174,8 @@ export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
 
     if (key === "direkrut_oleh_nama") {
       return terikatAgen(row)
-        ? <span className="text-[13px] font-body font-medium text-neutral-800 whitespace-nowrap">{row.direkrut_oleh_nama}</span>
-        : <span className="text-[13px] font-body text-neutral-400 whitespace-nowrap">{row.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}</span>;
+        ? <span className="text-sm font-body font-medium text-neutral-800 whitespace-nowrap">{row.direkrut_oleh_nama}</span>
+        : <span className="text-sm font-body text-neutral-400 whitespace-nowrap">{row.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}</span>;
     }
 
     if (key === "pct_data") return <ProgressCell value={row.pct_data} title="Kelengkapan Data Profil" />;
@@ -205,7 +205,7 @@ export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
       {error && <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>}
 
       {loading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200">
           <LoadingSpinner />
         </div>
       ) : (

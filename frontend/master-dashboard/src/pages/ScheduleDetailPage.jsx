@@ -173,7 +173,7 @@ const HotelItem = ({ title, hotel, distanceLabel }) => {
   return (
     <div className="min-w-0">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-neutral-400 font-body">{title}</span>
+        <span className="text-xs text-neutral-400 font-body">{title}</span>
         <StarRating count={hotel?.star_rating} />
       </div>
       <h4 className="font-heading text-sm font-semibold text-neutral-900 mt-0.5">{hotel?.name || '-'}</h4>
@@ -326,7 +326,7 @@ const ScheduleDetailPage = () => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center p-12 bg-white rounded-2xl border border-neutral-200 shadow-card">
+      <div className="flex justify-center items-center p-12 bg-white rounded-2xl border border-neutral-200">
         <LoadingSpinner />
       </div>
     );
@@ -494,7 +494,7 @@ const ScheduleDetailPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Kolom kiri: satu card, section dipisah garis tipis */}
-        <Surface className="lg:col-span-2 divide-y divide-neutral-200/80">
+        <Surface className="lg:col-span-2 divide-y divide-neutral-200">
           <Section
             title="Penerbangan"
             aside={
@@ -517,12 +517,12 @@ const ScheduleDetailPage = () => {
                   </div>
                 )}
                 <div>
-                  <span className="text-[11px] text-neutral-400 block">Maskapai</span>
+                  <span className="text-xs text-neutral-400 block">Maskapai</span>
                   <span className="font-heading text-sm font-semibold text-neutral-900">{schedule.maskapai?.name || '-'}</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-0 md:divide-x md:divide-neutral-200/80">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-0 md:divide-x md:divide-neutral-200">
                 <div className="md:pr-6">
                   <FlightLeg
                     title="Berangkat"
@@ -553,7 +553,7 @@ const ScheduleDetailPage = () => {
 
           <Section title="Akomodasi Hotel">
             <div className="font-body space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-0 md:divide-x md:divide-neutral-200/80">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-0 md:divide-x md:divide-neutral-200">
                 <div className="md:pr-6">
                   <HotelItem title="Makkah" hotel={schedule.hotel_mekkah} distanceLabel="Jarak ke Masjidil Haram" />
                 </div>
@@ -563,13 +563,13 @@ const ScheduleDetailPage = () => {
               </div>
 
               {hasTransitHotels && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-y-5 md:gap-x-0 border-t border-neutral-200/80 pt-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-y-5 md:gap-x-0 border-t border-neutral-200 pt-5">
                   {schedule.transit_hotels.map((th, idx) => (
                     <div
                       key={idx}
                       className={idx % 2 === 0
                         ? 'md:pr-6'
-                        : 'md:pl-6 md:border-l md:border-neutral-200/80'}
+                        : 'md:pl-6 md:border-l md:border-neutral-200'}
                     >
                       <HotelItem
                         title={`Hotel Transit${th.kota ? ` · ${th.kota}` : ''}`}
@@ -587,16 +587,14 @@ const ScheduleDetailPage = () => {
             aside={hasItinerary && (
               <div className="flex items-center gap-3">
                 <span className="text-xs font-medium text-neutral-500">{itinerary.days.length} Hari</span>
-                <button
-                  type="button"
+                <Button variant="secondary" size="sm"
                   onClick={handlePrintItinerary}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs font-semibold text-neutral-700 transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 cursor-pointer"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V3h12v6M6 18H4a1 1 0 01-1-1v-6a2 2 0 012-2h14a2 2 0 012 2v6a1 1 0 01-1 1h-2M7 14h10v7H7z" />
                   </svg>
                   <span>Cetak / PDF</span>
-                </button>
+                </Button>
               </div>
             )}
           >
@@ -617,7 +615,7 @@ const ScheduleDetailPage = () => {
 
         {/* Kolom kanan: dua card saja */}
         <div className="space-y-6">
-          <Surface className="divide-y divide-neutral-200/80">
+          <Surface className="divide-y divide-neutral-200">
             <Section title="Harga Paket">
               <div className="font-body">
                 <dl className="divide-y divide-neutral-100 text-xs">
@@ -665,7 +663,7 @@ const ScheduleDetailPage = () => {
                     alt={`Gambar utama ${schedule.jadwal_nama}`}
                     className="w-full h-auto max-h-72 object-contain"
                   />
-                  <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-white/90 px-2 py-1 text-[11px] font-semibold text-neutral-700 opacity-0 shadow-sm transition-opacity group-hover:opacity-100">
+                  <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-neutral-700 opacity-0 transition-opacity group-hover:opacity-100">
                     Buka penuh
                     <ExternalLink size={11} strokeWidth={1.75} />
                   </span>

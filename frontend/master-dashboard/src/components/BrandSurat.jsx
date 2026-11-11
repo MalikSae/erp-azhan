@@ -125,7 +125,7 @@ const BrandSurat = ({ brandId }) => {
           className="!mb-0"
         />
       </div>
-      <p className="text-[12px] text-neutral-500 font-body">
+      <p className="text-xs text-neutral-500 font-body">
         Nomor berikutnya = nomor terakhir + 1, mis. {form.nomor_terakhir + 1}/{form.kode_surat || 'KODE'}/SKU/XI/2026. Nomor tidak bisa diturunkan agar tidak ada nomor ganda.
         Kota surat diambil dari Kontak &amp; Alamat, dan nomor izin PPIU/PIHK dari Legalitas.
       </p>
@@ -143,7 +143,7 @@ const BrandSurat = ({ brandId }) => {
               uploadingText="Mengunggah..."
               placeholder="Pilih file..."
             />
-            <p className="mt-1 text-[12px] text-neutral-500 font-body">{g.petunjuk}</p>
+            <p className="mt-1 text-xs text-neutral-500 font-body">{g.petunjuk}</p>
           </div>
         ))}
       </div>

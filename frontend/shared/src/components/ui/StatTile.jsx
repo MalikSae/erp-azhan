@@ -1,28 +1,25 @@
 import React from 'react';
 
-// StatTile — kartu statistik gaya SmartHR: ikon kotak ber-tint di kiri,
-// angka besar + label. Varian menentukan warna tint ikon.
+// StatTile — kartu statistik gaya dash.cloudflare.com (DESIGN.md): kartu datar,
+// label kecil di atas, angka besar di bawah. Ikon kecil netral di samping
+// label; `variant` mewarnai ikon saja, tanpa kotak ber-tint.
 const VARIANTS = {
-  primary: 'bg-primary-100 text-primary-600',
-  success: 'bg-success-100 text-success-600',
-  info: 'bg-info-100 text-info-600',
-  violet: 'bg-violet-100 text-violet-600',
-  warning: 'bg-warning-100 text-warning-600',
-  danger: 'bg-danger-100 text-danger-600',
+  primary: 'text-neutral-500',
+  success: 'text-success-600',
+  info: 'text-info-600',
+  violet: 'text-violet-600',
+  warning: 'text-warning-600',
+  danger: 'text-danger-600',
 };
 
 const StatTile = ({ icon: Icon, label, value, hint, variant = 'primary' }) => (
-  <div className="bg-white rounded-2xl border border-neutral-200 shadow-card p-4 flex items-center gap-4">
-    {Icon && (
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${VARIANTS[variant] || VARIANTS.primary}`}>
-        <Icon className="w-5 h-5" strokeWidth={2} />
-      </div>
-    )}
-    <div className="min-w-0">
-      <div className="text-2xl font-heading font-bold text-neutral-900 leading-tight">{value}</div>
-      <div className="text-xs font-body text-neutral-500 truncate">{label}</div>
-      {hint && <div className="text-[11px] font-body text-neutral-400 truncate">{hint}</div>}
+  <div className="bg-white rounded-2xl border border-neutral-200 p-4 min-w-0">
+    <div className="flex items-center gap-1.5 text-xs font-body font-medium text-neutral-600">
+      {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${VARIANTS[variant] || VARIANTS.primary}`} strokeWidth={2} />}
+      <span className="truncate">{label}</span>
     </div>
+    <div className="mt-1.5 text-xl md:text-2xl font-heading font-semibold tracking-tight tabular-nums text-neutral-900 leading-tight">{value}</div>
+    {hint && <div className="mt-0.5 text-xs font-body text-neutral-500 truncate">{hint}</div>}
   </div>
 );
 

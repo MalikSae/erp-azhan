@@ -22,30 +22,26 @@ const emptyActivity = () => ({ time: '', text: '' });
 const emptyDay = () => ({ title: '', location: '', activities: [emptyActivity()] });
 
 const AddButton = ({ onClick, children }) => (
-  <button
-    type="button"
+  <Button variant="dashed" className="w-full"
     onClick={onClick}
-    className="w-full py-2 px-4 rounded-md border border-dashed border-neutral-300 hover:border-primary-400 hover:bg-neutral-50 text-neutral-700 hover:text-primary-600 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
   >
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
     </svg>
     <span>{children}</span>
-  </button>
+  </Button>
 );
 
 const RemoveButton = ({ onClick, title }) => (
-  <button
-    type="button"
+  <Button variant="danger-outline" className="shrink-0"
     onClick={onClick}
     title={title}
     aria-label={title}
-    className="h-10 px-3 inline-flex items-center text-danger-600 hover:text-danger-700 hover:bg-danger-50 rounded-md border border-neutral-200 transition-colors cursor-pointer shrink-0"
   >
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
     </svg>
-  </button>
+  </Button>
 );
 
 const ItineraryFormPage = () => {
@@ -184,7 +180,7 @@ const ItineraryFormPage = () => {
 
   if (isLoadingDetail) {
     return (
-      <div className="flex justify-center p-12 bg-white rounded-2xl border border-neutral-200 shadow-card">
+      <div className="flex justify-center p-12 bg-white rounded-2xl border border-neutral-200">
         <LoadingSpinner />
       </div>
     );
@@ -246,7 +242,7 @@ const ItineraryFormPage = () => {
                     />
 
                     <div className="space-y-2">
-                      <span className="block min-h-5 text-[13px] font-medium leading-5 text-neutral-800 font-body">Kegiatan</span>
+                      <span className="block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">Kegiatan</span>
                       {day.activities.map((act, actIndex) => (
                         <div key={actIndex} className="flex items-start gap-3">
                           <div className="min-w-0 flex-1">

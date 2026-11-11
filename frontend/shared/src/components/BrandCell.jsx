@@ -14,7 +14,7 @@ export const BrandCell = ({ brand, brandId, brandName, brandIconUrl, showText = 
   return (
     <div className="flex items-center gap-2" title={name}>
       {showInitial ? (
-        <div className="w-7 h-7 shrink-0 rounded-full bg-neutral-200 border border-neutral-300 flex items-center justify-center text-xs font-bold text-neutral-700 uppercase font-heading">
+        <div className="w-7 h-7 shrink-0 rounded-full bg-neutral-200 border border-neutral-300 flex items-center justify-center text-xs font-semibold text-neutral-700 uppercase font-heading">
           {initial}
         </div>
       ) : (

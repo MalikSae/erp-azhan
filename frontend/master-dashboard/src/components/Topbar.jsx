@@ -24,7 +24,7 @@ const Topbar = ({ toggleSidebar }) => {
   }, []);
 
   return (
-    <header className="bg-white border-b border-neutral-200/80 h-16 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-30 shadow-xs">
+    <header className="bg-white border-b border-neutral-200 h-16 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-30">
       {/* Mobile Hamburger Menu */}
       <button 
         type="button"
@@ -43,22 +43,22 @@ const Topbar = ({ toggleSidebar }) => {
         {/* Lonceng: pekerjaan yang menunggu keputusan */}
         <TopbarNotifikasi />
 
-        <div className="h-6 w-[1px] bg-neutral-200 mx-1 hidden sm:block" />
+        <div className="h-6 w-px bg-neutral-200 mx-1 hidden sm:block" />
 
         {/* User Profile Card */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center gap-3 p-1.5 pl-2 pr-2.5 rounded-xl hover:bg-neutral-50 transition-all border border-transparent hover:border-neutral-200/80"
+            className="flex items-center gap-3 p-1.5 pl-2 pr-2.5 rounded-xl hover:bg-neutral-50 transition-all border border-transparent hover:border-neutral-200"
           >
-            <div className="w-8 h-8 rounded-full bg-primary-500 text-white flex items-center justify-center font-bold text-xs shadow-xs ring-2 ring-primary-100">
+            <div className="w-8 h-8 rounded-full bg-primary-600 text-white flex items-center justify-center font-semibold text-xs ring-2 ring-primary-100">
               {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
             </div>
             <div className="hidden sm:flex flex-col text-left leading-tight">
-              <span className="text-xs font-bold text-neutral-900 font-heading">
+              <span className="text-xs font-semibold text-neutral-900 font-heading">
                 {user?.name || 'Admin'}
               </span>
-              <span className="text-[10px] text-neutral-500 font-medium font-body flex items-center gap-1">
+              <span className="text-xs text-neutral-500 font-medium font-body flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-primary-600 inline" />
                 {subText}
               </span>
@@ -67,11 +67,11 @@ const Topbar = ({ toggleSidebar }) => {
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-neutral-200/90 z-50 py-1.5 animate-in fade-in slide-in-from-top-2">
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-3xl shadow-popover border border-neutral-200 z-50 py-1.5 animate-in fade-in slide-in-from-top-2">
               <div className="px-4 py-2 border-b border-neutral-100">
-                <p className="text-xs font-bold text-neutral-900 font-heading">{user?.name || 'Admin'}</p>
-                <p className="text-[11px] text-neutral-500 font-body truncate">{user?.email || 'admin@azhan.group'}</p>
-                <span className="inline-block mt-1 text-[10px] font-semibold uppercase tracking-wider bg-neutral-100 text-neutral-700 border border-neutral-200 px-2 py-0.5 rounded-md">
+                <p className="text-xs font-semibold text-neutral-900 font-heading">{user?.name || 'Admin'}</p>
+                <p className="text-xs text-neutral-500 font-body truncate">{user?.email || 'admin@azhan.group'}</p>
+                <span className="inline-block mt-1 text-xs font-semibold bg-neutral-100 text-neutral-700 border border-neutral-200 px-2 py-0.5 rounded-md">
                   {roleText}
                 </span>
               </div>

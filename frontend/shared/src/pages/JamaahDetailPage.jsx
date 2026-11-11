@@ -98,7 +98,7 @@ const InfoItem = ({ label, value, colSpan = false }) => (
 
 // Status = titik berwarna kecil + teks (bukan pil berwarna).
 const StatusDot = ({ label, text, dot }) => (
-  <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${text}`}>
+  <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${text}`}>
     <span className={`w-2 h-2 rounded-full ${dot}`} />
     {label}
   </span>
@@ -369,7 +369,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Kolom kiri: satu card, section dipisah garis tipis */}
-        <Surface className="lg:col-span-2 divide-y divide-neutral-200/80">
+        <Surface className="lg:col-span-2 divide-y divide-neutral-200">
           <Section title="Identitas Pribadi">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
               <InfoItem label="Nama Lengkap" value={jamaah.nama_lengkap} />
@@ -421,7 +421,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
         </Surface>
 
         {/* Kolom kanan: satu card */}
-        <Surface className="divide-y divide-neutral-200/80">
+        <Surface className="divide-y divide-neutral-200">
           <Section title="Akun">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-neutral-500 font-body">Status</span>
@@ -603,7 +603,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
       {/* Riwayat perubahan data: editan admin, isian langsung pelanggan, dan pengajuan yang menunggu keputusan */}
       {bolehLihatPerubahan && (
         <div>
-          <h3 className="mb-3 font-heading text-sm font-bold text-neutral-900">Riwayat Perubahan Data</h3>
+          <h3 className="mb-3 font-heading text-sm font-semibold text-neutral-900">Riwayat Perubahan Data</h3>
           <PerubahanJamaahPanel jamaahId={id} onChanged={(aksi) => { if (aksi === 'setujui') muatUlangJamaah(); }} />
         </div>
       )}

@@ -84,7 +84,7 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
           </label>
         ))}
       </div>
-      {hint && <p className="text-[11px] text-neutral-500 font-body">{hint}</p>}
+      {hint && <p className="text-xs text-neutral-500 font-body">{hint}</p>}
 
       {value.mode === 'agen' && brandMissing && (
         <p className="text-xs text-warning-700 font-body">Pilih biro travel / brand terlebih dahulu untuk mencari agen.</p>
@@ -116,10 +116,10 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Cari nama, no HP, atau kode referral agen..."
-              className="h-11 w-full min-w-0 rounded-xl border border-neutral-200/90 bg-white pl-9 pr-3.5 text-xs md:text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 shadow-2xs font-body"
+              className="h-11 w-full min-w-0 rounded-xl border border-neutral-200 bg-white pl-9 pr-3.5 text-xs md:text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 font-body"
             />
           </div>
-          <div className="max-h-52 overflow-y-auto rounded-xl border border-neutral-200/90 bg-white">
+          <div className="max-h-52 overflow-y-auto rounded-xl border border-neutral-200 bg-white">
             {loading && <p className="px-3 py-2 text-xs text-neutral-500 font-body">Memuat agen...</p>}
             {!loading && loadError && <p className="px-3 py-2 text-xs text-danger-600 font-body">{loadError}</p>}
             {!loading && !loadError && results.length === 0 && (
@@ -133,7 +133,7 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
                 className="flex w-full flex-col items-start px-3 py-2 text-left hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0"
               >
                 <span className="text-sm text-neutral-900 font-body">{a.nama_lengkap}</span>
-                <span className="text-[11px] text-neutral-500 font-body">
+                <span className="text-xs text-neutral-500 font-body">
                   {[a.kode_referral, a.no_hp].filter(Boolean).join(' · ')}
                 </span>
               </button>

@@ -174,7 +174,7 @@ const DestinationsPage = () => {
         <button
           type="button"
           onClick={() => handleOpenModal(row)}
-          className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+          className="font-body font-medium text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
         >
           {row.name}
         </button>
@@ -182,9 +182,9 @@ const DestinationsPage = () => {
         <span className="font-heading font-semibold text-neutral-900">{row.name}</span>
       );
     }
-    if (key === 'slug') return <span className="text-[13px] font-body text-neutral-600">{row.slug}</span>;
+    if (key === 'slug') return <span className="text-sm font-body text-neutral-600">{row.slug}</span>;
     if (key === 'package_count') {
-      return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.package_count || 0} paket</span>;
+      return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.package_count || 0} paket</span>;
     }
     if (key === 'is_active') return <StatusChip active={row.is_active} />;
     if (key === 'aksi') {
@@ -220,7 +220,7 @@ const DestinationsPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : (
         <DataTable
           columns={columns}
@@ -259,7 +259,7 @@ const DestinationsPage = () => {
               placeholder="mis. abu-dhabi"
               required
             />
-            <p className="mt-1.5 text-[11px] font-body text-neutral-500">
+            <p className="mt-1.5 text-xs font-body text-neutral-500">
               Huruf kecil, angka, dan tanda hubung. Dipakai di URL web publik, sebaiknya tidak diubah setelah dipakai.
             </p>
           </div>

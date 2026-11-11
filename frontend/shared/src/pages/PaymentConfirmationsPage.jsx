@@ -206,11 +206,11 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
           <button
             type="button"
             onClick={() => openDetail(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            className="font-body font-medium text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
           >
             {row.jamaah_name || '-'}
           </button>
-          <div className="mt-0.5 text-[11px] font-body text-neutral-400">
+          <div className="mt-0.5 text-xs font-body text-neutral-400">
             {showBrandColumn && row.brand_name ? `${row.brand_name} · ` : ''}
             {row.booking_id ? (
               <a
@@ -233,16 +233,16 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     if (key === 'schedule_name') {
       return (
         <div className="min-w-36 max-w-56">
-          <p className="truncate text-[13px] font-body font-medium text-neutral-800 leading-tight" title={row.schedule_name || undefined}>{row.schedule_name || '-'}</p>
-          {row.departure_date && <p className="mt-0.5 text-[11px] font-body text-neutral-400">{dateLabel(row.departure_date)}</p>}
+          <p className="truncate text-sm font-body font-medium text-neutral-800 leading-tight" title={row.schedule_name || undefined}>{row.schedule_name || '-'}</p>
+          {row.departure_date && <p className="mt-0.5 text-xs font-body text-neutral-400">{dateLabel(row.departure_date)}</p>}
         </div>
       );
     }
     if (key === 'tanggal') {
       return (
         <div className="min-w-28">
-          <p className="text-[13px] font-body font-medium text-neutral-800 whitespace-nowrap">{dateLabel(row.tanggal)}</p>
-          <p className="mt-0.5 text-[11px] font-body text-neutral-400">
+          <p className="text-sm font-body font-medium text-neutral-800 whitespace-nowrap">{dateLabel(row.tanggal)}</p>
+          <p className="mt-0.5 text-xs font-body text-neutral-400">
             {row.sender_name || 'Pengirim belum diisi'}
             {row.sender_bank ? ` · ${row.sender_bank}` : ''}
           </p>
@@ -254,8 +254,8 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       if (String(row.metode || '').toLowerCase() === 'cash') {
         return (
           <div className="min-w-28">
-            <p className="text-[13px] font-body font-medium text-neutral-800">Tunai</p>
-            <p className="mt-0.5 text-[11px] font-body text-neutral-400">
+            <p className="text-sm font-body font-medium text-neutral-800">Tunai</p>
+            <p className="mt-0.5 text-xs font-body text-neutral-400">
               {row.received_by ? `Diterima: ${row.received_by}` : 'Penerima belum dicatat'}
             </p>
           </div>
@@ -263,8 +263,8 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       }
       return (
         <div className="min-w-28">
-          <p className="text-[13px] font-body font-medium text-neutral-800">{row.destination_bank_name || '-'}</p>
-          <p className="mt-0.5 text-[11px] font-body text-neutral-400">
+          <p className="text-sm font-body font-medium text-neutral-800">{row.destination_bank_name || '-'}</p>
+          <p className="mt-0.5 text-xs font-body text-neutral-400">
             {row.destination_account_number || '-'}
             {row.destination_account_holder ? ` · ${row.destination_account_holder}` : ''}
           </p>
@@ -273,7 +273,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     }
 
     if (key === 'jumlah') {
-      return <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.jumlah)}</span>;
+      return <span className="text-sm font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.jumlah)}</span>;
     }
     if (key === 'status') {
       const meta = statusMeta[row.status] || { label: row.status || '-', variant: 'archived' };
@@ -281,7 +281,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
         <div className="max-w-44">
           <Badge variant={meta.variant} hideIcon className={STATUS_STRONG[row.status]}>{meta.label}</Badge>
           {/* Alasan satu baris; teks lengkapnya ada di tooltip dan di detail pembayaran. */}
-          {row.rejection_reason && <p className="mt-1 truncate text-[11px] font-body text-danger-700 leading-tight" title={row.rejection_reason}>{row.rejection_reason}</p>}
+          {row.rejection_reason && <p className="mt-1 truncate text-xs font-body text-danger-700 leading-tight" title={row.rejection_reason}>{row.rejection_reason}</p>}
         </div>
       );
     }
@@ -388,7 +388,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                   </Button>
                   <Button
                     variant="primary"
-                    className="!bg-success-600 hover:!bg-success-700 !text-white !border-success-600 shadow-xs"
+                    className="!bg-success-600 hover:!bg-success-700 !text-white !border-success-600"
                     onClick={handleConfirmPayment}
                     isLoading={saving}
                   >
@@ -428,9 +428,9 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
 
           const details = (
             <div className="min-w-0">
-              <span className="block text-[11px] font-body text-neutral-400">Nominal Pembayaran</span>
+              <span className="block text-xs font-body text-neutral-400">Nominal Pembayaran</span>
               <div className="mt-0.5 flex items-center justify-between gap-3">
-                <span className="font-heading text-3xl font-bold tracking-tight text-neutral-900">
+                <span className="font-heading text-3xl font-semibold tracking-tight text-neutral-900">
                   {money(selectedPayment.jumlah)}
                 </span>
                 {selectedMeta && <Badge variant={selectedMeta.variant} hideIcon className={STATUS_STRONG[selectedPayment.status]}>{selectedMeta.label}</Badge>}
@@ -448,7 +448,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                 </p>
               )}
 
-              <dl className="mt-4 divide-y divide-neutral-200/80 border-t border-neutral-200/80 text-[13px] font-body">
+              <dl className="mt-4 divide-y divide-neutral-200 border-t border-neutral-200 text-sm font-body">
                 <div className={row}>
                   <dt className={dt}>Tanggal Transfer</dt>
                   <dd className={dd}>{dateLabel(selectedPayment.tanggal)}</dd>
@@ -544,10 +544,10 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
               {actionError && <Alert variant="error" message={actionError} />}
 
               {hasProof ? (
-                <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
                   {/* Bukti transfer jadi fokus verifikasi */}
                   <div className="min-w-0">
-                    <span className="mb-1.5 block text-[11px] font-body text-neutral-400">Bukti Transfer</span>
+                    <span className="mb-1.5 block text-xs font-body text-neutral-400">Bukti Transfer</span>
                     <div className="flex min-h-72 items-center justify-center overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 p-2">
                       {proofLoading ? (
                         <div className="py-10 text-center space-y-2">
@@ -579,7 +579,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
               ) : (
                 <>
                   {details}
-                  <p className="border-t border-neutral-200/80 pt-3 text-xs font-body text-neutral-500">
+                  <p className="border-t border-neutral-200 pt-3 text-xs font-body text-neutral-500">
                     Tidak ada bukti transfer. Pembayaran ini dicatat tanpa unggahan bukti.
                   </p>
                 </>
@@ -587,7 +587,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
 
               {/* Alasan penolakan (mode tolak) */}
               {rejectMode && (
-                <div className="border-t border-neutral-200/80 pt-4">
+                <div className="border-t border-neutral-200 pt-4">
                   <label className="mb-1.5 block text-xs font-semibold font-body text-neutral-800">
                     Alasan Penolakan <span className="text-danger-600">*</span>
                   </label>
@@ -596,7 +596,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                     onChange={(e) => setRejectionReason(e.target.value)}
                     rows={3}
                     placeholder="Tuliskan alasan mengapa pembayaran ini ditolak (akan dibaca jamaah di portal)..."
-                    className="w-full rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-[13px] font-body text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-sm font-body text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     autoFocus
                   />
                 </div>

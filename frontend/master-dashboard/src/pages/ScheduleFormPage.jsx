@@ -870,7 +870,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
 
   if (isLoadingInitial) {
     return (
-      <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
+      <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200">
         <LoadingSpinner />
       </div>
     );
@@ -927,7 +927,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
               {Object.keys(fieldErrors).length > 0 && (
                 <ul className="mt-1.5 space-y-1">
                   {Object.entries(fieldErrors).map(([field, message]) => (
-                    <li key={field} className="text-[13px] leading-5 text-danger-700">
+                    <li key={field} className="text-sm leading-5 text-danger-700">
                       <a
                         className="underline decoration-danger-300 underline-offset-2 hover:text-danger-900 hover:decoration-danger-600"
                         href={`#${field}`}
@@ -1114,7 +1114,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
 
                 {/* Bagian 2: Penerbangan Berangkat */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-neutral-600 text-[13px] font-semibold font-heading">
+                  <div className="flex items-center gap-2 text-neutral-600 text-sm font-semibold font-heading">
                     <span>Penerbangan Berangkat</span>
                   </div>
 
@@ -1172,11 +1172,11 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     />
                     {!berangkatIsCustom && currentAirlineCode ? (
                       <div>
-                        <label className="mb-1.5 block min-h-5 text-[13px] font-medium leading-5 text-neutral-800 font-body">
+                        <label className="mb-1.5 block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">
                           Kode Penerbangan
                         </label>
                         <div className="flex">
-                          <span className="inline-flex h-10 items-center px-3 rounded-l-lg border border-r-0 border-neutral-200 bg-neutral-50 text-neutral-700 font-mono font-semibold text-[13px] select-none">
+                          <span className="inline-flex h-9 items-center px-3 rounded-l-lg border border-r-0 border-neutral-200 bg-neutral-50 text-neutral-700 font-mono font-semibold text-sm select-none">
                             {currentAirlineCode}
                           </span>
                           <input
@@ -1187,7 +1187,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             placeholder="mis. 822"
                             maxLength={5}
                             inputMode="numeric"
-                            className="h-10 flex-1 min-w-0 block w-full px-3.5 rounded-none rounded-r-lg border border-neutral-200 focus:outline-none focus:border-primary-500 text-[13px] font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
+                            className="h-9 flex-1 min-w-0 block w-full px-3.5 rounded-none rounded-r-lg border border-neutral-200 focus:outline-none focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
                           />
                         </div>
                       </div>
@@ -1266,31 +1266,27 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             </div>
 
                             {(formData.transit_items_berangkat || []).length > 1 && (
-                              <button
-                                type="button"
+                              <Button variant="danger-outline" className="shrink-0"
                                 onClick={() => handleRemoveTransitBerangkat(idx)}
-                                className="h-10 px-3 inline-flex items-center gap-1 text-xs text-danger-600 hover:text-danger-700 hover:bg-danger-50 rounded-md border border-neutral-200 transition-colors cursor-pointer shrink-0"
                                 title="Hapus titik transit"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                                 <span className="sm:hidden">Hapus</span>
-                              </button>
+                              </Button>
                             )}
                           </div>
                         ))}
 
-                        <button
-                          type="button"
+                        <Button variant="dashed" className="w-full"
                           onClick={handleAddTransitBerangkat}
-                          className="w-full py-2 px-4 rounded-md border border-dashed border-neutral-300 hover:border-primary-400 hover:bg-neutral-50 text-neutral-700 hover:text-primary-600 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                           </svg>
                           <span>Tambah Transit</span>
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -1301,7 +1297,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
 
                 {/* Bagian 3: Penerbangan Pulang */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-neutral-600 text-[13px] font-semibold font-heading">
+                  <div className="flex items-center gap-2 text-neutral-600 text-sm font-semibold font-heading">
                     <span>Penerbangan Pulang</span>
                   </div>
 
@@ -1329,11 +1325,11 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     />
                     {!pulangIsCustom && currentAirlineCode ? (
                       <div>
-                        <label className="mb-1.5 block min-h-5 text-[13px] font-medium leading-5 text-neutral-800 font-body">
+                        <label className="mb-1.5 block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">
                           Kode Penerbangan
                         </label>
                         <div className="flex">
-                          <span className="inline-flex h-10 items-center px-3 rounded-l-lg border border-r-0 border-neutral-200 bg-neutral-50 text-neutral-700 font-mono font-semibold text-[13px] select-none">
+                          <span className="inline-flex h-9 items-center px-3 rounded-l-lg border border-r-0 border-neutral-200 bg-neutral-50 text-neutral-700 font-mono font-semibold text-sm select-none">
                             {currentAirlineCode}
                           </span>
                           <input
@@ -1344,7 +1340,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             placeholder="mis. 823"
                             maxLength={5}
                             inputMode="numeric"
-                            className="h-10 flex-1 min-w-0 block w-full px-3.5 rounded-none rounded-r-lg border border-neutral-200 focus:outline-none focus:border-primary-500 text-[13px] font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
+                            className="h-9 flex-1 min-w-0 block w-full px-3.5 rounded-none rounded-r-lg border border-neutral-200 focus:outline-none focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
                           />
                         </div>
                       </div>
@@ -1423,31 +1419,27 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             </div>
 
                             {(formData.transit_items_pulang || []).length > 1 && (
-                              <button
-                                type="button"
+                              <Button variant="danger-outline" className="shrink-0"
                                 onClick={() => handleRemoveTransitPulang(idx)}
-                                className="h-10 px-3 inline-flex items-center gap-1 text-xs text-danger-600 hover:text-danger-700 hover:bg-danger-50 rounded-md border border-neutral-200 transition-colors cursor-pointer shrink-0"
                                 title="Hapus titik transit"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                                 <span className="sm:hidden">Hapus</span>
-                              </button>
+                              </Button>
                             )}
                           </div>
                         ))}
 
-                        <button
-                          type="button"
+                        <Button variant="dashed" className="w-full"
                           onClick={handleAddTransitPulang}
-                          className="w-full py-2 px-4 rounded-md border border-dashed border-neutral-300 hover:border-primary-400 hover:bg-neutral-50 text-neutral-700 hover:text-primary-600 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                           </svg>
                           <span>Tambah Transit</span>
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -1508,16 +1500,14 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                           options={transitHotelOptionsFor(thId)}
                         />
                       </div>
-                      <button
-                        type="button"
+                      <Button variant="danger-outline" className="shrink-0"
                         onClick={() => handleRemoveTransitHotel(thId)}
-                        className="h-10 px-3 inline-flex items-center text-danger-600 hover:text-danger-700 hover:bg-danger-50 rounded-md border border-neutral-200 transition-colors cursor-pointer shrink-0"
                         title="Hapus hotel transit"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                      </button>
+                      </Button>
                     </div>
                   ))}
 
@@ -1535,29 +1525,25 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                           options={transitHotelOptionsFor(null)}
                         />
                       </div>
-                      <button
-                        type="button"
+                      <Button variant="danger-outline" className="shrink-0"
                         onClick={() => setExtraTransitHotelSlots(count => Math.max(0, count - 1))}
-                        className="h-10 px-3 inline-flex items-center text-danger-600 hover:text-danger-700 hover:bg-danger-50 rounded-md border border-neutral-200 transition-colors cursor-pointer shrink-0"
                         title="Batalkan baris ini"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                      </button>
+                      </Button>
                     </div>
                   ))}
 
-                  <button
-                    type="button"
+                  <Button variant="dashed" className="w-full"
                     onClick={() => setExtraTransitHotelSlots(count => count + 1)}
-                    className="w-full py-2 px-4 rounded-md border border-dashed border-neutral-300 hover:border-primary-400 hover:bg-neutral-50 text-neutral-700 hover:text-primary-600 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                     </svg>
                     <span>Tambah Hotel Transit</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             </FormSection>
@@ -1615,7 +1601,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   <PerlengkapanSetEditor catalog={perlCatalog} value={perlItems} onChange={setPerlItems} />
                 ) : (
                   <div>
-                    <p className="mb-1 text-[11px] font-body text-neutral-400">{perlInheritedLabel || 'Set bawaan'}</p>
+                    <p className="mb-1 text-xs font-body text-neutral-400">{perlInheritedLabel || 'Set bawaan'}</p>
                     <PerlengkapanSetList items={perlInherited} emptyText="Belum ada set bawaan. Atur di Kelola Kategori atau pilih set khusus." />
                   </div>
                 )}
@@ -1723,7 +1709,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   {formData.journey_type && formData.journey_type !== 'umroh' ? (
                     <div>
                       <span className="block text-xs font-semibold text-neutral-700 font-body mb-1.5">Jenis Perjalanan</span>
-                      <div className="h-10 flex items-center rounded-lg border border-neutral-200 bg-neutral-50 px-3 text-[13px] text-neutral-500 font-body">
+                      <div className="h-9 flex items-center rounded-lg border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-500 font-body">
                         {({ haji: 'Haji', wisata_halal: 'Wisata Halal' })[formData.journey_type] || formData.journey_type}
                       </div>
                     </div>
@@ -1763,14 +1749,14 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
               <div>
                 {formData.brosur_url ? (
                   <div className="space-y-3">
-                    <div className="border border-neutral-200 rounded-xl p-1 bg-white overflow-hidden flex justify-center shadow-2xs">
+                    <div className="border border-neutral-200 rounded-xl p-1 bg-white overflow-hidden flex justify-center">
                       <img
                         src={formData.brosur_url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${formData.brosur_url}` : formData.brosur_url}
                         alt="Preview gambar utama"
                         className="max-w-full h-auto max-h-52 object-contain rounded"
                       />
                     </div>
-                    <label className="flex items-center justify-center gap-2 px-4 py-2 w-full bg-white border border-neutral-300 rounded-lg text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer shadow-2xs transition-colors text-center">
+                    <label className="flex items-center justify-center gap-2 px-4 py-2 w-full bg-white border border-neutral-300 rounded-lg text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer transition-colors text-center">
                         <span>{isUploadingBrosur ? 'Mengupload...' : 'Ganti Gambar'}</span>
                       <input type="file" className="hidden" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
                     </label>
@@ -1783,7 +1769,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                           <span>{isUploadingBrosur ? 'Mengupload...' : 'Upload Gambar Utama'}</span>
                           <input id="brosur-upload" name="brosur-upload" type="file" className="sr-only" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
                         </label>
-                        <p className="text-[11px] text-neutral-400 mt-0.5">JPG, PNG, WebP</p>
+                        <p className="text-xs text-neutral-400 mt-0.5">JPG, PNG, WebP</p>
                       </div>
                     </div>
                   </div>

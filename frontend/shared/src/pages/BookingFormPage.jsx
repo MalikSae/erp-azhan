@@ -122,7 +122,7 @@ export const getContrastTextColor = (hexColor) => {
     b = parseInt(cleanHex.substring(4, 6), 16);
   }
   const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq >= 150 ? '#111827' : '#FFFFFF';
+  return yiq >= 150 ? '#171717' : '#FFFFFF';
 };
 
 export const parseTransitDetails = (rawStr = '', airportMap = {}) => {
@@ -1063,7 +1063,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       />
 
       {serverError && (
-        <Alert variant="error" className="shadow-sm">
+        <Alert variant="error" className="">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <span>{serverError}</span>
             {paxList.some((p) => p.jamaah_id && !jamaahMap[p.jamaah_id]?.tanggal_lahir) && (
@@ -1076,7 +1076,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                       href={`/jamaah/${p.jamaah_id}/edit`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-bold underline text-danger-900 hover:text-danger-950 inline-flex items-center gap-1"
+                      className="font-semibold underline text-danger-900 hover:text-danger-950 inline-flex items-center gap-1"
                       title={`Buka form edit ${jamaahMap[p.jamaah_id]?.nama_lengkap || 'jamaah'} di tab baru`}
                     >
                       Lengkapi {jamaahMap[p.jamaah_id]?.nama_lengkap || `Pax #${p.id}`} →
@@ -1088,13 +1088,13 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
         </Alert>
       )}
       {draftSuccess && (
-        <Alert variant="success" className="shadow-sm border-success-300">
+        <Alert variant="success" className="border-success-300">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">{draftSuccess}</span>
             <button
               type="button"
               onClick={() => setDraftSuccess(null)}
-              className="text-xs font-bold text-success-800 hover:text-success-900 underline ml-4 cursor-pointer"
+              className="text-xs font-semibold text-success-800 hover:text-success-900 underline ml-4 cursor-pointer"
             >
               Tutup
             </button>
@@ -1234,15 +1234,13 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     {/* Judul paket + brand + buka/tutup rincian */}
                     <div className="flex flex-wrap items-center justify-between gap-2.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-heading font-bold text-base text-neutral-900">
+                        <span className="font-heading font-semibold text-base text-neutral-900">
                           {selectedSchedule.jadwal_nama}
                         </span>
                       </div>
 
-                      <button
-                        type="button"
+                      <Button variant="secondary" size="sm"
                         onClick={() => setShowScheduleDetails((prev) => !prev)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-100/80 hover:text-neutral-900 transition-colors shadow-2xs cursor-pointer"
                         title={showScheduleDetails ? "Tutup rincian paket" : "Buka rincian lengkap paket"}
                       >
                         <span>{showScheduleDetails ? "Tutup Rincian" : "Lihat Rincian"}</span>
@@ -1250,13 +1248,13 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                           size={14}
                           className={`transition-transform duration-200 ${showScheduleDetails ? "rotate-180 text-neutral-900" : "text-neutral-500"}`}
                         />
-                      </button>
+                      </Button>
                     </div>
 
                     {/* Ringkasan: periode, penerbangan */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
                       <div>
-                        <span className="block text-[11px] text-neutral-400 mb-0.5">Periode Berangkat</span>
+                        <span className="block text-xs text-neutral-400 mb-0.5">Periode Berangkat</span>
                         <div className="font-medium text-neutral-900">
                           {selectedSchedule.berangkat_tanggal ? (
                             selectedSchedule.pulang_tanggal ? (
@@ -1278,7 +1276,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                       </div>
 
                       <div>
-                        <span className="block text-[11px] text-neutral-400 mb-0.5">Penerbangan</span>
+                        <span className="block text-xs text-neutral-400 mb-0.5">Penerbangan</span>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-neutral-900">
                             {selectedSchedule.maskapai?.name || "-"}
@@ -1302,7 +1300,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                         ["Infant", selectedSchedule.harga_infant || 0],
                       ].map(([label, value]) => (
                         <div key={label}>
-                          <span className="block text-[11px] text-neutral-400 mb-0.5">{label}</span>
+                          <span className="block text-xs text-neutral-400 mb-0.5">{label}</span>
                           <span className="font-heading font-semibold text-neutral-900">{formatRupiah(value)}</span>
                         </div>
                       ))}
@@ -1313,7 +1311,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                       <div className="border-t border-neutral-200 pt-5 space-y-6 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
                         {/* Jadwal Penerbangan */}
                         <div className="space-y-3">
-                          <h4 className="font-heading text-sm font-bold text-neutral-900">Jadwal Penerbangan</h4>
+                          <h4 className="font-heading text-sm font-semibold text-neutral-900">Jadwal Penerbangan</h4>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                             {[
                               {
@@ -1332,8 +1330,8 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                               },
                             ].map((leg) => (
                               <div key={leg.title} className="space-y-1">
-                                <span className="block text-[11px] text-neutral-400">{leg.title}</span>
-                                <div className="font-heading font-bold text-neutral-900">{leg.route}</div>
+                                <span className="block text-xs text-neutral-400">{leg.title}</span>
+                                <div className="font-heading font-semibold text-neutral-900">{leg.route}</div>
                                 <div className="text-xs text-neutral-600 space-y-0.5">
                                   <div>Maskapai: <span className="font-medium text-neutral-800">{selectedSchedule.maskapai?.name || "-"}</span></div>
                                   <div>Flight: <span className="font-medium text-neutral-800">{leg.flight || "-"}</span></div>
@@ -1349,7 +1347,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                         {/* Akomodasi Hotel */}
                         <div className="border-t border-neutral-200 pt-5 space-y-3">
-                          <h4 className="font-heading text-sm font-bold text-neutral-900">Akomodasi Hotel</h4>
+                          <h4 className="font-heading text-sm font-semibold text-neutral-900">Akomodasi Hotel</h4>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                             {[
                               { label: "Hotel Mekkah", hotel: selectedSchedule.hotel_mekkah, near: "Masjidil Haram" },
@@ -1357,14 +1355,14 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                             ].map(({ label, hotel, near }) => (
                               <div key={label} className="space-y-1">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[11px] text-neutral-400">{label}</span>
+                                  <span className="text-xs text-neutral-400">{label}</span>
                                   {hotel?.star_rating > 0 && (
-                                    <span className="text-warning-500 font-bold text-xs tracking-wider">
+                                    <span className="text-warning-500 font-semibold text-xs tracking-wider">
                                       {"★".repeat(hotel.star_rating)}
                                     </span>
                                   )}
                                 </div>
-                                <div className="font-heading font-bold text-neutral-900">{hotel?.name || "-"}</div>
+                                <div className="font-heading font-semibold text-neutral-900">{hotel?.name || "-"}</div>
                                 {hotel?.distance_m ? (
                                   <div className="text-xs text-neutral-600">±{hotel.distance_m}m ke {near}</div>
                                 ) : null}
@@ -1376,16 +1374,16 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                               selectedSchedule.transit_hotels.map((th, idx) => (
                                 <div key={idx} className="space-y-1 sm:col-span-2">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[11px] text-neutral-400">
+                                    <span className="text-xs text-neutral-400">
                                       Hotel Transit {th.kota ? `(${th.kota})` : ""}
                                     </span>
                                     {th.star_rating > 0 && (
-                                      <span className="text-warning-500 font-bold text-xs tracking-wider">
+                                      <span className="text-warning-500 font-semibold text-xs tracking-wider">
                                         {"★".repeat(th.star_rating)}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="font-heading font-bold text-neutral-900">{th.nama || "-"}</div>
+                                  <div className="font-heading font-semibold text-neutral-900">{th.nama || "-"}</div>
                                 </div>
                               ))
                             )}
@@ -1396,15 +1394,15 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                         {((selectedSchedule.include_items && selectedSchedule.include_items.length > 0) ||
                           (selectedSchedule.exclude_items && selectedSchedule.exclude_items.length > 0)) && (
                           <div className="border-t border-neutral-200 pt-5 space-y-3">
-                            <h4 className="font-heading text-sm font-bold text-neutral-900">Fasilitas Paket</h4>
+                            <h4 className="font-heading text-sm font-semibold text-neutral-900">Fasilitas Paket</h4>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                               {selectedSchedule.include_items && selectedSchedule.include_items.length > 0 && (
                                 <div className="space-y-2">
-                                  <span className="block text-[11px] text-neutral-400">Termasuk</span>
+                                  <span className="block text-xs text-neutral-400">Termasuk</span>
                                   <ul className="space-y-1.5 text-xs text-neutral-700">
                                     {selectedSchedule.include_items.map((item, idx) => (
                                       <li key={idx} className="flex items-start gap-1.5">
-                                        <span className="text-success-600 font-bold shrink-0">✓</span>
+                                        <span className="text-success-600 font-semibold shrink-0">✓</span>
                                         <span>{item}</span>
                                       </li>
                                     ))}
@@ -1414,11 +1412,11 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                               {selectedSchedule.exclude_items && selectedSchedule.exclude_items.length > 0 && (
                                 <div className="space-y-2">
-                                  <span className="block text-[11px] text-neutral-400">Tidak Termasuk</span>
+                                  <span className="block text-xs text-neutral-400">Tidak Termasuk</span>
                                   <ul className="space-y-1.5 text-xs text-neutral-600">
                                     {selectedSchedule.exclude_items.map((item, idx) => (
                                       <li key={idx} className="flex items-start gap-1.5">
-                                        <span className="text-danger-500 font-bold shrink-0">✕</span>
+                                        <span className="text-danger-500 font-semibold shrink-0">✕</span>
                                         <span>{item}</span>
                                       </li>
                                     ))}
@@ -1499,10 +1497,10 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                             Jamaah #{index + 1}
                           </span>
                           {isPic && (
-                            <span className="text-[11px] font-body font-medium text-neutral-500">PIC</span>
+                            <span className="text-xs font-body font-medium text-neutral-500">PIC</span>
                           )}
                           {isInfant && (
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-body font-medium text-warning-700">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-body font-medium text-warning-700">
                               <span className="w-1.5 h-1.5 rounded-full bg-warning-500" />
                               Infant
                             </span>
@@ -1552,17 +1550,16 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                               type="button"
                               disabled={!selectedScheduleId}
                               onClick={() => handleOpenQuickCreate(pax.id)}
-                              className="w-10 h-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="mb-4 w-9 h-9 shrink-0 inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                               title="Tambah jamaah baru langsung dari sini"
                               aria-label="Tambah jamaah baru"
-                              style={{ marginBottom: '1rem' }}
                             >
                               <UserPlus size={15} />
                             </button>
                             )}
                           </div>
                           {isMissingNik && (
-                            <div className="-mt-2 mb-0 flex flex-wrap items-center gap-2 text-[11px] text-warning-800 bg-warning-50 border border-warning-200/80 px-3 py-2 rounded-lg">
+                            <div className="-mt-2 mb-0 flex flex-wrap items-center gap-2 text-xs text-warning-800 bg-warning-50 border border-warning-200/80 px-3 py-2 rounded-lg">
                               <AlertCircle size={12} className="shrink-0" />
                               <span className="font-medium flex-1">NIK belum diisi. Booking tidak bisa diproses tanpa NIK.</span>
                               <a
@@ -1580,7 +1577,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                             const inlineState = inlineDobMap[pax.jamaah_id] || {};
                             return (
                               <div className="-mt-2 mb-0 space-y-1">
-                                <div className="flex flex-wrap items-center gap-2 text-[11px] text-warning-800 bg-warning-50 border border-warning-200/80 px-3 py-2 rounded-lg">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-warning-800 bg-warning-50 border border-warning-200/80 px-3 py-2 rounded-lg">
                                   <AlertCircle size={12} className="shrink-0" />
                                   <span className="font-medium flex-1">Tanggal lahir belum diisi</span>
                                   <div className="flex items-center gap-1.5 w-full sm:w-auto">
@@ -1595,7 +1592,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                                       type="button"
                                       onClick={() => handleInlineDobSave(pax.id, pax.jamaah_id)}
                                       disabled={inlineState.saving || !inlineState.value}
-                                      className="h-8 px-2.5 inline-flex items-center gap-1 rounded-lg bg-warning-600 hover:bg-warning-700 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="h-8 px-2.5 inline-flex items-center gap-1 rounded-lg bg-warning-600 hover:bg-warning-700 text-white text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       {inlineState.saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                                       <span>Simpan</span>
@@ -1603,7 +1600,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                                   </div>
                                 </div>
                                 {inlineState.error && (
-                                  <p className="text-[11px] text-danger-600 pl-1">{inlineState.error}</p>
+                                  <p className="text-xs text-danger-600 pl-1">{inlineState.error}</p>
                                 )}
                               </div>
                             );
@@ -1615,7 +1612,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                           {isInfant ? (
                             /* Kondisi B: Infant (< 2 tahun) -> Tanpa Kamar */
                             <FormField label="Tipe Kamar">
-                              <div className="h-10 w-full rounded-lg border border-neutral-200/90 bg-neutral-50 px-3.5 flex items-center text-[13px] text-neutral-400 font-body select-none">
+                              <div className="h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 flex items-center text-sm text-neutral-400 font-body select-none">
                                 Tanpa Kamar
                               </div>
                             </FormField>
@@ -1647,7 +1644,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                         {/* 3. Harga Pax Subtotal (3 col) */}
                         <div className="sm:col-span-3">
                           <FormField label={isInfant ? "Harga Infant" : "Harga / Pax"}>
-                            <div className="h-10 w-full rounded-lg border border-neutral-200/90 bg-neutral-50 px-3.5 flex items-center text-[13px] font-semibold text-neutral-900 font-body select-none">
+                            <div className="h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 flex items-center text-sm font-semibold text-neutral-900 font-body select-none">
                               {paxPrice !== null ? formatRupiah(paxPrice) : "-"}
                             </div>
                           </FormField>
@@ -1696,14 +1693,14 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                       <div className="font-body">
                         {isOverQuota ? (
                           <div>
-                            <span className="font-bold">Melebihi Kuota!</span>
+                            <span className="font-semibold">Melebihi Kuota!</span>
                             <p className="mt-0.5">
                               Dibutuhkan <strong>{regularPaxCount} seat</strong>, sisa <strong>{seatSisa} seat</strong>.
                             </p>
                           </div>
                         ) : (
                           <div>
-                            <span className="font-bold">Kuota Tersedia</span>
+                            <span className="font-semibold">Kuota Tersedia</span>
                             <p className="mt-0.5 text-neutral-600">
                               <strong>{regularPaxCount}</strong> dari <strong>{seatSisa}</strong> seat akan terpakai.
                             </p>
@@ -1740,13 +1737,13 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                     {/* Total Harga Highlight Card */}
                     <div className="border-t border-neutral-200 pt-4">
-                      <span className="text-[11px] text-neutral-400 block">
+                      <span className="text-xs text-neutral-400 block">
                         Total Biaya
                       </span>
-                      <div className="mt-1 font-heading font-bold text-xl md:text-2xl text-neutral-900">
+                      <div className="mt-1 font-heading font-semibold text-xl md:text-2xl text-neutral-900">
                         {formatRupiah(totalHarga)}
                       </div>
-                      <p className="text-[11px] text-neutral-500 mt-1">
+                      <p className="text-xs text-neutral-500 mt-1">
                         {infantPaxCount > 0 
                           ? `${paxList.length} Jamaah (${regularPaxCount} reguler, ${infantPaxCount} infant)` 
                           : `${paxList.length} Jamaah reguler`
@@ -1819,7 +1816,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                   error={clientErrors.pic_jamaah_id}
                   required
                 />
-                <p className="text-[11px] text-neutral-500 font-body">
+                <p className="text-xs text-neutral-500 font-body">
                   Penanggung jawab invoice dan komunikasi rombongan.
                 </p>
               </div>
@@ -1936,21 +1933,21 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
             {/* Nama Lengkap */}
             <div>
               <label className="mb-1.5 block text-xs font-medium text-neutral-700">
-                Nama Lengkap <span className="text-danger-500 font-bold">*</span>
+                Nama Lengkap <span className="text-danger-500 font-semibold">*</span>
               </label>
               <input
                 type="text"
                 value={quickCreateForm.nama_lengkap}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
                 placeholder="cth: Ahmad Fauzi"
-                className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                 autoFocus
               />
             </div>
             {/* Jenis Kelamin */}
             <div>
               <label className="mb-1.5 block text-xs font-medium text-neutral-700">Jenis Kelamin</label>
-              <div className="flex gap-4 items-center h-10 px-1">
+              <div className="flex gap-4 items-center h-9 px-1">
                 <label className="flex items-center gap-2 text-sm text-neutral-900 cursor-pointer">
                   <input
                     type="radio"
@@ -1984,21 +1981,21 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 value={quickCreateForm.nik}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, nik: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
                 placeholder="16 digit NIK"
-                className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>
             {/* Tanggal Lahir */}
             <div>
               <label className="mb-1.5 block text-xs font-medium text-neutral-700">
                 Tanggal Lahir
-                <span className="ml-1 text-neutral-400 text-[11px] font-normal">(wajib untuk deteksi usia/infant)</span>
+                <span className="ml-1 text-neutral-400 text-xs font-normal">(wajib untuk deteksi usia/infant)</span>
               </label>
               <input
                 type="date"
                 value={quickCreateForm.tanggal_lahir}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, tanggal_lahir: e.target.value }))}
                 max={hariIniWIB()}
-                className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>
             {/* No HP */}
@@ -2009,7 +2006,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                 value={quickCreateForm.no_hp}
                 onChange={e => setQuickCreateForm(prev => ({ ...prev, no_hp: e.target.value }))}
                 placeholder="cth: 08123456789"
-                className="h-10 w-full rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
               />
             </div>
             {/* Kaitan Agen (Jalur 3) */}

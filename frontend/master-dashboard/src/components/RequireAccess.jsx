@@ -24,7 +24,7 @@ const RequireAccess = ({ perm, anyOf, holdingOnly = false, children }) => {
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-warning-50 text-warning-600">
         <ShieldAlert size={22} strokeWidth={1.75} />
       </div>
-      <h2 className="font-heading text-base font-bold text-neutral-900">Anda tidak punya akses ke halaman ini</h2>
+      <h2 className="font-heading text-base font-semibold text-neutral-900">Anda tidak punya akses ke halaman ini</h2>
       <p className="mt-1.5 text-sm font-body text-neutral-500">
         Halaman ini tidak termasuk dalam hak akses akun Anda. Hubungi admin holding bila memerlukannya.
       </p>
