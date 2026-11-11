@@ -39,11 +39,10 @@ export const EVENT_PERUBAHAN_JAMAAH = 'perubahan-jamaah-diputuskan';
 // dibaca pelanggan.
 //
 // Dua pemakaian:
-// - tab "Menunggu persetujuan" di Kelola Jamaah: semua jamaah, bawaan hanya yang menunggu;
+// - tab "Menunggu persetujuan" di Kelola Jamaah: semua jamaah, hanya yang menunggu;
 // - detail jamaah (jamaahId diisi): seluruh riwayat satu jamaah, tanpa kolom nama dan tanpa pencarian.
 export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChanged }) {
   const perJamaah = Boolean(jamaahId);
-  const [semua, setSemua] = useState(perJamaah);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,11 +52,11 @@ export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChang
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
 
-  const load = async (tampilSemua = semua) => {
+  const load = async () => {
     setLoading(true);
     setError('');
     try {
-      setItems(await listPerubahanJamaah({ status: tampilSemua ? 'semua' : 'menunggu', jamaahId }));
+      setItems(await listPerubahanJamaah({ status: perJamaah ? 'semua' : 'menunggu', jamaahId }));
     } catch (err) {
       setError(err.response?.status === 403
         ? 'Anda tidak memiliki izin untuk melihat perubahan data jamaah.'
@@ -68,8 +67,8 @@ export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChang
   };
 
   useEffect(() => {
-    load(semua);
-  }, [semua, jamaahId]); // eslint-disable-line react-hooks/exhaustive-deps
+    load();
+  }, [jamaahId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const open = async (row) => {
     setActionError('');
@@ -137,7 +136,7 @@ export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChang
     ? 'Memuat perubahan...'
     : perJamaah
       ? 'Belum ada perubahan data yang tercatat untuk jamaah ini'
-      : semua ? 'Belum ada riwayat perubahan' : 'Tidak ada perubahan yang menunggu persetujuan';
+      : 'Tidak ada perubahan yang menunggu persetujuan';
 
   return (
     <div className="space-y-4">
@@ -153,12 +152,6 @@ export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChang
         searchPlaceholder="Cari nama jamaah atau pelanggan..."
         emptyMessage={pesanKosong}
         toolbarLeading={toolbarLeading}
-        toolbarActions={perJamaah ? undefined : (
-          <label className="inline-flex items-center gap-2 text-xs text-neutral-700 cursor-pointer">
-            <input type="checkbox" checked={semua} onChange={(e) => setSemua(e.target.checked)} />
-            Tampilkan riwayat (disetujui, ditolak, dan perubahan langsung)
-          </label>
-        )}
       />
 
       <Modal
