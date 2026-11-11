@@ -42,7 +42,7 @@ const StatusDot = ({ variant = 'neutral', children }) => {
 
 const bayarMeta = {
   menunggu_verifikasi: { label: 'Menunggu verifikasi', variant: 'pending' },
-  terverifikasi: { label: 'Terverifikasi', variant: 'success' },
+  terverifikasi: { label: 'Lunas', variant: 'success' },
   dibebaskan: { label: 'Dibebaskan', variant: 'success' },
   ditolak: { label: 'Ditolak', variant: 'danger' },
 };
@@ -166,7 +166,6 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
   }
 
   const statusMeta = STATUS_AGEN[agen.status_agen] || { label: agen.status_agen, variant: 'neutral' };
-  const siklusAktifId = agen.siklus?.find((s) => s.keputusan_agen === 'disetujui')?.id;
   const pencairanTerbaru = agen.pencairan.slice(0, 3);
 
   return (
@@ -220,30 +219,26 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
             )}
           </MetaBox>
 
-          {/* g. Riwayat siklus pengajuan */}
-          <MetaBox title="Riwayat Siklus Pengajuan" subtitle="Setiap pengajuan keagenan dan pembayarannya" icon={<History size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+          {/* g. Riwayat pengajuan: satu baris per pengajuan (tanggal, keputusan, biaya). */}
+          <MetaBox title="Riwayat Pengajuan" icon={<History size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             {agen.siklus.length === 0 ? (
               <p className="text-sm text-neutral-500">Tidak ada riwayat pengajuan.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="divide-y divide-neutral-100">
                 {agen.siklus.map((s) => {
                   const kep = keputusanMeta[s.keputusan_agen] || { label: s.keputusan_agen, variant: 'neutral' };
                   const bayar = bayarMeta[s.status] || { label: s.status, variant: 'neutral' };
-                  const aktif = s.id === siklusAktifId;
+                  const berbayar = Number(s.nominal_tagihan) > 0;
                   return (
-                    <div key={s.id} className={`rounded-xl border p-3 space-y-2 ${aktif ? 'border-primary-200 bg-primary-50/40' : 'border-neutral-200'}`}>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-sm font-heading font-semibold text-neutral-900">Diajukan {dateLabel(s.created_at)}</span>
-                        <div className="flex flex-wrap items-center gap-3">
-                          {aktif && <StatusDot variant="primary">Siklus aktif</StatusDot>}
-                          <StatusDot variant={kep.variant}>Keagenan: {kep.label}</StatusDot>
-                        </div>
+                    <div key={s.id} className="py-2.5 first:pt-0 last:pb-0">
+                      <div className="grid grid-cols-[7rem_7rem_1fr] items-center gap-3 text-sm">
+                        <span className="text-neutral-700 whitespace-nowrap">{dateLabel(s.created_at)}</span>
+                        <StatusDot variant={kep.variant}>{kep.label}</StatusDot>
+                        <span className="text-right text-neutral-700 whitespace-nowrap">
+                          {berbayar ? <><span className="font-heading font-semibold text-neutral-900">{money(s.nominal_tagihan)}</span> · {bayar.label}</> : 'Tanpa biaya'}
+                        </span>
                       </div>
-                      {s.alasan_ditolak_agen && <p className="text-xs text-danger-700">Alasan ditolak: {s.alasan_ditolak_agen}</p>}
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-600">
-                        <span>{Number(s.nominal_tagihan) > 0 ? `Biaya ${money(s.nominal_tagihan)}` : 'Tanpa biaya pendaftaran'}</span>
-                        {Number(s.nominal_tagihan) > 0 && <StatusDot variant={bayar.variant}>{bayar.label}</StatusDot>}
-                      </div>
+                      {s.alasan_ditolak_agen && <p className="mt-1 text-xs text-danger-700">{s.alasan_ditolak_agen}</p>}
                     </div>
                   );
                 })}
