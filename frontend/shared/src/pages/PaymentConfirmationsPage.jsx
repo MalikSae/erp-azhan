@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PAYMENT_STATUS_META } from '../utils/bookingStatus';
-import { SlidersHorizontal, Eye } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import client from '../api/client';
 import { protectedMediaPath } from '../api/media';
 import { listAllPayments, verifyPayment } from '../api/bookings';
@@ -9,7 +9,6 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import DataTable from '../components/ui/DataTable';
-import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import ActionMenu from '../components/ui/ActionMenu';
@@ -21,24 +20,20 @@ const statusMeta = PAYMENT_STATUS_META;
 const STATUS_STRONG = Object.fromEntries(
   Object.entries(PAYMENT_STATUS_META).map(([key, meta]) => [key, meta.className]),
 );
-const EMPTY_FILTERS = { status: '', brand: '', bank: '', from: '', to: '', pencatat: '' };
-// Pembayaran yang dicatat admin langsung terkonfirmasi oleh orang yang sama. Filter ini untuk pengawasan:
-// menampilkan pembayaran yang pencatat dan verifikatornya satu orang.
+const EMPTY_FILTERS = { status: '', brand: '' };
+// Pembayaran yang dicatat admin langsung terkonfirmasi oleh orang yang sama; ditandai di detail pembayaran.
 const pencatatSama = (item) => item.dicatat_oleh != null && item.dicatat_oleh === item.verified_by;
-const cocokPencatat = (item, nilai) => !nilai || pencatatSama(item);
 // CustomDropdown mengirim nilai langsung atau objek event.
 const valueOf = (v) => (v?.target ? v.target.value : v);
 
 // Konfirmasi pembayaran manual (Master & Travel). showBrandColumn: Admin Master,
-// lintas brand dengan filter brand. Filter status selalu tampil di toolbar tabel;
-// brand, rekening, dan rentang tanggal ada di panel "Filter" agar tidak menumpuk.
+// lintas brand dengan filter brand. Filter hanya Status dan Brand, sejajar di toolbar tabel.
 export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [panelOpen, setPanelOpen] = useState(false);
 
   // Modal Detail & Verifikasi State
   const [selectedPayment, setSelectedPayment] = useState(null);
@@ -109,18 +104,12 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
 
   const options = useMemo(() => ({
     brands: [...new Set(items.map((item) => item.brand_name).filter(Boolean))].sort(),
-    banks: [...new Set(items.map((item) => item.destination_bank_name).filter(Boolean))].sort(),
   }), [items]);
 
-  const filteredItems = useMemo(() => items.filter((item) => {
-    const date = String(item.tanggal || '').slice(0, 10);
-    return (!filters.status || item.status === filters.status)
-      && (!filters.brand || item.brand_name === filters.brand)
-      && (!filters.bank || item.destination_bank_name === filters.bank)
-      && (!filters.from || date >= filters.from)
-      && (!filters.to || date <= filters.to)
-      && cocokPencatat(item, filters.pencatat);
-  }).map((item) => ({
+  const filteredItems = useMemo(() => items.filter((item) => (
+    (!filters.status || item.status === filters.status)
+    && (!filters.brand || item.brand_name === filters.brand)
+  )).map((item) => ({
     ...item,
     invoice: item.booking_id_booking || item.id_booking || `ID: ${item.booking_id}`,
     search_detail: [
@@ -134,16 +123,9 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
     ].filter(Boolean).join(' '),
   })), [items, filters, showBrandColumn]);
 
-  // Hitungan ditampilkan di label filter status (bukan kartu KPI); mengikuti filter lain.
+  // Hitungan ditampilkan di label filter status (bukan kartu KPI); mengikuti filter brand.
   const statusOptions = useMemo(() => {
-    const base = items.filter((item) => {
-      const date = String(item.tanggal || '').slice(0, 10);
-      return (!filters.brand || item.brand_name === filters.brand)
-        && (!filters.bank || item.destination_bank_name === filters.bank)
-        && (!filters.from || date >= filters.from)
-        && (!filters.to || date <= filters.to)
-        && cocokPencatat(item, filters.pencatat);
-    });
+    const base = items.filter((item) => !filters.brand || item.brand_name === filters.brand);
     const count = (status) => base.filter((i) => i.status === status).length;
     return [
       { value: '', label: `Semua status (${base.length})` },
@@ -152,14 +134,9 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       { value: 'rejected', label: `Ditolak (${count('rejected')})` },
       { value: 'void', label: `Dibatalkan (${count('void')})` },
     ];
-  }, [items, filters.brand, filters.bank, filters.from, filters.to, filters.pencatat]);
+  }, [items, filters.brand]);
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
-  const resetFilters = () => setFilters(EMPTY_FILTERS);
-  const hasFilters = Object.values(filters).some(Boolean);
-  // Jumlah filter aktif di panel (status tampil terpisah di toolbar).
-  const panelActive = ['brand', 'bank', 'from', 'to', 'pencatat'].filter((k) => filters[k]).length;
-
   const openDetail = (payment) => {
     setActionError('');
     setRejectMode(false);
@@ -330,54 +307,14 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
         placeholder="Semua status"
         className="!mb-0 flex-1 sm:w-52 sm:flex-none"
       />
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={() => setPanelOpen((open) => !open)}
-        className={`h-10 shrink-0 whitespace-nowrap ${panelOpen || panelActive ? '!border-primary-200 !bg-primary-50 !text-primary-700' : ''}`}
-        aria-expanded={panelOpen}
-      >
-        <SlidersHorizontal className="w-4 h-4" />
-        <span>Filter{panelActive ? ` (${panelActive})` : ''}</span>
-      </Button>
-    </div>
-  );
-
-  const toolbarPanel = panelOpen && (
-    <div className="space-y-3">
-      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${showBrandColumn ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
-        {showBrandColumn && (
-          <CustomDropdown
-            label="Brand"
-            value={filters.brand}
-            onChange={(v) => setFilter('brand', valueOf(v))}
-            options={[{ value: '', label: 'Semua brand' }, ...options.brands.map((b) => ({ value: b, label: b }))]}
-            placeholder="Semua brand"
-          />
-        )}
+      {showBrandColumn && options.brands.length > 0 && (
         <CustomDropdown
-          label="Rekening tujuan"
-          value={filters.bank}
-          onChange={(v) => setFilter('bank', valueOf(v))}
-          options={[{ value: '', label: 'Semua rekening' }, ...options.banks.map((b) => ({ value: b, label: b }))]}
-          placeholder="Semua rekening"
+          value={filters.brand}
+          onChange={(v) => setFilter('brand', valueOf(v))}
+          options={[{ value: '', label: 'Semua brand' }, ...options.brands.map((b) => ({ value: b, label: b }))]}
+          placeholder="Semua brand"
+          className="!mb-0 flex-1 sm:w-52 sm:flex-none"
         />
-        <Input label="Transfer dari" type="date" name="dari" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} />
-        <Input label="Transfer sampai" type="date" name="sampai" value={filters.to} min={filters.from || undefined} onChange={(e) => setFilter('to', e.target.value)} />
-        <CustomDropdown
-          label="Pencatat"
-          value={filters.pencatat}
-          onChange={(v) => setFilter('pencatat', valueOf(v))}
-          options={[{ value: '', label: 'Semua pembayaran' }, { value: 'sama', label: 'Dicatat dan diverifikasi orang yang sama' }]}
-          placeholder="Semua pembayaran"
-        />
-      </div>
-      {hasFilters && (
-        <div className="flex justify-end">
-          <button type="button" onClick={resetFilters} className="text-sm font-semibold text-neutral-900 underline underline-offset-2">
-            Reset semua filter
-          </button>
-        </div>
       )}
     </div>
   );
@@ -396,9 +333,8 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
         onRowClick={openDetail}
         itemsPerPage={10}
         searchPlaceholder={showBrandColumn ? 'Cari brand, invoice, jamaah, paket, pengirim...' : 'Cari invoice, jamaah, paket, pengirim...'}
-        emptyMessage={loading ? 'Memuat pembayaran...' : hasFilters ? 'Tidak ada pembayaran yang sesuai filter' : 'Belum ada pembayaran'}
+        emptyMessage={loading ? 'Memuat pembayaran...' : (filters.status || filters.brand) ? 'Tidak ada pembayaran yang sesuai filter' : 'Belum ada pembayaran'}
         toolbarActions={toolbarActions}
-        toolbarPanel={toolbarPanel}
       />
 
       <VoidPaymentModal
