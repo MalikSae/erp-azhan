@@ -149,13 +149,13 @@ func (r *Repository) Delete(ctx context.Context, id uint64) error {
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-// jumlahPaketPemakai menghitung paket yang merujuk kode bandara ini di salah satu dari empat kolom bandaranya.
+// jumlahPaketPemakai menghitung paket yang merujuk kode bandara ini di salah satu kolom bandaranya, termasuk bandara transit bila diisi dengan kodenya.
 func (r *Repository) jumlahPaketPemakai(ctx context.Context, code string) (int, error) {
 	var n int
 	if err := r.db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM schedules
 		WHERE UPPER(?) IN (UPPER(berangkat_bandara_asal), UPPER(berangkat_bandara_tujuan),
-		                   UPPER(pulang_bandara_asal), UPPER(pulang_bandara_tujuan))`, code).Scan(&n); err != nil {
+		                   UPPER(pulang_bandara_asal), UPPER(pulang_bandara_tujuan), UPPER(TRIM(transit_bandara)))`, code).Scan(&n); err != nil {
 		return 0, fmt.Errorf("airport: cek pemakaian kode: %w", err)
 	}
 	return n, nil

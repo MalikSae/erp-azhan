@@ -3,6 +3,7 @@ package hotel
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ func NewHandler(repo *Repository) *Handler {
 func (h *Handler) ListHotels(w http.ResponseWriter, r *http.Request) {
 	hotels, err := h.repo.List(r.Context())
 	if err != nil {
+		log.Printf("[ERROR] hotel: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data hotel")
 		return
 	}
@@ -44,6 +46,7 @@ func (h *Handler) ListHotels(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListCities(w http.ResponseWriter, r *http.Request) {
 	cities, err := h.repo.ListCities(r.Context())
 	if err != nil {
+		log.Printf("[ERROR] hotel: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar kota hotel")
 		return
 	}

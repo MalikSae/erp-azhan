@@ -279,14 +279,17 @@ func (r *Repository) Update(ctx context.Context, id int64, req UpdateCategoryReq
 		}
 	}
 
-	isActive := true
-	if req.IsActive != nil {
+	// is_active yang tidak dikirim berarti tidak diubah. Dulu dianggap aktif, sehingga menyimpan ulang
+	// kategori nonaktif tanpa field itu menghidupkannya lagi.
+	ubahAktif := req.IsActive != nil
+	isActive := false
+	if ubahAktif {
 		isActive = *req.IsActive
 	}
 
 	_, err = tx.ExecContext(ctx,
-		`UPDATE package_categories SET name = ?, slug = ?, seo_tier = ?, description = IF(?, ?, description), badge_color = ?, is_active = ? WHERE id = ?`,
-		req.Name, req.Slug, req.SEOTier, ubahDeskripsi, deskripsi, req.BadgeColor, isActive, id,
+		`UPDATE package_categories SET name = ?, slug = ?, seo_tier = ?, description = IF(?, ?, description), badge_color = ?, is_active = IF(?, ?, is_active) WHERE id = ?`,
+		req.Name, req.Slug, req.SEOTier, ubahDeskripsi, deskripsi, req.BadgeColor, ubahAktif, isActive, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("category.Update update: %w", err)

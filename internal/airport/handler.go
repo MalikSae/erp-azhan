@@ -3,6 +3,7 @@ package airport
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ func (h *Handler) ListAirports(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	airports, err := h.repo.List(r.Context(), search)
 	if err != nil {
+		log.Printf("[ERROR] airport: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data bandara")
 		return
 	}

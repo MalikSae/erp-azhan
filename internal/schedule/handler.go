@@ -37,6 +37,7 @@ func (h *Handler) ListSchedulesAdmin(w http.ResponseWriter, r *http.Request) {
 	brandID := identity.GetBrandID(r.Context())
 	items, err := h.repo.List(r.Context(), brandID)
 	if err != nil {
+		log.Printf("[ERROR] schedule: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data jadwal")
 		return
 	}
@@ -82,7 +83,7 @@ func (h *Handler) ListSchedulesPublic(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.repo.ListPublic(r.Context(), brandID)
 	if err != nil {
-		fmt.Println("ListPublic Error:", err)
+		log.Printf("[ERROR] schedule.ListPublic: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data jadwal")
 		return
 	}
@@ -114,7 +115,7 @@ func (h *Handler) GetSchedulePublic(w http.ResponseWriter, r *http.Request) {
 
 	// Paket yang berangkat kurang dari 30 hari lagi (termasuk yang sudah berangkat) tidak ditampilkan
 	// dan tidak bisa dipesan lagi (MP-04); daftar publik memakai batas yang sama.
-	if s.Status != "published" || s.BerangkatTanggal < batasPublikWIB() {
+	if s.Status != StatusPublished || s.BerangkatTanggal < batasPublikWIB() {
 		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan atau belum dipublikasikan")
 		return
 	}
@@ -140,9 +141,9 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if inp.Status == "" {
-		inp.Status = "draft"
+		inp.Status = StatusDraft
 	}
-	if inp.Status == "published" && inp.BerangkatTanggal < todayWIB() {
+	if inp.Status == StatusPublished && inp.BerangkatTanggal < todayWIB() {
 		writeError(w, http.StatusBadRequest, errPublishLampau)
 		return
 	}
@@ -196,7 +197,7 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	// Override req.BrandID agar validateScheduleInput tidak error saat Super Admin tidak kirim brand_id
 	req.BrandID = &finalBrandID
-	// Sisa kursi saat edit dihitung repository dari data terkunci; nilai form diabaikan
+	// Sisa seat saat edit dihitung repository dari data terkunci; nilai form diabaikan
 	// agar kapasitas di bawah alokasi mendapat pesan yang tepat (MP-07).
 	req.SeatSisa = nil
 
@@ -210,11 +211,11 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		finalStatus = existing.Status
 	}
 	tanggalBerubah := inp.BerangkatTanggal != existing.BerangkatTanggal
-	if finalStatus == "published" && inp.BerangkatTanggal < todayWIB() && (tanggalBerubah || existing.Status != "published") {
+	if finalStatus == StatusPublished && inp.BerangkatTanggal < todayWIB() && (tanggalBerubah || existing.Status != StatusPublished) {
 		writeError(w, http.StatusBadRequest, errPublishLampau)
 		return
 	}
-	if finalStatus == "archived" && existing.Status != "archived" {
+	if finalStatus == StatusArchived && existing.Status != StatusArchived {
 		// Tanggal tersimpan, bukan tanggal dari request: mengirim tanggal lampau bersama status arsip
 		// tidak boleh melewati pemeriksaan booking aktif (audit menu Paket S-01).
 		if !h.bolehArsip(r.Context(), w, id, existing.BerangkatTanggal) {
@@ -222,6 +223,10 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	inp.AlasanUbahTanggal = strings.TrimSpace(req.AlasanUbahTanggal)
+	if err := validateMaxLen("alasan_ubah_tanggal", inp.AlasanUbahTanggal, maxAlasanTanggal); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	inp.ActorID = identity.GetAdminUserID(r.Context())
 
 	// 3. Panggil repository Update dengan finalBrandID sebagai parameter
@@ -251,24 +256,24 @@ func (h *Handler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validStatuses := map[string]bool{"draft": true, "published": true, "archived": true}
+	validStatuses := map[string]bool{StatusDraft: true, StatusPublished: true, StatusArchived: true}
 	if !validStatuses[req.Status] {
 		writeError(w, http.StatusBadRequest, "status tidak valid, harus draft/published/archived")
 		return
 	}
 
 	brandID := identity.GetBrandID(r.Context())
-	if req.Status == "published" || req.Status == "archived" {
+	if req.Status == StatusPublished || req.Status == StatusArchived {
 		s, err := h.repo.GetByID(r.Context(), id, brandID)
 		if err != nil {
 			handleRepoError(w, err)
 			return
 		}
-		if req.Status == "published" && s.BerangkatTanggal < todayWIB() {
+		if req.Status == StatusPublished && s.BerangkatTanggal < todayWIB() {
 			writeError(w, http.StatusBadRequest, errPublishLampau)
 			return
 		}
-		if req.Status == "archived" && s.Status != "archived" {
+		if req.Status == StatusArchived && s.Status != StatusArchived {
 			if !h.bolehArsip(r.Context(), w, id, s.BerangkatTanggal) {
 				return
 			}
@@ -327,7 +332,7 @@ func (h *Handler) UpdateScheduleSeat(w http.ResponseWriter, r *http.Request) {
 
 // GetScheduleSeat godoc
 // GET /api/admin/schedules/{id}/seat
-// Response 200: SeatOverview (ringkasan kursi + riwayat penyesuaian terakhir)
+// Response 200: SeatOverview (ringkasan seat + riwayat penyesuaian terakhir)
 func (h *Handler) GetScheduleSeat(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
@@ -394,7 +399,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	// Gate 1.5: status (enum: draft, published, archived)
 	reqStatus := strings.TrimSpace(req.Status)
 	if reqStatus != "" {
-		if reqStatus != "draft" && reqStatus != "published" && reqStatus != "archived" {
+		if reqStatus != StatusDraft && reqStatus != StatusPublished && reqStatus != StatusArchived {
 			writeError(w, http.StatusBadRequest, "status tidak valid, harus 'draft', 'published', atau 'archived'")
 			return nil, false
 		}
@@ -407,7 +412,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	}
 
 	// Gate 3 & 4: seat_sisa. Paket baru selalu mulai penuh; pada edit, nilai ini
-	// diabaikan dan dihitung repository dari kursi teralokasi.
+	// diabaikan dan dihitung repository dari seat teralokasi.
 	seatSisa := req.SeatTotal
 	if existing == nil {
 		var err error
@@ -426,6 +431,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 6: maskapai exist di DB
 	if exists, err := h.repo.AirlineExists(ctx, req.MaskapaiID); err != nil {
+		log.Printf("[ERROR] schedule: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 		return nil, false
 	} else if !exists {
@@ -502,6 +508,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 			seenTransit[thID] = true
 
 			if exists, err := h.repo.HotelExists(ctx, thID); err != nil {
+				log.Printf("[ERROR] schedule: %v", err)
 				writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 				return nil, false
 			} else if !exists {
@@ -510,6 +517,15 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 			}
 			finalTransitHotelIDs = append(finalTransitHotelIDs, thID)
 		}
+	}
+
+	if pesan := pesanNominalPaketBulat(
+		nominalPaket{"harga_quad", &req.HargaQuad}, nominalPaket{"harga_triple", &req.HargaTriple}, nominalPaket{"harga_double", &req.HargaDouble},
+		nominalPaket{"harga_infant", req.HargaInfant}, nominalPaket{"nominal_komisi_langsung", req.NominalKomisiLangsung},
+		nominalPaket{"nominal_bonus_pembinaan", req.NominalBonusPembinaan},
+	); pesan != "" {
+		writeError(w, http.StatusBadRequest, pesan)
+		return nil, false
 	}
 
 	// Gate 14: harga_quad, harga_triple, harga_double masing-masing > 0
@@ -583,6 +599,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	// Gate 15: itinerary_id opsional, tapi kalau dikirim harus ada di DB
 	if req.ItineraryID != nil {
 		if exists, err := h.repo.ItineraryExists(ctx, *req.ItineraryID); err != nil {
+			log.Printf("[ERROR] schedule: %v", err)
 			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 			return nil, false
 		} else if !exists {
@@ -597,6 +614,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		// sudah memakainya tetap bisa disimpan (audit menu Paket S-09, S-10).
 		tetap := existing != nil && existing.CategoryID != nil && *existing.CategoryID == *req.CategoryID
 		if exists, err := h.repo.CategoryAvailable(ctx, *req.CategoryID, finalBrandID, tetap); err != nil {
+			log.Printf("[ERROR] schedule: %v", err)
 			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 			return nil, false
 		} else if !exists {

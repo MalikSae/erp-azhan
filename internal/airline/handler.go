@@ -3,6 +3,7 @@ package airline
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ func NewHandler(repo *Repository) *Handler {
 func (h *Handler) ListAirlines(w http.ResponseWriter, r *http.Request) {
 	airlines, err := h.repo.List(r.Context())
 	if err != nil {
+		log.Printf("[ERROR] airline: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data maskapai")
 		return
 	}

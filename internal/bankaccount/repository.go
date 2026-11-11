@@ -54,26 +54,32 @@ func (r *Repository) Create(ctx context.Context, req UpsertRequest) (*BankAccoun
 	if err != nil {
 		return nil, fmt.Errorf("bankaccount.Create: %w", err)
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("bankaccount.Create LastInsertId: %w", err)
+	}
 	return r.Get(ctx, id)
 }
 func (r *Repository) Update(ctx context.Context, id int64, req UpsertRequest) (*BankAccount, error) {
 	res, err := r.db.ExecContext(ctx, `UPDATE bank_accounts SET brand_id=?,bank_name=?,logo_url=?,account_number=?,account_holder=?,instructions=?,is_active=?,sort_order=? WHERE id=?`, req.BrandID, req.BankName, req.LogoURL, req.AccountNumber, req.AccountHolder, req.Instructions, req.IsActive, req.SortOrder, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("bankaccount.Update: %w", err)
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return nil, ErrNotFound
+	// RowsAffected 0 juga terjadi bila tidak ada yang berubah; Get yang menentukan ada-tidaknya rekening.
+	if _, err := res.RowsAffected(); err != nil {
+		return nil, fmt.Errorf("bankaccount.Update baris: %w", err)
 	}
 	return r.Get(ctx, id)
 }
 func (r *Repository) Delete(ctx context.Context, id int64) error {
 	res, err := r.db.ExecContext(ctx, `DELETE FROM bank_accounts WHERE id=?`, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("bankaccount.Delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("bankaccount.Delete baris: %w", err)
+	}
 	if n == 0 {
 		return ErrNotFound
 	}

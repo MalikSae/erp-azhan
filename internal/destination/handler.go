@@ -35,10 +35,12 @@ func (h *Handler) ListDestinations(w http.ResponseWriter, r *http.Request) {
 
 // CreateDestination: POST /api/admin/destinations. Response 201: Destination baru.
 func (h *Handler) CreateDestination(w http.ResponseWriter, r *http.Request) {
-	name, slug, active, ok := decodeSave(w, r)
+	name, slug, aktif, ok := decodeSave(w, r)
 	if !ok {
 		return
 	}
+	// Destinasi baru aktif kecuali diminta lain.
+	active := aktif == nil || *aktif
 	d, err := h.repo.Create(r.Context(), name, slug, active)
 	if err != nil {
 		handleRepoError(w, err)
@@ -53,9 +55,21 @@ func (h *Handler) UpdateDestination(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, slug, active, ok := decodeSave(w, r)
+	name, slug, aktif, ok := decodeSave(w, r)
 	if !ok {
 		return
+	}
+	// is_active yang tidak dikirim berarti tidak diubah: pakai nilai yang tersimpan.
+	var active bool
+	if aktif != nil {
+		active = *aktif
+	} else {
+		lama, err := h.repo.GetByID(r.Context(), id)
+		if err != nil {
+			handleRepoError(w, err)
+			return
+		}
+		active = lama.IsActive
 	}
 	d, err := h.repo.Update(r.Context(), id, name, slug, active)
 	if err != nil {
@@ -80,31 +94,27 @@ func (h *Handler) DeleteDestination(w http.ResponseWriter, r *http.Request) {
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
-func decodeSave(w http.ResponseWriter, r *http.Request) (name, slug string, active bool, ok bool) {
+func decodeSave(w http.ResponseWriter, r *http.Request) (name, slug string, active *bool, ok bool) {
 	var req SaveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
-		return "", "", false, false
+		return "", "", nil, false
 	}
 	name = strings.TrimSpace(req.Name)
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "nama destinasi wajib diisi")
-		return "", "", false, false
+		return "", "", nil, false
 	}
 	if len([]rune(name)) > 100 {
 		writeError(w, http.StatusBadRequest, "nama destinasi maksimal 100 karakter")
-		return "", "", false, false
+		return "", "", nil, false
 	}
 	slug = strings.ToLower(strings.TrimSpace(req.Slug))
 	if !ValidSlug(slug) {
 		writeError(w, http.StatusBadRequest, "slug destinasi hanya huruf kecil, angka, dan tanda hubung (mis. abu-dhabi)")
-		return "", "", false, false
+		return "", "", nil, false
 	}
-	active = true
-	if req.IsActive != nil {
-		active = *req.IsActive
-	}
-	return name, slug, active, true
+	return name, slug, req.IsActive, true
 }
 
 // ─── Error handling ───────────────────────────────────────────────────────────

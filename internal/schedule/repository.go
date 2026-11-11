@@ -161,7 +161,10 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 			}
 		}
 
-		th, _ := r.GetTransitHotelsByScheduleID(ctx, item.ID)
+		th, errTransit := r.GetTransitHotelsByScheduleID(ctx, item.ID)
+		if errTransit != nil {
+			return nil, fmt.Errorf("schedule.List hotel transit: %w", errTransit)
+		}
 		item.TransitHotels = th
 
 		items = append(items, item)
@@ -176,19 +179,24 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 		}
 		bQuery := fmt.Sprintf(`SELECT schedule_id, COUNT(*) FROM bookings WHERE schedule_id IN (%s) GROUP BY schedule_id`, strings.Join(placeholders, ","))
 		bRows, err := r.db.QueryContext(ctx, bQuery, ids...)
-		if err == nil {
-			defer bRows.Close()
-			bCountMap := make(map[int64]int)
-			for bRows.Next() {
-				var schedID int64
-				var count int
-				if err := bRows.Scan(&schedID, &count); err == nil {
-					bCountMap[schedID] = count
-				}
+		if err != nil {
+			return nil, fmt.Errorf("schedule.List jumlah booking: %w", err)
+		}
+		defer bRows.Close()
+		bCountMap := make(map[int64]int)
+		for bRows.Next() {
+			var schedID int64
+			var count int
+			if err := bRows.Scan(&schedID, &count); err != nil {
+				return nil, fmt.Errorf("schedule.List jumlah booking: %w", err)
 			}
-			for i := range items {
-				items[i].BookingCount = bCountMap[items[i].ID]
-			}
+			bCountMap[schedID] = count
+		}
+		if err := bRows.Err(); err != nil {
+			return nil, fmt.Errorf("schedule.List jumlah booking: %w", err)
+		}
+		for i := range items {
+			items[i].BookingCount = bCountMap[items[i].ID]
 		}
 	}
 
@@ -487,7 +495,7 @@ func (r *Repository) UpdateSeat(ctx context.Context, id int64, seatSisa int, exp
 }
 
 // updateSeatTx menjalankan penyesuaian di dalam transaksi pemanggil; mengembalikan
-// brand pemilik dan sisa kursi sebelum diubah.
+// brand pemilik dan sisa seat sebelum diubah.
 func updateSeatTx(ctx context.Context, tx *sql.Tx, id int64, seatSisa int, expected *int, brandID *int64, reason string, actorID int64) (owner int64, current int, err error) {
 	reason = strings.TrimSpace(reason)
 	if expected == nil || reason == "" {
@@ -521,7 +529,7 @@ func updateSeatTx(ctx context.Context, tx *sql.Tx, id int64, seatSisa int, expec
 	return owner, current, nil
 }
 
-// SeatOverview mengambil ringkasan kursi dan 20 riwayat penyesuaian terakhir.
+// SeatOverview mengambil ringkasan seat dan 20 riwayat penyesuaian terakhir.
 // brandID non-nil membatasi ke paket milik brand itu (ErrNotFound bila bukan).
 func (r *Repository) SeatOverview(ctx context.Context, id int64, brandID *int64) (*SeatOverview, error) {
 	var o SeatOverview
@@ -649,11 +657,16 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 		return nil, err
 	}
 
-	th, _ := r.GetTransitHotelsByScheduleID(ctx, s.ID)
+	th, err := r.GetTransitHotelsByScheduleID(ctx, s.ID)
+	if err != nil {
+		return nil, fmt.Errorf("schedule.GetByID hotel transit: %w", err)
+	}
 	s.TransitHotels = th
 
 	var bCount int
-	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id = ?`, s.ID).Scan(&bCount)
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id = ?`, s.ID).Scan(&bCount); err != nil {
+		return nil, fmt.Errorf("schedule.GetByID jumlah booking: %w", err)
+	}
 	s.BookingCount = bCount
 
 	kl, err := r.loadKlasifikasi(ctx, []int64{s.ID})
