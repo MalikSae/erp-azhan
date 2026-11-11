@@ -12,8 +12,8 @@ export function getStatusBadgeConfig(status) {
 export function getSeatLockIcon(status, isSeatBlocked) {
   if (status === 'batal' || status === 'draft') return null; // Booking batal & draft tidak menampilkan status seat
   return isSeatBlocked
-    ? { icon: 'CircleCheckBig', colorClass: 'text-success-600', label: 'Seat Terkunci' }
-    : { icon: 'Loader', colorClass: 'text-warning-600', label: 'Seat Belum Terkunci' };
+    ? { icon: 'CircleCheckBig', colorClass: 'text-success-600', label: 'Seat Di-hold' }
+    : { icon: 'Loader', colorClass: 'text-warning-600', label: 'Seat Belum Di-hold' };
 }
 
 // Status pembayaran: satu sumber label & gaya untuk Detail Booking dan daftar Pembayaran.

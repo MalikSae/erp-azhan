@@ -7,6 +7,7 @@ import (
 	"erp-azhan/api/internal/perlengkapan"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -24,8 +25,10 @@ var (
 	ErrNotFound                        = errors.New("data tidak ditemukan")
 	ErrSeatHabis                       = errors.New("seat sudah habis, tidak bisa konfirmasi DP")
 	ErrInvalidStatus                   = errors.New("status tidak valid")
-	ErrSeatBelumDiblokir               = errors.New("seat booking belum diblokir")
-	ErrSeatSudahDiblokir               = errors.New("seat booking sudah diblokir oleh permintaan lain")
+	ErrSeatBelumDiblokir               = errors.New("seat booking ini belum di-hold")
+	ErrSeatSudahDiblokir               = errors.New("seat booking ini sudah di-hold oleh permintaan lain")
+	// ErrSeatTerkonfirmasi: seat booking yang sudah dibayar (dp/lunas) hanya lepas lewat pembatalan.
+	ErrSeatTerkonfirmasi               = errors.New("seat booking yang sudah dibayar tidak dapat dilepas. Batalkan booking atau jamaahnya bila seat memang harus dilepas")
 	ErrTemplatePerlengkapanBelumDiatur = errors.New("template set perlengkapan belum diatur untuk brand ini")
 	ErrPerlengkapanSudahDiberikan      = errors.New("perlengkapan untuk booking ini sudah pernah diberikan")
 	ErrPerlengkapanBelumDiberikan      = errors.New("perlengkapan belum pernah diberikan untuk booking ini")
@@ -1089,7 +1092,7 @@ func hargaPaxSaatIniTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	return nil
 }
 
-func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Booking, error) {
+func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64, bolehDiskonBesar bool) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.Finalize tx: %w", err)
@@ -1274,6 +1277,11 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 	if err := shared.GugurkanKlaimPembuatBooking(ctx, tx, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.Finalize: %w", err)
 	}
+	// Harga pax baru saja ditetapkan dari harga jadwal saat ini. Diskon yang ditambahkan selagi draft
+	// diperiksa terhadap harga itu, supaya draft tidak menjadi jalan melewati batas diskon.
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, bookingID, math.Inf(1), bolehDiskonBesar); err != nil {
+		return nil, err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("booking.Finalize commit: %w", err)
@@ -1344,7 +1352,7 @@ func returPerlengkapanPaxTx(ctx context.Context, tx *sql.Tx, brandID, paxID int6
 }
 
 // CancelPax membatalkan status satu pax pada booking dan mengembalikan kuota kursi jika eligible.
-func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64, brandID *int64) (*Booking, error) {
+func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64, brandID *int64, bolehDiskonBesar bool) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.CancelPax tx: %w", err)
@@ -1388,6 +1396,11 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 	}
 	if paxStatus == "batal" {
 		return nil, ErrPaxAlreadyCancelled
+	}
+
+	hargaSebelum, err := jumlahHargaPaxTx(ctx, tx, bookingID)
+	if err != nil {
+		return nil, err
 	}
 
 	// 2.5 Handle Perlengkapan
@@ -1506,6 +1519,14 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 		return nil, fmt.Errorf("booking.CancelPax sync seat_count: %w", err)
 	}
 
+	// Booking yang tetap berjalan: pembatalan pax tidak boleh membuat diskon melewati batas. Booking yang
+	// ikut batal (tidak ada pax reguler tersisa) tidak punya tagihan, jadi dikecualikan.
+	if activeAdultChildCount > 0 {
+		if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, bookingID, hargaSebelum, bolehDiskonBesar); err != nil {
+			return nil, err
+		}
+	}
+
 	// 6. Recalculate total harga (karena sudah mengubah status/harga_pax)
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.CancelPax recalc: %w", err)
@@ -1522,7 +1543,7 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 // ─── Update Pax Room Type ─────────────────────────────────────────────────────
 
 // UpdatePaxRoomType mengubah tipe kamar satu pax dan memperbarui total_harga booking secara otomatis.
-func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, paxID int64, newRoomType string, brandID *int64) (*Booking, error) {
+func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, paxID int64, newRoomType string, brandID *int64, bolehDiskonBesar bool) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.UpdatePaxRoomType tx: %w", err)
@@ -1589,10 +1610,19 @@ func (r *Repository) UpdatePaxRoomType(ctx context.Context, bookingID int64, pax
 		return nil, fmt.Errorf("booking.UpdatePaxRoomType lookup price: %w", err)
 	}
 
+	hargaSebelum, err := jumlahHargaPaxTx(ctx, tx, bookingID)
+	if err != nil {
+		return nil, err
+	}
+
 	// 4. Update booking_pax
 	_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET room_type = ?, harga_pax = ? WHERE id = ?`, newRoomType, newHarga, paxID)
 	if err != nil {
 		return nil, fmt.Errorf("booking.UpdatePaxRoomType update pax: %w", err)
+	}
+	// Pindah ke kamar yang lebih murah tidak boleh membuat diskon melewati batas.
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, bookingID, hargaSebelum, bolehDiskonBesar); err != nil {
+		return nil, err
 	}
 
 	// 5. Recalculate total_harga
@@ -1744,7 +1774,8 @@ func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Boo
 	var scheduleID int64
 	var isBlocked bool
 	var seatCount int
-	err = tx.QueryRowContext(ctx, `SELECT schedule_id, is_seat_blocked, seat_count FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&scheduleID, &isBlocked, &seatCount)
+	var status string
+	err = tx.QueryRowContext(ctx, `SELECT schedule_id, is_seat_blocked, seat_count, status FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&scheduleID, &isBlocked, &seatCount, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -1753,6 +1784,11 @@ func (r *Repository) CancelSeatBlock(ctx context.Context, bookingID int64) (*Boo
 	}
 	if !isBlocked {
 		return nil, ErrSeatBelumDiblokir
+	}
+	// Seat terkonfirmasi: jamaah yang sudah membayar tidak boleh kehilangan seat tanpa pembatalan
+	// (keputusan 11 November 2026). Pelepasan manual hanya untuk booking yang belum dibayar.
+	if seatTerkonfirmasi(status) {
+		return nil, ErrSeatTerkonfirmasi
 	}
 	var activeRegularPax int
 	err = tx.QueryRowContext(ctx, `
@@ -1944,6 +1980,43 @@ const BatasDiskonPersen = 10
 // melebihiBatasDiskon: apakah total diskon melewati BatasDiskonPersen dari jumlah harga pax.
 func melebihiBatasDiskon(hargaPax, totalDiskon float64) bool {
 	return totalDiskon*100 > hargaPax*BatasDiskonPersen
+}
+
+// seatTerkonfirmasi: booking yang sudah dibayar (dp atau lunas) memegang seat secara tetap.
+func seatTerkonfirmasi(status string) bool {
+	return status == "dp" || status == "lunas"
+}
+
+// jumlahHargaPaxTx menjumlahkan harga_pax semua pax sebuah booking.
+func jumlahHargaPaxTx(ctx context.Context, tx *sql.Tx, bookingID int64) (float64, error) {
+	var harga float64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(harga_pax), 0) FROM booking_pax WHERE booking_id = ?`, bookingID).Scan(&harga); err != nil {
+		return 0, fmt.Errorf("booking: jumlah harga pax: %w", err)
+	}
+	return harga, nil
+}
+
+// cekBatasDiskonSetelahHargaTurunTx menolak perubahan yang menurunkan jumlah harga pax sampai total diskon
+// melewati batas (keputusan 11 November 2026). Batas diskon dulu hanya diperiksa saat diskon ditambahkan,
+// sehingga membatalkan pax atau pindah ke kamar lebih murah sesudahnya menaikkan persentase diskon tanpa
+// pemeriksaan. hargaSebelum: jumlah harga pax sebelum perubahan; perubahan yang tidak menurunkan harga
+// tidak diperiksa, supaya booking berdiskon besar yang sah tidak terkunci. Pemegang izin diskon besar lolos.
+func cekBatasDiskonSetelahHargaTurunTx(ctx context.Context, tx *sql.Tx, bookingID int64, hargaSebelum float64, bolehDiskonBesar bool) error {
+	if bolehDiskonBesar {
+		return nil
+	}
+	var hargaPax, totalDiskon float64
+	err := tx.QueryRowContext(ctx, `
+		SELECT (SELECT COALESCE(SUM(harga_pax), 0) FROM booking_pax WHERE booking_id = ?),
+		       (SELECT COALESCE(SUM(nominal), 0) FROM booking_discounts WHERE booking_id = ?)`, bookingID, bookingID).Scan(&hargaPax, &totalDiskon)
+	if err != nil {
+		return fmt.Errorf("booking.cekBatasDiskonSetelahHargaTurun: %w", err)
+	}
+	if hargaPax >= hargaSebelum || !melebihiBatasDiskon(hargaPax, totalDiskon) {
+		return nil
+	}
+	return bizErr("total diskon (%s) akan melebihi batas %d%% dari harga (%s). Hapus atau kecilkan diskon lebih dulu, atau minta pengguna dengan izin diskon besar",
+		formatRupiah(totalDiskon), BatasDiskonPersen, formatRupiah(hargaPax))
 }
 
 // cekBatasDiskonTx menolak total diskon di atas batas. Dipanggil setelah diskon baru disisipkan, di dalam

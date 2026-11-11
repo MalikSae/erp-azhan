@@ -2,6 +2,8 @@ package booking
 
 import (
 	"context"
+	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,5 +78,58 @@ func TestReturPerlengkapanPaxTx(t *testing.T) {
 	testdb.Exec(t, tx, `UPDATE booking_pax SET pax_status='batal' WHERE id=?`, b.PaxID)
 	if ids, err := paxAktifBerperlengkapanTx(ctx, tx, b.ID); err != nil || len(ids) != 0 {
 		t.Fatalf("pax batal tidak boleh terdaftar: ids=%v err=%v", ids, err)
+	}
+}
+
+// Keputusan 11 November 2026 (C3): seat terkonfirmasi hanya untuk booking yang sudah dibayar.
+func TestSeatTerkonfirmasi(t *testing.T) {
+	for status, mau := range map[string]bool{"draft": false, "baru": false, "dp": true, "lunas": true, "batal": false} {
+		if got := seatTerkonfirmasi(status); got != mau {
+			t.Errorf("seatTerkonfirmasi(%q) = %v, mau %v", status, got, mau)
+		}
+	}
+}
+
+// Keputusan 11 November 2026 (C2): perubahan yang menurunkan harga pax tidak boleh membuat diskon melewati
+// batas 10%, kecuali pelakunya pemegang izin diskon besar.
+func TestCekBatasDiskonSetelahHargaTurunTx(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	b := testdb.NewBooking(t, tx, testdb.BookingOpts{Status: "baru", TotalHarga: 30_000_000, MinimalDP: 5_000_000, Blocked: true})
+	testdb.Exec(t, tx, `INSERT INTO booking_discounts (booking_id, nama, nominal) VALUES (?, 'Uji', 3000000)`, b.ID)
+
+	awal, err := jumlahHargaPaxTx(ctx, tx, b.ID)
+	if err != nil || awal != 30_000_000 {
+		t.Fatalf("harga awal = %v, %v", awal, err)
+	}
+	// Diskon tepat 10% dan harga tidak berubah: lolos.
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, b.ID, awal, false); err != nil {
+		t.Fatalf("harga tetap: %v", err)
+	}
+
+	// Harga turun ke 20 juta (pindah kamar lebih murah): diskon 3 juta menjadi 15%.
+	testdb.Exec(t, tx, `UPDATE booking_pax SET harga_pax = 20000000 WHERE id = ?`, b.PaxID)
+	var biz *BusinessError
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, b.ID, awal, false); !errors.As(err, &biz) {
+		t.Fatalf("harga turun melewati batas: err = %v, mau BusinessError", err)
+	}
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, b.ID, awal, true); err != nil {
+		t.Fatalf("pemegang izin diskon besar harus lolos: %v", err)
+	}
+	// Booking yang diskonnya sudah di atas batas tetap boleh diubah selama harga tidak turun.
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, b.ID, 20_000_000, false); err != nil {
+		t.Fatalf("harga tidak turun pada booking berdiskon besar: %v", err)
+	}
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, b.ID, 15_000_000, false); err != nil {
+		t.Fatalf("harga naik: %v", err)
+	}
+	// Finalisasi memakai harga sebelum tak hingga: selalu diperiksa.
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, b.ID, math.Inf(1), false); !errors.As(err, &biz) {
+		t.Fatalf("finalisasi dengan diskon di atas batas: err = %v, mau BusinessError", err)
+	}
+	// Harga turun tetapi diskon masih dalam batas: lolos.
+	testdb.Exec(t, tx, `UPDATE booking_discounts SET nominal = 2000000 WHERE booking_id = ?`, b.ID)
+	if err := cekBatasDiskonSetelahHargaTurunTx(ctx, tx, b.ID, awal, false); err != nil {
+		t.Fatalf("diskon 10%% dari harga baru: %v", err)
 	}
 }

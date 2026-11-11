@@ -30,6 +30,19 @@ _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lam
 
 **Pax**: satu kursi dalam booking (`booking_pax`). Jenis: reguler atau bayi (infant).
 
+**Kuota seat**: jumlah seat yang dijual untuk satu jadwal (`schedules.seat_total`). Padanan "block seat" atau allotment yang travel pesan dari maskapai.
+
+**Sisa seat**: kuota seat dikurangi seat yang sedang di-hold (`schedules.seat_sisa`).
+
+**Hold seat**: seat sebuah booking sudah mengurangi sisa seat jadwal, sehingga tidak bisa dijual ke booking lain (`bookings.is_seat_blocked`). Yang memakai seat hanya pax reguler; bayi tidak.
+_Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti kuota dari maskapai; "kunci" dipakai untuk kunci baris database).
+
+**Batas waktu hold**: saat hold seat berakhir bila booking belum dibayar (`bookings.seat_hold_expires_at`). Booking dari web dan agen: 24 jam. Kosong berarti hold tetap.
+
+**Seat terkonfirmasi**: hold seat pada booking yang sudah dibayar (status dp atau lunas). Tanpa batas waktu, dan tidak bisa dilepas lewat tombol; hanya lepas bila booking atau pax dibatalkan.
+
+**Lepas seat**: seat dikembalikan ke sisa seat jadwal. Terjadi saat booking atau pax dibatalkan, saat batas waktu hold lewat, atau lewat tombol Lepas Seat pada booking yang belum dibayar.
+
 **Lunas**: status booking yang memicu pencatatan komisi. Komisi mengikuti lunas terakhir: booking yang turun dari lunas membatalkan komisinya, dan komisi dihitung ulang saat booking lunas lagi.
 
 **Komisi batal**: baris komisi yang ditandai batal karena bookingnya turun dari lunas. Tidak dihapus dan tidak dihitung di saldo, total, maupun peringkat.
