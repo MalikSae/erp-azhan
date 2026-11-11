@@ -4,6 +4,7 @@ import Button from 'shared/ui/Button';
 import Input from 'shared/ui/Input';
 import Modal from 'shared/ui/Modal';
 import Alert from 'shared/ui/Alert';
+import Badge from 'shared/ui/Badge';
 import FormField from 'shared/ui/FormField';
 import FileInput from 'shared/ui/FileInput';
 import Toggle from 'shared/ui/Toggle';
@@ -194,10 +195,7 @@ const BrandBankAccounts = ({ brandId }) => {
                   {' · a.n. '}{a.account_holder}
                 </div>
               </div>
-              <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${a.is_active ? 'text-success-700' : 'text-neutral-500'}`}>
-                <span className={`w-2 h-2 rounded-full ${a.is_active ? 'bg-success-500' : 'bg-neutral-300'}`} />
-                {a.is_active ? 'Aktif' : 'Nonaktif'}
-              </span>
+              <Badge variant={a.is_active ? 'success' : 'neutral'}>{a.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
               <button
                 type="button"
                 onClick={() => openEdit(a)}

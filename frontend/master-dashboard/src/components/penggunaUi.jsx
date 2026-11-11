@@ -1,5 +1,6 @@
 import React from 'react';
 import BrandLabel from 'shared/ui/BrandLabel';
+import Badge from 'shared/ui/Badge';
 
 // Potongan UI bersama halaman Pengguna & Struktur Organisasi (gaya SmartHR).
 
@@ -12,16 +13,9 @@ export const errMsg = (error, fallback) => {
 export const actionBtn =
   'w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
+// Status Aktif/Nonaktif memakai Badge bersama (satu gaya status, lihat Badge.jsx).
 export const StatusChip = ({ active, activeLabel = 'Aktif', inactiveLabel = 'Nonaktif' }) =>
-  active ? (
-    <span className="inline-flex items-center gap-1.5 text-xs font-body text-success-700">
-      <span className="w-2 h-2 rounded-full bg-success-500" />{activeLabel}
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 text-xs font-body text-neutral-500">
-      <span className="w-2 h-2 rounded-full bg-neutral-300" />{inactiveLabel}
-    </span>
-  );
+  <Badge variant={active ? 'success' : 'neutral'}>{active ? activeLabel : inactiveLabel}</Badge>;
 
 // Akses brand: gaya sama dengan penanda brand di daftar Paket (dot warna + nama).
 export const AksesChip = ({ brandId, brandName, brandColor }) => {
@@ -34,18 +28,9 @@ export const AksesChip = ({ brandId, brandName, brandColor }) => {
   );
 };
 
-export const SoftBadge = ({ children, tone = 'primary', title }) => {
-  const tones = {
-    primary: 'bg-primary-50 text-primary-700 border-primary-200',
-    warning: 'bg-warning-50 text-warning-700 border-warning-200',
-    neutral: 'bg-neutral-50 text-neutral-600 border-neutral-200',
-  };
-  return (
-    <span title={title} className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading border ${tones[tone] || tones.primary}`}>
-      {children}
-    </span>
-  );
-};
+export const SoftBadge = ({ children, tone = 'neutral', title }) => (
+  <span title={title}><Badge variant={tone}>{children}</Badge></span>
+);
 
 // Kartu bergaya referensi dengan header judul.
 export const Panel = ({ title, right, children, bodyClass = 'p-5' }) => (

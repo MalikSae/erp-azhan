@@ -4,6 +4,7 @@ import { getDetailAgen, ubahStatusAgen } from '../api/agen';
 import { ubahNikAgen } from '../api/akun';
 import { Banknote, Clock3, History, Network, Pencil, TrendingUp, UserCheck, Wallet } from 'lucide-react';
 import Alert from '../components/ui/Alert';
+import Badge, { toneFromClass } from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import MetaBox from '../components/ui/MetaBox';
@@ -32,12 +33,7 @@ const DOT_STYLE = {
 
 const StatusDot = ({ variant = 'neutral', children }) => {
   const s = DOT_STYLE[variant] || DOT_STYLE.neutral;
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${s.text}`}>
-      <span className={`w-2 h-2 rounded-full ${s.dot}`} />
-      {children}
-    </span>
-  );
+  return <Badge variant={toneFromClass(s.dot)}>{children}</Badge>;
 };
 
 const bayarMeta = {

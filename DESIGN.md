@@ -145,7 +145,7 @@ Aturan:
 - **Button gelap** (`variant="dark"`): `neutral-800`, untuk aksi kuat yang bukan aksi utama.
 - **Button sekunder**: putih, border `neutral-200`, bayangan tipis `shadow-btn-secondary`, radius 8px (seperti "Last 24 hours").
 - **Kolom cari**: putih, border `neutral-200`, radius 8px, petunjuk `Ctrl K` dalam kotak kecil di kanan.
-- **Badge**: radius 4px, border tipis, `text-xs`. Badge "Baru" abu netral, bukan berwarna.
+- **Badge**: satu-satunya gaya status. Kotak tint tipis, radius 4px, border tipis, `text-xs font-medium`, tanpa ikon dan tanpa titik. Nada: `success`, `warning`, `danger`, `info`, `neutral`, `promo` (peta lengkap di design-system.md §5.2).
 - **Kartu**: putih, border `neutral-200`, radius 8px, tanpa bayangan.
 - **Daftar ringkas** (pola Cloudflare "Domains", "Recents"): tanpa kartu. Baris 48px, garis `neutral-200` di antara baris, ikon abu di kiri, chevron `>` di kanan. Pakai untuk widget dashboard dan daftar pendek.
 - **DataTable**: tetap kartu berbingkai radius 8px untuk daftar panjang dengan toolbar. Header `neutral-50`, baris dipisah garis.
@@ -182,3 +182,4 @@ Cincin fokus 2px wajib di semua elemen interaktif. Target sentuh mobile minimal 
 - [2026-11-11] (color) Token `primary` adalah skala abu-hitam; oranye hanya lewat `accent` untuk logo, promo, dan grafik — Mengubah satu token membuat semua kelas primary-* lama ikut monokrom.
 - [2026-11-11] (buttons) Tombol primer meniru "Watch now" dash.cloudflare.com: gradien oranye #FF8130 ke #FF6A00, border #E25A00, kilap tepi atas, bayangan oranye lembut, radius 8px — User minta tombol sama dengan Cloudflare. Konsekuensi diterima: teks putih di oranye ini 2.5–2.9:1, gagal WCAG AA; kalau jadi masalah, gelapkan gradien ke accent-700 tanpa mengubah bentuk.
 - [2026-11-11] (typography) Inter untuk judul, angka statistik, tombol, dan badge (font-heading); Roboto untuk semua teks isi (font-body, default body) — Permintaan user. Weight maksimal font-semibold; font-bold disapu dari seluruh halaman.
+- [2026-11-12] (status) Semua status memakai satu gaya: komponen Badge (kotak tint, tanpa ikon, tanpa titik) dengan nada success/warning/danger/info/neutral/promo; override warna lewat className dan span status buatan sendiri dilarang — User melihat status beda-beda antar halaman (Badge kotak, titik + teks, pil bertitik) dan memilih satu gaya.

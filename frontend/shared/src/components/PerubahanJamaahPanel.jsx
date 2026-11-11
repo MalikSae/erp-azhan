@@ -3,28 +3,25 @@ import { Eye } from 'lucide-react';
 import { listPerubahanJamaah, getPerubahanJamaah, setujuiPerubahanJamaah, tolakPerubahanJamaah } from '../api/perubahanJamaah';
 import Alert from './ui/Alert';
 import ActionMenu from './ui/ActionMenu';
+import Badge from './ui/Badge';
 import Button from './ui/Button';
 import DataTable from './ui/DataTable';
 import Modal from './ui/Modal';
 
 const waktu = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 
+// Nada Badge per status perubahan data (satu gaya status, lihat Badge.jsx).
 const STATUS = {
-  menunggu: { label: 'Menunggu persetujuan', dot: 'bg-warning-500' },
-  disetujui: { label: 'Disetujui', dot: 'bg-success-500' },
-  ditolak: { label: 'Ditolak', dot: 'bg-danger-500' },
-  diganti: { label: 'Digantikan pengajuan baru', dot: 'bg-neutral-400' },
-  langsung: { label: 'Langsung tersimpan', dot: 'bg-info-500' },
+  menunggu: { label: 'Menunggu persetujuan', variant: 'warning' },
+  disetujui: { label: 'Disetujui', variant: 'success' },
+  ditolak: { label: 'Ditolak', variant: 'danger' },
+  diganti: { label: 'Digantikan pengajuan baru', variant: 'neutral' },
+  langsung: { label: 'Langsung tersimpan', variant: 'info' },
 };
 
 const StatusDot = ({ status }) => {
-  const meta = STATUS[status] || { label: status, dot: 'bg-neutral-400' };
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-body text-neutral-700">
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
-      {meta.label}
-    </span>
-  );
+  const meta = STATUS[status] || { label: status, variant: 'neutral' };
+  return <Badge variant={meta.variant}>{meta.label}</Badge>;
 };
 
 const pelaku = (row) => (row.sumber === 'admin' ? `Admin ${row.pelaku || ''}`.trim() : row.akun_nama || 'Pelanggan');

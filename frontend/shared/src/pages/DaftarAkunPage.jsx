@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { listAkunPelanggan } from '../api/akun';
 import { listBrandOptions } from '../api/brands';
 import Alert from '../components/ui/Alert';
+import Badge, { toneFromClass } from '../components/ui/Badge';
 import BrandLabel from '../components/ui/BrandLabel';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import DataTable from '../components/ui/DataTable';
@@ -30,11 +31,7 @@ const UPLINE_OPTIONS = [
 
 export const StatusAkun = ({ status }) => {
   const s = STATUS_AKUN[status] || STATUS_AKUN.tidak_aktif;
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${s.text}`}>
-      <span className={`w-2 h-2 rounded-full ${s.dot}`} />{s.label}
-    </span>
-  );
+  return <Badge variant={toneFromClass(s.dot)}>{s.label}</Badge>;
 };
 
 // Kolom hanya memuat data milik akun. Closing, komisi, dan kode referral ada di menu Agen; di sini
@@ -56,11 +53,7 @@ const STATUS_KEAGENAN = {
 const TandaAgen = ({ row }) => {
   const s = STATUS_KEAGENAN[row.status_agen];
   if (!s) return <span className="text-sm text-neutral-400">-</span>;
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${s.text}`}>
-      <span className={`w-2 h-2 rounded-full ${s.dot}`} />{s.label}
-    </span>
-  );
+  return <Badge variant={toneFromClass(s.dot)}>{s.label}</Badge>;
 };
 
 // Daftar akun (baca saja). Paging dan pencarian dari server. Admin brand hanya melihat brand-nya;

@@ -16,15 +16,10 @@ import { AuthContext } from '../context/AuthContext';
 
 const STATUS_LABEL = { published: 'Published', draft: 'Draft', archived: 'Archived' };
 
-const STATUS_STRONG = {
-  published: '!bg-success-100 !border-success-300 !text-success-800',
-  draft: '!border-neutral-400 !text-neutral-800',
-  archived: '!bg-neutral-200 !border-neutral-300 !text-neutral-800',
-};
-
+// Nada Badge per status paket (satu gaya status, lihat Badge.jsx).
 const StatusBadge = ({ status }) => {
   if (!STATUS_LABEL[status]) return <span className="text-xs text-neutral-400 font-body">-</span>;
-  return <Badge variant={status} hideIcon className={STATUS_STRONG[status]}>{STATUS_LABEL[status]}</Badge>;
+  return <Badge variant={status}>{STATUS_LABEL[status]}</Badge>;
 };
 
 const formatDate = (dateStr) => {

@@ -44,18 +44,18 @@ const formatPaxDetail = (row) => {
   return `${reg} reguler`;
 };
 
-// Status booking memakai Badge bersama; warna dipertegas agar terbaca di atas latar abu-abu.
+// Status booking memakai Badge bersama (satu gaya status, lihat Badge.jsx).
 const STATUS_BADGE = {
-  draft: { label: 'Draft', variant: 'draft', cls: '!border-neutral-400 !text-neutral-800' },
-  baru: { label: 'Baru', variant: 'neutral', cls: '!bg-info-100 !border-info-500 !text-info-600' },
-  dp: { label: 'DP', variant: 'warning', cls: '!bg-warning-100 !border-warning-300 !text-warning-800' },
-  lunas: { label: 'Lunas', variant: 'success', cls: '!bg-success-100 !border-success-300 !text-success-800' },
-  batal: { label: 'Batal', variant: 'danger', cls: '!bg-danger-100 !border-danger-200 !text-danger-700' },
+  draft: { label: 'Draft', variant: 'warning' },
+  baru: { label: 'Baru', variant: 'info' },
+  dp: { label: 'DP', variant: 'warning' },
+  lunas: { label: 'Lunas', variant: 'success' },
+  batal: { label: 'Batal', variant: 'danger' },
 };
 
 const StatusPill = ({ status }) => {
-  const s = STATUS_BADGE[status] || { label: status || '-', variant: 'archived', cls: '!bg-neutral-200 !border-neutral-300 !text-neutral-800' };
-  return <Badge variant={s.variant} hideIcon className={s.cls}>{s.label}</Badge>;
+  const s = STATUS_BADGE[status] || { label: status || '-', variant: 'neutral' };
+  return <Badge variant={s.variant}>{s.label}</Badge>;
 };
 
 // Brand: titik warna + nama (gaya sama dengan daftar Paket).

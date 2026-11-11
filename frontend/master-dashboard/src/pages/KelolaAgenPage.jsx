@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { TriangleAlert } from 'lucide-react';
 import { dateLabel, listAgen, listBrandOptions, money } from 'shared';
 import Alert from 'shared/ui/Alert';
+import Badge, { toneFromClass } from 'shared/ui/Badge';
 import BrandLabel from 'shared/ui/BrandLabel';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import DataTable from 'shared/ui/DataTable';
@@ -14,10 +15,11 @@ import { BAYAR_META, muatPengajuanAgen, useJumlahPengajuanAgen } from '../utils/
 
 const ALAMAT_TAB = { semua: '/agen', pengajuan: '/agen/pengajuan' };
 
+// Nada Badge per status agen (satu gaya status, lihat Badge.jsx).
 const STATUS = {
-  aktif: { label: 'Aktif', dot: 'bg-success-500', text: 'text-success-700' },
-  nonaktif: { label: 'Nonaktif', dot: 'bg-neutral-300', text: 'text-neutral-500' },
-  pengajuan: { label: 'Mengajukan', dot: 'bg-warning-500', text: 'text-warning-700' },
+  aktif: { label: 'Aktif', variant: 'success' },
+  nonaktif: { label: 'Nonaktif', variant: 'neutral' },
+  pengajuan: { label: 'Mengajukan', variant: 'warning' },
 };
 // Urutan saat kolom Status diklik: yang butuh perhatian dulu.
 const URUT_STATUS = { pengajuan: 0, aktif: 1, nonaktif: 2 };
@@ -131,12 +133,10 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
     if (key === 'brand_name') return <BrandLabel name={brandsMap[row.brand_id]?.name || row.brand_name || '-'} color={brandsMap[row.brand_id]?.primary_color} />;
     if (key === 'upline_nama') return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.upline_nama || '-'}</span>;
     if (key === 'status_agen') {
-      const s = STATUS[row.status_agen] || { label: row.status_agen || '-', dot: 'bg-neutral-300', text: 'text-neutral-500' };
+      const s = STATUS[row.status_agen] || { label: row.status_agen || '-', variant: 'neutral' };
       return (
         <div>
-          <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${s.text}`}>
-            <span className={`w-2 h-2 rounded-full ${s.dot}`} />{s.label}
-          </span>
+          <Badge variant={s.variant}>{s.label}</Badge>
           {row.periksa_nik && <div className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-warning-700 whitespace-nowrap"><TriangleAlert size={12} />Periksa NIK</div>}
         </div>
       );
@@ -148,9 +148,7 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
         <div>
           <div className="text-sm font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.biaya)}</div>
           {row.biaya_keadaan && (
-            <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-body text-neutral-500 whitespace-nowrap">
-              <span className={`w-1.5 h-1.5 rounded-full ${row.biaya_keadaan.dot}`} />{row.biaya_keadaan.label}
-            </span>
+            <div className="mt-1"><Badge variant={toneFromClass(row.biaya_keadaan.dot)}>{row.biaya_keadaan.label}</Badge></div>
           )}
         </div>
       );

@@ -64,41 +64,8 @@ const formatTanggal = (dateStr) => {
   }
 };
 
-const STATUS_STYLE = {
-  draft: { label: 'Draft', chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' },
-  baru: { label: 'Baru', chip: 'bg-info-50 text-info-700 border-info-200', dot: 'bg-info-500' },
-  dp: { label: 'DP', chip: 'bg-warning-50 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
-  lunas: { label: 'Lunas', chip: 'bg-success-50 text-success-700 border-success-200', dot: 'bg-success-500' },
-  batal: { label: 'Batal', chip: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
-};
-
-
-// Badge status utama (bentuk sama dengan komponen Badge): titik berwarna kecil + teks.
-const StatusPill = ({ status, styleMap = STATUS_STYLE }) => {
-  const s = styleMap[status] || { label: status, chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' };
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading border ${s.chip}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-      {s.label}
-    </span>
-  );
-};
-
-// Status ringan: titik + teks tanpa bingkai.
-const DotText = ({ tone, children }) => {
-  const tones = {
-    success: { text: 'text-success-700', dot: 'bg-success-500' },
-    warning: { text: 'text-warning-700', dot: 'bg-warning-500' },
-    neutral: { text: 'text-neutral-500', dot: 'bg-neutral-400' },
-  };
-  const t = tones[tone] || tones.neutral;
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${t.text}`}>
-      <span className={`w-2 h-2 rounded-full ${t.dot}`} />
-      {children}
-    </span>
-  );
-};
+// Status ringan memakai Badge bersama (satu gaya status, lihat Badge.jsx).
+const DotText = ({ tone, children }) => <Badge variant={tone}>{children}</Badge>;
 
 const PROGRESS_HEADER_MANUAL_ITEMS = [
   { key: 'tiket', label: 'Tiket PP' },
@@ -760,13 +727,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               <BrandBadge name={brand?.name || `Brand #${booking.brand_id}`} color={brand?.primary_color} />
             )}
             {seatLockInfo && (
-              <Badge
-                variant="neutral"
-                hideIcon
-                className={booking.is_seat_blocked
-                  ? "!bg-success-100 !border-success-300 !text-success-800"
-                  : "!bg-warning-100 !border-warning-300 !text-warning-800"}
-              >
+              <Badge variant={booking.is_seat_blocked ? 'success' : 'warning'}>
                 {seatLockInfo.label}
               </Badge>
             )}
@@ -1220,7 +1181,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   if (key === "status") {
                     return (
                       <div className="flex flex-col items-start gap-1">
-                        <Badge variant={getPaymentStatusMeta(p.status).variant} hideIcon className={getPaymentStatusMeta(p.status).className}>
+                        <Badge variant={getPaymentStatusMeta(p.status).variant}>
                           {getPaymentStatusMeta(p.status).label}
                         </Badge>
                         {p.status === "rejected" && p.rejection_reason && (
