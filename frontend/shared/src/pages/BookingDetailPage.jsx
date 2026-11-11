@@ -641,6 +641,10 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       setPaymentFormError("Nama staff penerima wajib diisi untuk pembayaran tunai");
       return;
     }
+    if (paymentForm.metode === "transfer" && !paymentForm.bukti_file) {
+      setPaymentFormError("Bukti transfer wajib diunggah untuk pembayaran transfer");
+      return;
+    }
 
     setPaymentSubmitting(true);
     setPaymentFormError(null);
@@ -1488,7 +1492,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             />
           )}
 
-          <FormField label="Bukti Pembayaran (Opsional)">
+          <FormField label={paymentForm.metode === "transfer" ? "Bukti Transfer (Wajib)" : "Bukti Pembayaran (Opsional)"}>
             {paymentForm.bukti_file ? (
               <div className="flex items-center justify-between p-3 bg-neutral-50 border border-neutral-200 rounded-xl">
                 <div className="flex items-center gap-2.5 overflow-hidden">

@@ -21,7 +21,11 @@ const statusMeta = PAYMENT_STATUS_META;
 const STATUS_STRONG = Object.fromEntries(
   Object.entries(PAYMENT_STATUS_META).map(([key, meta]) => [key, meta.className]),
 );
-const EMPTY_FILTERS = { status: '', brand: '', bank: '', from: '', to: '' };
+const EMPTY_FILTERS = { status: '', brand: '', bank: '', from: '', to: '', pencatat: '' };
+// Pembayaran yang dicatat admin langsung terkonfirmasi oleh orang yang sama. Filter ini untuk pengawasan:
+// menampilkan pembayaran yang pencatat dan verifikatornya satu orang.
+const pencatatSama = (item) => item.dicatat_oleh != null && item.dicatat_oleh === item.verified_by;
+const cocokPencatat = (item, nilai) => !nilai || pencatatSama(item);
 // CustomDropdown mengirim nilai langsung atau objek event.
 const valueOf = (v) => (v?.target ? v.target.value : v);
 
@@ -114,7 +118,8 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       && (!filters.brand || item.brand_name === filters.brand)
       && (!filters.bank || item.destination_bank_name === filters.bank)
       && (!filters.from || date >= filters.from)
-      && (!filters.to || date <= filters.to);
+      && (!filters.to || date <= filters.to)
+      && cocokPencatat(item, filters.pencatat);
   }).map((item) => ({
     ...item,
     invoice: item.booking_id_booking || item.id_booking || `ID: ${item.booking_id}`,
@@ -136,7 +141,8 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       return (!filters.brand || item.brand_name === filters.brand)
         && (!filters.bank || item.destination_bank_name === filters.bank)
         && (!filters.from || date >= filters.from)
-        && (!filters.to || date <= filters.to);
+        && (!filters.to || date <= filters.to)
+        && cocokPencatat(item, filters.pencatat);
     });
     const count = (status) => base.filter((i) => i.status === status).length;
     return [
@@ -146,13 +152,13 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       { value: 'rejected', label: `Ditolak (${count('rejected')})` },
       { value: 'void', label: `Dibatalkan (${count('void')})` },
     ];
-  }, [items, filters.brand, filters.bank, filters.from, filters.to]);
+  }, [items, filters.brand, filters.bank, filters.from, filters.to, filters.pencatat]);
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
   const resetFilters = () => setFilters(EMPTY_FILTERS);
   const hasFilters = Object.values(filters).some(Boolean);
   // Jumlah filter aktif di panel (status tampil terpisah di toolbar).
-  const panelActive = ['brand', 'bank', 'from', 'to'].filter((k) => filters[k]).length;
+  const panelActive = ['brand', 'bank', 'from', 'to', 'pencatat'].filter((k) => filters[k]).length;
 
   const openDetail = (payment) => {
     setActionError('');
@@ -339,7 +345,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
 
   const toolbarPanel = panelOpen && (
     <div className="space-y-3">
-      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${showBrandColumn ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${showBrandColumn ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         {showBrandColumn && (
           <CustomDropdown
             label="Brand"
@@ -358,6 +364,13 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
         />
         <Input label="Transfer dari" type="date" name="dari" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} />
         <Input label="Transfer sampai" type="date" name="sampai" value={filters.to} min={filters.from || undefined} onChange={(e) => setFilter('to', e.target.value)} />
+        <CustomDropdown
+          label="Pencatat"
+          value={filters.pencatat}
+          onChange={(v) => setFilter('pencatat', valueOf(v))}
+          options={[{ value: '', label: 'Semua pembayaran' }, { value: 'sama', label: 'Dicatat dan diverifikasi orang yang sama' }]}
+          placeholder="Semua pembayaran"
+        />
       </div>
       {hasFilters && (
         <div className="flex justify-end">
@@ -540,6 +553,18 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                     )}
                   </dd>
                 </div>
+                {selectedPayment.dicatat_oleh_nama && (
+                  <div className={row}>
+                    <dt className={dt}>Dicatat Oleh</dt>
+                    <dd className={dd}>{selectedPayment.dicatat_oleh_nama}</dd>
+                  </div>
+                )}
+                {selectedPayment.verified_by_nama && (
+                  <div className={row}>
+                    <dt className={dt}>Diverifikasi Oleh</dt>
+                    <dd className={dd}>{selectedPayment.verified_by_nama}{pencatatSama(selectedPayment) ? ' (orang yang sama dengan pencatat)' : ''}</dd>
+                  </div>
+                )}
                 {String(selectedPayment.metode || '').toLowerCase() === 'cash' ? (
                   <>
                     <div className={row}>

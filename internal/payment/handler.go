@@ -120,17 +120,17 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 
 	// Aturan catat pembayaran oleh admin: transfer wajib menyebut rekening tujuan,
 	// tunai wajib menyebut nama staff yang menerima uangnya.
-	metode := "transfer"
+	metode := metodeTransfer
 	if req.Metode != nil && strings.TrimSpace(*req.Metode) != "" {
 		metode = strings.ToLower(strings.TrimSpace(*req.Metode))
 	}
 	switch metode {
-	case "transfer":
+	case metodeTransfer:
 		if req.BankAccountID == nil || *req.BankAccountID <= 0 {
 			writeError(w, http.StatusBadRequest, "rekening tujuan wajib dipilih untuk pembayaran transfer")
 			return
 		}
-	case "cash":
+	case metodeTunai:
 		if req.ReceivedBy == nil || strings.TrimSpace(*req.ReceivedBy) == "" {
 			writeError(w, http.StatusBadRequest, "nama staff penerima wajib diisi untuk pembayaran tunai")
 			return
@@ -142,7 +142,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "metode pembayaran harus transfer atau cash")
 		return
 	}
-	if metode != "cash" {
+	if metode != metodeTunai {
 		req.ReceivedBy = nil
 	}
 	req.Metode = &metode // simpan nilai efektif (termasuk default transfer)
@@ -167,6 +167,13 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		} else {
 			req.BuktiURL = &trimmed
 		}
+	}
+
+	// Transfer yang dicatat admin wajib berbukti: pencatat dan verifikatornya orang yang sama, jadi bukti
+	// satu-satunya pegangan pihak lain (keputusan 11 November 2026). Tunai tidak punya bukti transfer.
+	if pesan := pesanBuktiWajib(metode, req.BuktiURL); pesan != "" {
+		writeError(w, http.StatusBadRequest, pesan)
+		return
 	}
 
 	// Verify booking

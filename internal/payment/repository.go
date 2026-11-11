@@ -84,14 +84,14 @@ func (r *Repository) ListDailyBrandTransactions(ctx context.Context, brandID *in
 
 // kolomPayment: kolom tabel payments beralias p, urutannya sama dengan tujuanScan.
 const kolomPayment = `p.id,p.booking_id,p.jumlah,p.metode,DATE_FORMAT(p.tanggal,'%Y-%m-%d'),p.status,p.bukti_url,p.bank_account_id,
-	p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.created_at`
+	p.destination_bank_name,p.destination_account_number,p.destination_account_holder,p.sender_name,p.sender_bank,p.received_by,p.notes,p.source,p.rejection_reason,p.verified_by,p.verified_at,p.void_reason,p.voided_by,p.voided_at,p.dicatat_oleh,p.created_at`
 
 // tujuanScan mengembalikan tujuan Scan untuk kolomPayment, diikuti kolom tambahan bila ada.
 func tujuanScan(p *Payment, tambahan ...any) []any {
 	dasar := []any{&p.ID, &p.BookingID, &p.Jumlah, &p.Metode, &p.Tanggal, &p.Status, &p.BuktiURL, &p.BankAccountID,
 		&p.DestinationBankName, &p.DestinationAccountNumber, &p.DestinationAccountHolder, &p.SenderName, &p.SenderBank,
 		&p.ReceivedBy, &p.Notes, &p.Source, &p.RejectionReason, &p.VerifiedBy, &p.VerifiedAt, &p.VoidReason, &p.VoidedBy,
-		&p.VoidedAt, &p.CreatedAt}
+		&p.VoidedAt, &p.DicatatOleh, &p.CreatedAt}
 	return append(dasar, tambahan...)
 }
 
@@ -177,9 +177,12 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Pa
 }
 
 func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string) ([]Payment, error) {
-	q := `SELECT ` + kolomPayment + `,j.nama_lengkap,s.jadwal_nama,br.name,COALESCE(b.id_booking, '')
+	q := `SELECT ` + kolomPayment + `,j.nama_lengkap,s.jadwal_nama,br.name,COALESCE(b.id_booking, ''),
+		COALESCE(NULLIF(pc.display_name,''), pc.email, ''),COALESCE(NULLIF(vf.display_name,''), vf.email, '')
 		FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN jamaah j ON j.id=b.pic_jamaah_id
-		JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id WHERE b.status != 'draft'`
+		JOIN schedules s ON s.id=b.schedule_id JOIN brands br ON br.id=s.brand_id
+		LEFT JOIN admin_users pc ON pc.id=p.dicatat_oleh LEFT JOIN admin_users vf ON vf.id=p.verified_by
+		WHERE b.status != 'draft'`
 	args := []any{}
 	if brandID != nil {
 		q += " AND s.brand_id=?"
@@ -199,7 +202,7 @@ func (r *Repository) ListAll(ctx context.Context, brandID *int64, status string)
 	items := []Payment{}
 	for rows.Next() {
 		var p Payment
-		if err := rows.Scan(tujuanScan(&p, &p.JamaahName, &p.ScheduleName, &p.BrandName, &p.KodeBooking)...); err != nil {
+		if err := rows.Scan(tujuanScan(&p, &p.JamaahName, &p.ScheduleName, &p.BrandName, &p.KodeBooking, &p.DicatatOlehNama, &p.VerifiedByNama)...); err != nil {
 			return nil, fmt.Errorf("payment.ListAll scan: %w", err)
 		}
 		items = append(items, p)
@@ -274,17 +277,18 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 
 	// Pembayaran yang dicatat admin langsung terkonfirmasi; dari portal menunggu verifikasi.
 	status := StatusPending
-	var diverifikasiOleh *int64
+	var diverifikasiOleh, dicatatOleh *int64
 	var verifiedAt any
 	if source == SourceAdmin {
 		status = StatusConfirmed
 		diverifikasiOleh = verifiedBy
+		dicatatOleh = verifiedBy // admin pencatat; pembayaran admin langsung terkonfirmasi oleh orang yang sama
 		verifiedAt = time.Now().UTC()
 	}
 
-	const q = `INSERT INTO payments (booking_id,bank_account_id,destination_bank_name,destination_account_number,destination_account_holder,jumlah,metode,sender_name,sender_bank,received_by,tanggal,status,bukti_url,notes,source,verified_by,verified_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+	const q = `INSERT INTO payments (booking_id,bank_account_id,destination_bank_name,destination_account_number,destination_account_holder,jumlah,metode,sender_name,sender_bank,received_by,tanggal,status,bukti_url,notes,source,dicatat_oleh,verified_by,verified_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 
-	res, err := tx.ExecContext(ctx, q, bookingID, req.BankAccountID, bankName, accountNumber, accountHolder, req.Jumlah, req.Metode, req.SenderName, req.SenderBank, req.ReceivedBy, req.Tanggal, status, req.BuktiURL, req.Notes, source, diverifikasiOleh, verifiedAt)
+	res, err := tx.ExecContext(ctx, q, bookingID, req.BankAccountID, bankName, accountNumber, accountHolder, req.Jumlah, req.Metode, req.SenderName, req.SenderBank, req.ReceivedBy, req.Tanggal, status, req.BuktiURL, req.Notes, source, dicatatOleh, diverifikasiOleh, verifiedAt)
 	if err != nil {
 		return nil, fmt.Errorf("payment.Create: %w", err)
 	}
