@@ -795,6 +795,9 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 	if err := agen.IkatRombonganBooking(ctx, tx, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.Create kaitan agen: %w", err)
 	}
+	if err := shared.GugurkanKlaimPembuatBooking(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.Create: %w", err)
+	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("booking.Create commit: %w", err)
@@ -1259,6 +1262,9 @@ func (r *Repository) FinalizeBooking(ctx context.Context, bookingID int64) (*Boo
 
 	if err := agen.IkatRombonganBooking(ctx, tx, bookingID); err != nil {
 		return nil, fmt.Errorf("booking.Finalize kaitan agen: %w", err)
+	}
+	if err := shared.GugurkanKlaimPembuatBooking(ctx, tx, bookingID); err != nil {
+		return nil, fmt.Errorf("booking.Finalize: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -44,6 +44,8 @@ func fixturePerubahan(t *testing.T, tx *sql.Tx) (akun, lama, baru, admin int64) 
 	b1, _ := testdb.NewBookingPax(t, tx, jadwal, "dp", 1000, testdb.Pax{JamaahID: lama})
 	b2, _ := testdb.NewBookingPax(t, tx, jadwal, "batal", 1000, testdb.Pax{JamaahID: baru}) // booking batal tetap ikut
 	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id IN (?,?)`, akun, b1, b2)
+	// Akun ini pembuat kedua baris jamaah: akses penuh (akses_jamaah.go).
+	testdb.Exec(t, tx, `UPDATE jamaah SET dibuat_oleh_akun_id=? WHERE id IN (?,?)`, akun, lama, baru)
 	testdb.Exec(t, tx, `INSERT INTO admin_users (email, password_hash) VALUES (?, 'x')`, "adm-qzk@uji.test")
 	if err := tx.QueryRow(`SELECT id FROM admin_users WHERE email='adm-qzk@uji.test'`).Scan(&admin); err != nil {
 		t.Fatal(err)

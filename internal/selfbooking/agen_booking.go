@@ -48,7 +48,7 @@ func resolvePaxAgen(ctx context.Context, tx *sql.Tx, brandID, agenAkunID int64, 
 		}
 		id = *jamaahID
 	} else {
-		id, err = resolveAnggotaPublik(ctx, tx, brandID, a)
+		id, err = resolveAnggotaPublik(ctx, tx, brandID, agenAkunID, a)
 		if err != nil {
 			return 0, false, err
 		}

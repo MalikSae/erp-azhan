@@ -51,6 +51,8 @@ type paxDokumen struct {
 	JamaahID int64         `json:"jamaah_id"`
 	Nama     string        `json:"nama"`
 	PaxType  string        `json:"pax_type"`
+	// AksesTerbatas: akun bukan pembuat jamaah; hanya boleh mengunggah jenis yang belum ada berkasnya.
+	AksesTerbatas bool     `json:"akses_terbatas"`
 	Dokumen  []dokumenItem `json:"dokumen"`
 }
 
@@ -90,12 +92,12 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := o.db.QueryContext(r.Context(), `
-		SELECT j.id, j.nama_lengkap, bp.pax_type, COALESCE(d.jenis,''), COALESCE(d.status,''), d.rejection_reason
+		SELECT j.id, j.nama_lengkap, bp.pax_type, COALESCE(d.jenis,''), COALESCE(d.status,''), d.rejection_reason, ` + sqlAksesPenuh + `
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
 		LEFT JOIN dokumen_jamaah d ON d.jamaah_id = j.id
 		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif'
-		ORDER BY bp.id`, id)
+		ORDER BY bp.id`, acc.ID, id)
 	if err != nil {
 		log.Printf("[ERROR] account dokumen: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil dokumen")
@@ -110,19 +112,20 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 		var jid int64
 		var nama, tipe, jenis, status string
 		var alasan sql.NullString
-		if err := rows.Scan(&jid, &nama, &tipe, &jenis, &status, &alasan); err != nil {
+		var penuh bool
+		if err := rows.Scan(&jid, &nama, &tipe, &jenis, &status, &alasan, &penuh); err != nil {
 			log.Printf("[ERROR] account dokumen scan: %v", err)
 			writeError(w, http.StatusInternalServerError, "gagal mengambil dokumen")
 			return
 		}
 		if _, seen := pax[jid]; !seen {
-			pax[jid] = &paxDokumen{JamaahID: jid, Nama: nama, PaxType: tipe}
+			pax[jid] = &paxDokumen{JamaahID: jid, Nama: nama, PaxType: tipe, AksesTerbatas: !penuh}
 			ada[jid] = map[string]dokumenItem{}
 			urut = append(urut, jid)
 		}
 		if jenis != "" {
 			it := dokumenItem{Status: status}
-			if alasan.Valid && strings.TrimSpace(alasan.String) != "" && status == "rejected" {
+			if penuh && alasan.Valid && strings.TrimSpace(alasan.String) != "" && status == "rejected" {
 				s := alasan.String
 				it.RejectionReason = &s
 			}
@@ -195,6 +198,19 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ERROR] account kirim dokumen: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal menyimpan dokumen")
 		return
+	}
+	// Akses terbatas: berkas yang sudah ada, apa pun statusnya, tidak boleh ditimpa.
+	if status.Valid {
+		penuh, err := aksesPenuhJamaah(r.Context(), o.db, acc.ID, req.JamaahID)
+		if err != nil {
+			log.Printf("[ERROR] account kirim dokumen akses: %v", err)
+			writeError(w, http.StatusInternalServerError, "gagal menyimpan dokumen")
+			return
+		}
+		if !penuh {
+			writeError(w, http.StatusForbidden, "Dokumen jamaah ini sudah ada. Hubungi admin untuk menggantinya.")
+			return
+		}
 	}
 	if status.Valid && status.String == "approved" {
 		writeError(w, http.StatusConflict, "dokumen ini sudah disetujui. Hubungi kami bila perlu menggantinya.")

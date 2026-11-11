@@ -10,6 +10,11 @@ _Hindari_: user, pelanggan (terlalu umum), jamaah (itu orang lain).
 **Jamaah**: orang yang berangkat umroh. Tabel `jamaah`. Bukan "penumpang". Data identitas milik jamaah, bukan milik akun. Banyak akun boleh memasukkan jamaah yang sama; jamaah yang sama dikenali dari NIK. Jamaah belum tentu punya akun.
 _Hindari_: peserta, penumpang, pax untuk orang (pax adalah kursi dalam booking).
 
+**Akun pembuat**: akun yang pertama memasukkan seorang jamaah lewat bookingnya. Kolom `jamaah.dibuat_oleh_akun_id`. Hanya akun pembuat yang punya **akses penuh** atas data jamaah itu di portal. Jamaah yang dibuat admin tidak punya akun pembuat. Klaim pembuat gugur bila jamaah dipakai booking pihak lain sebelum akun pembuat punya pembayaran terkonfirmasi.
+_Hindari_: pemilik jamaah (data identitas tetap milik jamaah); menyamakan dengan agen perekrut (`direkrut_oleh_akun_id`, itu urusan komisi).
+
+**Akses terbatas**: yang didapat akun atas jamaah yang bukan buatannya: nama, NIK tersamar, jenis pax, dan angka kelengkapan. Tidak bisa melihat atau mengubah isian, tidak bisa mengunduh surat, dan hanya bisa mengunggah jenis dokumen yang belum ada berkasnya.
+
 **Agen**: akun yang punya kode referral dan berstatus aktif. Agen tidak harus pernah berangkat umroh. Program keagenan disebut **Syiar**.
 _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lama, sistem belum deploy).
 
