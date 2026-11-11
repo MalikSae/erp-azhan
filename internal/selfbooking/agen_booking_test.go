@@ -321,7 +321,7 @@ func TestValidasiPortalAgenWajibNIK(t *testing.T) {
 
 // Booking publik: akun yang terikat ke agen (saat dibuat) menentukan agen penjaga jamaah baru. Jamaah yang sudah
 // terkunci agen lain tidak berubah. Akun tanpa agen membuat jamaah tetap belum_ditentukan.
-func TestBookingPublikMengikutiAgenPengikatAkun(t *testing.T) {
+func TestBookingPublikMengikutiUplineAkun(t *testing.T) {
 	tx, sched, brand, _ := setupAgenBooking(t)
 	ctx := context.Background()
 	w := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenW", StatusAgen: "aktif"})

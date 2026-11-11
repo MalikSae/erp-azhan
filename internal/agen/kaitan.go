@@ -15,8 +15,9 @@ import (
 
 var ErrAgenTidakValid = errors.New("agen tidak ditemukan atau tidak aktif di brand ini")
 
-// Asal kaitan (kolom jamaah.kaitan_sumber, migrasi 064). Hanya SumberJalur3
-// yang boleh diganti Admin Master lewat C4.
+// Asal kaitan (kolom jamaah.kaitan_sumber, migrasi 064). Nilai kolom memakai penomoran jalur lama:
+// jalur1 = booking di portal agen, jalur2 = upline akun pemesan (web publik) atau kode referral di deal CRM,
+// jalur3 = ditetapkan admin. Semua sumber boleh diganti Admin Master lewat Ganti Kaitan.
 const (
 	SumberJalur1   = "jalur1"
 	SumberReferral = "jalur2"
@@ -72,46 +73,62 @@ func IkatJamaah(ctx context.Context, tx *sql.Tx, jamaahID, agenAkunID int64, sum
 	return nil
 }
 
-// AgenPengikatAkun mengembalikan id akun agen yang mengikat akun ini saat akun
-// dibuat (customer_accounts.direkrut_oleh_akun_id), asalkan agen itu masih
-// aktif. 0 bila akun tidak punya pengikat atau pengikatnya tidak lagi aktif.
-func AgenPengikatAkun(ctx context.Context, q querier, akunID int64) (int64, error) {
+// UplineAkun mengembalikan id upline sebuah akun (customer_accounts.direkrut_oleh_akun_id) untuk
+// pengikatan jamaah saat akun itu booking di web. Upline yang sedang nonaktif tetap dikembalikan
+// (keputusan 11 November 2026): jamaah tetap terikat ke upline itu, komisi langsungnya hangus saat lunas,
+// dan bonus pembinaan tetap mengalir ke upline di atasnya yang aktif (spek 5.1). Tanpa ini, jamaah
+// dari akun yang upline-nya nonaktif sementara tetap belum_ditentukan dan bisa diikat agen lain.
+// 0 bila akun tidak punya upline.
+func UplineAkun(ctx context.Context, q querier, akunID int64) (int64, error) {
 	var id int64
 	err := q.QueryRowContext(ctx, `
 		SELECT a.id FROM customer_accounts c JOIN customer_accounts a ON a.id = c.direkrut_oleh_akun_id
-		WHERE c.id = ? AND a.status_agen = 'aktif'`, akunID).Scan(&id)
+		WHERE c.id = ? AND a.status_agen IN ('aktif','nonaktif')`, akunID).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	if err != nil {
-		return 0, fmt.Errorf("agen: baca pengikat akun: %w", err)
+		return 0, fmt.Errorf("agen: baca upline akun: %w", err)
 	}
 	return id, nil
 }
 
-// IkatAkunDariReferral mengikat akun yang baru dibuat ke agen pemilik kode
-// referral (cookie azhan_ref, klik terakhir) dan mengembalikan id agennya.
-// Kode kosong, tidak dikenal, atau milik agen nonaktif diabaikan diam-diam (0).
-// Pengikatan hanya terjadi di sini: setelah akun ada, cookie tidak dibaca lagi.
-func IkatAkunDariReferral(ctx context.Context, q querier, brandID int64, kode string) (int64, error) {
-	return ResolveKodeReferral(ctx, q, brandID, kode)
-}
+// AlasanIkatAkunDariJamaah: alasan yang dicatat di log kaitan akun untuk pengikatan otomatis.
+const AlasanIkatAkunDariJamaah = "Otomatis: jamaah milik akun ini sudah terikat ke agen tersebut"
 
-// IkatAkunDariJamaah menyamakan pengikat akun dengan pemilik kunci jamaah milik akun itu sendiri: akun pemesan yang ikut berangkat
-// (jamaahID = dirinya) dan belum punya pengikat menjadi downline agen aktif yang lebih dulu mengunci jamaah itu (first-set wins,
-// docs/spek/SPEK-KEAGENAN-AKUN-2026-11-03.md). Akun yang sudah punya pengikat tidak diubah; kunci jamaah juga tidak pernah diubah.
+// IkatAkunDariJamaah memberi upline kepada akun pemesan yang ikut berangkat (jamaahID = dirinya) dan belum
+// punya upline: upline-nya menjadi agen aktif yang lebih dulu mengikat jamaah itu (first-set wins,
+// docs/spek/SPEK-KEAGENAN-AKUN-2026-11-03.md). Akun yang sudah punya upline tidak diubah; kaitan jamaah juga
+// tidak pernah diubah.
+//
+// Hanya berlaku untuk akun yang bukan agen (keputusan 11 November 2026). Upline agen punya dua kolom
+// (direkrut_oleh_akun_id dan upline_akun_id, yang disalin saat pengajuan disetujui); jalur ini hanya mengisi
+// yang pertama, jadi pada akun agen keduanya menjadi tidak cocok. Upline agen hanya berubah lewat Admin Master.
+// Setiap pengikatan dicatat di akun_kaitan_log dengan diganti_oleh kosong (oleh sistem).
 func IkatAkunDariJamaah(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64) error {
 	if akunID <= 0 || jamaahID <= 0 {
 		return nil
 	}
-	_, err := tx.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 		UPDATE customer_accounts c
 		JOIN jamaah j ON j.id = ? AND j.kaitan_status = 'terikat_agen'
 		JOIN customer_accounts a ON a.id = j.direkrut_oleh_akun_id AND a.brand_id = c.brand_id AND a.status_agen = 'aktif' AND a.id <> c.id
 		SET c.direkrut_oleh_akun_id = a.id
-		WHERE c.id = ? AND c.direkrut_oleh_akun_id IS NULL`, jamaahID, akunID)
+		WHERE c.id = ? AND c.direkrut_oleh_akun_id IS NULL AND c.status_agen = 'tidak_aktif'`, jamaahID, akunID)
 	if err != nil {
 		return fmt.Errorf("agen: ikat akun dari jamaah: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("agen: ikat akun dari jamaah, jumlah baris: %w", err)
+	}
+	if n == 0 {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO akun_kaitan_log (akun_id, direkrut_oleh_akun_id_lama, direkrut_oleh_akun_id_baru, upline_diubah, diganti_oleh, alasan)
+		SELECT c.id, NULL, c.direkrut_oleh_akun_id, FALSE, NULL, ? FROM customer_accounts c WHERE c.id = ?`, AlasanIkatAkunDariJamaah, akunID); err != nil {
+		return fmt.Errorf("agen: log ikat akun dari jamaah: %w", err)
 	}
 	return nil
 }
@@ -119,7 +136,7 @@ func IkatAkunDariJamaah(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64)
 // IkatRombongan mengikat semua jamaah yang masih 'belum_ditentukan' ke akun
 // agen (auto-bind multi-pax). Jamaah yang sudah terikat tidak diubah. Prioritas
 // penentu agen ditetapkan pemanggil: portal agen memakai agen pembuat booking,
-// web publik memakai agen pengikat akun pemesan (AgenPengikatAkun), cookie
+// web publik memakai upline akun pemesan (UplineAkun), cookie
 // tidak dibaca saat booking. agenAkunID <= 0: tidak ada yang diikat.
 func IkatRombongan(ctx context.Context, tx *sql.Tx, jamaahIDs []int64, agenAkunID int64, sumber string) error {
 	for _, id := range jamaahIDs {
@@ -168,16 +185,16 @@ func IkatRombonganBooking(ctx context.Context, tx *sql.Tx, bookingID int64) erro
 // (3.5): 'agen' dengan agenAkunID, atau 'tanpa_agen'.
 func TetapkanKaitanJalur3(ctx context.Context, tx *sql.Tx, jamaahID int64, mode string, agenAkunID int64) error {
 	switch mode {
-	case "agen":
+	case modeKaitanAgen:
 		_, err := tx.ExecContext(ctx,
 			`UPDATE jamaah SET direkrut_oleh_akun_id = ?, kaitan_status = 'terikat_agen', kaitan_sumber = 'jalur3' WHERE id = ?`, agenAkunID, jamaahID)
 		return err
-	case "tanpa_agen":
+	case modeKaitanTanpaAgen:
 		_, err := tx.ExecContext(ctx,
 			`UPDATE jamaah SET direkrut_oleh_akun_id = NULL, kaitan_status = 'tanpa_agen', kaitan_sumber = 'jalur3' WHERE id = ?`, jamaahID)
 		return err
 	}
-	return fmt.Errorf("agen: mode kaitan tidak dikenal: %q", mode)
+	return ErrKaitanModeTidakSah
 }
 
 // AgenAktif adalah satu pilihan di picker "Kaitkan ke Agen" (screen B4/C3).

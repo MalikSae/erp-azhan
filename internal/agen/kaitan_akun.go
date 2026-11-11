@@ -139,7 +139,7 @@ func gantiAgenAkunTx(ctx context.Context, tx *sql.Tx, brandID *int64, akunID, ad
 	}
 	samaID := func(x, y *int64) bool { return (x == nil && y == nil) || (x != nil && y != nil && *x == *y) }
 	// Upline satu konsep dengan pengajak: akun yang sudah menjadi agen selalu ikut dipindah (bonus pembinaan menuju upline).
-	ubahUpline := a.StatusAgen == "aktif" || a.StatusAgen == "nonaktif"
+	ubahUpline := sudahAgen(a.StatusAgen)
 	if samaID(a.AgenID, req.AgenAkunID) && (!ubahUpline || samaID(a.UplineID, req.AgenAkunID)) {
 		return ErrKaitanTidakBerubah
 	}
@@ -169,11 +169,11 @@ func listAkunKaitanLog(ctx context.Context, q querier, brandID *int64, akunID in
 		return nil, ErrNotFound
 	}
 	rows, err := q.QueryContext(ctx, `
-		SELECT l.id, lama.nama_lengkap, baru.nama_lengkap, l.upline_diubah, COALESCE(au.display_name, au.email), l.diganti_at, l.alasan
+		SELECT l.id, lama.nama_lengkap, baru.nama_lengkap, l.upline_diubah, COALESCE(au.display_name, au.email, 'Sistem'), l.diganti_at, l.alasan
 		FROM akun_kaitan_log l
 		LEFT JOIN customer_accounts lama ON lama.id = l.direkrut_oleh_akun_id_lama
 		LEFT JOIN customer_accounts baru ON baru.id = l.direkrut_oleh_akun_id_baru
-		JOIN admin_users au ON au.id = l.diganti_oleh
+		LEFT JOIN admin_users au ON au.id = l.diganti_oleh
 		WHERE l.akun_id = ? ORDER BY l.id DESC`, akunID)
 	if err != nil {
 		return nil, fmt.Errorf("agen: log kaitan akun: %w", err)
@@ -206,7 +206,7 @@ func (r *Repository) ListAkunKaitanLog(ctx context.Context, brandID *int64, akun
 func (h *Handler) CariAkunKaitan(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.CariAkunKaitan(r.Context(), adminBrandScope(r), r.URL.Query().Get("q"))
 	if err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -220,7 +220,7 @@ func (h *Handler) LogKaitanAkun(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.repo.ListAkunKaitanLog(r.Context(), adminBrandScope(r), id)
 	if err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -244,7 +244,7 @@ func (h *Handler) GantiAgenAkun(w http.ResponseWriter, r *http.Request) {
 	}
 	adminID := identity.GetAdminUserID(r.Context())
 	if err := h.repo.GantiAgenAkun(r.Context(), adminBrandScope(r), id, adminID, req); err != nil {
-		handleSprint5Error(w, err)
+		handlePencairanKaitanError(w, err)
 		return
 	}
 	log.Printf("[AUDIT] kaitan_akun_diganti akun_id=%d admin_id=%d", id, adminID)

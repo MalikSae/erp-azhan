@@ -358,7 +358,7 @@ export default function GantiKaitanAgenPage() {
                         <p className="text-sm font-heading font-semibold text-neutral-900">{logLabel(l)}</p>
                         <p className="mt-0.5 text-sm font-body text-neutral-700">{l.alasan}</p>
                         {isJamaah && (l.komisi_dipindah > 0 || l.komisi_dihapus > 0) && (
-                          <p className="mt-0.5 text-xs font-body text-neutral-600">Komisi dipindah: {l.komisi_dipindah}{l.komisi_dihapus > 0 ? ` • dihapus: ${l.komisi_dihapus}` : ''}</p>
+                          <p className="mt-0.5 text-xs font-body text-neutral-600">Komisi dipindah: {l.komisi_dipindah}{l.komisi_dihapus > 0 ? ` • dibatalkan: ${l.komisi_dihapus}` : ''}</p>
                         )}
                         {!isJamaah && l.upline_diubah && <p className="mt-0.5 text-xs font-body text-neutral-600">Upline ikut diganti</p>}
                         <p className="mt-0.5 text-[11px] font-body text-neutral-400">{l.diganti_oleh} · {dateTime(l.diganti_at)}</p>

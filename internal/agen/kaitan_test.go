@@ -56,27 +56,6 @@ func TestResolveKodeReferral(t *testing.T) {
 	}
 }
 
-// AgenPengikatAkun: hanya pengikat yang masih aktif yang dihitung.
-func TestAgenPengikatAkun(t *testing.T) {
-	_, tx := testdb.Tx(t)
-	ctx := context.Background()
-	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
-	aktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Aktif", StatusAgen: "aktif"})
-	nonaktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Nonaktif", StatusAgen: "nonaktif"})
-	terikatAktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Z1", Direkrut: aktif})
-	terikatNonaktif := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Z2", Direkrut: nonaktif})
-	tanpaAgen := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Z3"})
-	for _, c := range []struct {
-		akun, want int64
-	}{{terikatAktif, aktif}, {terikatNonaktif, 0}, {tanpaAgen, 0}} {
-		got, err := AgenPengikatAkun(ctx, tx, c.akun)
-		must(t, "pengikat", err)
-		if got != c.want {
-			t.Fatalf("AgenPengikatAkun(%d) = %d, want %d", c.akun, got, c.want)
-		}
-	}
-}
-
 // Jamaah diikat ke akun agen (first-set wins); akun yang diikat agen lalu menjadi
 // agen punya upline agen yang mengikat akunnya.
 func TestKunciJamaahDanUplineAkun(t *testing.T) {
