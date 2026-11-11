@@ -45,3 +45,18 @@ func statusBookingDari(totalHarga, terbayar, dpWajib float64) string {
 		return bookingBaru
 	}
 }
+
+// Nilai kolom payments.metode yang diterima saat admin mencatat pembayaran.
+const (
+	metodeTransfer = "transfer"
+	metodeTunai    = "cash"
+)
+
+// pesanBuktiWajib: pembayaran transfer yang dicatat admin wajib punya berkas bukti. Mengembalikan pesan
+// untuk pengguna, atau teks kosong bila aturan terpenuhi.
+func pesanBuktiWajib(metode string, buktiURL *string) string {
+	if metode == metodeTransfer && (buktiURL == nil || *buktiURL == "") {
+		return "bukti transfer wajib diunggah untuk pembayaran transfer"
+	}
+	return ""
+}

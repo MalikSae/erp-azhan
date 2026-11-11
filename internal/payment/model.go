@@ -23,6 +23,11 @@ type Payment struct {
 	RejectionReason          *string    `json:"rejection_reason"`
 	VerifiedBy               *int64     `json:"verified_by"`
 	VerifiedAt               *time.Time `json:"verified_at"`
+	// DicatatOleh: admin yang mencatat pembayaran (hanya sumber admin). Pembayaran admin langsung
+	// terkonfirmasi, jadi pencatat dan verifikatornya orang yang sama; kolom ini jejak untuk pengawasan.
+	DicatatOleh              *int64     `json:"dicatat_oleh"`
+	DicatatOlehNama          string     `json:"dicatat_oleh_nama,omitempty"`
+	VerifiedByNama           string     `json:"verified_by_nama,omitempty"`
 	// Pembatalan pembayaran terkonfirmasi (status void): alasan, pelaku, dan waktunya.
 	VoidReason               *string    `json:"void_reason"`
 	VoidedBy                 *int64     `json:"voided_by"`

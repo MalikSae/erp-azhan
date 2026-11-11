@@ -84,7 +84,7 @@ func pembayaranUntukPelanggan(items []payment.Payment) []payment.Payment {
 			p.RejectionReason = &keterangan
 		}
 		p.VoidReason, p.VoidedBy, p.VoidedAt = nil, nil, nil
-		p.Notes, p.ReceivedBy, p.VerifiedBy = nil, nil, nil
+		p.Notes, p.ReceivedBy, p.VerifiedBy, p.DicatatOleh = nil, nil, nil, nil
 		out = append(out, p)
 	}
 	return out
