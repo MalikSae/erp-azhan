@@ -39,3 +39,33 @@ func TestAlasanUbahTanggalBatasPanjang(t *testing.T) {
 		t.Fatal("melebihi batas harus ditolak")
 	}
 }
+
+func TestAlasanUbahKuota(t *testing.T) {
+	if got := alasanUbahKuota(45, 50); got != "Ubah kuota seat lewat edit paket: 45 menjadi 50" {
+		t.Fatalf("dapat %q", got)
+	}
+	if len([]rune(alasanUbahKuota(99999, 100000))) > maxAlasanSeat {
+		t.Fatal("keterangan melebihi lebar kolom reason")
+	}
+}
+
+// Paket hanya boleh dihapus bila draft dan belum pernah tayang; mengembalikan paket tayang ke draft tidak
+// membukanya untuk dihapus.
+func TestTolakHapusPaket(t *testing.T) {
+	cases := []struct {
+		status       string
+		pernahTayang bool
+		tolak        bool
+	}{
+		{StatusDraft, false, false},
+		{StatusDraft, true, true},
+		{StatusPublished, true, true},
+		{StatusArchived, true, true},
+		{StatusArchived, false, true},
+	}
+	for _, c := range cases {
+		if got := tolakHapusPaket(c.status, c.pernahTayang) != ""; got != c.tolak {
+			t.Errorf("status %s pernah tayang %v: tolak=%v, mau %v", c.status, c.pernahTayang, got, c.tolak)
+		}
+	}
+}

@@ -204,6 +204,11 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Kategori wajib bertaut ke minimal satu brand (keputusan 11 November 2026).
+	if len(req.BrandIDs) == 0 {
+		writeError(w, http.StatusBadRequest, pesanBrandWajib)
+		return
+	}
 	// Validasi brand IDs
 	if valid, err := h.repo.ValidateBrandIDs(r.Context(), req.BrandIDs); err != nil {
 		handleRepoError(w, err)
@@ -273,6 +278,10 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.BrandIDs) == 0 {
+		writeError(w, http.StatusBadRequest, pesanBrandWajib)
+		return
+	}
 	if valid, err := h.repo.ValidateBrandIDs(r.Context(), req.BrandIDs); err != nil {
 		handleRepoError(w, err)
 		return
@@ -342,16 +351,20 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 
 // ─── Public Handlers ─────────────────────────────────────────────────────────
 
+// pesanBrandWajib: kategori tanpa brand tidak punya arti; dulu dibaca "semua brand" di paket dan "tidak
+// tampil" di daftar kategori.
+const pesanBrandWajib = "pilih minimal satu brand untuk kategori ini"
+
 // ListPublicCategories GET /api/public/categories?brand_id=...
 func (h *Handler) ListPublicCategories(w http.ResponseWriter, r *http.Request) {
-	var brandID *int64
-	if bParam := r.URL.Query().Get("brand_id"); bParam != "" {
-		if bid, err := strconv.ParseInt(bParam, 10, 64); err == nil && bid > 0 {
-			brandID = &bid
-		}
+	// brand_id wajib, sama dengan daftar paket dan rekening publik: tanpa itu kategori semua brand terbaca.
+	bid, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64)
+	if err != nil || bid <= 0 {
+		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		return
 	}
 
-	items, err := h.repo.List(r.Context(), brandID, true)
+	items, err := h.repo.ListPublik(r.Context(), bid)
 	if err != nil {
 		handleRepoError(w, err)
 		return

@@ -9,6 +9,10 @@ import (
 
 var ErrNotFound = errors.New("rekening tidak ditemukan")
 
+// ErrDipakai: rekening pernah menjadi tujuan pembayaran. Menghapusnya memutus rujukan pembayaran itu
+// (kunci asing ber-aturan SET NULL), jadi rekening seperti ini hanya boleh dinonaktifkan.
+var ErrDipakai = errors.New("rekening ini pernah dipakai pembayaran dan tidak dapat dihapus. Nonaktifkan rekening ini supaya tidak tampil lagi")
+
 type Repository struct{ db *sql.DB }
 
 func NewRepository(db *sql.DB) *Repository { return &Repository{db: db} }
@@ -72,6 +76,13 @@ func (r *Repository) Update(ctx context.Context, id int64, req UpsertRequest) (*
 	return r.Get(ctx, id)
 }
 func (r *Repository) Delete(ctx context.Context, id int64) error {
+	var dipakai bool
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM payments WHERE bank_account_id=?)`, id).Scan(&dipakai); err != nil {
+		return fmt.Errorf("bankaccount.Delete cek pemakaian: %w", err)
+	}
+	if dipakai {
+		return ErrDipakai
+	}
 	res, err := r.db.ExecContext(ctx, `DELETE FROM bank_accounts WHERE id=?`, id)
 	if err != nil {
 		return fmt.Errorf("bankaccount.Delete: %w", err)

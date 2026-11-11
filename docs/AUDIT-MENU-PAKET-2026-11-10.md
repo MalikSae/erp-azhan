@@ -186,3 +186,22 @@ Catatan PR 4:
 3. S-01, S-03: status paket berubah tanpa pemeriksaan.
 4. S-08 sampai S-12 setelah keputusan di atas.
 5. Sisanya menurut kebutuhan.
+
+## Code review 11 November 2026
+
+Review dua sumbu atas paket dan master (PR 44 dan PR berikutnya). Keputusan tambahan:
+
+| Hal | Keputusan |
+|---|---|
+| Hapus rekening bank | Rekening yang pernah dipakai pembayaran tidak bisa dihapus; dinonaktifkan. |
+| Kategori tanpa brand | Tidak diizinkan. Kategori wajib bertaut ke minimal satu brand, dan paket hanya memakai kategori brand-nya. |
+| Ubah kuota seat lewat form edit | Tercatat otomatis di riwayat penyesuaian seat, tanpa isian alasan. |
+| Kota hotel | Tidak bisa diubah selama hotel dipakai paket. |
+| Hapus paket | Hanya paket draft yang belum pernah tayang. Penanda `schedules.pernah_tayang_at` (migrasi 133) terisi saat paket pertama kali `published` dan tidak dikosongkan, jadi paket tayang yang dikembalikan ke draft tetap tidak bisa dihapus. |
+| Nominal brand lewat API | Yang tidak dikirim tidak diubah. |
+| Nominal paket dan brand | Wajib bilangan bulat rupiah (ADR-0001). |
+| `is_active` kategori dan destinasi | Yang tidak dikirim tidak diubah. |
+| Tutup pendaftaran manual, brand dari domain, itinerary di detail v1 | Tidak dibangun; spek web publik disesuaikan. |
+| Izin set perlengkapan paket dan kategori | Tetap `schedule.edit` dan `masterdata.edit`; dicatat di spek RBAC. |
+
+R-01 sampai R-18 dan R-20 tetap ditunda.

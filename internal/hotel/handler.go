@@ -194,6 +194,8 @@ func handleHotelRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	case errors.Is(err, ErrDuplicate):
 		writeError(w, http.StatusConflict, "hotel dengan nama ini sudah ada di kota yang sama")
+	case errors.Is(err, ErrKotaDipakai):
+		writeError(w, http.StatusConflict, ErrKotaDipakai.Error())
 	default:
 		// Tangkap MySQL FK constraint violation (error 1451)
 		var mysqlErr *mysql.MySQLError
