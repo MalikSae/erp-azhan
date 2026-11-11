@@ -146,3 +146,29 @@ func UniqueCode(ctx context.Context, tx *sql.Tx, table, column, prefix string, r
 	}
 	return "", errors.New("gagal membuat kode unik")
 }
+
+// GugurkanKlaimPembuatBooking menjalankan aturan gugur klaim pembuat untuk semua jamaah di satu booking
+// (keputusan 11 November 2026). Akun pembuat jamaah (jamaah.dibuat_oleh_akun_id) kehilangan klaimnya bila
+// jamaah itu dipakai booking pihak lain (admin atau akun lain) sementara akun pembuat belum pernah punya
+// pembayaran terkonfirmasi pada booking yang memuat jamaah itu. Tanpa aturan ini, siapa pun bisa mendahului
+// membuat jamaah dengan NIK + nama orang lain lalu membaca datanya setelah orang itu mendaftar sungguhan.
+// Dipanggil setiap kali booking baru terbentuk, dari jalur mana pun.
+func GugurkanKlaimPembuatBooking(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE jamaah j
+		JOIN booking_pax bp ON bp.jamaah_id = j.id AND bp.booking_id = ?
+		JOIN bookings b ON b.id = bp.booking_id
+		SET j.dibuat_oleh_akun_id = NULL
+		WHERE j.dibuat_oleh_akun_id IS NOT NULL
+		  AND NOT (b.customer_account_id <=> j.dibuat_oleh_akun_id)
+		  AND NOT EXISTS (
+		    SELECT 1 FROM payments p
+		    JOIN bookings b2 ON b2.id = p.booking_id
+		    JOIN booking_pax bp2 ON bp2.booking_id = b2.id
+		    WHERE bp2.jamaah_id = j.id AND b2.customer_account_id = j.dibuat_oleh_akun_id AND p.status = 'confirmed'
+		  )`, bookingID)
+	if err != nil {
+		return fmt.Errorf("gugurkan klaim pembuat jamaah: %w", err)
+	}
+	return nil
+}

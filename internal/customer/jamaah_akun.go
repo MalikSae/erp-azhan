@@ -54,6 +54,7 @@ type jamaahBaris struct {
 	NamaLengkap   string         `json:"nama_lengkap"`
 	JenisKelamin  string         `json:"jenis_kelamin"`
 	Bayi          bool           `json:"bayi"`
+	AksesTerbatas bool           `json:"akses_terbatas"`
 	Terisi        int            `json:"terisi"`
 	Total         int            `json:"total"`
 	Menunggu      bool           `json:"menunggu_persetujuan"`
@@ -88,7 +89,7 @@ func (h *JamaahAkun) Daftar(w http.ResponseWriter, r *http.Request) {
 		}
 		terisi, total, _ := kelengkapanOrang(d.Nilai, adaBayi(grup))
 		b := jamaahBaris{ID: grup[0].ID, NamaLengkap: d.Nama, JenisKelamin: d.Nilai["jenis_kelamin"], Bayi: adaBayi(grup),
-			Terisi: terisi, Total: total, Booking: ringkasBooking(grup[0]), JumlahBooking: len(grup)}
+			Terisi: terisi, Total: total, Booking: ringkasBooking(grup[0]), JumlahBooking: len(grup), AksesTerbatas: !grup[0].Penuh}
 		for _, a := range grup {
 			if menunggu[a.ID] {
 				b.Menunggu = true
@@ -125,6 +126,7 @@ type jamaahDetail struct {
 	NIKTersamar string            `json:"nik_tersamar"`
 	Email       string            `json:"email"`
 	Bayi        bool              `json:"bayi"`
+	AksesTerbatas bool            `json:"akses_terbatas"`
 	Data        map[string]string `json:"data"`
 	Terisi      int               `json:"terisi"`
 	Total       int               `json:"total"`
@@ -152,6 +154,10 @@ func (h *JamaahAkun) bangunDetail(ctx context.Context, q dbq, akunID int64, grup
 	}
 	out := &jamaahDetail{ID: grup[0].ID, NamaLengkap: d.Nama, NIKTersamar: nikTersamar(d.NIK), Email: d.Email, Bayi: adaBayi(grup),
 		Data: d.Nilai, Terisi: terisi, Total: total, Kurang: kurang, Pengajuan: pj}
+	if !grup[0].Penuh {
+		// Akses terbatas: nilai isian, email, daftar isian yang kurang, dan pengajuan tidak ikut.
+		out.AksesTerbatas, out.Email, out.Data, out.Kurang, out.Pengajuan = true, "", map[string]string{}, []string{}, nil
+	}
 	for _, a := range grup {
 		out.Booking = append(out.Booking, ringkasBooking(a))
 	}
@@ -205,6 +211,8 @@ func tulisGalatSimpan(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, hp.Error())
 	case errors.Is(err, errJamaahTidakAda):
 		writeError(w, http.StatusNotFound, "jamaah tidak ditemukan")
+	case errors.Is(err, errAksesTerbatas):
+		writeError(w, http.StatusForbidden, pesanAksesTerbatas)
 	default:
 		log.Printf("[ERROR] account simpan jamaah: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal menyimpan data jamaah")

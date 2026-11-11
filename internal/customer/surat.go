@@ -110,13 +110,17 @@ func evaluasiSurat(o *orderSummary, d *dataJamaah, pengaturanLengkap bool, nomor
 		return nil
 	}
 	jenis := []string{surat.JenisKeteranganUmroh}
-	if strings.TrimSpace(d.NoPaspor) == "" {
+	// Akses terbatas: nomor paspor tidak terbaca, jadi surat rekomendasi paspor tidak ditawarkan.
+	if !d.AksesTerbatas && strings.TrimSpace(d.NoPaspor) == "" {
 		jenis = append(jenis, surat.JenisRekomPaspor)
 	}
 	out := make([]suratItem, 0, len(jenis))
 	for _, j := range jenis {
 		it := suratItem{Slug: slugJenis(j), Jenis: j, Label: surat.LabelJenis(j), Nomor: nomor[fmt.Sprintf("%d|%s", d.JamaahID, j)]}
 		switch kurang := kurangData(d); {
+		case d.AksesTerbatas:
+			// Kedua jenis surat memuat tempat dan tanggal lahir serta kota jamaah.
+			it.Alasan = "Data jamaah ini sudah terdaftar. Hubungi kami untuk surat ini."
 		case o.Tab == "batal":
 			it.Alasan = "Booking tidak aktif."
 		case !dpTerpenuhi(o):
@@ -135,7 +139,7 @@ func evaluasiSurat(o *orderSummary, d *dataJamaah, pengaturanLengkap bool, nomor
 }
 
 func (o *Orders) dataJamaahBooking(r *http.Request, bookingID int64) ([]dataJamaah, error) {
-	rows, err := o.db.QueryContext(r.Context(), dataJamaahSelect+` ORDER BY bp.id`, bookingID)
+	rows, err := o.db.QueryContext(r.Context(), dataJamaahSelect+` ORDER BY bp.id`, FromContext(r.Context()).ID, bookingID)
 	if err != nil {
 		return nil, err
 	}

@@ -558,17 +558,17 @@ func TestAnggotaTanpaNIKCocokNamaDanTanggalLahir(t *testing.T) {
 	tl := "2026-03-04"
 	hp := nomorUji(31)
 	bayi := AnggotaInput{PaxType: "infant", NamaLengkap: "Bayi Sama", JenisKelamin: "L", TanggalLahir: &tl, NoHP: &hp}
-	id1, err := resolveAnggotaPublik(ctx, tx, brand, bayi)
+	id1, err := resolveAnggotaPublik(ctx, tx, brand, 0, bayi)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2, err := resolveAnggotaPublik(ctx, tx, brand, bayi)
+	id2, err := resolveAnggotaPublik(ctx, tx, brand, 0, bayi)
 	if err != nil || id1 != id2 {
 		t.Fatalf("bayi sama: id1=%d id2=%d err=%v, want dipakai ulang", id1, id2, err)
 	}
 	// Nama beda dengan nomor WA yang sama (keluarga berbagi nomor): jamaah baru, tanpa penolakan.
 	saudara := AnggotaInput{PaxType: "infant", NamaLengkap: "Bayi Saudara", JenisKelamin: "P", TanggalLahir: &tl, NoHP: &hp}
-	id3, err := resolveAnggotaPublik(ctx, tx, brand, saudara)
+	id3, err := resolveAnggotaPublik(ctx, tx, brand, 0, saudara)
 	if err != nil || id3 == id1 {
 		t.Fatalf("saudara: id=%d err=%v, want jamaah baru", id3, err)
 	}

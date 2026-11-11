@@ -90,6 +90,8 @@ type anggotaJamaah struct {
 	StatusBooking string
 	Paket         string
 	Berangkat     string
+	// Penuh: akun adalah pembuat jamaah ini (akses_jamaah.go).
+	Penuh         bool
 }
 
 func normalNama(s string) string {
@@ -100,13 +102,14 @@ func normalNama(s string) string {
 func muatAnggota(ctx context.Context, q dbq, akunID int64) ([]anggotaJamaah, error) {
 	rows, err := q.QueryContext(ctx, `
 		SELECT j.id, j.nama_lengkap, COALESCE(DATE_FORMAT(j.tanggal_lahir,'%Y-%m-%d'),''), bp.pax_type,
-		       b.id, b.id_booking, b.status, s.jadwal_nama, COALESCE(DATE_FORMAT(s.berangkat_tanggal,'%Y-%m-%d'),'')
+		       b.id, b.id_booking, b.status, s.jadwal_nama, COALESCE(DATE_FORMAT(s.berangkat_tanggal,'%Y-%m-%d'),''),
+		       ` + sqlAksesPenuh + `
 		FROM booking_pax bp
 		JOIN bookings b ON b.id = bp.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
 		JOIN jamaah j ON j.id = bp.jamaah_id
 		WHERE b.customer_account_id = ? AND b.status <> 'draft' AND bp.pax_status = 'aktif'
-		ORDER BY j.id DESC, b.id DESC`, akunID)
+		ORDER BY j.id DESC, b.id DESC`, akunID, akunID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +118,7 @@ func muatAnggota(ctx context.Context, q dbq, akunID int64) ([]anggotaJamaah, err
 	sudah := map[int64]bool{}
 	for rows.Next() {
 		var a anggotaJamaah
-		if err := rows.Scan(&a.ID, &a.Nama, &a.Lahir, &a.PaxType, &a.BookingID, &a.BookingKode, &a.StatusBooking, &a.Paket, &a.Berangkat); err != nil {
+		if err := rows.Scan(&a.ID, &a.Nama, &a.Lahir, &a.PaxType, &a.BookingID, &a.BookingKode, &a.StatusBooking, &a.Paket, &a.Berangkat, &a.Penuh); err != nil {
 			return nil, err
 		}
 		if sudah[a.ID] { // satu baris per jamaah: booking terbaru
@@ -127,8 +130,12 @@ func muatAnggota(ctx context.Context, q dbq, akunID int64) ([]anggotaJamaah, err
 	return out, rows.Err()
 }
 
-// cocokOrang: nama sama dan tanggal lahir sama (atau salah satunya belum diisi).
+// cocokOrang: nama sama dan tanggal lahir sama (atau salah satunya belum diisi). Baris dengan akses berbeda
+// tidak digabung, supaya isian jamaah akses terbatas tidak terbaca lewat baris akses penuh yang senama.
 func cocokOrang(a, b anggotaJamaah) bool {
+	if a.Penuh != b.Penuh {
+		return false
+	}
 	if normalNama(a.Nama) != normalNama(b.Nama) {
 		return false
 	}
@@ -377,6 +384,9 @@ func nullID(id int64) any {
 // simpanPerubahanPelanggan: mengisi yang kosong langsung, sisanya jadi satu pengajuan (menggantikan pengajuan terbuka sebelumnya).
 // Harus dipanggil di dalam transaksi. grup: orang yang dimaksud (wakil = grup[0]).
 func simpanPerubahanPelanggan(ctx context.Context, tx dbq, akunID int64, grup []anggotaJamaah, perubahan map[string]string) (*hasilSimpan, error) {
+	if !grup[0].Penuh {
+		return nil, errAksesTerbatas
+	}
 	ids := idGrup(grup)
 	wakil := ids[0]
 	// Kunci baris wakil agar dua simpan bersamaan tidak membuat dua pengajuan terbuka.

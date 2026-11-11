@@ -42,6 +42,8 @@ type dataJamaah struct {
 	Terisi              int      `json:"terisi"`
 	Total               int      `json:"total"`
 	Kurang              []string `json:"kurang"`
+	// AksesTerbatas: akun bukan pembuat jamaah ini. Isian dikosongkan dan tidak bisa diubah (akses_jamaah.go).
+	AksesTerbatas       bool     `json:"akses_terbatas"`
 	// Hasil simpan terakhir: isian yang langsung terisi dan isian yang menunggu persetujuan admin.
 	PerubahanLangsung int `json:"perubahan_langsung,omitempty"`
 	PerubahanMenunggu int `json:"perubahan_menunggu,omitempty"`
@@ -150,6 +152,7 @@ func nikTersamar(nik string) string {
 	return strings.Repeat("•", len(nik)-4) + nik[len(nik)-4:]
 }
 
+// dataJamaahSelect: parameter pertama id akun (penentu akses), lalu id booking.
 const dataJamaahSelect = `
 	SELECT j.id, j.nama_lengkap, COALESCE(j.nik,''), bp.pax_type, COALESCE(j.jenis_kelamin,''), COALESCE(j.nama_ayah_kandung,''),
 	       COALESCE(j.tempat_lahir,''), COALESCE(DATE_FORMAT(j.tanggal_lahir,'%Y-%m-%d'),''),
@@ -157,22 +160,34 @@ const dataJamaahSelect = `
 	       COALESCE(DATE_FORMAT(j.tanggal_paspor_keluar,'%Y-%m-%d'),''), COALESCE(DATE_FORMAT(j.paspor_berlaku_sampai,'%Y-%m-%d'),''),
 	       COALESCE(j.no_hp,''), COALESCE(j.pekerjaan,''), COALESCE(j.pendidikan_terakhir,''),
 	       COALESCE(j.penjamin_kesehatan,''), COALESCE(j.no_asuransi_bpjs,''), COALESCE(j.alamat,''), COALESCE(j.kota,''),
-	       COALESCE(j.emergency_nama,''), COALESCE(j.emergency_hp,''), COALESCE(j.emergency_hubungan,''), COALESCE(j.emergency_alamat,'')
+	       COALESCE(j.emergency_nama,''), COALESCE(j.emergency_hp,''), COALESCE(j.emergency_hubungan,''), COALESCE(j.emergency_alamat,''),
+	       ` + sqlAksesPenuh + `
 	FROM booking_pax bp JOIN jamaah j ON j.id = bp.jamaah_id
 	WHERE bp.booking_id = ? AND bp.pax_status = 'aktif'`
 
 func scanDataJamaah(rows interface{ Scan(...any) error }) (*dataJamaah, error) {
 	var d dataJamaah
 	var nik string
+	var penuh bool
 	if err := rows.Scan(&d.JamaahID, &d.NamaLengkap, &nik, &d.PaxType, &d.JenisKelamin, &d.NamaAyahKandung,
 		&d.TempatLahir, &d.TanggalLahir, &d.NoPaspor, &d.TempatPasporKeluar, &d.TanggalPasporKeluar, &d.PasporBerlakuSampai,
 		&d.NoHP, &d.Pekerjaan, &d.PendidikanTerakhir, &d.PenjaminKesehatan, &d.NoAsuransiBPJS, &d.Alamat, &d.Kota,
-		&d.EmergencyNama, &d.EmergencyHP, &d.EmergencyHubungan, &d.EmergencyAlamat); err != nil {
+		&d.EmergencyNama, &d.EmergencyHP, &d.EmergencyHubungan, &d.EmergencyAlamat, &penuh); err != nil {
 		return nil, err
 	}
 	d.NIKTersamar = nikTersamar(nik)
 	d.hitungKelengkapan()
+	if !penuh {
+		d.batasi()
+	}
 	return &d, nil
+}
+
+// batasi menyisakan yang boleh dilihat akun dengan akses terbatas: nama, NIK tersamar, jenis pax, dan
+// angka kelengkapan. Nilai isian dan daftar isian yang kurang tidak ikut.
+func (d *dataJamaah) batasi() {
+	*d = dataJamaah{JamaahID: d.JamaahID, NamaLengkap: d.NamaLengkap, NIKTersamar: d.NIKTersamar, PaxType: d.PaxType,
+		Terisi: d.Terisi, Total: d.Total, Kurang: []string{}, AksesTerbatas: true}
 }
 
 // DataJamaah GET /api/account/bookings/{id}/jamaah
@@ -190,7 +205,7 @@ func (o *Orders) DataJamaah(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
 		return
 	}
-	rows, err := o.db.QueryContext(r.Context(), dataJamaahSelect+` ORDER BY bp.id`, id)
+	rows, err := o.db.QueryContext(r.Context(), dataJamaahSelect+` ORDER BY bp.id`, acc.ID, id)
 	if err != nil {
 		log.Printf("[ERROR] account data jamaah: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
@@ -313,7 +328,7 @@ func (o *Orders) SimpanDataJamaah(w http.ResponseWriter, r *http.Request) {
 		hasil = &hasilSimpan{}
 	}
 
-	d, err := scanDataJamaah(o.db.QueryRowContext(r.Context(), dataJamaahSelect+` AND j.id = ?`, id, jamaahID))
+	d, err := scanDataJamaah(o.db.QueryRowContext(r.Context(), dataJamaahSelect+` AND j.id = ?`, acc.ID, id, jamaahID))
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			log.Printf("[ERROR] account simpan data jamaah baca ulang: %v", err)

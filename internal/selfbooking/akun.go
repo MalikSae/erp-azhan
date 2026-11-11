@@ -92,7 +92,7 @@ func resolvePIC(ctx context.Context, tx *sql.Tx, brandID, accountID int64, pic P
 	if pic.NoHP != "" {
 		hp = &pic.NoHP
 	}
-	id, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{
+	id, err := resolveAnggotaPublik(ctx, tx, brandID, accountID, AnggotaInput{
 		PaxType: "reguler", NamaLengkap: strings.TrimSpace(pic.NamaLengkap), NoHP: hp, JenisKelamin: pic.JenisKelamin, NIK: pic.NIK, Nomor: 1,
 	})
 	if err != nil {

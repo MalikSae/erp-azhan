@@ -102,6 +102,16 @@ Catatan: kode sekarang memprioritaskan cookie saat checkout dan hanya mengikat j
 - Bayi tanpa NIK: dicocokkan lewat nama dan tanggal lahir.
 - Nomor WA bukan kunci identitas jamaah. Batas unik nomor HP jamaah per brand (`uq_jamaah_brand_hp`, migrasi 060) dicabut.
 
+**Akses akun atas data jamaah (keputusan 11 November 2026, migrasi 130).** Memakai ulang jamaah lama lewat NIK + nama tidak memberi hak atas datanya:
+
+- Akses penuh hanya untuk akun pembuat (`jamaah.dibuat_oleh_akun_id`): akun yang bookingnya pertama kali membuat baris jamaah itu. Jamaah buatan admin tidak punya akun pembuat.
+- Akun lain mendapat akses terbatas: nama, NIK tersamar, jenis pax, angka kelengkapan. Tidak bisa melihat atau mengubah isian (termasuk kolom kosong), tidak bisa mengunduh surat, hanya bisa mengunggah jenis dokumen yang belum ada berkasnya.
+- NIK akun bukan bukti kepemilikan; NIK akun diisi sendiri tanpa verifikasi.
+- Klaim pembuat gugur bila jamaah dipakai booking pihak lain (admin atau akun lain) sementara akun pembuat belum pernah punya pembayaran terkonfirmasi pada booking yang memuat jamaah itu (`shared.GugurkanKlaimPembuatBooking`).
+- Agen perekrut (`direkrut_oleh_akun_id`) tidak otomatis mendapat akses penuh: kunci agen terpasang saat booking dibuat, lewat pencocokan NIK + nama yang sama, jadi bukan bukti hubungan. Agen mendapat akses penuh atas jamaah yang ia buat sendiri.
+- Aturan ditulis satu kali di `internal/customer/akses_jamaah.go` dan dipakai semua pintu akun.
+- Ditunda: tombol admin untuk menyerahkan jamaah ke sebuah akun.
+
 ### 4.4 Override admin
 
 Admin Master dapat memindahkan jamaah ke agen lain, dan memasangkan atau mengganti agen akun, untuk semua `kaitan_sumber` (bukan hanya `jalur3` seperti `kaitan.go:18`). Bila komisi atas jamaah itu sudah tercatat, harus ada cara memindahkan komisi yang sudah ada (bagian 10, butir 8); aturan lama yang menolak tanpa jalan keluar tidak dipertahankan. Setiap override dicatat di log kaitan yang sudah ada.

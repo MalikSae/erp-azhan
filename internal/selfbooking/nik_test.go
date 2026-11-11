@@ -51,7 +51,7 @@ func TestResolveAnggotaPublikNIK(t *testing.T) {
 	ctx := context.Background()
 	nik := "3174010101019999"
 
-	pertama, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Pemilik NIK", JenisKelamin: "L", NIK: &nik})
+	pertama, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "Pemilik NIK", JenisKelamin: "L", NIK: &nik})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,12 +60,12 @@ func TestResolveAnggotaPublikNIK(t *testing.T) {
 		t.Fatalf("NIK tersimpan = %q (err %v), want %s", tersimpan.String, err, nik)
 	}
 
-	ulang, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "  pemilik   nik ", JenisKelamin: "L", NIK: &nik})
+	ulang, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "  pemilik   nik ", JenisKelamin: "L", NIK: &nik})
 	if err != nil || ulang != pertama {
 		t.Fatalf("nama sama harus memakai ulang jamaah %d, dapat %d (err %v)", pertama, ulang, err)
 	}
 
-	_, err = resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Orang Lain", JenisKelamin: "L", NIK: &nik, Nomor: 2})
+	_, err = resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "Orang Lain", JenisKelamin: "L", NIK: &nik, Nomor: 2})
 	if !errors.Is(err, ErrNIKAtasNamaLain) {
 		t.Fatalf("nama beda: err=%v, want ErrNIKAtasNamaLain", err)
 	}
@@ -78,11 +78,11 @@ func TestResolveAnggotaPublikNIK(t *testing.T) {
 	hp := nomorUji(990)
 	nikBaru := "3174010101018888"
 	nikLain := "3174010101017777"
-	satu, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Berbagi Nomor Satu", NoHP: &hp, JenisKelamin: "P", NIK: &nikBaru})
+	satu, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "Berbagi Nomor Satu", NoHP: &hp, JenisKelamin: "P", NIK: &nikBaru})
 	if err != nil {
 		t.Fatal(err)
 	}
-	dua, err := resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{PaxType: "reguler", NamaLengkap: "Berbagi Nomor Dua", NoHP: &hp, JenisKelamin: "L", NIK: &nikLain})
+	dua, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "Berbagi Nomor Dua", NoHP: &hp, JenisKelamin: "L", NIK: &nikLain})
 	if err != nil || dua == satu {
 		t.Fatalf("dua NIK dengan nomor sama: id1=%d id2=%d err=%v, want dua jamaah", satu, dua, err)
 	}

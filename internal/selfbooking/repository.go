@@ -175,7 +175,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		if req.PIC.NoHP != "" {
 			hp = &req.PIC.NoHP
 		}
-		picJamaahID, err = resolveAnggotaPublik(ctx, tx, brandID, AnggotaInput{
+		picJamaahID, err = resolveAnggotaPublik(ctx, tx, brandID, ini.accountID, AnggotaInput{
 			PaxType: "reguler", NamaLengkap: req.PIC.NamaLengkap, NoHP: hp, JenisKelamin: req.PIC.JenisKelamin, NIK: req.PIC.NIK, Nomor: 1,
 		})
 		if err != nil {
@@ -238,7 +238,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 			anggotaJamaahIDs[i] = id
 			continue
 		}
-		id, err := resolveAnggotaPublik(ctx, tx, brandID, a)
+		id, err := resolveAnggotaPublik(ctx, tx, brandID, ini.accountID, a)
 		if err != nil {
 			return nil, err
 		}
@@ -489,6 +489,10 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	if err != nil {
 		return nil, err
 	}
+	// Jamaah yang dipakai ulang dari pihak lain: klaim pembuat yang belum pernah membayar gugur.
+	if err := shared.GugurkanKlaimPembuatBooking(ctx, tx, bookingID); err != nil {
+		return nil, err
+	}
 	var keyHash, fingerprint any
 	if req.RequestKey != "" {
 		keyHash = hashText(req.RequestKey)
@@ -517,7 +521,8 @@ func stringPtr(s string) *string {
 
 // resolveAnggotaPublik mencari atau membuat jamaah untuk anggota booking publik.
 // Jamaah dikenali dari NIK (nama harus cocok); tanpa NIK (bayi) dari nama dan tanggal lahir.
-func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID int64, a AnggotaInput) (int64, error) {
+// pembuatAkunID: akun pemesan; dicatat sebagai pembuat hanya bila jamaah baru dibuat di sini (0 = tidak dicatat).
+func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID, pembuatAkunID int64, a AnggotaInput) (int64, error) {
 	nik := nikBersih(a.NIK)
 	if nik != "" {
 		// NIK sudah terdaftar: pakai ulang bila nama cocok, tolak bila beda.
@@ -532,7 +537,7 @@ func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID int64, a Angg
 			return id, nil
 		}
 	}
-	id, err := resolveAnggotaTanpaNIK(ctx, tx, brandID, a)
+	id, err := resolveAnggotaTanpaNIK(ctx, tx, brandID, pembuatAkunID, a)
 	if err != nil {
 		return 0, err
 	}
@@ -547,7 +552,7 @@ func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID int64, a Angg
 // resolveAnggotaTanpaNIK mencari atau membuat jamaah untuk pax tanpa NIK (bayi). Nomor WhatsApp bukan kunci
 // identitas (spek 4.3): bayi dicocokkan lewat nama dan tanggal lahir; bila tidak ada yang cocok, jamaah baru
 // dibuat dengan nomor sebagai kontak biasa. Jamaah lama yang cocok dipakai ulang tanpa menimpa data apa pun.
-func resolveAnggotaTanpaNIK(ctx context.Context, tx *sql.Tx, brandID int64, a AnggotaInput) (int64, error) {
+func resolveAnggotaTanpaNIK(ctx context.Context, tx *sql.Tx, brandID, pembuatAkunID int64, a AnggotaInput) (int64, error) {
 	dob := tanggalLahirOrNil(a.TanggalLahir)
 	if dob != nil {
 		rows, err := tx.QueryContext(ctx, `SELECT id, nama_lengkap FROM jamaah WHERE brand_id=? AND tanggal_lahir=? ORDER BY id FOR UPDATE`, brandID, dob)
@@ -582,6 +587,12 @@ func resolveAnggotaTanpaNIK(ctx context.Context, tx *sql.Tx, brandID int64, a An
 	id, err := shared.CreateJamaah(ctx, tx, brandID, shared.JamaahInput{NamaLengkap: a.NamaLengkap, NoHP: hp, JenisKelamin: &jk})
 	if err != nil {
 		return 0, fmt.Errorf("insert anggota jamaah: %w", err)
+	}
+	// Akun pemesan menjadi pembuat jamaah baru: dasar akses penuh atas data jamaah ini di portal.
+	if pembuatAkunID > 0 {
+		if _, err := tx.ExecContext(ctx, `UPDATE jamaah SET dibuat_oleh_akun_id=? WHERE id=?`, pembuatAkunID, id); err != nil {
+			return 0, fmt.Errorf("catat pembuat jamaah: %w", err)
+		}
 	}
 	if dob != nil {
 		if _, err := tx.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir=? WHERE id=?`, dob, id); err != nil {
