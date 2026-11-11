@@ -66,23 +66,32 @@ const CustomDropdown = ({
     if (!isOpen && dropdownRef.current) {
       const rect = dropdownRef.current.getBoundingClientRect();
       let el = dropdownRef.current.parentElement;
-      let bottomEdge = window.innerHeight;
+      let bottomEdge = window.innerHeight; // tepi bawah area gulir: lunak, halaman masih bisa digulir
       let topEdge = 0;
+      let potongBawah = Infinity; // tepi bawah leluhur yang memotong isinya (overflow hidden): keras
       while (el && el !== document.body) {
         const oy = getComputedStyle(el).overflowY;
-        if (oy === 'auto' || oy === 'scroll') {
+        // Leluhur yang memotong isinya (mis. kartu tabel ber-overflow hidden) ikut membatasi ruang:
+        // menu yang melewati tepi kartu terpotong dan tidak terlihat.
+        if (oy === 'auto' || oy === 'scroll' || oy === 'hidden' || oy === 'clip') {
           const r = el.getBoundingClientRect();
-          bottomEdge = Math.min(bottomEdge, r.bottom);
           topEdge = Math.max(topEdge, r.top);
-          break;
+          if (oy === 'auto' || oy === 'scroll') {
+            bottomEdge = Math.min(bottomEdge, r.bottom);
+            break;
+          }
+          potongBawah = Math.min(potongBawah, r.bottom);
         }
         el = el.parentElement;
       }
       const reserve = 80; // ruang untuk bar aksi sticky
       const menuHeight = Math.min(248, Math.max(1, normalizedOptions.length) * 40 + 10);
       const spaceBelow = bottomEdge - rect.bottom - reserve;
-      const spaceAbove = rect.top - topEdge;
-      setOpenUp(spaceBelow < menuHeight && spaceAbove > spaceBelow);
+      const muatAtas = rect.top - topEdge >= menuHeight;
+      const muatBawah = potongBawah - rect.bottom >= menuHeight;
+      // Ke atas hanya bila menunya muat utuh di atas. Bila tidak muat, tetap ke bawah: paling buruk
+      // halaman perlu digulir, sedangkan menu yang terpotong di atas tidak bisa dijangkau sama sekali.
+      setOpenUp(muatAtas && (spaceBelow < menuHeight || !muatBawah));
     }
     setIsOpen(!isOpen);
   };

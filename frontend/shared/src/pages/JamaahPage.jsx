@@ -33,8 +33,8 @@ const ProgressCell = ({ value, title }) => {
   );
 };
 
-// toolbarLeading: isi tambahan di kiri toolbar tabel (mis. pemilih tab Daftar / Menunggu persetujuan).
-export const JamaahPage = ({ showBrandColumn = false, toolbarLeading }) => {
+// subnav: pemilih tab halaman (Daftar / Menunggu persetujuan), tampil tepat di bawah judul.
+export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [data, setData] = useState([]);
@@ -199,6 +199,7 @@ export const JamaahPage = ({ showBrandColumn = false, toolbarLeading }) => {
         actionLabel="+ Tambah Jamaah"
         onAction={() => navigate("/jamaah/new")}
       />
+      {subnav}
 
       {successMessage && <Alert variant="success" onClose={() => setSuccessMessage(null)}>{successMessage}</Alert>}
       {error && <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>}
@@ -214,7 +215,6 @@ export const JamaahPage = ({ showBrandColumn = false, toolbarLeading }) => {
           itemsPerPage={15}
           searchPlaceholder="Cari nama, NIK, atau nomor HP..."
           emptyMessage='Belum ada data jamaah. Klik "+ Tambah Jamaah" untuk menambahkan.'
-          toolbarLeading={toolbarLeading}
           toolbarActions={
             <div className="flex flex-wrap items-center gap-2">
               <CustomDropdown

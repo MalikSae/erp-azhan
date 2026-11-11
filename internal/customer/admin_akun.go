@@ -29,6 +29,7 @@ type FilterAkun struct {
 	Cari       string
 	StatusAgen string // tidak_aktif | pengajuan | aktif | nonaktif
 	Upline     string // ada | tanpa
+	Agen       string // agen (aktif atau nonaktif) | bukan
 	Page       int
 	PerPage    int
 }
@@ -44,8 +45,10 @@ type AkunBaris struct {
 	KodeReferral *string    `json:"kode_referral"`
 	UplineID     *int64     `json:"upline_akun_id"`
 	UplineNama   *string    `json:"upline_nama"`
-	CreatedAt    time.Time  `json:"created_at"`
-	LastLoginAt  *time.Time `json:"last_login_at"`
+	// JumlahBooking: semua booking yang dibuat akun ini, termasuk yang batal (sama dengan angka di detail akun).
+	JumlahBooking int        `json:"jumlah_booking"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastLoginAt   *time.Time `json:"last_login_at"`
 }
 
 type HasilListAkun struct {
@@ -125,6 +128,9 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 	if f.Upline != "" && f.Upline != "ada" && f.Upline != "tanpa" {
 		return HasilListAkun{}, ErrFilterAkun
 	}
+	if f.Agen != "" && f.Agen != "agen" && f.Agen != "bukan" {
+		return HasilListAkun{}, ErrFilterAkun
+	}
 	if f.Page < 1 {
 		f.Page = 1
 	}
@@ -141,6 +147,13 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 	}
 	if f.StatusAgen != "" {
 		where, args = append(where, "a.status_agen = ?"), append(args, f.StatusAgen)
+	}
+	// Agen = akun yang punya kode referral, aktif maupun nonaktif. Calon agen (pengajuan) belum termasuk.
+	switch f.Agen {
+	case "agen":
+		where = append(where, "a.status_agen IN ('aktif','nonaktif')")
+	case "bukan":
+		where = append(where, "a.status_agen NOT IN ('aktif','nonaktif')")
 	}
 	switch f.Upline {
 	case "ada":
@@ -161,7 +174,8 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 	}
 	rows, err := q.QueryContext(ctx, `
 		SELECT a.id, a.nama_lengkap, a.email, a.no_hp, a.brand_id, b.name, a.status_agen, a.kode_referral,
-		       a.direkrut_oleh_akun_id, up.nama_lengkap, a.created_at, a.last_login_at
+		       a.direkrut_oleh_akun_id, up.nama_lengkap,
+		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id), a.created_at, a.last_login_at
 		FROM customer_accounts a
 		JOIN brands b ON b.id = a.brand_id
 		LEFT JOIN customer_accounts up ON up.id = a.direkrut_oleh_akun_id
@@ -175,7 +189,7 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 		var a AkunBaris
 		var upline sql.NullInt64
 		if err := rows.Scan(&a.AkunID, &a.NamaLengkap, &a.Email, &a.NoHP, &a.BrandID, &a.BrandName, &a.StatusAgen, &a.KodeReferral,
-			&upline, &a.UplineNama, &a.CreatedAt, &a.LastLoginAt); err != nil {
+			&upline, &a.UplineNama, &a.JumlahBooking, &a.CreatedAt, &a.LastLoginAt); err != nil {
 			return out, fmt.Errorf("customer: scan akun: %w", err)
 		}
 		if upline.Valid {
@@ -266,13 +280,13 @@ func adminBrandScope(r *http.Request) *int64 {
 	return nil
 }
 
-// List GET /api/admin/akun?page=&per_page=&q=&brand_id=&status_agen=&upline=ada|tanpa
+// List GET /api/admin/akun?page=&per_page=&q=&brand_id=&status_agen=&upline=ada|tanpa&agen=agen|bukan
 func (h *AdminAkun) List(w http.ResponseWriter, r *http.Request) {
 	qs := r.URL.Query()
 	page, _ := strconv.Atoi(qs.Get("page"))
 	perPage, _ := strconv.Atoi(qs.Get("per_page"))
 	hasil, err := listAkun(r.Context(), h.db, adminBrandScope(r), FilterAkun{
-		Cari: qs.Get("q"), StatusAgen: qs.Get("status_agen"), Upline: qs.Get("upline"), Page: page, PerPage: perPage,
+		Cari: qs.Get("q"), StatusAgen: qs.Get("status_agen"), Upline: qs.Get("upline"), Agen: qs.Get("agen"), Page: page, PerPage: perPage,
 	})
 	if errors.Is(err, ErrFilterAkun) {
 		writeError(w, http.StatusBadRequest, err.Error())

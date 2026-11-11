@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { History, IdCard, Network, Pencil, UserRound } from 'lucide-react';
-import { getAkunPelanggan, ubahNikAgen, ubahProfilAkun } from '../api/akun';
+import { getAkunPelanggan, ubahProfilAkun } from '../api/akun';
 import Alert from '../components/ui/Alert';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -30,13 +30,14 @@ const TombolUbah = ({ onClick, children }) => (
 );
 
 // Detail satu akun pelanggan. showBrandColumn: Admin Master, boleh membuka layar Ganti Kaitan Agen.
-// izin: { ubahProfil, nikPengajuan, nikAktif } menentukan tombol Ubah (API tetap memeriksa izin sendiri).
+// izin: { ubahProfil, gantiUpline, lihatAgen, setujuiAgen } menentukan tombol (API tetap memeriksa izin sendiri).
+// Data keagenan (NIK agen, kinerja, komisi) tidak ditampilkan di sini; rumahnya di halaman agen.
 export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [akun, setAkun] = useState(null);
   const [error, setError] = useState('');
-  const [dialog, setDialog] = useState(null); // 'profil' | 'nik'
+  const [dialog, setDialog] = useState(null); // 'profil'
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [galat, setGalat] = useState(null);
@@ -57,13 +58,12 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
 
   const jadiAgen = akun.status_agen === 'aktif' || akun.status_agen === 'nonaktif';
   const gantiUpline = `/komisi/ganti-kaitan?akun=${akun.akun_id}&q=${encodeURIComponent(akun.nama_lengkap)}`;
-  const bolehNik = akun.status_agen !== 'tidak_aktif' && (jadiAgen ? izin.nikAktif : izin.nikPengajuan);
+  // Halaman agen: untuk agen butuh agen.view; untuk yang masih mengajukan butuh agen.approve.
+  const bukaAgen = jadiAgen ? izin.lihatAgen : (akun.status_agen === 'pengajuan' && izin.setujuiAgen);
 
   const buka = (jenis) => {
     setGalat(null);
-    setForm(jenis === 'profil'
-      ? { nama_lengkap: akun.nama_lengkap, no_hp: akun.no_hp, domisili: akun.domisili || '', alasan: '' }
-      : { nik: '', alasan: '' });
+    setForm({ nama_lengkap: akun.nama_lengkap, no_hp: akun.no_hp, domisili: akun.domisili || '', alasan: '' });
     setDialog(jenis);
   };
   const isi = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -72,8 +72,7 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
     setSaving(true);
     setGalat(null);
     try {
-      if (dialog === 'profil') await ubahProfilAkun(akun.akun_id, form);
-      else await ubahNikAgen(akun.akun_id, form);
+      await ubahProfilAkun(akun.akun_id, form);
       setDialog(null);
       await muat();
     } catch (e) {
@@ -130,27 +129,16 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
             {izin.gantiUpline && <Button variant="secondary" size="sm" onClick={() => navigate(gantiUpline)}>Ganti upline</Button>}
           </MetaBox>
 
-          <MetaBox
-            title="Agen"
-            icon={<IdCard size={18} />}
-            contentClassName="p-4 sm:p-5 space-y-2.5"
-            headerAction={bolehNik ? <TombolUbah onClick={() => buka('nik')}>Ubah NIK</TombolUbah> : null}
-          >
+          {/* Keagenan punya halaman sendiri di menu Agen; di sini cukup status dan tautannya. */}
+          <MetaBox title="Agen" icon={<IdCard size={18} />} contentClassName="p-4 sm:p-5 space-y-2.5">
             <Row label="Status"><StatusAkun status={akun.status_agen} /></Row>
-            {akun.status_agen !== 'tidak_aktif' && (
-              <>
-                <Row label="Kode referral"><span className="font-mono">{akun.kode_referral || '-'}</span></Row>
-                <Row label="Diajukan">{dateLabel(akun.diajukan_agen_at)}</Row>
-                <Row label="Disetujui">{dateLabel(akun.disetujui_agen_at)}</Row>
-                <Row label="NIK agen">{akun.nik_agen || '-'}</Row>
-              </>
-            )}
-            {jadiAgen && (
-              <>
-                <Row label="Jamaah agen ini">{akun.jumlah_jamaah_agen}</Row>
-                <Row label="Akun yang diajak">{akun.jumlah_diajak}</Row>
-                <div className="pt-1"><Button variant="secondary" size="sm" onClick={() => navigate(`/agen/${akun.akun_id}`)}>Lihat kinerja agen</Button></div>
-              </>
+            {jadiAgen && <Row label="Kode referral"><span className="font-mono">{akun.kode_referral || '-'}</span></Row>}
+            {bukaAgen && (
+              <div className="pt-1">
+                <Button variant="secondary" size="sm" onClick={() => navigate(`/agen/${akun.akun_id}`)}>
+                  {jadiAgen ? 'Buka halaman agen' : 'Tinjau pengajuan agen'}
+                </Button>
+              </div>
             )}
           </MetaBox>
         </div>
@@ -191,7 +179,7 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
       <Modal
         isOpen={dialog !== null}
         onClose={() => !saving && setDialog(null)}
-        title={dialog === 'nik' ? 'Ubah NIK Agen' : 'Ubah Data Akun'}
+        title="Ubah Data Akun"
         footer={(
           <div className="flex justify-end gap-2 w-full">
             <Button variant="secondary" onClick={() => setDialog(null)} disabled={saving}>Batal</Button>
@@ -210,14 +198,6 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
               <Input label="Nomor WhatsApp" value={form.no_hp || ''} onChange={isi('no_hp')} />
               <Input label="Domisili" value={form.domisili || ''} onChange={isi('domisili')} />
             </>
-          )}
-          {dialog === 'nik' && (
-            <Input
-              label="NIK baru (16 digit)"
-              value={form.nik || ''}
-              onChange={(e) => setForm((f) => ({ ...f, nik: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
-              helpText={akun.nik_agen ? `NIK sekarang ${akun.nik_agen}.` : 'Belum ada NIK tercatat.'}
-            />
           )}
           <Textarea label="Alasan perubahan *" value={form.alasan || ''} onChange={isi('alasan')} rows={3} placeholder="Contoh: salah ketik saat mendaftar, diminta pemilik akun" />
         </div>

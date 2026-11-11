@@ -46,10 +46,12 @@ export async function listAgenAktif({ brandId, q } = {}) {
 
 // B2 Daftar Agen (aktif & nonaktif) + jumlah_closing & total_komisi.
 // brandId hanya dipakai super admin (kosong = semua brand).
-export async function listAgen({ q, brandId } = {}) {
+// dari dan sampai (YYYY-MM-DD) membatasi pax_closing dan total_komisi; kosong = sepanjang waktu.
+export async function listAgen({ q, brandId, dari, sampai } = {}) {
   const params = {};
   if (q) params.q = q;
   if (brandId) params.brand_id = brandId;
+  if (dari && sampai) { params.dari = dari; params.sampai = sampai; }
   const { data } = await client.get('/api/admin/agen', { params });
   return data || [];
 }

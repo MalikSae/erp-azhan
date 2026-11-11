@@ -1,13 +1,15 @@
 import client from './client';
 
-// Akun Pelanggan (layar admin, hanya baca): akun yang bisa booking di situs publik.
+// Akun (layar admin, hanya baca): akun yang bisa booking di situs publik.
 
-export async function listAkunPelanggan({ q, brandId, statusAgen, upline, page, perPage } = {}) {
+// agen: 'agen' (aktif atau nonaktif) | 'bukan'.
+export async function listAkunPelanggan({ q, brandId, statusAgen, upline, agen, page, perPage } = {}) {
   const params = { page, per_page: perPage };
   if (q) params.q = q;
   if (brandId) params.brand_id = brandId;
   if (statusAgen) params.status_agen = statusAgen;
   if (upline) params.upline = upline;
+  if (agen) params.agen = agen;
   const { data } = await client.get('/api/admin/akun', { params });
   return data;
 }

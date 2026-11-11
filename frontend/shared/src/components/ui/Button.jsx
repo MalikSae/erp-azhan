@@ -18,7 +18,7 @@ const Button = ({
     primary: 'bg-primary-500 hover:bg-primary-600 text-white border border-primary-500 shadow-2xs hover:shadow-xs focus:ring-primary-500 active:scale-[0.98]',
     dark: 'bg-neutral-800 hover:bg-neutral-700 text-white shadow-2xs hover:shadow-xs focus:ring-neutral-700 active:scale-[0.98]',
     secondary: 'bg-white hover:bg-neutral-50 text-neutral-800 border border-neutral-200 shadow-2xs hover:border-neutral-300 focus:ring-neutral-200 active:scale-[0.98]',
-    danger: 'bg-danger-600 hover:bg-danger-700 text-white shadow-2xs hover:shadow-xs focus:ring-danger-500 active:scale-[0.98]',
+    danger: 'bg-danger-600 hover:bg-danger-700 text-white border border-danger-600 shadow-2xs hover:shadow-xs focus:ring-danger-500 active:scale-[0.98]',
     'danger-light': 'bg-danger-50 hover:bg-danger-100 text-danger-700 border border-danger-200 focus:ring-danger-200 active:scale-[0.98]',
     ghost: 'bg-transparent hover:bg-neutral-100 text-neutral-700 focus:ring-neutral-200 active:scale-[0.98]'
   };

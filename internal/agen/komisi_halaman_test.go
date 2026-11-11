@@ -69,6 +69,19 @@ func TestDaftarKomisiPaginasiRingkasanDanBatal(t *testing.T) {
 	if rs, _ := ringkasanKomisi(ctx, tx, f); rs.Jumlah != 2 || rs.Total != 1_000_000 {
 		t.Fatalf("ringkasan semua: jumlah baris 2 dan total hanya yang aktif, dapat %+v", rs)
 	}
+	// Status tertahan dan tersedia: jadwal belum berangkat, jadi komisi yang tersisa tertahan.
+	f.Status = "tertahan"
+	items, err = listKomisi(ctx, tx, f)
+	must(t, "daftar tertahan", err)
+	if len(items) != 1 || items[0].Ketersediaan != "tertahan" {
+		t.Fatalf("daftar tertahan = %+v", items)
+	}
+	f.Status = "tersedia"
+	items, err = listKomisi(ctx, tx, f)
+	must(t, "daftar tersedia", err)
+	if rt, _ := ringkasanKomisi(ctx, tx, f); len(items) != 0 || rt.Jumlah != 0 {
+		t.Fatalf("daftar tersedia harus kosong: %d baris, ringkasan %+v", len(items), rt)
+	}
 
 	tot, err := totalPerJenis(ctx, tx, nuh)
 	must(t, "total per jenis", err)

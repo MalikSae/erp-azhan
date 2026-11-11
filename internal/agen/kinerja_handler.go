@@ -98,9 +98,16 @@ func (h *Handler) RiwayatKomisiPortal(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
-// ListAgen GET /api/admin/agen?q= (B2)
+// ListAgen GET /api/admin/agen?q=&dari=&sampai= (B2)
+// dari dan sampai (YYYY-MM-DD) membatasi pax_closing dan total_komisi ke komisi yang tercatat di rentang itu;
+// keduanya kosong berarti sepanjang waktu.
 func (h *Handler) ListAgen(w http.ResponseWriter, r *http.Request) {
-	items, err := h.repo.ListAgen(r.Context(), adminBrandScope(r), r.URL.Query().Get("q"))
+	q := r.URL.Query()
+	items, err := h.repo.ListAgen(r.Context(), adminBrandScope(r), q.Get("q"), RentangAgen{Dari: q.Get("dari"), Sampai: q.Get("sampai")})
+	if errors.Is(err, ErrPeriodeTidakValid) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		handleError(w, err)
 		return

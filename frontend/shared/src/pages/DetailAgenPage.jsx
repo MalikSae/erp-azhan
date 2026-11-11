@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getDetailAgen, ubahStatusAgen } from '../api/agen';
-import { Banknote, Clock3, History, IdCard, Network, TrendingUp, UserCheck, Wallet } from 'lucide-react';
+import { ubahNikAgen } from '../api/akun';
+import { Banknote, Clock3, History, Network, Pencil, TrendingUp, UserCheck, Wallet } from 'lucide-react';
 import Alert from '../components/ui/Alert';
 import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 import MetaBox from '../components/ui/MetaBox';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import StatTile from '../components/ui/StatTile';
+import Textarea from '../components/ui/Textarea';
 import useProtectedImage from '../utils/useProtectedImage';
 import { dateLabel, HARI_TAHAN_KOMISI, money, STATUS_AGEN } from '../utils/agen';
 
@@ -54,33 +57,61 @@ const pencairanMeta = {
   ditolak: { label: 'Ditolak', variant: 'danger' },
 };
 
-// Screen B2a — detail satu agen, 8 kelompok data (screen-agen.md). Satu-satunya
-// aksi: toggle aktif <-> nonaktif. showBrandColumn: Admin Master (tampilkan brand).
-export default function DetailAgenPage({ showBrandColumn = false }) {
+// Halaman satu agen (screen B2a). Hanya memuat data keagenan: status, kinerja, komisi, dan riwayatnya.
+// Profil (nama, WhatsApp, domisili) dan upline milik akun, diubah di Detail Akun; di sini hanya tautan.
+//
+// atas: isi tambahan di bawah judul (dashboard menaruh kartu keputusan pengajuan di situ).
+// calon: akun yang masih mengajukan dan belum jadi agen ({ nama_lengkap, no_hp }); halaman lalu hanya
+// menampilkan judul dan `atas`. undefined berarti belum diketahui (antrean masih dimuat).
+// izin: { lihatAkun, ubahNik } menentukan tautan dan tombol; API tetap memeriksa izinnya sendiri.
+// muatUlang: angka yang dinaikkan pemanggil untuk memuat ulang data (mis. setelah pengajuan disetujui).
+export default function DetailAgenPage({ showBrandColumn = false, atas = null, calon, izin = {}, muatUlang = 0 }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [agen, setAgen] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [bukanAgen, setBukanAgen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
   const [alasan, setAlasan] = useState('');
+  const [nikOpen, setNikOpen] = useState(false);
+  const [nikForm, setNikForm] = useState({ nik: '', alasan: '' });
+  const [nikGalat, setNikGalat] = useState('');
   const fotoSrc = useProtectedImage(agen?.foto_url);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
+    setBukanAgen(false);
     try {
       setAgen(await getDetailAgen(id));
     } catch (err) {
-      setError(err.response?.status === 404 ? 'Agen tidak ditemukan.' : 'Detail agen gagal dimuat.');
+      setAgen(null);
+      const tidakAda = err.response?.status === 404;
+      setBukanAgen(tidakAda);
+      setError(tidakAda ? 'Agen tidak ditemukan.' : 'Detail agen gagal dimuat.');
     } finally {
       setLoading(false);
     }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, muatUlang]);
+
+  const simpanNik = async () => {
+    setSaving(true);
+    setNikGalat('');
+    try {
+      await ubahNikAgen(agen.akun_id, nikForm);
+      setNikOpen(false);
+      await load();
+    } catch (err) {
+      setNikGalat(err.response?.data?.error || 'NIK gagal disimpan.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const targetStatus = agen?.status_agen === 'aktif' ? 'nonaktif' : 'aktif';
   const alasanValid = alasan.trim().length >= 5 && alasan.trim().length <= 500;
@@ -103,25 +134,56 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
     }
   };
 
-  if (loading && !agen) return <p className="text-sm text-neutral-500">Memuat detail agen...</p>;
-  if (error) return <Alert variant="error" message={error} />;
-  if (!agen) return null;
+  const tautanAkun = izin.lihatAkun
+    ? <Button variant="secondary" onClick={() => navigate(`/akun/${id}`)}>Lihat akun</Button>
+    : null;
+
+  // Belum ada data agen: sedang memuat, akun yang masih mengajukan, atau galat. Susunan luarnya sama
+  // dengan halaman penuh supaya `atas` tidak dipasang ulang saat keadaan berganti.
+  if (!agen) {
+    const masihCalon = bukanAgen && calon;
+    const menunggu = loading || (bukanAgen && calon === undefined && atas);
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title={masihCalon ? calon.nama_lengkap : 'Agen'}
+          subtitle={masihCalon ? (
+            <>
+              {calon.no_hp || '-'} · Pengajuan agen{calon.diajukan_agen_at ? ` · Diajukan ${dateLabel(calon.diajukan_agen_at)}` : ''}
+              {izin.lihatAkun && <> · <Link to={`/akun/${id}`} className="font-semibold text-primary-600 hover:underline">Lihat akun</Link></>}
+            </>
+          ) : undefined}
+          onBack={() => navigate(masihCalon ? '/agen/pengajuan' : '/agen')}
+          breadcrumb={false}
+        >
+          {null}
+        </PageHeader>
+        {atas}
+        {menunggu && <p className="text-sm text-neutral-500">Memuat data agen...</p>}
+        {!menunggu && !masihCalon && error && <Alert variant="error" message={error} />}
+      </div>
+    );
+  }
 
   const statusMeta = STATUS_AGEN[agen.status_agen] || { label: agen.status_agen, variant: 'neutral' };
   const siklusAktifId = agen.siklus?.find((s) => s.keputusan_agen === 'disetujui')?.id;
+  const pencairanTerbaru = agen.pencairan.slice(0, 3);
 
   return (
     <div className="space-y-6">
-      <PageHeader title={agen.nama_lengkap} onBack={() => navigate('/agen')}>
+      <PageHeader title={agen.nama_lengkap} subtitle={`${agen.no_hp || '-'} · kode ${agen.kode_referral || '-'}`} onBack={() => navigate('/agen')} breadcrumb={false}>
+        {tautanAkun}
         <Button variant={agen.status_agen === 'aktif' ? 'danger-light' : 'primary'} onClick={() => { setAlasan(''); setActionError(''); setConfirmOpen(true); }}>
           {agen.status_agen === 'aktif' ? 'Nonaktifkan Agen' : 'Aktifkan Kembali'}
         </Button>
       </PageHeader>
 
+      {atas}
+
       {/* e. Ringkasan komisi & saldo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <StatTile icon={Wallet} variant="success" value={money(agen.saldo.saldo_tersedia)} label="Saldo tersedia" hint={`Komisi yang sudah lewat H+${HARI_TAHAN_KOMISI} berangkat, dikurangi pencairan`} />
-        <StatTile icon={Clock3} variant="warning" value={money(agen.saldo.saldo_tertahan)} label="Saldo tertahan" hint={`Sampai H+${HARI_TAHAN_KOMISI} setelah berangkat`} />
+        <StatTile icon={Wallet} variant="success" value={money(agen.saldo.saldo_tersedia)} label="Dapat Dicairkan" hint="Setelah dikurangi pencairan" />
+        <StatTile icon={Clock3} variant="warning" value={money(agen.saldo.saldo_tertahan)} label="Tertahan" hint={`Hingga H+${HARI_TAHAN_KOMISI} keberangkatan`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -137,12 +199,12 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
           </MetaBox>
 
           {/* f. Riwayat pencairan (read-only) */}
-          <MetaBox title="Riwayat Pencairan" subtitle="Persetujuan pencairan dilakukan Admin Master" icon={<Banknote size={18} strokeWidth={1.75} className="text-neutral-700" />}>
-            {agen.pencairan.length === 0 ? (
+          <MetaBox title="Pencairan Terbaru" subtitle="Tiga pengajuan terakhir. Persetujuan dan riwayat lengkap ada di menu Komisi." icon={<Banknote size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+            {pencairanTerbaru.length === 0 ? (
               <p className="text-sm text-neutral-500">Belum ada pengajuan pencairan.</p>
             ) : (
               <div className="space-y-2">
-                {agen.pencairan.map((p) => {
+                {pencairanTerbaru.map((p) => {
                   const meta = pencairanMeta[p.status] || { label: p.status, variant: 'neutral' };
                   return (
                     <div key={p.id} className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-2 last:border-b-0 text-sm">
@@ -191,29 +253,29 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
         </div>
 
         <div className="space-y-6">
-          {/* a. Identitas & data profil */}
-          <MetaBox title="Identitas" icon={<IdCard size={18} strokeWidth={1.75} className="text-neutral-700" />}>
-            <div className="flex items-center gap-3">
-              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
-                {fotoSrc && <img src={fotoSrc} alt={`Foto ${agen.nama_lengkap}`} className="h-full w-full object-cover" />}
-              </div>
-              <div className="min-w-0">
-                <p className="font-heading font-semibold text-neutral-900 truncate">{agen.nama_lengkap}</p>
-                <p className="text-[11px] text-neutral-400 font-mono">{agen.no_hp || '-'}</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {showBrandColumn && <Row label="Brand">{agen.brand_name || '-'}</Row>}
-              <Row label="Domisili">{agen.domisili || '-'}</Row>
-              <Row label="Setuju S&K">{dateLabel(agen.menyetujui_syarat_ketentuan_agen_at)}</Row>
-            </div>
-          </MetaBox>
-
           {/* b. Status keagenan */}
-          <MetaBox title="Status Keagenan" icon={<UserCheck size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+          <MetaBox
+            title="Status Keagenan"
+            icon={<UserCheck size={18} strokeWidth={1.75} className="text-neutral-700" />}
+            headerAction={izin.ubahNik ? (
+              <Button variant="secondary" size="sm" onClick={() => { setNikForm({ nik: '', alasan: '' }); setNikGalat(''); setNikOpen(true); }}>
+                <Pencil size={14} className="mr-1.5" />Ubah NIK
+              </Button>
+            ) : null}
+          >
+            {agen.foto_url && (
+              <div className="flex justify-center">
+                <div className="h-20 w-20 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+                  {fotoSrc && <img src={fotoSrc} alt={`Foto ${agen.nama_lengkap}`} className="h-full w-full object-cover" />}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Row label="Status"><StatusDot variant={statusMeta.variant}>{statusMeta.label}</StatusDot></Row>
               <Row label="Kode referral"><span className="font-mono">{agen.kode_referral || '-'}</span></Row>
+              <Row label="NIK agen"><span className="font-mono">{agen.nik_masked || '-'}</span></Row>
+              {showBrandColumn && <Row label="Brand">{agen.brand_name || '-'}</Row>}
+              <Row label="Setuju S&K">{dateLabel(agen.menyetujui_syarat_ketentuan_agen_at)}</Row>
               <Row label="Diajukan">{dateLabel(agen.diajukan_agen_at)}</Row>
               <Row label="Disetujui">{dateLabel(agen.disetujui_agen_at)}</Row>
               <Row label="Disetujui oleh">{agen.disetujui_agen_oleh_nama || '-'}</Row>
@@ -238,7 +300,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
           )}
 
           {/* c. Jaringan & d. Performa closing */}
-          <MetaBox title="Jaringan & Closing" icon={<Network size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+          <MetaBox title="Jaringan" icon={<Network size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="space-y-2">
               <Row label="Upline">
                 {agen.upline_akun_id ? (
@@ -250,7 +312,7 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
             <div className="flex items-center gap-2 rounded-xl bg-neutral-50 border border-neutral-200 p-3">
               <TrendingUp size={16} strokeWidth={1.75} className="text-neutral-600" />
               <span className="text-sm text-neutral-700">
-                <span className="font-heading font-semibold text-neutral-900">{agen.jumlah_closing}</span> jamaah di-closing
+                <span className="font-heading font-semibold text-neutral-900">{agen.jumlah_closing}</span> jamaah terikat ke agen ini
               </span>
             </div>
           </MetaBox>
@@ -291,6 +353,29 @@ export default function DetailAgenPage({ showBrandColumn = false }) {
             />
             <p className="text-[11px] text-neutral-400">Minimal 5 karakter. Alasan, nama Anda, dan waktunya tercatat di riwayat status agen.</p>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={nikOpen}
+        onClose={() => !saving && setNikOpen(false)}
+        title="Ubah NIK Agen"
+        footer={(
+          <div className="flex justify-end gap-2 w-full">
+            <Button variant="secondary" onClick={() => setNikOpen(false)} disabled={saving}>Batal</Button>
+            <Button variant="primary" onClick={simpanNik} isLoading={saving}>Simpan</Button>
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          {nikGalat && <Alert variant="error" message={nikGalat} />}
+          <Input
+            label="NIK baru (16 digit)"
+            value={nikForm.nik}
+            onChange={(e) => setNikForm((f) => ({ ...f, nik: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
+            helpText={agen.nik_masked ? `NIK sekarang ${agen.nik_masked}.` : 'Belum ada NIK tercatat.'}
+          />
+          <Textarea label="Alasan perubahan *" value={nikForm.alasan} onChange={(e) => setNikForm((f) => ({ ...f, alasan: e.target.value }))} rows={3} placeholder="Contoh: salah ketik saat mendaftar, diminta pemilik akun" />
         </div>
       </Modal>
     </div>

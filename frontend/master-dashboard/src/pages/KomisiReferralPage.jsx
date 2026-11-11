@@ -43,7 +43,8 @@ const Row = ({ label, children }) => (
 // Screen C1 — Persetujuan Pencairan lintas brand (agen-azhan.md §5 poin 11).
 // Menyetujui wajib mengunggah bukti transfer keluar; saldo dicek ulang di
 // server. Pajak diproses di luar sistem (D7).
-export default function KomisiReferralPage() {
+// `judul` dan `subnav` (pemilih tab) diisi halaman pembungkus bertab (menu Komisi).
+export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', subnav }) {
   const [status, setStatus] = useState('pending');
   const [brandId, setBrandId] = useState('');
   const [brands, setBrands] = useState([]);
@@ -224,7 +225,8 @@ export default function KomisiReferralPage() {
   );
   return (
     <div className="space-y-6">
-      <PageHeader title="Persetujuan Pencairan" />
+      <PageHeader title={judul} />
+      {subnav}
       {error && <Alert variant="error" message={error} />}
 
       {!loading && (

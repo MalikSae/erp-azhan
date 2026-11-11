@@ -3,6 +3,7 @@ package agen
 import (
 	"context"
 	"testing"
+	"time"
 
 	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/testdb"
@@ -64,7 +65,7 @@ func TestKinerjaAgen(t *testing.T) {
 	}
 
 	// Daftar agen B2: aktif & nonaktif, scope brand.
-	list, err := listAgen(ctx, tx, &brand, "(uji)")
+	list, err := listAgen(ctx, tx, &brand, "(uji)", RentangAgen{})
 	must(t, "list agen", err)
 	found := map[int64]string{}
 	for _, a := range list {
@@ -80,6 +81,36 @@ func TestKinerjaAgen(t *testing.T) {
 		if a.AkunID == adam && (a.JumlahClosing != 0 || a.TotalKomisi != 300_000) {
 			t.Fatalf("metrik Adam = %+v", a)
 		}
+		// Pax closing dihitung dari komisi langsung; upline ikut dikirim.
+		if a.AkunID == nuh && (a.PaxClosing != 1 || a.UplineID == nil || *a.UplineID != adam || a.UplineNama == nil) {
+			t.Fatalf("pax closing atau upline Nuh = %+v", a)
+		}
+		if a.AkunID == adam && (a.PaxClosing != 0 || a.UplineID != nil) {
+			t.Fatalf("pax closing atau upline Adam = %+v", a)
+		}
+	}
+
+	// Rentang waktu membatasi pax closing dan komisi; jumlah jamaah terikat tetap sepanjang waktu.
+	lampau, err := listAgen(ctx, tx, &brand, "(uji)", RentangAgen{Dari: "2000-01-01", Sampai: "2000-12-31"})
+	must(t, "list agen rentang lampau", err)
+	for _, a := range lampau {
+		if a.AkunID == nuh && (a.PaxClosing != 0 || a.TotalKomisi != 0 || a.JumlahClosing != 1) {
+			t.Fatalf("rentang lampau Nuh = %+v", a)
+		}
+	}
+	hariIni := time.Now().Format("2006-01-02")
+	kini, err := listAgen(ctx, tx, &brand, "(uji)", RentangAgen{Dari: hariIni, Sampai: hariIni})
+	must(t, "list agen rentang hari ini", err)
+	for _, a := range kini {
+		if a.AkunID == nuh && (a.PaxClosing != 1 || a.TotalKomisi != 1_000_000) {
+			t.Fatalf("rentang hari ini Nuh = %+v", a)
+		}
+	}
+	if _, err := listAgen(ctx, tx, &brand, "", RentangAgen{Dari: "2026-12-31", Sampai: "2026-01-01"}); err != ErrPeriodeTidakValid {
+		t.Fatalf("rentang terbalik: %v, want ErrPeriodeTidakValid", err)
+	}
+	if _, err := listAgen(ctx, tx, &brand, "", RentangAgen{Dari: "2026-01-01"}); err != ErrPeriodeTidakValid {
+		t.Fatalf("rentang setengah: %v, want ErrPeriodeTidakValid", err)
 	}
 }
 
