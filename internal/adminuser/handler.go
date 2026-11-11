@@ -138,8 +138,8 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	password := strings.TrimSpace(req.Password)
-	if len(password) < 8 {
-		h.sendError(w, http.StatusBadRequest, "password minimal 8 karakter")
+	if msg := pesanPanjangPassword(password, "Password"); msg != "" {
+		h.sendError(w, http.StatusBadRequest, msg)
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -249,8 +249,8 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	password := strings.TrimSpace(req.Password)
-	if len(password) < 8 {
-		h.sendError(w, http.StatusBadRequest, "Password minimal 8 karakter")
+	if msg := pesanPanjangPassword(password, "Password"); msg != "" {
+		h.sendError(w, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -277,6 +277,25 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	h.sendJSON(w, http.StatusOK, map[string]string{"message": "password berhasil diubah"})
 }
 
+// Batas panjang password. bcrypt menolak masukan di atas 72 byte; tanpa pemeriksaan ini password panjang
+// berakhir sebagai galat 500.
+const (
+	minPanjangPassword = 8
+	maksBytePassword   = 72
+)
+
+// pesanPanjangPassword memeriksa panjang password. Mengembalikan pesan untuk pengguna, atau teks kosong
+// bila sah. label: sebutan isian di pesan ("Password", "Password baru").
+func pesanPanjangPassword(password, label string) string {
+	switch {
+	case len(password) < minPanjangPassword:
+		return label + " minimal 8 karakter"
+	case len(password) > maksBytePassword:
+		return label + " maksimal 72 karakter"
+	}
+	return ""
+}
+
 // ChangeOwnPassword: PUT /api/admin/account/password
 // Hanya Admin Travel yang boleh mengubah password akunnya sendiri.
 func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
@@ -296,8 +315,8 @@ func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusBadRequest, "Password saat ini dan password baru wajib diisi")
 		return
 	}
-	if len(newPassword) < 8 {
-		h.sendError(w, http.StatusBadRequest, "Password baru minimal 8 karakter")
+	if msg := pesanPanjangPassword(newPassword, "Password baru"); msg != "" {
+		h.sendError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if currentPassword == newPassword {
@@ -329,8 +348,8 @@ func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusInternalServerError, "Gagal menyimpan password baru")
 		return
 	}
-	// Semua sesi akun ini diakhiri, termasuk sesi saat ini: setelah access token
-	// habis (maks. 15 menit) pengguna login ulang dengan password baru.
+	// Semua sesi akun ini diakhiri, termasuk sesi saat ini: perm_version naik bersama password, jadi access
+	// token lama ditolak pada permintaan berikutnya dan pengguna login ulang dengan password baru.
 	if err := h.revoker.RevokeAllRefreshTokens(r.Context(), int64(userID)); err != nil {
 		log.Printf("[ERROR] adminuser.ChangeOwnPassword RevokeAllRefreshTokens user_id=%d: %v", userID, err)
 		h.sendError(w, http.StatusInternalServerError, "Password tersimpan, tetapi gagal mengakhiri sesi lama. Silakan ganti ulang")

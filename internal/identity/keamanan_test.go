@@ -119,6 +119,10 @@ func TestRequireAuthCekStatusUser(t *testing.T) {
 	if c := run(2); c != http.StatusUnauthorized {
 		t.Fatalf("pver usang: %d, want 401", c)
 	}
+	// Token tanpa klaim pver (versi 0) juga ditolak begitu perm_version di database sudah naik.
+	if c := run(0); c != http.StatusUnauthorized {
+		t.Fatalf("token tanpa pver saat versi database 3: %d, want 401", c)
+	}
 	// Izin berubah (pver 4) lalu klien refresh: cache (pver 3) dimuat ulang, token baru lolos.
 	status[1] = struct {
 		active bool

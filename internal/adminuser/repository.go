@@ -533,20 +533,21 @@ func (r *Repository) Delete(ctx context.Context, id uint64, actorID uint64) erro
 
 // ─── Password ────────────────────────────────────────────────────────────────
 
+// ResetPassword mengganti password dan menaikkan perm_version. Kenaikan versi membuat access token lama
+// ditolak pada permintaan berikutnya (identity.StatusChecker), jadi token yang sudah bocor tidak bertahan
+// sampai kedaluwarsa. Refresh token dicabut pemanggil.
 func (r *Repository) ResetPassword(ctx context.Context, id uint64, passwordHash string) error {
-	res, err := r.db.ExecContext(ctx, `UPDATE admin_users SET password_hash = ? WHERE id = ?`, passwordHash, id)
+	res, err := r.db.ExecContext(ctx, `UPDATE admin_users SET password_hash = ?, perm_version = perm_version + 1 WHERE id = ?`, passwordHash, id)
 	if err != nil {
 		return fmt.Errorf("adminuser.ResetPassword: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		// RowsAffected 0 juga terjadi bila hash identik; pastikan pengguna ada.
-		var exists int
-		if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_users WHERE id = ?`, id).Scan(&exists); err != nil {
-			return fmt.Errorf("adminuser.ResetPassword cek: %w", err)
-		}
-		if exists == 0 {
-			return ErrNotFound
-		}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("adminuser.ResetPassword baris: %w", err)
+	}
+	// perm_version selalu berubah, jadi nol baris berarti pengguna tidak ada.
+	if n == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
