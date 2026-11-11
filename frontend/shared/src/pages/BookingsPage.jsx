@@ -217,8 +217,8 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
     const unlocked = baseForCounts.filter(b => ['baru', 'dp', 'lunas'].includes(b.status) && !b.is_seat_blocked).length;
     return [
       { value: '', label: 'Semua Seat' },
-      { value: 'blocked', label: 'Seat Terkunci' },
-      { value: 'unblocked', label: `Seat Belum Terkunci (${unlocked})` },
+      { value: 'blocked', label: 'Seat Di-hold' },
+      { value: 'unblocked', label: `Seat Belum Di-hold (${unlocked})` },
     ];
   }, [baseForCounts]);
 
@@ -299,11 +299,11 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
       if (!lockInfo) return <span className="text-xs text-neutral-400 font-body">-</span>;
       return row.is_seat_blocked ? (
         <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-success-700 whitespace-nowrap">
-          <span className="w-2 h-2 rounded-full bg-success-500" />Terkunci
+          <span className="w-2 h-2 rounded-full bg-success-500" />Di-hold
         </span>
       ) : (
         <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-warning-700 whitespace-nowrap">
-          <span className="w-2 h-2 rounded-full bg-warning-500" />Belum terkunci
+          <span className="w-2 h-2 rounded-full bg-warning-500" />Belum di-hold
         </span>
       );
     }

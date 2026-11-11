@@ -433,7 +433,7 @@ func (h *Handler) FinalizeBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := h.repo.FinalizeBooking(r.Context(), id)
+	b, err := h.repo.FinalizeBooking(r.Context(), id, identity.HasPermission(r.Context(), "booking.diskon.besar"))
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -457,7 +457,7 @@ func (h *Handler) CancelPax(w http.ResponseWriter, r *http.Request) {
 
 	brandID := identity.GetBrandID(r.Context())
 
-	b, err := h.repo.CancelPax(r.Context(), id, paxID, brandID)
+	b, err := h.repo.CancelPax(r.Context(), id, paxID, brandID, identity.HasPermission(r.Context(), "booking.diskon.besar"))
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -492,7 +492,7 @@ func (h *Handler) UpdatePaxRoomType(w http.ResponseWriter, r *http.Request) {
 
 	brandID := identity.GetBrandID(r.Context())
 
-	b, err := h.repo.UpdatePaxRoomType(r.Context(), id, paxID, req.RoomType, brandID)
+	b, err := h.repo.UpdatePaxRoomType(r.Context(), id, paxID, req.RoomType, brandID, identity.HasPermission(r.Context(), "booking.diskon.besar"))
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -872,7 +872,9 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrInvalidStatus):
 		writeError(w, http.StatusBadRequest, "status tidak valid")
 	case errors.Is(err, ErrSeatBelumDiblokir):
-		writeError(w, http.StatusConflict, "seat booking ini sudah tidak diblokir")
+		writeError(w, http.StatusConflict, "seat booking ini sudah dilepas")
+	case errors.Is(err, ErrSeatTerkonfirmasi):
+		writeError(w, http.StatusConflict, ErrSeatTerkonfirmasi.Error())
 	case errors.Is(err, ErrSeatSudahDiblokir):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrTemplatePerlengkapanBelumDiatur):

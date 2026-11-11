@@ -291,7 +291,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       setCancelSeatBlockModal(false);
       await fetchAll();
     } catch (err) {
-      setCancelSeatBlockError(err.response?.data?.error || "Gagal membatalkan block seat");
+      setCancelSeatBlockError(err.response?.data?.error || "Gagal melepas seat");
     } finally {
       setSeatBlockLoading(false);
     }
@@ -318,7 +318,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       setBlockSeatModal(false);
       await fetchAll();
     } catch (err) {
-      setBlockSeatError(err.response?.data?.error || "Gagal melakukan block seat");
+      setBlockSeatError(err.response?.data?.error || "Gagal melakukan hold seat");
     } finally {
       setBlockSeatLoading(false);
     }
@@ -792,11 +792,12 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         {(() => {
           const headerMenu = [];
           if (["baru", "dp", "lunas"].includes(booking.status) && !booking.is_seat_blocked) {
-            headerMenu.push({ label: "Block Seat", icon: Lock, onClick: handleOpenBlockSeat });
+            headerMenu.push({ label: "Hold Seat", icon: Lock, onClick: handleOpenBlockSeat });
           }
-          if (booking.is_seat_blocked) {
+          // Seat terkonfirmasi (booking dp/lunas) hanya lepas lewat pembatalan; API menolak pelepasan manual.
+          if (booking.is_seat_blocked && booking.status === "baru") {
             headerMenu.push({
-              label: "Cancel Block Seat",
+              label: "Lepas Seat",
               icon: Unlock,
               onClick: () => {
                 setCancelSeatBlockError("");
@@ -1650,7 +1651,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       >
         <p className="text-neutral-600 font-body text-sm mb-6">
           Apakah Anda yakin ingin membatalkan booking ini?
-          Jika seat sempat terkunci, kuota seat akan dikembalikan ke paket.
+          Jika seat sedang di-hold, seat dikembalikan ke sisa seat jadwal.
         </p>
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={() => setCancelConfirmModal(false)}>Batal</Button>
@@ -1862,19 +1863,19 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         )}
       </Modal>
 
-      {/* Modal: Cancel Block Seat */}
+      {/* Modal: Lepas Seat */}
       <Modal
         isOpen={cancelSeatBlockModal}
         onClose={() => !seatBlockLoading && setCancelSeatBlockModal(false)}
-        title="Cancel Block Seat"
+        title="Lepas Seat"
       >
         {cancelSeatBlockError && <Alert variant="error" className="mb-4">{cancelSeatBlockError}</Alert>}
         <p className="text-neutral-600 font-body text-sm mb-6 leading-relaxed">
-          Apakah Anda yakin ingin membatalkan block seat untuk booking ini? Kuota seat yang terpakai ({regularActiveCount || booking.seat_count || 1} seat) akan otomatis dikembalikan ke jadwal paket.
+          Apakah Anda yakin ingin melepas seat booking ini? Seat yang di-hold ({regularActiveCount || booking.seat_count || 1} seat) akan dikembalikan ke sisa seat jadwal.
         </p>
         {Number(booking?.total_dibayar) > 0 && (
           <p className="text-warning-800 bg-warning-50 border border-warning-200 rounded-xl font-body text-sm px-3 py-2 mb-6 leading-relaxed">
-            Booking ini sudah dibayar. Seat yang dilepas bisa diambil booking lain; jamaah tidak lagi dijamin mendapat seat sampai seat dikunci ulang lewat tombol Block Seat.
+            Booking ini sudah dibayar. Seat yang dilepas bisa diambil booking lain; jamaah tidak lagi dijamin mendapat seat sampai seat di-hold ulang lewat tombol Hold Seat.
           </p>
         )}
         <div className="flex justify-end gap-3">
@@ -1882,16 +1883,16 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             Batal
           </Button>
           <Button variant="danger" disabled={seatBlockLoading} isLoading={seatBlockLoading} onClick={handleCancelSeatBlock}>
-            {seatBlockLoading ? "Membatalkan..." : "Cancel Block Seat"}
+            {seatBlockLoading ? "Melepas..." : "Lepas Seat"}
           </Button>
         </div>
       </Modal>
 
-      {/* Modal: Block Seat */}
+      {/* Modal: Hold Seat */}
       <Modal
         isOpen={blockSeatModal}
         onClose={() => !blockSeatLoading && setBlockSeatModal(false)}
-        title="Block Seat"
+        title="Hold Seat"
       >
         {blockSeatError && <Alert variant="error" className="mb-4">{blockSeatError}</Alert>}
         <div className="space-y-4 font-body">
@@ -1920,7 +1921,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               Batal
             </Button>
             <Button variant="primary" disabled={blockSeatLoading} isLoading={blockSeatLoading} onClick={handleBlockSeatSubmit}>
-              {blockSeatLoading ? "Memproses..." : "Block Seat"}
+              {blockSeatLoading ? "Memproses..." : "Hold Seat"}
             </Button>
           </div>
         </div>

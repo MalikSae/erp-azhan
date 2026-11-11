@@ -189,7 +189,7 @@ const DashboardPage = () => {
     const unlocked = stats.activeBookings.filter((item) => !item.is_seat_blocked);
     const incomplete = stats.activeBookings.filter((item) => !item.siap_berangkat && item.status !== "baru");
 if (stats.pendingPayments.length) items.push({ label: "Pembayaran perlu dikonfirmasi", count: stats.pendingPayments.length, icon: Banknote, tone: "warning", path: "/bookings" });
-    if (unlocked.length) items.push({ label: "Booking tanpa block seat", count: unlocked.length, icon: TicketCheck, tone: "danger", path: "/bookings" });
+    if (unlocked.length) items.push({ label: "Booking tanpa hold seat", count: unlocked.length, icon: TicketCheck, tone: "danger", path: "/bookings" });
     if (incomplete.length) items.push({ label: "Progress jamaah belum lengkap", count: incomplete.length, icon: UserRoundCheck, tone: "warning", path: "/bookings" });
 return items.slice(0, 4);
   }, [data, stats]);
@@ -203,7 +203,7 @@ return items.slice(0, 4);
     {error && <Alert variant="error" message={error} onClose={() => setError("")} />}
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <MetricCard label="Jamaah Terdaftar" value={data.jamaah.length} note={`${stats.activeBookings.length} booking aktif`} icon={UsersRound} tone="primary" onClick={() => navigate("/jamaah")} />
-      <MetricCard label="Booking Baru" value={stats.newBookings} note={`${stats.blocked} seat sedang diblokir`} icon={CalendarDays} tone="primary" onClick={() => navigate("/bookings")} />
+      <MetricCard label="Booking Baru" value={stats.newBookings} note={`${stats.blocked} seat sedang di-hold`} icon={CalendarDays} tone="primary" onClick={() => navigate("/bookings")} />
       <MetricCard label="Pembayaran Diterima" value={formatCompactRupiah(stats.confirmedPaid)} note={`${stats.pendingPayments.length} pembayaran menunggu`} icon={TrendingUp} tone="success" onClick={() => navigate("/bookings")} />
       <MetricCard label="Sisa Tagihan" value={formatCompactRupiah(stats.receivable)} note="Dari seluruh booking aktif" icon={Banknote} tone="danger" onClick={() => navigate("/bookings")} />
     </div>
