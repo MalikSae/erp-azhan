@@ -92,7 +92,9 @@ func (c *userStatusCache) allow(ctx context.Context, claims *AccessClaims) (bool
 	if !s.active {
 		return false, nil
 	}
-	if claims.PermVersion > 0 && claims.PermVersion != s.version {
+	// Token tanpa klaim pver terbaca sebagai versi 0. Perbandingan tidak dilewati untuk nilai 0: pengguna
+	// yang perm_version-nya baru naik dari 0 harus ikut ditolak, bukan lolos sampai token kedaluwarsa.
+	if claims.PermVersion != s.version {
 		return false, nil
 	}
 	return true, nil
