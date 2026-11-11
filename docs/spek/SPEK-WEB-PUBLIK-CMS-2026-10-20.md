@@ -99,6 +99,16 @@ Aturan penting:
 - Cache: respons dapat di-cache pendek; seat dan harga untuk checkout tidak boleh dari cache halaman.
 - Brand ditentukan dari `domain` atau parameter `brand`, seperti pola yang sudah ada.
 
+**Penyesuaian 11 November 2026 (code review Paket dan master).** Bagian ini disamakan dengan cara web publik bekerja sekarang:
+
+- Brand hanya lewat parameter `brand` (id angka). "Brand dari `domain`" tidak dibangun; web mengambil id brand dari `/api/public/brand` lalu mengirimnya.
+- Detail paket membawa `itinerary_id`; isi itinerary diambil lewat `GET /api/itineraries/{id}`, tidak disisipkan di detail.
+- Filter harga bernama `harga_max`. `harga_maks` tetap diterima untuk klien lama.
+- `CLOSED` belum dipakai: tutup pendaftaran manual tidak dibangun, dan paket yang berangkat kurang dari 30 hari tidak tampil di daftar (detailnya menjawab `gone`).
+- `GET /api/public/categories` wajib `brand_id`. `package_count` di jawabannya hanya menghitung paket brand itu yang tayang.
+- `views` tidak dikirim ke publik.
+- Paket yang pernah tayang tidak bisa dihapus permanen, hanya diarsipkan, supaya detailnya tetap menjawab `gone`.
+
 ### 4.4 Izin CMS (RBAC)
 Tambah permission data (pola migrasi 071–083): `cms.view`, `cms.edit`, `cms.publish`. Marketing Member: view + edit draft. Marketing Lead: + publish. Cakupan brand lewat Akses Brand yang sudah ada. Tidak ada role baru ("SEO adalah tim, bukan role" — migrasi 078).
 

@@ -3,6 +3,7 @@ package brand
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -265,8 +266,29 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	badan, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maksBadanBrand))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
 	var req UpdateBrandRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(badan, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		return
+	}
+	// Nominal yang tidak dikirim berarti tidak diubah (keputusan 11 November 2026). Dulu field yang
+	// terlewat tersimpan 0, sehingga satu permintaan yang kurang lengkap menghapus komisi bawaan brand.
+	lama, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+			return
+		}
+		log.Printf("[ERROR] brand.Update baca brand: %v", err)
+		writeError(w, http.StatusInternalServerError, "gagal mengambil brand")
+		return
+	}
+	if err := pertahankanNominalKosong(badan, &req, lama); err != nil {
 		writeError(w, http.StatusBadRequest, "request body tidak valid")
 		return
 	}
@@ -557,6 +579,33 @@ func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// maksBadanBrand: batas ukuran badan permintaan ubah brand (syarat dan ketentuan agen bisa panjang).
+const maksBadanBrand = 1 << 20
+
+// pertahankanNominalKosong mengisi nominal yang tidak ada di badan permintaan dengan nilai yang tersimpan.
+func pertahankanNominalKosong(badan []byte, req *UpdateBrandRequest, lama *Brand) error {
+	var kunci map[string]json.RawMessage
+	if err := json.Unmarshal(badan, &kunci); err != nil {
+		return err
+	}
+	for nama, pasangan := range map[string]struct {
+		tujuan *float64
+		lama   float64
+	}{
+		"minimal_dp":             {&req.MinimalDP, lama.MinimalDP},
+		"cashback_alumni":        {&req.CashbackAlumni, lama.CashbackAlumni},
+		"biaya_pendaftaran_agen": {&req.BiayaPendaftaranAgen, lama.BiayaPendaftaranAgen},
+		"ujroh_closing":          {&req.UjrohClosing, lama.UjrohClosing},
+		"ujroh_pembinaan":        {&req.UjrohPembinaan, lama.UjrohPembinaan},
+		"ujroh_repeat_booking":   {&req.UjrohRepeatBooking, lama.UjrohRepeatBooking},
+	} {
+		if _, dikirim := kunci[nama]; !dikirim {
+			*pasangan.tujuan = pasangan.lama
+		}
+	}
+	return nil
 }
 
 // pesanNominalBulat: nominal brand yang masuk dari luar harus bilangan bulat rupiah (ADR-0001).

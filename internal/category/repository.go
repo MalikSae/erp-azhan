@@ -23,7 +23,24 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 // List mengambil daftar kategori, opsional filter brandID dan activeOnly.
+// ListPublik: kategori aktif satu brand untuk situs publik. package_count hanya menghitung paket brand itu
+// yang tayang (published dan berangkat 30 hari lagi atau lebih), sama dengan aturan daftar paket publik.
+func (r *Repository) ListPublik(ctx context.Context, brandID int64) ([]CategoryListItem, error) {
+	return r.list(ctx, &brandID, true, true)
+}
+
 func (r *Repository) List(ctx context.Context, brandID *int64, activeOnly bool) ([]CategoryListItem, error) {
+	return r.list(ctx, brandID, activeOnly, false)
+}
+
+func (r *Repository) list(ctx context.Context, brandID *int64, activeOnly, hanyaTayang bool) ([]CategoryListItem, error) {
+	// syaratTayang membatasi hitungan paket untuk jawaban publik.
+	syaratTayang := ""
+	var args []interface{}
+	if hanyaTayang && brandID != nil {
+		syaratTayang = " AND s.brand_id = ? AND s.status = 'published' AND s.berangkat_tanggal >= DATE_ADD(CURDATE(), INTERVAL 30 DAY)"
+		args = append(args, *brandID)
+	}
 	q := `
 		SELECT 
 			c.id, c.name, c.slug, c.seo_tier, c.description, c.badge_color, c.is_active,
@@ -37,12 +54,11 @@ func (r *Repository) List(ctx context.Context, brandID *int64, activeOnly bool) 
 			(
 				SELECT COUNT(*) 
 				FROM schedules s 
-				WHERE s.category_id = c.id
+				WHERE s.category_id = c.id` + syaratTayang + `
 			) AS package_count
 		FROM package_categories c
 		WHERE 1=1`
 
-	var args []interface{}
 	if activeOnly {
 		q += " AND c.is_active = TRUE"
 	}

@@ -364,6 +364,9 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 	if err := setKlasifikasiTx(ctx, tx, id, inp.Klasifikasi); err != nil {
 		return nil, err
 	}
+	if err := tandaiPernahTayang(ctx, tx, id); err != nil {
+		return nil, err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("schedule.Create commit: %w", err)
@@ -430,6 +433,9 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 	if err := setKlasifikasiTx(ctx, tx, id, inp.Klasifikasi); err != nil {
 		return nil, err
 	}
+	if err := tandaiPernahTayang(ctx, tx, id); err != nil {
+		return nil, err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("schedule.Update commit: %w", err)
@@ -445,7 +451,10 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status string, 
 	if err := r.exists(ctx, id, brandID); err != nil {
 		return 0, "", err
 	}
-	_, err := r.db.ExecContext(ctx, `UPDATE schedules SET status=? WHERE id=?`, status, id)
+	// Satu pernyataan: status dan penanda pernah tayang berubah bersama.
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE schedules SET status=?, pernah_tayang_at = IF(? = 'published', COALESCE(pernah_tayang_at, NOW()), pernah_tayang_at)
+		WHERE id=?`, status, status, id)
 	if err != nil {
 		return 0, "", fmt.Errorf("schedule.UpdateStatus: %w", err)
 	}
@@ -575,6 +584,18 @@ func (r *Repository) Delete(ctx context.Context, id int64, brandID *int64) error
 	if err := r.exists(ctx, id, brandID); err != nil {
 		return err
 	}
+	// Hanya paket draft yang dihapus permanen (keputusan 11 November 2026). Paket yang pernah tayang
+	// diarsipkan, supaya tautan yang sudah tersebar tetap menjawab "sudah tidak tersedia", bukan 404.
+	// Penanda pernah_tayang_at ikut diperiksa: paket yang pernah tayang lalu dikembalikan ke draft tetap
+	// tidak bisa dihapus, karena tautannya sudah pernah beredar.
+	var status string
+	var pernahTayang bool
+	if err := r.db.QueryRowContext(ctx, `SELECT status, pernah_tayang_at IS NOT NULL FROM schedules WHERE id=?`, id).Scan(&status, &pernahTayang); err != nil {
+		return fmt.Errorf("schedule.Delete baca status: %w", err)
+	}
+	if pesan := tolakHapusPaket(status, pernahTayang); pesan != "" {
+		return fmt.Errorf("%w: %s", ErrConflict, pesan)
+	}
 	_, err := r.db.ExecContext(ctx, `DELETE FROM schedules WHERE id=?`, id)
 	return err
 }
@@ -607,7 +628,7 @@ func (r *Repository) ItineraryExists(ctx context.Context, id int64) (bool, error
 // dipakai saat paket tetap memakai kategori yang sudah dipilihnya sebelum kategori itu dinonaktifkan.
 func (r *Repository) CategoryAvailable(ctx context.Context, id int64, brandID int64, bolehNonaktif bool) (bool, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories c WHERE c.id=? AND (c.is_active=TRUE OR ?) AND (NOT EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id) OR EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id AND cb.brand_id=?))`, id, bolehNonaktif, brandID).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories c WHERE c.id=? AND (c.is_active=TRUE OR ?) AND EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id AND cb.brand_id=?)`, id, bolehNonaktif, brandID).Scan(&count)
 	return count > 0, err
 }
 
@@ -936,6 +957,14 @@ func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *Sched
 	if err != nil {
 		return err
 	}
+	// Ubah kuota seat lewat form edit ikut tercatat di riwayat penyesuaian seat, tanpa isian alasan.
+	if inp.SeatTotal != oldTotal {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schedule_seat_adjustments (schedule_id, admin_user_id, seat_before, seat_after, reason) VALUES (?,?,?,?,?)`,
+			id, nullInt64(inp.ActorID), oldRemaining, inp.SeatSisa, alasanUbahKuota(oldTotal, inp.SeatTotal)); err != nil {
+			return fmt.Errorf("catat riwayat ubah kuota seat: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -1013,4 +1042,32 @@ func (r *Repository) NameTaken(ctx context.Context, brandID int64, nama, berangk
 	var n int
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schedules WHERE brand_id=? AND jadwal_nama=? AND berangkat_tanggal=? AND id<>?`, brandID, nama, berangkat, excludeID).Scan(&n)
 	return n > 0, err
+}
+
+// alasanUbahKuota: keterangan riwayat penyesuaian seat untuk perubahan kuota lewat form edit paket.
+func alasanUbahKuota(kuotaLama, kuotaBaru int) string {
+	return fmt.Sprintf("Ubah kuota seat lewat edit paket: %d menjadi %d", kuotaLama, kuotaBaru)
+}
+
+// tandaiPernahTayang mengisi schedules.pernah_tayang_at saat paket berstatus published dan penandanya masih
+// kosong. Dipanggil setelah paket dibuat atau diubah, di transaksi yang sama.
+func tandaiPernahTayang(ctx context.Context, tx *sql.Tx, id int64) error {
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE schedules SET pernah_tayang_at = NOW()
+		WHERE id = ? AND status = 'published' AND pernah_tayang_at IS NULL`, id); err != nil {
+		return fmt.Errorf("schedule: tandai pernah tayang: %w", err)
+	}
+	return nil
+}
+
+// tolakHapusPaket: paket hanya boleh dihapus permanen bila berstatus draft dan belum pernah tayang.
+// Mengembalikan pesan untuk pengguna, atau teks kosong bila boleh dihapus.
+func tolakHapusPaket(status string, pernahTayang bool) string {
+	switch {
+	case status != StatusDraft:
+		return "hanya paket draft yang dapat dihapus; paket yang pernah tayang cukup diarsipkan"
+	case pernahTayang:
+		return "paket ini pernah tayang, jadi tidak dapat dihapus. Arsipkan paket ini"
+	}
+	return ""
 }

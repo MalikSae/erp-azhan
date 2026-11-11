@@ -14,6 +14,10 @@ var ErrNotFound = errors.New("data tidak ditemukan")
 // ErrDuplicate dikembalikan saat nama hotel sudah ada (case-insensitive).
 var ErrDuplicate = errors.New("hotel dengan nama ini sudah ada di kota yang sama")
 
+// ErrKotaDipakai: kota hotel menentukan perannya di paket (hotel Makkah, hotel Madinah, hotel transit).
+// Mengubahnya saat hotel dipakai membuat paket pemakainya tidak bisa disimpan lagi.
+var ErrKotaDipakai = errors.New("kota hotel tidak dapat diubah selama hotel ini dipakai paket")
+
 // Repository mengelola semua query ke tabel hotels.
 type Repository struct {
 	db *sql.DB
@@ -115,11 +119,23 @@ func (r *Repository) Create(ctx context.Context, name, city string, starRating *
 // Mengembalikan ErrNotFound jika id tidak ada, ErrDuplicate jika nama sudah dipakai hotel lain.
 func (r *Repository) Update(ctx context.Context, id uint64, name, city string, starRating *int, distanceM *int, photoURL *string, videoURL *string) (*Hotel, error) {
 	// Pastikan row ada
-	if _, err := r.getByID(ctx, id); err != nil {
+	lama, err := r.getByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 
 	city = r.normalizeCity(ctx, city)
+	if !strings.EqualFold(strings.TrimSpace(city), strings.TrimSpace(lama.City)) {
+		var dipakai bool
+		if err := r.db.QueryRowContext(ctx, `
+			SELECT EXISTS(SELECT 1 FROM schedules WHERE hotel_mekkah_id = ? OR hotel_madinah_id = ?)
+			    OR EXISTS(SELECT 1 FROM schedule_transit_hotels WHERE hotel_id = ?)`, id, id, id).Scan(&dipakai); err != nil {
+			return nil, fmt.Errorf("hotel.Update cek pemakaian: %w", err)
+		}
+		if dipakai {
+			return nil, ErrKotaDipakai
+		}
+	}
 
 	// Cek duplikat nama di kota yang sama, exclude id sendiri
 	if exists, err := r.nameExists(ctx, name, city, id); err != nil {

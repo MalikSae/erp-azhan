@@ -142,6 +142,9 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.Delete(r.Context(), id); errors.Is(err, ErrNotFound) {
 		writeError(w, 404, "rekening tidak ditemukan")
 		return
+	} else if errors.Is(err, ErrDipakai) {
+		writeError(w, 409, ErrDipakai.Error())
+		return
 	} else if err != nil {
 		log.Printf("[ERROR] bankaccount.Delete: %v", err)
 		writeError(w, 500, "gagal menghapus rekening")

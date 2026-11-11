@@ -277,7 +277,7 @@ const CategoriesPage = () => {
 
     if (key === 'brands') {
       if (!row.brands || row.brands.length === 0) {
-        return <span className="text-xs text-neutral-400 font-body">Semua brand</span>;
+        return <span className="text-xs text-neutral-400 font-body">Belum ada brand</span>;
       }
       return (
         <div className="flex flex-wrap gap-1.5 max-w-sm">

@@ -106,7 +106,8 @@ type PublicSchedule struct {
 	CategoryID               *int64         `json:"category_id"`
 	Category                 *CategoryRef   `json:"category"`
 	JadwalNama               string         `json:"jadwal_nama"`
-	Views                    int            `json:"views"`
+	// Views: hitungan internal, tidak dikirim ke publik.
+	Views                    int            `json:"-"`
 	IsDirectFlight           bool           `json:"is_direct_flight"`
 	SeatTotal                int            `json:"seat_total"`
 	SeatSisa                 int            `json:"seat_sisa"`
