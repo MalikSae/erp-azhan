@@ -14,6 +14,7 @@ import (
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/payment"
+	"erp-azhan/api/internal/shared"
 	"erp-azhan/api/internal/surat"
 	"github.com/go-chi/chi/v5"
 )
@@ -371,19 +372,30 @@ func (o *Orders) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	req.Source = "portal"
+	// Kolom yang hanya diisi admin tidak diterima dari portal: sumber, metode, penerima tunai, catatan.
+	req.Source = payment.SourcePortal
+	metode := metodeTransfer
+	req.Metode, req.ReceivedBy, req.Notes = &metode, nil, nil
 	if req.Tanggal == nil {
 		writeError(w, http.StatusBadRequest, "tanggal transfer wajib diisi")
 		return
 	}
-	transferDate, dateErr := time.Parse("2006-01-02", *req.Tanggal)
-	today := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
-	if dateErr != nil || transferDate.Format("2006-01-02") > today {
+	tanggal := strings.TrimSpace(*req.Tanggal)
+	if !shared.TanggalTidakDiMasaDepan(tanggal) {
 		writeError(w, http.StatusBadRequest, "tanggal transfer tidak valid atau berada di masa depan")
 		return
 	}
+	req.Tanggal = &tanggal
 	if req.Jumlah <= 0 || req.BankAccountID == nil || req.SenderName == nil || strings.TrimSpace(*req.SenderName) == "" || req.BuktiURL == nil || strings.TrimSpace(*req.BuktiURL) == "" {
 		writeError(w, http.StatusBadRequest, "rekening tujuan, nominal, nama pengirim, dan bukti transfer wajib diisi")
+		return
+	}
+	if !shared.RupiahBulat(req.Jumlah) {
+		writeError(w, http.StatusBadRequest, "nominal harus bilangan bulat rupiah")
+		return
+	}
+	if msg := rapikanPengirim(&req); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if err := media.ValidateCustomerUpload(r.Context(), o.db, *req.BuktiURL, acc.ID); err != nil {
@@ -397,6 +409,21 @@ func (o *Orders) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Jumlah > order.Sisa {
 		writeError(w, http.StatusBadRequest, "nominal melebihi sisa tagihan")
+		return
+	}
+	// Konfirmasi yang masih menunggu verifikasi ikut dihitung, supaya tumpukan konfirmasi tidak melebihi tagihan.
+	var menunggu float64
+	if err := o.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status='pending'`, id).Scan(&menunggu); err != nil {
+		log.Printf("[ERROR] account create payment cek menunggu: %v", err)
+		writeError(w, http.StatusInternalServerError, "gagal menyimpan konfirmasi pembayaran")
+		return
+	}
+	if msg := pesanMelebihiMenunggu(req.Jumlah, menunggu, order.Sisa); msg != "" {
+		writeError(w, http.StatusConflict, msg)
+		return
+	}
+	if msg := pesanKurangDP(req.Jumlah, order.MinimalDP, order.Terbayar, menunggu); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	item, err := o.paymentRepo.Create(r.Context(), id, &req, nil)
@@ -428,7 +455,8 @@ type travelerView struct {
 	JenisKelamin string  `json:"jenis_kelamin"`
 	NoHP         *string `json:"no_hp"`
 	TanggalLahir *string `json:"tanggal_lahir"`
-	NIK          *string `json:"nik"`
+	// NIK tidak pernah dikirim utuh: hanya empat digit terakhir sebagai petunjuk.
+	NIKMasked    string  `json:"nik_masked"`
 }
 
 // Travelers GET /api/account/travelers
@@ -442,9 +470,19 @@ func (o *Orders) Travelers(w http.ResponseWriter, r *http.Request) {
 	out := []travelerView{}
 	for rows.Next() {
 		var t travelerView
-		if rows.Scan(&t.ID, &t.NamaLengkap, &t.JenisKelamin, &t.NoHP, &t.TanggalLahir, &t.NIK) == nil {
-			out = append(out, t)
+		var nik sql.NullString
+		if err := rows.Scan(&t.ID, &t.NamaLengkap, &t.JenisKelamin, &t.NoHP, &t.TanggalLahir, &nik); err != nil {
+			log.Printf("[ERROR] account travelers scan: %v", err)
+			writeError(w, http.StatusInternalServerError, "gagal mengambil jamaah tersimpan")
+			return
 		}
+		t.NIKMasked = nikTersamar(nik.String)
+		out = append(out, t)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("[ERROR] account travelers: %v", err)
+		writeError(w, http.StatusInternalServerError, "gagal mengambil jamaah tersimpan")
+		return
 	}
 	writeJSON(w, http.StatusOK, out)
 }
