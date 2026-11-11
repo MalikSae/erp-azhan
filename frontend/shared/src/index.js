@@ -59,3 +59,7 @@ export * from './data/indonesianCities';
 export * from './utils/bookingStatus';
 export * from './utils/agen';
 export { default as useProtectedImage } from './utils/useProtectedImage';
+
+// Utils
+export { tautanAman } from './utils/tautan';
+export { passwordTerlaluPanjang } from './utils/password';

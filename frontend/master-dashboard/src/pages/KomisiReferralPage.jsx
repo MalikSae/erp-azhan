@@ -7,7 +7,7 @@ import {
   EVENT_PENCAIRAN_KOMISI,
   uploadMedia,
   openProtectedMedia,
-  listBrands,
+  listBrandOptions,
 } from 'shared';
 import Alert from 'shared/ui/Alert';
 import Button from 'shared/ui/Button';
@@ -58,7 +58,7 @@ export default function KomisiReferralPage() {
   const [actionError, setActionError] = useState('');
 
   useEffect(() => {
-    listBrands().then((b) => setBrands(b || [])).catch(() => {});
+    listBrandOptions().then((b) => setBrands(b || [])).catch(() => {});
   }, []);
 
   const load = async () => {

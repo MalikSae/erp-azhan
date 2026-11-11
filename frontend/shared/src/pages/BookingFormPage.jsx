@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { tautanAman } from '../utils/tautan';
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { 
   Plus, 
@@ -34,7 +35,7 @@ import { listJamaah, updateTanggalLahirJamaah, createJamaah } from "../api/jamaa
 import { hariIniWIB } from "../utils/tanggal";
 import KaitanAgenPicker, { EMPTY_KAITAN, validateKaitan, toKaitanPayload } from "../components/KaitanAgenPicker";
 import { listSchedulesAdmin, getScheduleAdmin } from "../api/schedules";
-import { listBrands } from "../api/brands";
+import { listBrandOptions } from "../api/brands";
 import { listAirports } from "../api/airports";
 import PageHeader from "../components/ui/PageHeader";
 import FormLayout, { FormSection, SidebarSection, FormAside } from "../components/ui/FormLayout";
@@ -248,7 +249,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
           listAirports()
         ];
         if (showBrandColumn) {
-          promises.push(listBrands());
+          promises.push(listBrandOptions());
         }
         if (isEditDraft) {
           promises.push(getBooking(id));
@@ -1433,7 +1434,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                           <div className="flex items-center justify-between border-t border-neutral-200 pt-5">
                             <span className="text-sm font-medium text-neutral-900">Brosur Paket</span>
                             <a
-                              href={selectedSchedule.brosur_url}
+                              href={tautanAman(selectedSchedule.brosur_url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"

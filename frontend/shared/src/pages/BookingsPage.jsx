@@ -3,7 +3,7 @@ import BrandLabel from '../components/ui/BrandLabel';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Eye, Pencil, Trash2, SlidersHorizontal } from "lucide-react";
 import { listBookings, deleteDraftBooking } from "../api/bookings";
-import { listBrands } from "../api/brands";
+import { listBrandOptions } from "../api/brands";
 import { getSeatLockIcon } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
 import DataTable from "../components/ui/DataTable";
@@ -108,9 +108,10 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
       setLoading(true);
       setError(null);
 
+      // Daftar brand hanya untuk label dan filter: kegagalannya tidak boleh menjatuhkan daftar booking.
       const promises = [listBookings()];
       if (showBrandColumn) {
-        promises.push(listBrands());
+        promises.push(listBrandOptions().catch(() => null));
       }
 
       const [resBookings, resBrands] = await Promise.all(promises);

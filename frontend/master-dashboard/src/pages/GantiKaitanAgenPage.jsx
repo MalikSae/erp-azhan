@@ -7,7 +7,7 @@ import {
   cariAkunKaitan,
   gantiAgenAkun,
   listKaitanAkunLog,
-  listBrands,
+  listBrandOptions,
   KaitanAgenPicker,
   EMPTY_KAITAN,
   validateKaitan,
@@ -67,7 +67,7 @@ export default function GantiKaitanAgenPage() {
   const idOf = (row) => (isJamaah ? row.jamaah_id : row.akun_id);
 
   useEffect(() => {
-    listBrands().then((b) => setBrands(b || [])).catch(() => {});
+    listBrandOptions().then((b) => setBrands(b || [])).catch(() => {});
   }, []);
 
   const resetForm = () => {

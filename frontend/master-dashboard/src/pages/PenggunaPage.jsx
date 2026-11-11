@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { passwordTerlaluPanjang } from 'shared';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Users, ShieldCheck, Building2, UserX, Pencil, KeyRound, Power } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
@@ -109,6 +110,7 @@ const PenggunaPage = () => {
     e.preventDefault();
     setResetError(null);
     if (resetForm.password.length < 8) { setResetError('Password baru minimal 8 karakter.'); return; }
+    if (passwordTerlaluPanjang(resetForm.password)) { setResetError('Password baru maksimal 72 byte (sekitar 72 huruf biasa).'); return; }
     if (resetForm.password !== resetForm.confirm) { setResetError('Konfirmasi password tidak cocok.'); return; }
     setIsSavingReset(true);
     try {

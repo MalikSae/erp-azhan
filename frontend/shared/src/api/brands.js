@@ -5,6 +5,13 @@ export async function listBrands() {
   return response.data;
 }
 
+// Daftar ringkas brand (id, nama, warna, logo, DP dan komisi bawaan) untuk dropdown dan label.
+// Tidak butuh izin brand.view, jadi aman dipakai halaman yang dibuka peran tanpa akses pengaturan brand.
+export async function listBrandOptions() {
+  const response = await client.get('/api/admin/brands/options');
+  return response.data;
+}
+
 export async function getBrand(id) {
   const response = await client.get(`/api/admin/brands/${id}`);
   return response.data;

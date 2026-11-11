@@ -3,7 +3,7 @@ import BrandLabel from '../components/ui/BrandLabel';
 import { useNavigate } from 'react-router-dom';
 import { Network, CheckCircle2, Users, Banknote, Eye } from 'lucide-react';
 import { listAgen } from '../api/agen';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 import Alert from '../components/ui/Alert';
 import ActionMenu from '../components/ui/ActionMenu';
 import CustomDropdown from '../components/ui/CustomDropdown';
@@ -51,7 +51,7 @@ export default function DaftarAgenPage({ showBrandColumn = false }) {
       .then((data) => setItems(data || []))
       .catch(() => setError('Daftar agen gagal dimuat. Silakan coba kembali.'))
       .finally(() => setLoading(false));
-    if (showBrandColumn) listBrands().then((b) => setBrands(b || [])).catch(() => {});
+    if (showBrandColumn) listBrandOptions().then((b) => setBrands(b || [])).catch(() => {});
   }, [showBrandColumn]);
 
   const brandsMap = useMemo(() => Object.fromEntries(brands.map((b) => [b.id, b])), [brands]);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getJamaah, createJamaah, updateJamaah } from "../api/jamaah";
-import { listBrands } from "../api/brands";
+import { listBrandOptions } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
 import FormLayout, { FormSection, SidebarSection, FormAside } from "../components/ui/FormLayout";
 import Input from "../components/ui/Input";
@@ -102,7 +102,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   // Fetch daftar Brands jika diakses dari Office Dashboard
   useEffect(() => {
     if (showBrandColumn) {
-      listBrands()
+      listBrandOptions()
         .then(res => {
           const brandData = res || [];
           setBrands(brandData);

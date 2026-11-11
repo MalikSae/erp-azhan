@@ -3,7 +3,7 @@ import BrandLabel from '../components/ui/BrandLabel';
 import { useNavigate, useLocation } from "react-router-dom";
 import { Eye, Trash2 } from "lucide-react";
 import { listJamaah, deleteJamaah } from "../api/jamaah";
-import { listBrands } from "../api/brands";
+import { listBrandOptions } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
 import DataTable from "../components/ui/DataTable";
 import Button from "../components/ui/Button";
@@ -65,7 +65,7 @@ export const JamaahPage = ({ showBrandColumn = false, toolbarLeading }) => {
       if (showBrandColumn) {
         const [resJamaah, resBrands] = await Promise.all([
           listJamaah(),
-          listBrands()
+          listBrandOptions()
         ]);
         setData(resJamaah || []);
         const bList = resBrands || [];

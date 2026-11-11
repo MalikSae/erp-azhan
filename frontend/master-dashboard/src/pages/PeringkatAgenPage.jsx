@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import BrandLabel from 'shared/ui/BrandLabel';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Coins, Trophy, Users } from 'lucide-react';
-import { getPeringkatAgen, listBrands, money } from 'shared';
+import { getPeringkatAgen, listBrandOptions, money } from 'shared';
 import Alert from 'shared/ui/Alert';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import DataTable from 'shared/ui/DataTable';
@@ -49,7 +49,7 @@ export default function PeringkatAgenPage({ showBrandColumn = false }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (showBrandColumn) listBrands().then((b) => setBrands(b || [])).catch(() => {});
+    if (showBrandColumn) listBrandOptions().then((b) => setBrands(b || [])).catch(() => {});
   }, [showBrandColumn]);
 
   useEffect(() => {

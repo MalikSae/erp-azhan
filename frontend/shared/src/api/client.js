@@ -36,6 +36,9 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+// refreshBerjalan: permintaan refresh token yang sedang berlangsung, bila ada.
+let refreshBerjalan = null;
+
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -57,9 +60,13 @@ client.interceptors.response.use(
       }
 
       try {
-        const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`, {
-          refresh_token: refreshToken,
-        });
+        // Beberapa permintaan yang ditolak 401 bersamaan memakai satu permintaan refresh yang sama.
+        if (!refreshBerjalan) {
+          refreshBerjalan = axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`, {
+            refresh_token: refreshToken,
+          }).finally(() => { refreshBerjalan = null; });
+        }
+        const res = await refreshBerjalan;
 
         const newAccessToken = res.data.access_token;
         setToken(newAccessToken);

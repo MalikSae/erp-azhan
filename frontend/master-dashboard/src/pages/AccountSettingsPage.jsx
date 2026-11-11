@@ -7,11 +7,12 @@ import Card from 'shared/ui/Card';
 import Input from 'shared/ui/Input';
 import PageHeader from 'shared/ui/PageHeader';
 import { useAuth } from '../context/AuthContext';
+import { passwordTerlaluPanjang } from 'shared';
 
 const initialForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
 export default function AccountSettingsPage() {
-  const { user, brandInfo } = useAuth();
+  const { user, brandInfo, logout } = useAuth();
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -32,6 +33,10 @@ export default function AccountSettingsPage() {
       setError('Password baru minimal 8 karakter.');
       return;
     }
+    if (passwordTerlaluPanjang(form.newPassword)) {
+      setError('Password baru maksimal 72 byte (sekitar 72 huruf biasa).');
+      return;
+    }
     if (form.newPassword !== form.confirmPassword) {
       setError('Konfirmasi password baru tidak cocok.');
       return;
@@ -44,7 +49,10 @@ export default function AccountSettingsPage() {
         new_password: form.newPassword,
       });
       setForm(initialForm);
-      setSuccess('Password berhasil diubah. Gunakan password baru pada login berikutnya.');
+      // Server mengakhiri semua sesi akun ini, termasuk yang sekarang: arahkan ke login sebelum permintaan
+      // berikutnya ditolak tanpa penjelasan.
+      setSuccess('Password berhasil diubah. Anda akan diminta login ulang dengan password baru.');
+      setTimeout(() => { logout(); }, 2500);
     } catch (requestError) {
       setError(requestError.response?.data?.error || 'Password gagal diubah. Silakan coba lagi.');
     } finally {
