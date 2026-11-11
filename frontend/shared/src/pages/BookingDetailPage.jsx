@@ -827,7 +827,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               {booking.pemesan && (
                 <Field label="Pemesan (akun situs)">
                   {booking.pemesan.nama_lengkap}
-                  {!booking.pemesan.ikut_berangkat && <span className="text-neutral-500"> · tidak ikut berangkat</span>}
+                  {booking.pemesan.ikut_berangkat === false && <span className="text-neutral-500"> · tidak ikut berangkat</span>}
                   <span className="block text-xs text-neutral-500">
                     {[booking.pemesan.no_hp, booking.pemesan.email].filter(Boolean).join(" · ")}
                   </span>

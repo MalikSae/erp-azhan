@@ -313,9 +313,9 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	// 8. Create booking header
 	seatHoldExpiresAt := time.Now().Add(24 * time.Hour).UTC()
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, seat_hold_expires_at, customer_account_id, dibuat_oleh_agen_akun_id)
-		VALUES (?, ?, ?, ?, 'baru', TRUE, ?, ?, ?)
-	`, bookingCode, req.ScheduleID, picJamaahID, regulerPaxCount, seatHoldExpiresAt, nullableID(ini.accountID), nullableID(ini.agenID))
+		INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, seat_hold_expires_at, customer_account_id, pemesan_ikut, dibuat_oleh_agen_akun_id)
+		VALUES (?, ?, ?, ?, 'baru', TRUE, ?, ?, ?, ?)
+	`, bookingCode, req.ScheduleID, picJamaahID, regulerPaxCount, seatHoldExpiresAt, nullableID(ini.accountID), pemesanIkut(modeAgen, req), nullableID(ini.agenID))
 	if err != nil {
 		return nil, fmt.Errorf("insert booking: %w", err)
 	}
@@ -613,4 +613,14 @@ func travelersUntukSimpan(req BookingRequest) []AnggotaInput {
 	}
 	pertama := AnggotaInput{PaxType: "reguler", NamaLengkap: req.PIC.NamaLengkap, NoHP: hp, JenisKelamin: req.PIC.JenisKelamin, NIK: req.PIC.NIK}
 	return append([]AnggotaInput{pertama}, req.Anggota...)
+}
+
+// pemesanIkut: apakah pemilik akun yang memesan ikut berangkat. Disimpan di bookings.pemesan_ikut supaya
+// detail booking tidak perlu menebaknya. Booking agen: ikut hanya bila jamaah pertama "Saya sendiri".
+// Booking publik: ikut kecuali pemesan memilih memesankan untuk orang lain.
+func pemesanIkut(modeAgen bool, req BookingRequest) bool {
+	if modeAgen {
+		return req.PIC.SayaSendiri
+	}
+	return !req.PemesanTidakIkut
 }

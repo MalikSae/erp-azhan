@@ -36,12 +36,13 @@ type BookingPax struct {
 }
 
 // Booking adalah response lengkap admin — JOIN nama jamaah + jadwal_nama schedule + primary pax.
-// Pemesan adalah pemilik akun yang membuat booking. Ikut=false: memesankan untuk orang lain.
+// Pemesan adalah pemilik akun yang membuat booking. Ikut dibaca dari bookings.pemesan_ikut:
+// false = memesankan untuk orang lain, nil = tidak tercatat (booking sebelum migrasi 134).
 type Pemesan struct {
-	Nama string `json:"nama_lengkap"`
-	NoHP string `json:"no_hp"`
+	Nama  string `json:"nama_lengkap"`
+	NoHP  string `json:"no_hp"`
 	Email string `json:"email"`
-	Ikut bool   `json:"ikut_berangkat"`
+	Ikut  *bool  `json:"ikut_berangkat"`
 }
 
 type Booking struct {
