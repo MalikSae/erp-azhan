@@ -66,8 +66,8 @@ export default function PeriodePicker({ value = {}, onChange, labelSemua = 'Semu
     ? `${tampil(dari)} - ${tampil(sampai)}`
     : PRESET[preset]?.label || labelSemua;
 
-  const kelasPilihan = (aktif) => `w-full px-3.5 py-2.5 text-left text-[13px] font-body cursor-pointer transition-colors ${aktif ? 'bg-primary-50 text-primary-700 font-semibold' : 'text-neutral-700 hover:bg-neutral-50'}`;
-  const kelasTanggal = 'h-9 w-full rounded-lg border border-neutral-200/90 bg-white px-2.5 text-[13px] font-body text-neutral-900 focus:outline-none focus:border-primary-400';
+  const kelasPilihan = (aktif) => `w-full px-3.5 py-2.5 text-left text-sm font-body cursor-pointer transition-colors ${aktif ? 'bg-primary-50 text-primary-700 font-semibold' : 'text-neutral-700 hover:bg-neutral-50'}`;
+  const kelasTanggal = 'h-9 w-full rounded-lg border border-neutral-200 bg-white px-2.5 text-sm font-body text-neutral-900 focus:outline-none focus:border-primary-400';
 
   return (
     <div className={`relative ${className}`} ref={ref}>
@@ -76,7 +76,7 @@ export default function PeriodePicker({ value = {}, onChange, labelSemua = 'Semu
         aria-haspopup="dialog"
         aria-expanded={buka}
         onClick={bukaTutup}
-        className="h-10 w-full min-w-0 flex items-center justify-between rounded-lg border border-neutral-200/90 bg-white px-3.5 text-[13px] font-body text-left text-neutral-900 cursor-pointer transition-all focus:outline-none"
+        className="h-9 w-full min-w-0 flex items-center justify-between rounded-lg border border-neutral-300 bg-white px-3 text-sm font-body text-left text-neutral-900 cursor-pointer transition-all focus:outline-none"
       >
         <span className="truncate mr-2">{label}</span>
         <svg className={`w-4 h-4 transition-transform duration-200 shrink-0 text-neutral-400 ${buka ? 'transform rotate-180 text-primary-500' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,22 +85,22 @@ export default function PeriodePicker({ value = {}, onChange, labelSemua = 'Semu
       </button>
 
       {buka && (
-        <div role="dialog" aria-label="Pilih periode" className="absolute left-0 top-full z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-neutral-200/80 bg-white shadow-card overflow-hidden animate-in fade-in duration-150">
+        <div role="dialog" aria-label="Pilih periode" className="absolute left-0 top-full z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-neutral-200 bg-white shadow-popover overflow-hidden animate-in fade-in duration-150">
           <ul className="py-1">
             <li><button type="button" className={kelasPilihan(preset === '')} onClick={() => pilih('')}>{labelSemua}</button></li>
             {Object.entries(PRESET).map(([key, p]) => (
               <li key={key}><button type="button" className={kelasPilihan(preset === key)} onClick={() => pilih(key)}>{p.label}</button></li>
             ))}
           </ul>
-          <div className={`border-t border-neutral-200/80 p-3 space-y-2 ${preset === 'kustom' ? 'bg-primary-50/40' : 'bg-neutral-50/60'}`}>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Rentang tanggal</p>
+          <div className={`border-t border-neutral-200 p-3 space-y-2 ${preset === 'kustom' ? 'bg-primary-50/40' : 'bg-neutral-50/60'}`}>
+            <p className="text-xs font-semibold text-neutral-500">Rentang tanggal</p>
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="mb-1 block text-[11px] text-neutral-500">Dari</span>
+                <span className="mb-1 block text-xs text-neutral-500">Dari</span>
                 <input type="date" value={dDari} max={dSampai || undefined} onChange={(e) => setDDari(e.target.value)} className={kelasTanggal} />
               </label>
               <label className="block">
-                <span className="mb-1 block text-[11px] text-neutral-500">Sampai</span>
+                <span className="mb-1 block text-xs text-neutral-500">Sampai</span>
                 <input type="date" value={dSampai} min={dDari || undefined} onChange={(e) => setDSampai(e.target.value)} className={kelasTanggal} />
               </label>
             </div>
@@ -108,7 +108,7 @@ export default function PeriodePicker({ value = {}, onChange, labelSemua = 'Semu
               type="button"
               onClick={terapkan}
               disabled={!rentangSah}
-              className={`h-9 w-full rounded-lg text-[13px] font-heading font-semibold transition-colors ${rentangSah ? 'bg-primary-500 text-white hover:bg-primary-600 cursor-pointer' : 'bg-neutral-100 text-neutral-400 cursor-not-allowed'}`}
+              className={`h-9 w-full rounded-lg text-sm font-heading font-semibold transition-colors ${rentangSah ? 'bg-accent-500 bg-btn-primary hover:bg-btn-primary-hover text-white border border-accent-600 shadow-btn-primary cursor-pointer' : 'bg-neutral-100 text-neutral-400 cursor-not-allowed'}`}
             >
               Terapkan
             </button>

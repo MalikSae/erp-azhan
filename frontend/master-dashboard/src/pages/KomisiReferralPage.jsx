@@ -152,34 +152,34 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
   const renderCell = (row, key) => {
     if (key === 'nama_agen') {
       return (
-        <div className="min-w-[150px]">
+        <div className="min-w-36">
           <button
             type="button"
             onClick={() => open(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            className="font-body font-medium text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
           >
             {row.nama_agen}
           </button>
-          <p className="text-[11px] font-body text-neutral-400">
+          <p className="text-xs font-body text-neutral-400">
             {row.brand_name}{row.kode_referral ? ' · ' : ''}{row.kode_referral && <span className="font-mono">{row.kode_referral}</span>}
           </p>
         </div>
       );
     }
-    if (key === 'nominal_diajukan') return <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.nominal_diajukan)}</span>;
+    if (key === 'nominal_diajukan') return <span className="text-sm font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.nominal_diajukan)}</span>;
     if (key === 'rekening') {
       return (
-        <div className="min-w-[150px]">
-          <p className="text-[13px] font-body font-medium text-neutral-800">{row.rekening_bank} · <span className="font-mono">{row.rekening_nomor}</span></p>
-          <p className="text-[11px] font-body text-neutral-400">a.n. {row.rekening_atas_nama}</p>
+        <div className="min-w-36">
+          <p className="text-sm font-body font-medium text-neutral-800">{row.rekening_bank} · <span className="font-mono">{row.rekening_nomor}</span></p>
+          <p className="text-xs font-body text-neutral-400">a.n. {row.rekening_atas_nama}</p>
         </div>
       );
     }
-    if (key === 'diajukan_at') return <span className="text-[13px] font-body text-neutral-500 whitespace-nowrap">{dateLabel(row.diajukan_at)}</span>;
+    if (key === 'diajukan_at') return <span className="text-sm font-body text-neutral-500 whitespace-nowrap">{dateLabel(row.diajukan_at)}</span>;
     if (key === 'status') {
       const meta = statusMeta[row.status] || { label: row.status, chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' };
       return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium font-body border ${meta.chip}`}>
+        <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading border ${meta.chip}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
           {meta.label}
         </span>
@@ -279,7 +279,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
         {selected && (
           <div className="space-y-4">
             {actionError && <Alert variant="error" message={actionError} />}
-            <div className="p-3.5 rounded-xl border border-neutral-200/70 space-y-2">
+            <div className="p-3.5 rounded-xl border border-neutral-200 space-y-2">
               <Row label="Agen">{selected.nama_agen}</Row>
               <Row label="Brand">{selected.brand_name}</Row>
               <Row label="Nominal">{money(selected.nominal_diajukan)}</Row>
@@ -297,7 +297,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
 
             {selected.status === 'pending' && (
               <div className={`p-3 rounded-xl border text-sm ${saldoKurang ? 'border-danger-200 bg-danger-50 text-danger-700' : 'border-neutral-200 bg-neutral-50 text-neutral-700'}`}>
-                Saldo tersedia setelah pengajuan ini: <span className="font-bold">{money(selected.saldo_tersedia)}</span>
+                Saldo tersedia setelah pengajuan ini: <span className="font-semibold">{money(selected.saldo_tersedia)}</span>
                 {saldoKurang && <p className="mt-1 text-xs">Saldo tidak lagi mencukupi. Tolak pengajuan ini.</p>}
               </div>
             )}

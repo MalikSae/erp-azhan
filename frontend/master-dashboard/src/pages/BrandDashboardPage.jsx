@@ -19,13 +19,13 @@ const daysUntil = (value) => Math.ceil((new Date(value).setHours(0, 0, 0, 0) - n
 
 function MetricCard({ label, value, note, icon: Icon, tone = "primary", onClick }) {
   const tones = { primary: "bg-primary-100 text-primary-600", success: "bg-success-100 text-success-600", warning: "bg-warning-100 text-warning-600", danger: "bg-danger-100 text-danger-600" };
-  return <button type="button" onClick={onClick} className="group rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-card transition-colors hover:border-primary-300">
-    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-body text-neutral-500">{label}</p><p className="mt-1 text-2xl font-heading font-bold text-neutral-900">{value}</p><p className="mt-1 truncate text-[11px] text-neutral-400">{note}</p></div><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}><Icon size={20} strokeWidth={1.75} /></span></div>
+  return <button type="button" onClick={onClick} className="group rounded-2xl border border-neutral-200 bg-white p-4 text-left transition-colors hover:border-primary-300">
+    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-body text-neutral-500">{label}</p><p className="mt-1 text-2xl font-heading font-semibold text-neutral-900">{value}</p><p className="mt-1 truncate text-xs text-neutral-400">{note}</p></div><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}><Icon size={20} strokeWidth={1.75} /></span></div>
   </button>;
 }
 
 function SectionHeader({ title, subtitle, action, onAction }) {
-  return <div className="flex items-end justify-between gap-3"><div><h2 className="text-base font-heading font-bold text-neutral-900">{title}</h2><p className="mt-0.5 text-[11px] text-neutral-400">{subtitle}</p></div>{action && <button type="button" onClick={onAction} className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700">{action}<ArrowRight size={13} /></button>}</div>;
+  return <div className="flex items-end justify-between gap-3"><div><h2 className="text-base font-heading font-semibold text-neutral-900">{title}</h2><p className="mt-0.5 text-xs text-neutral-400">{subtitle}</p></div>{action && <button type="button" onClick={onAction} className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700">{action}<ArrowRight size={13} /></button>}</div>;
 }
 
 function PaxChart({ bookings }) {
@@ -73,28 +73,28 @@ function PaxChart({ bookings }) {
     }
   };
 
-  return <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-card">
+  return <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
     <div className="flex flex-col gap-4 border-b border-neutral-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-start gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-600"><BarChart3 size={20} strokeWidth={1.75} /></span><div><h2 className="text-base font-bold font-heading text-neutral-900">Pendaftaran Pax</h2><p className="mt-0.5 text-[11px] text-neutral-400">30 hari terakhir • jumlah pax aktif</p></div></div>
-      <div className="flex gap-6"><div><p className="text-xs text-neutral-500">Total Pax</p><p className="font-bold text-neutral-900">{series.total} pax</p></div><div className="border-l border-neutral-200 pl-6"><p className="text-xs text-neutral-500">Rata-rata / hari</p><p className="font-bold text-neutral-900">{series.average.toFixed(1)} pax</p></div></div>
+      <div className="flex items-start gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-600"><BarChart3 size={20} strokeWidth={1.75} /></span><div><h2 className="text-base font-semibold font-heading text-neutral-900">Pendaftaran Pax</h2><p className="mt-0.5 text-xs text-neutral-400">30 hari terakhir • jumlah pax aktif</p></div></div>
+      <div className="flex gap-6"><div><p className="text-xs text-neutral-500">Total Pax</p><p className="font-semibold text-neutral-900">{series.total} pax</p></div><div className="border-l border-neutral-200 pl-6"><p className="text-xs text-neutral-500">Rata-rata / hari</p><p className="font-semibold text-neutral-900">{series.average.toFixed(1)} pax</p></div></div>
     </div>
     <div className="px-4 pb-3 pt-2 sm:px-5">
       <div className="relative rounded-xl bg-neutral-50 px-2 pt-1">
         {hoverIndex !== null && (
           <div
-            className="absolute z-20 pointer-events-none transition-all duration-75 ease-out bg-neutral-900/95 text-white px-3 py-2 rounded-xl shadow-xl backdrop-blur-xs border border-neutral-700/80 min-w-[160px]"
+            className="absolute z-20 pointer-events-none transition-all duration-75 ease-out bg-neutral-900/95 text-white px-3 py-2 rounded-xl shadow-popover backdrop-blur-xs border border-neutral-700/80 min-w-40"
             style={{
               left: `${(points[hoverIndex].x / width) * 100}%`,
               top: '6px',
               transform: hoverIndex > 20 ? 'translateX(-95%)' : hoverIndex < 6 ? 'translateX(5%)' : 'translateX(-50%)',
             }}
           >
-            <div className="text-[11px] font-medium text-neutral-400 border-b border-neutral-700/80 pb-1 mb-1 font-heading">
+            <div className="text-xs font-medium text-neutral-400 border-b border-neutral-700/80 pb-1 mb-1 font-heading">
               {points[hoverIndex].date.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}
             </div>
             <div className="flex items-center justify-between gap-3 text-xs">
               <span className="text-neutral-300">Pax Baru</span>
-              <span className="font-bold text-primary-400 font-mono">
+              <span className="font-semibold text-primary-400 font-mono">
                 {points[hoverIndex].amount} pax
               </span>
             </div>
@@ -112,7 +112,7 @@ function PaxChart({ bookings }) {
           onTouchEnd={() => setHoverIndex(null)}
         >
           <defs><linearGradient id="paymentArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity="0.24" /><stop offset="100%" stopColor="currentColor" stopOpacity="0.01" /></linearGradient></defs>
-          {[0, 0.5, 1].map((ratio) => <g key={ratio}><line x1={padding.left} y1={padding.top + plotHeight * ratio} x2={padding.left + plotWidth} y2={padding.top + plotHeight * ratio} stroke="#e4e4e7" strokeWidth="1" strokeDasharray="4 5" /><text x={padding.left - 10} y={padding.top + plotHeight * ratio + 3} textAnchor="end" fontSize="9" fill="#71717a">{Math.round(series.max * (1 - ratio))}</text></g>)}
+          {[0, 0.5, 1].map((ratio) => <g key={ratio}><line x1={padding.left} y1={padding.top + plotHeight * ratio} x2={padding.left + plotWidth} y2={padding.top + plotHeight * ratio} stroke="#E5E5E5" strokeWidth="1" strokeDasharray="4 5" /><text x={padding.left - 10} y={padding.top + plotHeight * ratio + 3} textAnchor="end" fontSize="9" fill="#737373">{Math.round(series.max * (1 - ratio))}</text></g>)}
           <polygon points={area} fill="url(#paymentArea)" />
           <polyline points={line} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
           
@@ -122,7 +122,7 @@ function PaxChart({ bookings }) {
               x2={points[hoverIndex].x}
               y1={padding.top}
               y2={padding.top + plotHeight}
-              stroke="#94A3B8"
+              stroke="#A3A3A3"
               strokeWidth="1.5"
               strokeDasharray="3 3"
               opacity="0.8"
@@ -142,7 +142,7 @@ function PaxChart({ bookings }) {
             />
           )}
 
-          {labelIndexes.map((index) => <text key={index} x={points[index].x} y={height - 7} textAnchor={index === 0 ? "start" : index === 29 ? "end" : "middle"} fontSize="10" fill={hoverIndex === index ? "#18181B" : "#9ca3af"} fontWeight={hoverIndex === index ? "700" : "400"}>{points[index].date.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</text>)}
+          {labelIndexes.map((index) => <text key={index} x={points[index].x} y={height - 7} textAnchor={index === 0 ? "start" : index === 29 ? "end" : "middle"} fontSize="10" fill={hoverIndex === index ? "#171717" : "#A3A3A3"} fontWeight={hoverIndex === index ? "700" : "400"}>{points[index].date.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</text>)}
         </svg>
         {series.total === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-lg border border-neutral-200 bg-white/90 px-4 py-2 text-xs font-medium text-neutral-500">Belum ada pendaftaran pax dalam 30 hari terakhir</div></div>}
       </div>
@@ -198,7 +198,7 @@ return items.slice(0, 4);
 
   if (loading) return <div className="flex min-h-[420px] items-center justify-center"><LoadingSpinner /></div>;
 
-  return <div className="space-y-5 pb-8">
+  return <div className="space-y-6 pb-8">
     <PageHeader title="Dashboard" breadcrumb={false} secondaryActionLabel="Tambah Jamaah" onSecondaryAction={() => navigate("/jamaah/new")} actionLabel="Booking Baru" onAction={() => navigate("/bookings/new")} />
     {error && <Alert variant="error" message={error} onClose={() => setError("")} />}
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -209,17 +209,17 @@ return items.slice(0, 4);
     </div>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       <div className="md:col-span-2"><PaxChart bookings={data.bookings} /></div>
-      <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-card"><SectionHeader title="Perlu Ditindaklanjuti" subtitle="Prioritas operasional saat ini" /><div className="mt-3 space-y-2">{tasks.length === 0 ? <div className="flex flex-col items-center py-8 text-center"><CheckCircle2 className="text-success-500" size={28} /><p className="mt-2 text-sm font-semibold text-neutral-700">Semua terkendali</p></div> : tasks.map((task) => <button key={task.label} onClick={() => navigate(task.path)} className="flex w-full items-center gap-3 rounded-xl border border-neutral-100 px-3 py-2.5 text-left hover:bg-neutral-50"><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${task.tone === "danger" ? "bg-danger-100 text-danger-600" : "bg-warning-100 text-warning-600"}`}><task.icon size={15} strokeWidth={1.75} /></span><span className="min-w-0 flex-1 text-xs font-medium text-neutral-700">{task.label}</span><span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-neutral-900 px-1.5 text-xs font-bold text-white">{task.count}</span></button>)}</div></section>
+      <section className="rounded-2xl border border-neutral-200 bg-white p-4"><SectionHeader title="Perlu Ditindaklanjuti" subtitle="Prioritas operasional saat ini" /><div className="mt-3 space-y-2">{tasks.length === 0 ? <div className="flex flex-col items-center py-8 text-center"><CheckCircle2 className="text-success-500" size={28} /><p className="mt-2 text-sm font-semibold text-neutral-700">Semua terkendali</p></div> : tasks.map((task) => <button key={task.label} onClick={() => navigate(task.path)} className="flex w-full items-center gap-3 rounded-xl border border-neutral-100 px-3 py-2.5 text-left hover:bg-neutral-50"><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${task.tone === "danger" ? "bg-danger-100 text-danger-600" : "bg-warning-100 text-warning-600"}`}><task.icon size={15} strokeWidth={1.75} /></span><span className="min-w-0 flex-1 text-xs font-medium text-neutral-700">{task.label}</span><span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-neutral-900 px-1.5 text-xs font-semibold text-white">{task.count}</span></button>)}</div></section>
     </div>
     <div className="grid grid-cols-1 gap-4">
-      <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-card"><SectionHeader title="Keberangkatan Terdekat" subtitle="Paket aktif berdasarkan tanggal keberangkatan" action="Lihat paket" onAction={() => navigate("/paket")} /><div className="mt-3 space-y-2">{upcomingSchedules.length === 0 ? <p className="py-8 text-center text-sm text-neutral-400">Belum ada jadwal terdekat.</p> : upcomingSchedules.map((schedule) => {
+      <section className="rounded-2xl border border-neutral-200 bg-white p-4"><SectionHeader title="Keberangkatan Terdekat" subtitle="Paket aktif berdasarkan tanggal keberangkatan" action="Lihat paket" onAction={() => navigate("/paket")} /><div className="mt-3 space-y-2">{upcomingSchedules.length === 0 ? <p className="py-8 text-center text-sm text-neutral-400">Belum ada jadwal terdekat.</p> : upcomingSchedules.map((schedule) => {
         const filled = Math.max(0, schedule.seat_total - schedule.seat_sisa); const percent = schedule.seat_total ? Math.round((filled / schedule.seat_total) * 100) : 0; const days = daysUntil(schedule.berangkat_tanggal);
-        return <button key={schedule.id} onClick={() => navigate("/paket")} className="block w-full rounded-xl border border-neutral-100 bg-neutral-50/60 px-3 py-2.5 text-left hover:border-primary-200"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold text-neutral-900">{schedule.jadwal_nama}</p><p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-neutral-500"><CalendarDays size={12} />{formatDate(schedule.berangkat_tanggal)} • {days === 0 ? "Hari ini" : `${days} hari lagi`}</p></div></div><div className="mt-2"><div className="mb-1 flex justify-between text-[10px]"><span className="text-neutral-500">{filled} dari {schedule.seat_total} seat terisi</span><span className="font-semibold text-neutral-700">{percent}%</span></div><div className="h-1 overflow-hidden rounded-full bg-neutral-200"><div className="h-full rounded-full bg-primary-600" style={{ width: `${Math.min(100, percent)}%` }} /></div></div></button>;
+        return <button key={schedule.id} onClick={() => navigate("/paket")} className="block w-full rounded-xl border border-neutral-100 bg-neutral-50/60 px-3 py-2.5 text-left hover:border-primary-200"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold text-neutral-900">{schedule.jadwal_nama}</p><p className="mt-0.5 flex items-center gap-1.5 text-xs text-neutral-500"><CalendarDays size={12} />{formatDate(schedule.berangkat_tanggal)} • {days === 0 ? "Hari ini" : `${days} hari lagi`}</p></div></div><div className="mt-2"><div className="mb-1 flex justify-between text-xs"><span className="text-neutral-500">{filled} dari {schedule.seat_total} seat terisi</span><span className="font-semibold text-neutral-700">{percent}%</span></div><div className="h-1 overflow-hidden rounded-full bg-neutral-200"><div className="h-full rounded-full bg-primary-600" style={{ width: `${Math.min(100, percent)}%` }} /></div></div></button>;
       })}</div></section>
     </div>
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-card lg:col-span-2"><div className="p-4 pb-3"><SectionHeader title="Booking Terbaru" subtitle="Aktivitas reservasi jamaah terkini" action="Lihat semua" onAction={() => navigate("/bookings")} /></div><div className="overflow-x-auto"><table className="min-w-full text-left"><thead><tr className="border-y border-neutral-100 bg-neutral-50 text-xs uppercase tracking-wider text-neutral-500"><th className="px-4 py-2 font-semibold">Jamaah</th><th className="px-3 py-2 font-semibold">Paket</th><th className="px-3 py-2 font-semibold">Tagihan</th><th className="px-4 py-2 font-semibold">Status</th></tr></thead><tbody className="divide-y divide-neutral-100">{recentBookings.map((booking) => <tr key={booking.id} onClick={() => navigate(`/bookings/${booking.id}`)} className="cursor-pointer hover:bg-neutral-50"><td className="px-4 py-2.5"><p className="text-xs font-semibold text-neutral-900">{booking.nama_jamaah}</p><p className="mt-0.5 text-xs font-mono text-neutral-400">{booking.id_booking || `ID: ${booking.id}`}</p></td><td className="max-w-48 truncate px-3 py-2.5 text-xs text-neutral-600">{booking.jadwal_nama}</td><td className="px-3 py-2.5 text-xs font-semibold text-neutral-700">{formatRupiah(booking.total_harga)}</td><td className="px-4 py-2.5">{(() => { const [v, l] = getStatusBadgeConfig(booking.status); return <span className="inline-flex items-center gap-1.5 text-xs font-body text-neutral-700"><span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[booking.status] || (v === "success" ? "bg-success-500" : "bg-neutral-400")}`} />{l}</span>; })()}</td></tr>)}</tbody></table></div>{recentBookings.length === 0 && <p className="py-8 text-center text-sm text-neutral-400">Belum ada booking.</p>}</section>
-      <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-card"><SectionHeader title="Kesiapan Perlengkapan" subtitle="Stok terendah yang perlu dipantau" action="Kelola stok" onAction={() => navigate("/stok-perlengkapan")} /><div className="mt-3 space-y-2.5">{lowStock.map((item) => { const isLow = item.stok_tersedia <= 40; return <div key={item.perlengkapan_item_id} className="flex items-center gap-3"><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${isLow ? "bg-warning-100 text-warning-600" : "bg-neutral-100 text-neutral-600"}`}><Package size={15} strokeWidth={1.75} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-neutral-700">{item.nama_item}</p><p className="mt-0.5 text-xs text-neutral-400">{item.qty_per_set} item per set</p></div><span className={`text-sm font-bold ${isLow ? "text-warning-700" : "text-neutral-800"}`}>{item.stok_tersedia}</span></div>; })}</div><div className="mt-4 rounded-xl bg-neutral-50 px-3 py-2.5"><div className="flex items-center gap-2 text-xs text-neutral-600"><Clock3 size={13} className="text-primary-600" /><span>Estimasi set lengkap tersedia</span></div><p className="mt-0.5 text-lg font-bold text-neutral-900">{data.stock.length ? Math.min(...data.stock.map((item) => Math.floor(item.stok_tersedia / Math.max(1, item.qty_per_set)))) : 0} set</p></div></section>
+      <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white lg:col-span-2"><div className="p-4 pb-3"><SectionHeader title="Booking Terbaru" subtitle="Aktivitas reservasi jamaah terkini" action="Lihat semua" onAction={() => navigate("/bookings")} /></div><div className="overflow-x-auto"><table className="min-w-full text-left"><thead><tr className="border-y border-neutral-100 bg-neutral-50 text-xs text-neutral-500"><th className="px-4 py-2 font-semibold">Jamaah</th><th className="px-3 py-2 font-semibold">Paket</th><th className="px-3 py-2 font-semibold">Tagihan</th><th className="px-4 py-2 font-semibold">Status</th></tr></thead><tbody className="divide-y divide-neutral-100">{recentBookings.map((booking) => <tr key={booking.id} onClick={() => navigate(`/bookings/${booking.id}`)} className="cursor-pointer hover:bg-neutral-50"><td className="px-4 py-2.5"><p className="text-xs font-semibold text-neutral-900">{booking.nama_jamaah}</p><p className="mt-0.5 text-xs font-mono text-neutral-400">{booking.id_booking || `ID: ${booking.id}`}</p></td><td className="max-w-48 truncate px-3 py-2.5 text-xs text-neutral-600">{booking.jadwal_nama}</td><td className="px-3 py-2.5 text-xs font-semibold text-neutral-700">{formatRupiah(booking.total_harga)}</td><td className="px-4 py-2.5">{(() => { const [v, l] = getStatusBadgeConfig(booking.status); return <span className="inline-flex items-center gap-1.5 text-xs font-body text-neutral-700"><span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[booking.status] || (v === "success" ? "bg-success-500" : "bg-neutral-400")}`} />{l}</span>; })()}</td></tr>)}</tbody></table></div>{recentBookings.length === 0 && <p className="py-8 text-center text-sm text-neutral-400">Belum ada booking.</p>}</section>
+      <section className="rounded-2xl border border-neutral-200 bg-white p-4"><SectionHeader title="Kesiapan Perlengkapan" subtitle="Stok terendah yang perlu dipantau" action="Kelola stok" onAction={() => navigate("/stok-perlengkapan")} /><div className="mt-3 space-y-2.5">{lowStock.map((item) => { const isLow = item.stok_tersedia <= 40; return <div key={item.perlengkapan_item_id} className="flex items-center gap-3"><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${isLow ? "bg-warning-100 text-warning-600" : "bg-neutral-100 text-neutral-600"}`}><Package size={15} strokeWidth={1.75} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-neutral-700">{item.nama_item}</p><p className="mt-0.5 text-xs text-neutral-400">{item.qty_per_set} item per set</p></div><span className={`text-sm font-semibold ${isLow ? "text-warning-700" : "text-neutral-800"}`}>{item.stok_tersedia}</span></div>; })}</div><div className="mt-4 rounded-xl bg-neutral-50 px-3 py-2.5"><div className="flex items-center gap-2 text-xs text-neutral-600"><Clock3 size={13} className="text-primary-600" /><span>Estimasi set lengkap tersedia</span></div><p className="mt-0.5 text-lg font-semibold text-neutral-900">{data.stock.length ? Math.min(...data.stock.map((item) => Math.floor(item.stok_tersedia / Math.max(1, item.qty_per_set)))) : 0} set</p></div></section>
     </div>
   </div>;
 };

@@ -39,8 +39,8 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
     <div className="overflow-x-auto w-full">
       {/* Bila kolom diberi lebar, tabel memakai tata letak tetap: lebar kolom tidak lagi mengikuti isi,
           jadi posisinya sama untuk data apa pun. Lebar minimal menjaga isi tidak bertumpuk di layar sempit. */}
-      <table className={`w-full text-left text-[13px] font-body text-neutral-700 border-collapse min-w-full ${columns.some((c) => c.width) ? 'table-fixed min-w-[880px]' : ''}`}>
-        <thead className="bg-neutral-50 text-neutral-800 font-heading text-[13px] font-semibold border-b border-neutral-200">
+      <table className={`w-full text-left text-sm font-body text-neutral-700 border-collapse min-w-full ${columns.some((c) => c.width) ? 'table-fixed min-w-[880px]' : ''}`}>
+        <thead className="bg-neutral-50 text-neutral-500 font-body text-xs font-medium border-b border-neutral-200">
           <tr>
             {columns.map((col, idx) => {
               const sortKey = col.key || col.accessor;
@@ -57,10 +57,10 @@ const Table = ({ columns, data = [], emptyMessage = "Tidak ada data", renderCell
                     {col.header}
                     {isSortable && (
                       <span className="inline-flex flex-col w-3">
-                        <svg className={`w-3 h-3 -mb-1 ${sortConfig?.key === sortKey && sortConfig.direction === 'asc' ? 'text-primary-600 font-bold' : 'text-neutral-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className={`w-3 h-3 -mb-1 ${sortConfig?.key === sortKey && sortConfig.direction === 'asc' ? 'text-primary-600 font-semibold' : 'text-neutral-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" />
                         </svg>
-                        <svg className={`w-3 h-3 -mt-1 ${sortConfig?.key === sortKey && sortConfig.direction === 'desc' ? 'text-primary-600 font-bold' : 'text-neutral-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className={`w-3 h-3 -mt-1 ${sortConfig?.key === sortKey && sortConfig.direction === 'desc' ? 'text-primary-600 font-semibold' : 'text-neutral-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                         </svg>
                       </span>

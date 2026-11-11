@@ -20,7 +20,7 @@ const STATUS = {
 const StatusDot = ({ status }) => {
   const meta = STATUS[status] || { label: status, dot: 'bg-neutral-400' };
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] font-body text-neutral-700">
+    <span className="inline-flex items-center gap-1.5 text-xs font-body text-neutral-700">
       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
       {meta.label}
     </span>
@@ -118,7 +118,7 @@ export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChang
   const renderCell = (row, key) => {
     if (key === 'jamaah_nama') {
       return (
-        <button type="button" onClick={(e) => { e.stopPropagation(); open(row); }} className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors cursor-pointer">
+        <button type="button" onClick={(e) => { e.stopPropagation(); open(row); }} className="font-body font-medium text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors cursor-pointer">
           {row.jamaah_nama}
         </button>
       );
@@ -179,7 +179,7 @@ export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChang
           <div className="space-y-4">
             {actionError && <Alert variant="error" message={actionError} />}
 
-            <div className="p-3.5 rounded-xl border border-neutral-200/70 space-y-2 text-xs">
+            <div className="p-3.5 rounded-xl border border-neutral-200 space-y-2 text-xs">
               {[
                 ['Jamaah', selected.jamaah_nama],
                 ['Diajukan oleh', pelaku(selected)],
@@ -208,10 +208,10 @@ export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChang
               )}
             </div>
 
-            <div className="rounded-xl border border-neutral-200/70 overflow-hidden">
+            <div className="rounded-xl border border-neutral-200 overflow-hidden">
               <table className="w-full text-xs">
                 <thead className="bg-neutral-50 text-neutral-500">
-                  <tr><th className="text-left font-semibold px-3 py-2">Isian</th><th className="text-left font-semibold px-3 py-2">Sebelumnya</th><th className="text-left font-semibold px-3 py-2">Menjadi</th></tr>
+                  <tr><th className="text-left font-medium px-3 py-2">Isian</th><th className="text-left font-medium px-3 py-2">Sebelumnya</th><th className="text-left font-medium px-3 py-2">Menjadi</th></tr>
                 </thead>
                 <tbody>
                   {selected.perubahan.map((p) => (
@@ -225,12 +225,12 @@ export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChang
               </table>
             </div>
             {!menunggu && selected.perubahan.some((p) => ['no_paspor', 'no_asuransi_bpjs', 'nik'].includes(p.kolom)) && (
-              <p className="text-[11px] text-neutral-400">Nomor paspor, NIK, dan nomor asuransi disamarkan pada riwayat yang sudah diputuskan.</p>
+              <p className="text-xs text-neutral-400">Nomor paspor, NIK, dan nomor asuransi disamarkan pada riwayat yang sudah diputuskan.</p>
             )}
 
             {menunggu && menolak && (
               <div className="space-y-1.5">
-                <label htmlFor="catatan-tolak" className="block text-xs font-bold text-neutral-700">Alasan penolakan <span className="text-danger-600">*</span></label>
+                <label htmlFor="catatan-tolak" className="block text-xs font-semibold text-neutral-700">Alasan penolakan <span className="text-danger-600">*</span></label>
                 <textarea
                   id="catatan-tolak"
                   value={catatan}

@@ -255,11 +255,11 @@ const CategoriesPage = () => {
             type="button"
             disabled={!canEdit}
             onClick={() => handleOpenModal(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
+            className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
           >
             {row.name}
           </button>
-          <div className="text-[11px] font-body text-neutral-400 truncate">/{row.slug}</div>
+          <div className="text-xs font-body text-neutral-400 truncate">/{row.slug}</div>
         </div>
       );
     }
@@ -267,7 +267,7 @@ const CategoriesPage = () => {
     if (key === 'badge_color') {
       const hex = isBadgeHex(row.badge_color) ? row.badge_color : null;
       return hex ? (
-        <span className="inline-block rounded px-2.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: hex, color: badgeTextColor(hex) }}>{row.name}</span>
+        <span className="inline-block rounded px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: hex, color: badgeTextColor(hex) }}>{row.name}</span>
       ) : (
         <span className="text-xs text-neutral-400 font-body">Otomatis</span>
       );
@@ -275,7 +275,7 @@ const CategoriesPage = () => {
 
     if (key === 'seo_tier') {
       return row.seo_tier
-        ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium font-body border bg-primary-50 text-primary-700 border-primary-200">{SEO_TIER_LABELS[row.seo_tier] || row.seo_tier}</span>
+        ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading border bg-primary-50 text-primary-700 border-primary-200">{SEO_TIER_LABELS[row.seo_tier] || row.seo_tier}</span>
         : <span className="text-xs text-neutral-400 font-body">Belum dipetakan</span>;
     }
 
@@ -297,7 +297,7 @@ const CategoriesPage = () => {
     }
 
     if (key === 'package_count') {
-      return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.package_count || 0} paket</span>;
+      return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.package_count || 0} paket</span>;
     }
 
     if (key === 'is_active') return <StatusChip active={row.is_active} />;
@@ -336,7 +336,7 @@ const CategoriesPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : (
         <DataTable
           columns={columns}
@@ -391,14 +391,14 @@ const CategoriesPage = () => {
               <option value="comfort">Comfort</option>
               <option value="premium">Premium</option>
             </Select>
-            <p className="mt-1.5 text-[11px] font-body text-neutral-500">Dipakai untuk URL tier di web publik. Kosongkan bila belum diputuskan.</p>
+            <p className="mt-1.5 text-xs font-body text-neutral-500">Dipakai untuk URL tier di web publik. Kosongkan bila belum diputuskan.</p>
           </div>
 
           {/* Warna badge */}
           <div className="space-y-2 pt-1 border-t border-neutral-100">
             <div>
               <div className="text-xs font-semibold text-neutral-800 font-heading">Warna Badge</div>
-              <p className="text-[11px] font-body text-neutral-500">Warna label kategori di situs booking. Otomatis = dipilihkan sistem.</p>
+              <p className="text-xs font-body text-neutral-500">Warna label kategori di situs booking. Otomatis = dipilihkan sistem.</p>
             </div>
             <BadgeColorField
               value={formData.badge_color}
@@ -454,12 +454,12 @@ const CategoriesPage = () => {
           <div className="space-y-2 pt-3 border-t border-neutral-100">
             <div>
               <div className="text-xs font-semibold text-neutral-800 font-heading">Perlengkapan Bawaan</div>
-              <p className="text-[11px] font-body text-neutral-500">
+              <p className="text-xs font-body text-neutral-500">
                 Dibagikan ke tiap jamaah pada paket kategori ini. Bisa diubah khusus per paket di form Paket.
               </p>
             </div>
             {perlStatus === 'memuat' && (
-              <p className="text-[11px] font-body text-neutral-500">Memuat set perlengkapan...</p>
+              <p className="text-xs font-body text-neutral-500">Memuat set perlengkapan...</p>
             )}
             {perlStatus === 'gagal' && (
               <Alert variant="warning">

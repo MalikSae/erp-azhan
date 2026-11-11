@@ -18,7 +18,7 @@ export const PerlengkapanSetList = ({ items = [], emptyText = 'Belum ada isi per
     return <p className="text-xs font-body text-neutral-500">{emptyText}</p>;
   }
   return (
-    <ul className="divide-y divide-neutral-200/80 text-[13px] font-body">
+    <ul className="divide-y divide-neutral-200 text-sm font-body">
       {items.map((it) => (
         <li key={it.perlengkapan_item_id} className="flex items-center justify-between gap-3 py-2">
           <span className="font-medium text-neutral-800">{it.nama}</span>
@@ -85,7 +85,7 @@ const PerlengkapanSetEditor = ({ catalog = [], value = [], onChange }) => {
               type="button"
               onClick={() => remove(index)}
               title="Hapus item"
-              className="flex h-10 w-9 cursor-pointer items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-danger-600"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-danger-600"
             >
               <Trash2 size={15} strokeWidth={1.75} />
             </button>

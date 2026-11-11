@@ -31,7 +31,7 @@ const UPLINE_OPTIONS = [
 export const StatusAkun = ({ status }) => {
   const s = STATUS_AKUN[status] || STATUS_AKUN.tidak_aktif;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${s.text}`}>
+    <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${s.text}`}>
       <span className={`w-2 h-2 rounded-full ${s.dot}`} />{s.label}
     </span>
   );
@@ -55,9 +55,9 @@ const STATUS_KEAGENAN = {
 };
 const TandaAgen = ({ row }) => {
   const s = STATUS_KEAGENAN[row.status_agen];
-  if (!s) return <span className="text-[13px] text-neutral-400">-</span>;
+  if (!s) return <span className="text-sm text-neutral-400">-</span>;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${s.text}`}>
+    <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${s.text}`}>
       <span className={`w-2 h-2 rounded-full ${s.dot}`} />{s.label}
     </span>
   );
@@ -109,14 +109,14 @@ export default function DaftarAkunPage({ showBrandColumn = false }) {
     if (key === 'nama_lengkap') {
       return (
         <div className="min-w-0">
-          <Link to={`/akun/${row.akun_id}`} onClick={(e) => e.stopPropagation()} className="font-heading font-semibold text-neutral-900 leading-snug hover:text-primary-600 transition-colors">{row.nama_lengkap}</Link>
-          <div className="text-[11px] font-body text-neutral-400">{row.no_hp || '-'}</div>
+          <Link to={`/akun/${row.akun_id}`} onClick={(e) => e.stopPropagation()} className="font-body font-medium text-neutral-900 leading-snug hover:text-primary-600 transition-colors">{row.nama_lengkap}</Link>
+          <div className="text-xs font-body text-neutral-400">{row.no_hp || '-'}</div>
         </div>
       );
     }
     if (key === 'brand_name') return <BrandLabel name={row.brand_name} />;
-    if (key === 'upline_nama') return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.upline_nama || '-'}</span>;
-    if (key === 'jumlah_booking') return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.jumlah_booking > 0 ? `${row.jumlah_booking} booking` : '-'}</span>;
+    if (key === 'upline_nama') return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.upline_nama || '-'}</span>;
+    if (key === 'jumlah_booking') return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.jumlah_booking > 0 ? `${row.jumlah_booking} booking` : '-'}</span>;
     if (key === 'agen') return <TandaAgen row={row} />;
     return row[key] ?? '-';
   };

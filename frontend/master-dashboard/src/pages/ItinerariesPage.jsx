@@ -98,7 +98,7 @@ const ItinerariesPage = () => {
           type="button"
           disabled={!canEdit}
             onClick={() => navigate(`/itineraries/${row.id}/edit`)}
-          className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
+          className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
         >
           {row.title}
         </button>
@@ -112,12 +112,12 @@ const ItinerariesPage = () => {
     }
 
     if (key === 'day_count') {
-      return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.day_count || 0} hari</span>;
+      return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.day_count || 0} hari</span>;
     }
 
     if (key === 'created_at') {
       return (
-        <span className="inline-flex items-center gap-1.5 text-[13px] font-body text-neutral-500 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1.5 text-sm font-body text-neutral-500 whitespace-nowrap">
           <CalendarDays className="w-3.5 h-3.5 text-neutral-400" strokeWidth={1.75} />
           {formatDate(row.created_at)}
         </span>
@@ -151,7 +151,7 @@ const ItinerariesPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : (
         <DataTable
           columns={columns}

@@ -1,17 +1,18 @@
 import React from 'react';
 
 const Alert = ({ variant = 'error', message, children, className = '', onClose }) => {
+  // Gaya dash.cloudflare.com (DESIGN.md): latar status lembut, garis kiri 2px warna status.
   const variants = {
-    error: 'bg-danger-50 border-danger-200 text-danger-700',
-    success: 'bg-success-50 border-success-200 text-success-700',
-    warning: 'bg-warning-50 border-warning-200 text-warning-700',
-    info: 'bg-neutral-50 border-neutral-200 text-neutral-700'
+    error: 'bg-danger-50 border-danger-200 border-l-danger-600 text-danger-800',
+    success: 'bg-success-50 border-success-200 border-l-success-600 text-success-800',
+    warning: 'bg-warning-50 border-warning-200 border-l-warning-600 text-warning-800',
+    info: 'bg-neutral-50 border-neutral-200 border-l-neutral-500 text-neutral-800'
   };
 
   const selectedVariant = variants[variant] || variants.error;
 
   return (
-    <div role={variant === 'error' ? 'alert' : 'status'} className={`p-4 rounded-xl border font-body text-xs md:text-sm flex items-center justify-between shadow-2xs ${selectedVariant} ${className}`}>
+    <div role={variant === 'error' ? 'alert' : 'status'} className={`px-4 py-3 rounded-md border border-l-2 font-body text-sm flex items-center justify-between ${selectedVariant} ${className}`}>
       <div>{children || message}</div>
       {onClose && (
         <button 

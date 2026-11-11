@@ -115,7 +115,7 @@ const CustomDropdown = ({
       case 'warning':
         return 'bg-warning-100 text-warning-800 border border-warning-200/60';
       case 'neutral':
-        return 'bg-neutral-100 text-neutral-700 border border-neutral-200/60';
+        return 'bg-neutral-100 text-neutral-700 border border-neutral-200';
       case 'success':
       default:
         return 'bg-success-100 text-success-800 border border-success-200/60';
@@ -132,11 +132,11 @@ const CustomDropdown = ({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           onClick={toggleOpen}
-          className={`h-10 w-full min-w-0 flex items-center justify-between rounded-lg border px-3.5 text-[13px] font-body text-left transition-all focus:outline-none
+          className={`h-9 w-full min-w-0 flex items-center justify-between rounded-lg border px-3 text-sm font-body text-left transition-all focus:outline-none
             ${disabled ? 'bg-neutral-50 text-neutral-400 border-neutral-200 cursor-not-allowed' : isDark ? 'bg-neutral-800' : 'bg-white cursor-pointer'}
             ${error 
               ? 'border-danger-500 focus:border-danger-500' 
-              : isDark ? 'border-neutral-700' : 'border-neutral-200/90'
+              : isDark ? 'border-neutral-700' : 'border-neutral-300'
             }
             
             ${!selectedOption 
@@ -150,7 +150,7 @@ const CustomDropdown = ({
               {selectedOption ? selectedOption.label : placeholder}
             </span>
             {selectedOption?.badge && (
-              <span className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-bold ${getBadgeClasses(selectedOption.badgeVariant)}`}>
+              <span className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-semibold ${getBadgeClasses(selectedOption.badgeVariant)}`}>
                 {selectedOption.badge}
               </span>
             )}
@@ -167,11 +167,11 @@ const CustomDropdown = ({
 
         {/* Dropdown Menu */}
         {isOpen && !disabled && (
-          <div className={`absolute z-50 w-max min-w-full max-w-[360px] border rounded-lg shadow-card overflow-hidden animate-in fade-in duration-150
+          <div className={`absolute z-50 w-max min-w-full max-w-sm border rounded-3xl shadow-popover overflow-hidden animate-in fade-in duration-150
             ${openUp ? 'bottom-full mb-1.5 slide-in-from-bottom-1' : 'top-full mt-1.5 slide-in-from-top-1'}
-            ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200/80'}
+            ${isDark ? 'bg-neutral-800 border-neutral-700' : 'bg-white border-neutral-200'}
           `}>
-            <ul className="max-h-60 overflow-y-auto py-1 text-[13px] font-body [scrollbar-width:thin]">
+            <ul className="max-h-60 overflow-y-auto py-1 text-sm font-body [scrollbar-width:thin]">
               {normalizedOptions.length === 0 ? (
                 <li className={`px-3.5 py-2.5 text-center text-xs whitespace-nowrap ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>Tidak ada pilihan</li>
               ) : (
@@ -192,7 +192,7 @@ const CustomDropdown = ({
                       <div className="flex items-center justify-between gap-3 w-full">
                         <span className="truncate">{opt.label}</span>
                         {opt.badge && (
-                          <span className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-bold ${getBadgeClasses(opt.badgeVariant)}`}>
+                          <span className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-semibold ${getBadgeClasses(opt.badgeVariant)}`}>
                             {opt.badge}
                           </span>
                         )}

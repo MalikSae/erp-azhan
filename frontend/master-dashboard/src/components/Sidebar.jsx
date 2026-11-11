@@ -101,7 +101,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
   // dan grup tanpa item tidak ditampilkan. Penegakan sebenarnya ada di API.
   const allGroups = [
     {
-      name: 'JAMAAH & BOOKING',
+      name: 'Jamaah & Booking',
       items: [
         { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
         { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
@@ -110,7 +110,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     },
     {
       // Akun (orang yang bisa booking), agen (akun yang ikut program keagenan), dan komisinya.
-      name: 'AKUN & AGEN',
+      name: 'Akun & Agen',
       items: [
         // Satu menu per benda. `cocok` menentukan kapan menu aktif, karena alamat lama dipertahankan:
         // /agen/komisi milik menu Komisi, dan Ganti Kaitan (/komisi/ganti-kaitan) dibuka dari detail akun.
@@ -120,7 +120,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       ],
     },
     {
-      name: 'PAKET',
+      name: 'Paket',
       items: [
         { name: 'Kelola Paket', path: '/schedules', icon: Package, perm: 'schedule.view' },
         { name: 'Kelola Kategori', path: '/categories', icon: FolderTree, perm: 'masterdata.view' },
@@ -131,7 +131,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       ],
     },
     {
-      name: 'INVENTORY',
+      name: 'Inventory',
       items: [
         { name: 'Perlengkapan', path: '/inventory/perlengkapan', icon: Boxes, perm: 'perlengkapan.view' },
         { name: 'Riwayat Stok', path: '/inventory/riwayat-stok', icon: History, perm: 'perlengkapan.view' },
@@ -139,13 +139,13 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     },
     {
       // Pesan dari travel ke akun pelanggan (tampil di web publik), bukan data jamaah atau booking.
-      name: 'KOMUNIKASI',
+      name: 'Komunikasi',
       items: [
         { name: 'Pengumuman', path: '/pengumuman', icon: Megaphone, perm: 'pengumuman.manage' },
       ],
     },
     {
-      name: 'ADMINISTRASI',
+      name: 'Administrasi',
       items: [
         { name: 'Kelola Brand', path: '/brands', icon: Building2, perm: 'brand.edit' },
         { name: 'Pengguna', path: '/users', icon: UserCog, perm: 'user.admin' },
@@ -180,18 +180,18 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                 src={brandIconSrc}
                 alt={brandInfo?.name || ''}
                 onError={() => setBrandIconFailed(true)}
-                className="w-9 h-9 rounded-xl object-contain bg-white border border-neutral-200 shadow-sm"
+                className="w-9 h-9 rounded-xl object-contain bg-white border border-neutral-200"
               />
             ) : (
-              <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-sm">
+              <div className="w-9 h-9 rounded-xl bg-accent-500 flex items-center justify-center text-white">
                 <KaabaIcon className="w-5 h-5" />
               </div>
             )}
             <div>
-              <h1 className="text-base font-heading font-bold text-neutral-900 tracking-tight leading-none truncate max-w-36">
+              <h1 className="text-base font-heading font-semibold text-neutral-900 tracking-tight leading-none truncate max-w-36">
                 {isHolding ? 'Azhan Corp' : (brandInfo?.name || 'Azhan Corp')}
               </h1>
-              <p className="text-[11px] font-body text-sidebar-muted mt-1 font-medium">Office Dashboard</p>
+              <p className="text-xs font-body text-sidebar-muted mt-1 font-medium">Office Dashboard</p>
             </div>
           </div>
         </div>
@@ -205,10 +205,10 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
               end
               onClick={closeDrawer}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 text-[13px] transition-all rounded-lg ${
+                `flex items-center gap-3 px-3 py-2 text-sm transition-colors duration-100 rounded-md ${
                   isActive
-                    ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
-                    :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
+                    ? 'bg-sidebar-active text-sidebar-activeText font-medium'
+                    : 'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-normal'
                 }`
               }
             >
@@ -221,7 +221,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
           {menuGroups.map((group) => {
             return (
               <div key={group.name} className="space-y-0.5">
-                <div className="px-3.5 pt-2 pb-1 text-[10.5px] font-semibold text-neutral-400 uppercase tracking-[0.08em]">
+                <div className="px-3 pt-3 pb-1 text-sm text-sidebar-label">
                   {group.name}
                 </div>
 
@@ -243,13 +243,13 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                               o.path !== item.path && o.path.startsWith(`${item.path}/`)
                               && (location.pathname === o.path || location.pathname.startsWith(`${o.path}/`))));
                             if (isInactive) {
-                              return 'flex items-center justify-between px-3 py-1.5 text-[13px] transition-all rounded-lg text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
+                              return 'flex items-center justify-between px-3 py-1.5 text-sm transition-colors rounded-md text-neutral-500 hover:bg-sidebar-surface/50 hover:text-neutral-400 font-medium';
                             }
                             
-                            return `flex items-center justify-between px-3 py-2 text-[13px] transition-all rounded-lg ${
+                            return `flex items-center justify-between px-3 py-2 text-sm transition-colors duration-100 rounded-md ${
                               isActive
-                                ? 'bg-sidebar-active text-sidebar-activeText font-semibold'
-                                :'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-medium'
+                                ? 'bg-sidebar-active text-sidebar-activeText font-medium'
+                                : 'text-sidebar-muted hover:text-neutral-900 hover:bg-sidebar-hover font-normal'
                             }`;
                           }}
                         >
@@ -258,10 +258,10 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                             <span className="truncate">{item.name}</span>
                           </div>
                           {penanda[item.path]?.jumlah > 0 && (
-                            <span className="text-[10px] bg-warning-100 text-warning-800 px-1.5 py-0.5 rounded-full font-semibold" title={penanda[item.path].keterangan} aria-label={`${penanda[item.path].jumlah} ${penanda[item.path].keterangan}`}>{penanda[item.path].jumlah}</span>
+                            <span className="text-xs bg-warning-50 text-warning-800 border border-warning-200 px-1.5 py-0.5 rounded-sm font-medium tabular-nums" title={penanda[item.path].keterangan} aria-label={`${penanda[item.path].jumlah} ${penanda[item.path].keterangan}`}>{penanda[item.path].jumlah}</span>
                           )}
                           {isInactive && (
-                            <span className="text-[10px] bg-neutral-100 text-neutral-400 px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-xs bg-neutral-100 text-neutral-400 px-1.5 py-0.5 rounded font-mono">
                               Soon
                             </span>
                           )}

@@ -315,7 +315,7 @@ const BrandFormPage = () => {
 
   if (isLoadingDetail) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
+      <div className="flex justify-center items-center min-h-96">
         <LoadingSpinner size="lg" />
       </div>
     );

@@ -81,8 +81,8 @@ const Badge = ({ variant = 'draft', icon, showIcon = true, hideIcon = false, chi
     archived: 'bg-neutral-100 text-neutral-700 border border-neutral-200',
     neutral: 'bg-neutral-100 text-neutral-700 border border-neutral-200',
     
-    primary: 'bg-primary-100 text-primary-700 border border-primary-200 font-bold',
-    promo: 'bg-primary-100 text-primary-700 border border-primary-200 font-bold',
+    primary: 'bg-primary-50 text-primary-700 border border-primary-200',
+    promo: 'bg-accent-50 text-accent-700 border border-accent-100',
   };
 
   const selectedVariant = variants[variant] || variants.draft;
@@ -91,7 +91,7 @@ const Badge = ({ variant = 'draft', icon, showIcon = true, hideIcon = false, chi
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold font-heading tracking-wide ${selectedVariant} ${className}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading ${selectedVariant} ${className}`}
     >
       {isIconVisible && badgeIcon}
       <span>{children}</span>

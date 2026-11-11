@@ -12,21 +12,27 @@ const Button = ({
   icon,
   ...props
 }) => {
-  const baseClasses = 'inline-flex items-center justify-center font-heading font-semibold focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all duration-150 ease-in-out select-none';
-  
+  // Gaya dash.cloudflare.com (DESIGN.md): radius 8px; primer oranye bergradien
+  // dengan border lebih tua, kilap tepi atas, bayangan lembut. Fokus cincin 2px primary-500.
+  const baseClasses = 'inline-flex items-center justify-center font-heading font-medium rounded-2xl border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 transition-colors duration-100 select-none';
+
   const variantClasses = {
-    primary: 'bg-primary-500 hover:bg-primary-600 text-white border border-primary-500 shadow-2xs hover:shadow-xs focus:ring-primary-500 active:scale-[0.98]',
-    dark: 'bg-neutral-800 hover:bg-neutral-700 text-white shadow-2xs hover:shadow-xs focus:ring-neutral-700 active:scale-[0.98]',
-    secondary: 'bg-white hover:bg-neutral-50 text-neutral-800 border border-neutral-200 shadow-2xs hover:border-neutral-300 focus:ring-neutral-200 active:scale-[0.98]',
-    danger: 'bg-danger-600 hover:bg-danger-700 text-white border border-danger-600 shadow-2xs hover:shadow-xs focus:ring-danger-500 active:scale-[0.98]',
-    'danger-light': 'bg-danger-50 hover:bg-danger-100 text-danger-700 border border-danger-200 focus:ring-danger-200 active:scale-[0.98]',
-    ghost: 'bg-transparent hover:bg-neutral-100 text-neutral-700 focus:ring-neutral-200 active:scale-[0.98]'
+    primary: 'bg-accent-500 bg-btn-primary hover:bg-btn-primary-hover text-white border-accent-600 shadow-btn-primary',
+    dark: 'bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-800',
+    secondary: 'bg-white hover:bg-neutral-50 text-neutral-800 border-neutral-200 hover:border-neutral-300 shadow-btn-secondary',
+    danger: 'bg-danger-600 hover:bg-danger-700 text-white border-danger-600',
+    'danger-light': 'bg-danger-50 hover:bg-danger-100 text-danger-700 border-danger-200',
+    // Hapus baris di form (ikon sampah di kanan baris): putih, teks merah.
+    'danger-outline': 'bg-white hover:bg-danger-50 text-danger-600 hover:text-danger-700 border-neutral-200 shadow-btn-secondary',
+    // "+ Tambah …" selebar penuh di bawah daftar baris (lihat design-system.md).
+    dashed: 'bg-white hover:bg-neutral-50 text-neutral-600 hover:text-neutral-900 border-dashed border-neutral-300 hover:border-neutral-400',
+    ghost: 'bg-transparent hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900 border-transparent'
   };
 
   const sizeClasses = {
-    sm: 'px-3 py-1.5 text-xs rounded-lg gap-1.5',
-    md: 'px-4 py-2 text-xs md:text-sm rounded-xl gap-2',
-    lg: 'px-5 py-2.5 text-sm md:text-base rounded-xl gap-2.5 font-bold'
+    sm: 'h-8 px-2.5 text-xs gap-1.5',
+    md: 'h-9 px-3 text-sm gap-2',
+    lg: 'h-10 px-4 text-sm gap-2 font-semibold'
   };
 
   const isDisabled = disabled || isLoading;

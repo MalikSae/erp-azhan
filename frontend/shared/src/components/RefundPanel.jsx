@@ -95,7 +95,7 @@ const RefundPanel = ({ booking, onRecorded }) => {
         </div>
 
         {items.length > 0 && (
-          <div className="divide-y divide-neutral-200/80 pt-4 mt-4 border-t border-neutral-200/80">
+          <div className="divide-y divide-neutral-200 pt-4 mt-4 border-t border-neutral-200">
             {items.map((rf) => (
               <div key={rf.id} className="py-2.5 flex flex-wrap items-start justify-between gap-2">
                 <div>

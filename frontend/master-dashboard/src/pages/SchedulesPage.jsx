@@ -293,12 +293,12 @@ const SchedulesPage = () => {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); navigate(`/schedules/${row.id}`); }}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+            className="font-body font-medium text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
             title="Lihat Detail Paket"
           >
             {row.jadwal_nama}
           </button>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-body text-neutral-500 min-w-0">
+          <div className="mt-0.5 flex items-center gap-1.5 text-xs font-body text-neutral-500 min-w-0">
             {brand && (
               <span className="inline-flex items-center gap-1.5 shrink-0 font-medium text-neutral-700">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: brand.primary_color || '#9CA3AF' }} />
@@ -315,15 +315,15 @@ const SchedulesPage = () => {
       const days = getDaysRemaining(row.berangkat_tanggal);
       return (
         <div>
-          <div className="flex items-center gap-1.5 text-[13px] leading-snug font-body text-neutral-700 whitespace-nowrap">
+          <div className="flex items-center gap-1.5 text-sm leading-snug font-body text-neutral-700 whitespace-nowrap">
             <CalendarDays className="w-3.5 h-3.5 text-neutral-400" strokeWidth={1.75} />
             {formatDate(row.berangkat_tanggal)}
           </div>
           {isScheduleDeparted(row) ? (
-            <div className="mt-0.5 text-[11px] font-body text-neutral-400">Sudah berangkat</div>
+            <div className="mt-0.5 text-xs font-body text-neutral-400">Sudah berangkat</div>
           ) : days !== null && days >= 0 ? (
             <div
-              className={`mt-0.5 text-[11px] font-body ${isScheduleUrgent(row) ? 'text-danger-600 font-medium' : 'text-neutral-400'}`}
+              className={`mt-0.5 text-xs font-body ${isScheduleUrgent(row) ? 'text-danger-600 font-medium' : 'text-neutral-400'}`}
               title={isScheduleUrgent(row) ? 'Mendekati keberangkatan & belum penuh' : undefined}
             >
               {days} hari lagi
@@ -341,7 +341,7 @@ const SchedulesPage = () => {
       if (sisa === null) return <span className="text-xs text-neutral-400 font-body">-</span>;
       if (sisa <= 0) {
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-heading tracking-wide uppercase bg-neutral-900 text-white">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-heading bg-neutral-900 text-white">
             Penuh
           </span>
         );
@@ -349,11 +349,11 @@ const SchedulesPage = () => {
       const filled = Math.max(0, total - sisa);
       const urgent = isScheduleUrgent(row);
       return (
-        <div className="min-w-[120px]" title={urgent ? 'Mendekati keberangkatan dan masih banyak seat kosong' : undefined}>
-          <div className="text-[13px] font-body text-neutral-700 leading-snug whitespace-nowrap">
+        <div className="min-w-32" title={urgent ? 'Mendekati keberangkatan dan masih banyak seat kosong' : undefined}>
+          <div className="text-sm font-body text-neutral-700 leading-snug whitespace-nowrap">
             <span className="font-semibold text-neutral-900">{filled}</span> dari {total} terisi
           </div>
-          <div className={`mt-0.5 text-[11px] font-body ${urgent ? 'text-danger-600 font-medium' : 'text-neutral-400'}`}>
+          <div className={`mt-0.5 text-xs font-body ${urgent ? 'text-danger-600 font-medium' : 'text-neutral-400'}`}>
             {urgent ? `Mendesak · ${sisa} seat kosong` : `${sisa} seat kosong`}
           </div>
         </div>
@@ -363,7 +363,7 @@ const SchedulesPage = () => {
     if (key === 'harga') {
       const minPrice = getMinPrice(row);
       if (minPrice <= 0) return <span className="text-xs text-neutral-400 font-body">-</span>;
-      return <span className="text-[13px] font-semibold text-neutral-900 font-body whitespace-nowrap">{formatCurrency(minPrice)}</span>;
+      return <span className="text-sm font-semibold text-neutral-900 font-body whitespace-nowrap">{formatCurrency(minPrice)}</span>;
     }
 
     if (key === 'aksi') {
@@ -410,7 +410,7 @@ const SchedulesPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : (
         <DataTable
           columns={columns}
@@ -482,7 +482,7 @@ const SchedulesPage = () => {
 
           <div className="bg-neutral-100 border border-neutral-200 rounded-md p-3 text-center">
             <span className="text-xs text-neutral-500 block mb-1">Kode Konfirmasi:</span>
-            <span className="font-mono text-xl font-bold tracking-widest text-neutral-800 select-all">
+            <span className="font-mono text-xl font-semibold tracking-widest text-neutral-800 select-all">
               {confirmCode}
             </span>
           </div>

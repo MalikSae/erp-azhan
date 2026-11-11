@@ -19,7 +19,7 @@ import React, { Children, isValidElement, useEffect, useRef, useState } from 're
 export const FormSection = ({ id, title, aside, children }) => (
   <section id={id} className="scroll-mt-16 px-5 py-6 sm:px-6">
     <div className="mb-5 flex items-center justify-between gap-3">
-      <h3 className="font-heading text-base font-bold text-neutral-900">{title}</h3>
+      <h3 className="font-heading text-base font-semibold text-neutral-900">{title}</h3>
       {aside}
     </div>
     <div className="min-w-0">{children}</div>
@@ -29,7 +29,7 @@ export const FormSection = ({ id, title, aside, children }) => (
 // Satu bagian di sidebar.
 export const SidebarSection = ({ title, children }) => (
   <section className="p-4">
-    {title && <h3 className="mb-3 font-heading text-[13px] font-bold text-neutral-900">{title}</h3>}
+    {title && <h3 className="mb-3 font-heading text-sm font-semibold text-neutral-900">{title}</h3>}
     {children}
   </section>
 );
@@ -75,7 +75,7 @@ const FormLayout = ({ tabs = [], children }) => {
       <div className="min-w-0">
         {tabs.length > 0 && (
           <nav className="sticky -top-6 z-10 -mx-1 bg-page-bg px-1 pb-3 pt-2.5 md:-top-8">
-            <div className="inline-flex max-w-full flex-wrap gap-1 rounded-xl bg-neutral-200/60 p-1">
+            <div className="inline-flex max-w-full flex-wrap gap-1 rounded-md border border-neutral-200 bg-neutral-100 p-0.5">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
@@ -87,7 +87,7 @@ const FormLayout = ({ tabs = [], children }) => {
                   }}
                   className={`cursor-pointer rounded-lg px-3 py-1.5 font-body text-xs font-semibold transition-colors ${
                     activeTab === tab.id
-                      ? 'bg-white text-primary-600 shadow-sm'
+                      ? 'bg-white text-neutral-900 shadow-popover'
                       : 'text-neutral-600 hover:text-neutral-900'
                   }`}
                 >
@@ -139,9 +139,9 @@ export const FormTabs = ({ tabs = [], children }) => {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               aria-current={activeTab === tab.id ? 'page' : undefined}
-              className={`shrink-0 cursor-pointer rounded-lg px-3 py-2 text-left font-body text-[13px] font-semibold transition-colors ${
+              className={`shrink-0 cursor-pointer rounded-lg px-3 py-2 text-left font-body text-sm font-semibold transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-white text-primary-600 shadow-sm ring-1 ring-neutral-200'
+                  ? 'bg-white text-neutral-900 ring-1 ring-neutral-200'
                   : 'text-neutral-600 hover:bg-neutral-200/50 hover:text-neutral-900'
               }`}
             >

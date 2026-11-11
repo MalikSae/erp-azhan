@@ -234,7 +234,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
       return (
         <div className="min-w-0">
           <div className="font-heading font-semibold text-neutral-900 leading-snug">{row.nama_jamaah || "-"}</div>
-          <div className="mt-0.5 text-[11px] font-body text-neutral-400">
+          <div className="mt-0.5 text-xs font-body text-neutral-400">
             <span className={row.id_booking ? "font-mono" : ""}>{idLabel}</span> · {formatPaxDetail(row)}
           </div>
         </div>
@@ -246,8 +246,8 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
     if (key === "jadwal_nama") {
       return (
         <div className="min-w-0">
-          <div className="text-[13px] font-body font-medium text-neutral-800">{row.jadwal_nama || "-"}</div>
-          <div className="mt-0.5 text-[11px] font-body text-neutral-400">
+          <div className="text-sm font-body font-medium text-neutral-800">{row.jadwal_nama || "-"}</div>
+          <div className="mt-0.5 text-xs font-body text-neutral-400">
             {formatTanggal(row.berangkat_tanggal)}
           </div>
         </div>
@@ -257,9 +257,9 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
     if (key === "total_harga") {
       return (
         <div className="min-w-0 whitespace-nowrap">
-          <div className="text-[13px] font-body font-semibold text-neutral-900">{formatRupiah(row.total_harga)}</div>
+          <div className="text-sm font-body font-semibold text-neutral-900">{formatRupiah(row.total_harga)}</div>
           {row.total_dibayar > 0 && (
-            <div className="mt-0.5 text-[11px] font-body text-neutral-400">Dibayar {formatRupiah(row.total_dibayar)}</div>
+            <div className="mt-0.5 text-xs font-body text-neutral-400">Dibayar {formatRupiah(row.total_dibayar)}</div>
           )}
         </div>
       );
@@ -269,7 +269,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
       return (
         <div>
           <StatusPill status={row.status} />
-          {row.perlu_refund && <div className="mt-1 text-[11px] font-body text-warning-700">Perlu refund</div>}
+          {row.perlu_refund && <div className="mt-1 text-xs font-body text-warning-700">Perlu refund</div>}
         </div>
       );
     }
@@ -320,7 +320,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
       )}
 
       {loading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200">
           <LoadingSpinner />
         </div>
       ) : (

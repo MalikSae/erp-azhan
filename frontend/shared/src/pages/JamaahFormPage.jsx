@@ -472,7 +472,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                     error={brandError}
                     disabled={isEdit}
                   />
-                  <p className="text-[11px] text-neutral-400 font-body">
+                  <p className="text-xs text-neutral-400 font-body">
                     Data jamaah akan terdaftar dan dikelola di bawah unit biro travel yang dipilih.
                   </p>
                 </div>
@@ -490,7 +490,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                     brandRequired={showBrandColumn}
                     error={kaitanError}
                   />
-                  <p className="text-[11px] text-neutral-400 font-body">
+                  <p className="text-xs text-neutral-400 font-body">
                     Agen yang membawa jamaah ini menerima komisinya. Pilihan ini tidak bisa diubah dari form edit.
                   </p>
                 </div>
@@ -508,7 +508,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   rows={4} 
                   placeholder="Catatan riwayat medis, penyakit kronis, kebutuhan kursi roda, atau permintaan khusus kamar..." 
                 />
-                <p className="text-[11px] text-neutral-400 font-body mt-1.5">
+                <p className="text-xs text-neutral-400 font-body mt-1.5">
                   Hanya dapat dilihat oleh petugas internal biro travel.
                 </p>
               </div>

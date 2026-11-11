@@ -7,7 +7,7 @@ import Button from '../components/ui/Button';
 export default function NotFoundPage() {
   const navigate = useNavigate();
   return (
-    <div className="flex flex-col items-center justify-center py-24 px-4 text-center bg-white rounded-2xl border border-neutral-200 shadow-card">
+    <div className="flex flex-col items-center justify-center py-24 px-4 text-center bg-white rounded-2xl border border-neutral-200">
       <div className="w-14 h-14 rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center mb-4">
         <SearchX className="w-7 h-7" strokeWidth={1.75} />
       </div>

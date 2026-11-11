@@ -20,7 +20,7 @@ const Toggle = ({ id, name, checked, onChange, disabled }) => {
           w-10 h-6 bg-neutral-300 rounded-full peer 
           peer-focus:ring-2 peer-focus:ring-primary-300 
           peer-checked:after:translate-x-4 peer-checked:after:border-white 
-          after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+          after:content-[''] after:absolute after:top-0.5 after:left-0.5 
           after:bg-white after:border-neutral-300 after:border after:rounded-full 
           after:h-5 after:w-5 after:transition-all 
           peer-checked:bg-primary-600

@@ -11,6 +11,7 @@ import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import StatTile from 'shared/ui/StatTile';
 import ActionMenu from 'shared/ui/ActionMenu';
+import SegmentedTabs from 'shared/ui/SegmentedTabs';
 import { AuthContext } from '../context/AuthContext';
 import { listAdminUsers, setAdminUserStatus, resetAdminUserPassword } from '../api/adminUsers';
 import { listRoles } from '../api/roles';
@@ -150,7 +151,7 @@ const PenggunaPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : (
         <DataTable
           columns={columns}
@@ -159,32 +160,23 @@ const PenggunaPage = () => {
           searchPlaceholder="Cari nama, email, role, atau tim..."
           emptyMessage={filter === 'nonaktif' ? 'Tidak ada pengguna nonaktif.' : 'Belum ada pengguna.'}
           toolbarActions={(
-            <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-0.5">
-              {FILTERS.map(f => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setFilter(f.value)}
-                  className={`px-3 py-1.5 text-xs font-medium font-body rounded-md transition-colors ${
-                    filter === f.value ? 'bg-primary-500 text-white' : 'text-neutral-600 hover:bg-neutral-50'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+            <SegmentedTabs
+              tabs={FILTERS.map((f) => ({ id: f.value, label: f.label }))}
+              value={filter}
+              onChange={setFilter}
+            />
           )}
           renderCell={(row, key) => {
             if (key === 'display_name') {
               return (
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => navigate(`/users/${row.id}`)} className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left">
+                    <button type="button" onClick={() => navigate(`/users/${row.id}`)} className="font-body font-medium text-neutral-900 hover:text-primary-600 text-left">
                       {row.display_name}
                     </button>
-                    {isSelf(row) && <span className="text-[11px] font-body text-neutral-400">(Anda)</span>}
+                    {isSelf(row) && <span className="text-xs font-body text-neutral-400">(Anda)</span>}
                   </div>
-                  <div className="text-[11px] font-body text-neutral-400 truncate">
+                  <div className="text-xs font-body text-neutral-400 truncate">
                     {row.jabatan ? `${row.jabatan} · ` : ''}{row.email}
                   </div>
                 </div>
@@ -195,7 +187,7 @@ const PenggunaPage = () => {
               const list = row.roles || [];
               if (list.length === 0) return <span className="text-xs text-neutral-400 font-body">—</span>;
               return (
-                <span className="block max-w-[220px] text-[13px] font-body text-neutral-700">
+                <span className="block max-w-56 text-sm font-body text-neutral-700">
                   {list.map(roleName).join(', ')}
                 </span>
               );
@@ -204,11 +196,11 @@ const PenggunaPage = () => {
               const list = row.keanggotaan || [];
               if (list.length === 0) return <span className="text-xs text-neutral-400 font-body">—</span>;
               return (
-                <div className="max-w-[240px] space-y-0.5 text-[13px] font-body text-neutral-700">
+                <div className="max-w-60 space-y-0.5 text-sm font-body text-neutral-700">
                   {list.map(k => (
                     <div key={k.org_unit_id}>
                       {k.unit_nama}
-                      {k.posisi === 'pemimpin' && <span className="text-[11px] text-neutral-400"> · Pemimpin</span>}
+                      {k.posisi === 'pemimpin' && <span className="text-xs text-neutral-400"> · Pemimpin</span>}
                     </div>
                   ))}
                 </div>

@@ -20,7 +20,7 @@ const ColorCell = ({ color }) => {
         className="w-4 h-4 rounded-full border border-neutral-200 shrink-0"
         style={{ backgroundColor: color }}
       />
-      <span className="text-[12px] font-mono uppercase text-neutral-600">{color}</span>
+      <span className="text-xs font-mono uppercase text-neutral-600">{color}</span>
     </div>
   );
 };
@@ -96,11 +96,11 @@ const BrandsPage = () => {
             <button
               type="button"
               onClick={() => navigate(`/brands/${row.id}/edit`)}
-              className="font-heading font-semibold text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
+              className="font-body font-medium text-neutral-900 hover:text-primary-600 text-left leading-snug transition-colors"
             >
               {row.name}
             </button>
-            <div className="text-[11px] font-body text-neutral-400">
+            <div className="text-xs font-body text-neutral-400">
               Kode <span className="font-mono">{row.kode_brand || '-'}</span>
             </div>
           </div>
@@ -109,7 +109,7 @@ const BrandsPage = () => {
     }
     if (key === 'domain') {
       return row.domain
-        ? <span className="text-[13px] font-mono text-neutral-700">{row.domain}</span>
+        ? <span className="text-sm font-mono text-neutral-700">{row.domain}</span>
         : <span className="text-xs text-neutral-400 font-body">-</span>;
     }
     if (key === 'primary_color') return <ColorCell color={row.primary_color} />;
@@ -140,7 +140,7 @@ const BrandsPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card">
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200">
           <LoadingSpinner />
         </div>
       ) : (

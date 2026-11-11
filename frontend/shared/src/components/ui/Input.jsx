@@ -8,7 +8,7 @@ const Input = ({ label, type = 'text', value, onChange, error, required, placeho
   const isPasswordField = type === 'password';
   const inputType = isPasswordField && showPassword ? 'text' : type;
 
-  const inputBaseClasses = 'h-10 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body transition-all';
+  const inputBaseClasses = 'h-9 w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body transition-all';
   const disabledClasses = disabled || readOnly ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : '';
   const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20' : '';
   const paddingRightClass = isPasswordField ? 'pr-10' : '';

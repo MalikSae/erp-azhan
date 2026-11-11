@@ -22,7 +22,7 @@ const STATUS = {
 // Urutan saat kolom Status diklik: yang butuh perhatian dulu.
 const URUT_STATUS = { pengajuan: 0, aktif: 1, nonaktif: 2 };
 
-const kosong = <span className="text-[13px] text-neutral-400">-</span>;
+const kosong = <span className="text-sm text-neutral-400">-</span>;
 
 // Keadaan biaya pendaftaran satu pengajuan, untuk kolom Biaya Pendaftaran.
 function keadaanBiaya(p) {
@@ -123,40 +123,40 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
     if (key === 'nama_lengkap') {
       return (
         <div className="min-w-0">
-          <Link to={`/agen/${row.akun_id}`} onClick={(e) => e.stopPropagation()} className="font-heading font-semibold text-neutral-900 leading-snug hover:text-primary-600 transition-colors">{row.nama_lengkap}</Link>
-          <div className="text-[11px] font-mono text-neutral-400">{row.keterangan}</div>
+          <Link to={`/agen/${row.akun_id}`} onClick={(e) => e.stopPropagation()} className="font-body font-medium text-neutral-900 leading-snug hover:text-primary-600 transition-colors">{row.nama_lengkap}</Link>
+          <div className="text-xs font-mono text-neutral-400">{row.keterangan}</div>
         </div>
       );
     }
     if (key === 'brand_name') return <BrandLabel name={brandsMap[row.brand_id]?.name || row.brand_name || '-'} color={brandsMap[row.brand_id]?.primary_color} />;
-    if (key === 'upline_nama') return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.upline_nama || '-'}</span>;
+    if (key === 'upline_nama') return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.upline_nama || '-'}</span>;
     if (key === 'status_agen') {
       const s = STATUS[row.status_agen] || { label: row.status_agen || '-', dot: 'bg-neutral-300', text: 'text-neutral-500' };
       return (
         <div>
-          <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${s.text}`}>
+          <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${s.text}`}>
             <span className={`w-2 h-2 rounded-full ${s.dot}`} />{s.label}
           </span>
-          {row.periksa_nik && <div className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-warning-700 whitespace-nowrap"><TriangleAlert size={12} />Periksa NIK</div>}
+          {row.periksa_nik && <div className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-warning-700 whitespace-nowrap"><TriangleAlert size={12} />Periksa NIK</div>}
         </div>
       );
     }
-    if (key === 'diajukan_agen_at') return <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{dateLabel(row.diajukan_agen_at)}</span>;
+    if (key === 'diajukan_agen_at') return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{dateLabel(row.diajukan_agen_at)}</span>;
     if (key === 'biaya') {
-      if (!row.biaya) return <span className="text-[13px] font-body text-neutral-500 whitespace-nowrap">Tanpa biaya</span>;
+      if (!row.biaya) return <span className="text-sm font-body text-neutral-500 whitespace-nowrap">Tanpa biaya</span>;
       return (
         <div>
-          <div className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.biaya)}</div>
+          <div className="text-sm font-body font-semibold text-neutral-900 whitespace-nowrap">{money(row.biaya)}</div>
           {row.biaya_keadaan && (
-            <span className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-body text-neutral-500 whitespace-nowrap">
+            <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-body text-neutral-500 whitespace-nowrap">
               <span className={`w-1.5 h-1.5 rounded-full ${row.biaya_keadaan.dot}`} />{row.biaya_keadaan.label}
             </span>
           )}
         </div>
       );
     }
-    if (key === 'pax_closing') return row.pax_closing == null ? kosong : <span className="text-[13px] font-body text-neutral-700 whitespace-nowrap">{row.pax_closing > 0 ? `${row.pax_closing} pax` : '-'}</span>;
-    if (key === 'total_komisi') return row.total_komisi == null ? kosong : <span className="text-[13px] font-body font-semibold text-neutral-900 whitespace-nowrap">{Number(row.total_komisi) > 0 ? money(row.total_komisi) : '-'}</span>;
+    if (key === 'pax_closing') return row.pax_closing == null ? kosong : <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.pax_closing > 0 ? `${row.pax_closing} pax` : '-'}</span>;
+    if (key === 'total_komisi') return row.total_komisi == null ? kosong : <span className="text-sm font-body font-semibold text-neutral-900 whitespace-nowrap">{Number(row.total_komisi) > 0 ? money(row.total_komisi) : '-'}</span>;
     return row[key] ?? '-';
   };
 

@@ -4,7 +4,7 @@ trigger: always_on
 
 # Design System — ERP Azhan Grup (Frontend Internal)
 
-> Berlaku untuk Office Dashboard, CRM Dashboard (semua dashboard internal React+Vite+Tailwind). Sumber kebenaran teknis ada di `tailwind.config.js` — dokumen ini adalah penjelasannya dalam bahasa manusia.
+> Berlaku untuk semua dashboard internal (React+Vite+Tailwind). Arah visual: gaya dash.cloudflare.com (hampir monokrom), lihat `DESIGN.md` di root repo (token lengkap, rasio kontras, log keputusan). Sumber kebenaran teknis: `frontend/shared/tailwind-preset.js` dan `frontend/shared/src/corner-radius.css`. Dokumen ini aturan kerjanya.
 
 ---
 
@@ -12,6 +12,8 @@ trigger: always_on
 
 **Dilarang keras hardcode UI.** Artinya:
 - Tidak ada `bg-[#123456]`, `text-[15px]`, `style={{color: '...'}}`, atau nilai Tailwind arbitrary (`w-[327px]`) di JSX manapun
+  - Pengecualian nilai arbitrary yang sah (tidak ada padanan di skala Tailwind): tinggi berbasis viewport (`max-h-[70vh]`), `calc(...)`, template grid berkolom tetap (`lg:grid-cols-[minmax(0,1fr)_320px]`), lebar minimum tabel lebar (`min-w-[880px]`), dan posisi presisi titik timeline. Selain itu pakai skala terdekat (`w-8`, `max-w-sm`, `min-w-40`).
+  - Inline `style` hanya untuk nilai dari data (warna brand dari database, lebar progress bar) atau posisi hitungan JS (tooltip, menu mengambang).
 - Tidak ada warna/spacing/font-size yang ditulis langsung — semua HARUS lewat token di `tailwind.config.js` atau komponen di `src/components/ui/`
 - Kalau butuh komponen yang belum ada di design system → **tambahkan dulu ke `components/ui/`**, baru dipakai. Jangan tulis markup styled one-off langsung di halaman
 
@@ -19,67 +21,76 @@ trigger: always_on
 
 ## 2. Warna (Color Tokens)
 
-**Office Dashboard (holding Azhan Grup)** memakai palet **Onyx & Champagne Gold di atas gading**: tombol utama onyx, emas hanya aksen (menu aktif, logo, garis tipis), latar gading hangat. Warna keempat brand (Zahara, Nava, Alsha, Hana) hanya dipakai untuk data (grafik per brand), bukan tombol/navigasi.
+Gaya dash.cloudflare.com: **hampir monokrom**. Latar halaman, sidebar, dan topbar putih; pemisah garis 1px `neutral-200`; teks hitam lembut. Satu-satunya warna yang muncul di layar kerja adalah warna status. Warna brand travel (Zahara, Nava, Alsha, Hana) hanya untuk data (grafik per brand), bukan tombol/navigasi.
 
-Aturan kontras: teks/ikon di latar terang memakai `primary-600` ke atas (≥ 4.5:1 vs putih); `primary-50`–`500` hanya untuk latar/isi dengan teks onyx di atasnya.
+**`primary` adalah skala abu-hitam, bukan oranye.** Menu aktif latar abu, fokus abu gelap. Oranye Cloudflare ada di token `accent` dan **hanya** untuk tombol primer (gradien `bg-btn-primary` + `shadow-btn-primary`, lewat komponen `Button`), logo, banner promo, dan seri grafik utama. Teks putih di oranye tombol hanya 2.5–2.9:1 (gagal AA, diterima demi meniru Cloudflare, lihat DESIGN.md Decisions); di luar komponen `Button` jangan taruh teks putih di `accent-*`. Teks oranye di latar putih memakai `accent-700`.
 
-### 2.1 Token Sidebar & Navigasi Gelap (Master)
+### 2.1 Token Sidebar
 | Token | Hex | Pemakaian |
 |---|---|---|
-| `sidebar.bg` | `#16181B` | Background sidebar utama (onyx) |
-| `sidebar.surface` | `#1F2226` | Permukaan card/grup dalam sidebar |
-| `sidebar.hover` | `#26292E` | Hover item menu sidebar |
-| `sidebar.border` | `#2A2D31` | Border pemisah pada sidebar gelap |
-| `sidebar.active` | champagne 14% | Latar menu aktif (tint emas tipis) |
-| `sidebar.activeText` | `#D9C392` | Teks menu aktif |
-| `sidebar.muted` | `#A8A49C` | Teks/label grup menu yang tidak aktif |
+| `sidebar.bg` | `#FFFFFF` | Background sidebar (putih, border kanan) |
+| `sidebar.hover` | `#F5F5F5` | Hover item menu |
+| `sidebar.border` | `#E5E5E5` | Border pemisah |
+| `sidebar.active` | `#F0F0F0` | Latar menu aktif (tanpa garis warna) |
+| `sidebar.activeText` | `#171717` | Teks menu aktif (weight 500) |
+| `sidebar.muted` | `#404040` | Teks menu tidak aktif |
+| `sidebar.label` | `#737373` | Label grup menu (`text-sm`, bukan kapital) |
 
-### 2.2 Token Brand & Status (Master)
+### 2.2 Token Warna & Status
 | Token | Hex | Pemakaian |
 |---|---|---|
-| `primary-50` | `#FAF7EF` | Latar highlight lembut |
-| `primary-100` / `accent-gold-light` | `#F3ECDC` | Latar badge/tint champagne |
-| `primary-500` / `accent-gold` | `#C4A062` | **Champagne gold** — aksen, logo, menu aktif |
-| `primary-600` | `#8C6D2F` | Teks/ikon emas di latar terang (4.8:1) |
-| `primary-700` | `#735826` | Emas tua: teks & link (6.7:1) |
-| `brand-dark` | `#16181B` | Onyx — tombol utama, teks kontras |
-| `brand-ivory` | `#F7F5F0` | Teks di atas tombol onyx |
-| `neutral-*` | skala stone | Netral hangat (`neutral-500` `#78716C` untuk caption) |
-| `page.bg` | `#F7F5F0` | Background halaman (gading) |
+| `primary-50` / `100` | `#F7F7F7` / `#F0F0F0` | Baris terpilih, latar aktif |
+| `primary-500` | `#404040` | Ikon aktif, cincin fokus, border field fokus |
+| `primary-600` | `#262626` | Tombol gelap (`variant="dark"`), teks putih 15:1 |
+| `primary-700` | `#171717` | Hover tombol primer, teks link (bergaris bawah) |
+| `accent-400` → `accent-500` | `#FF8130` → `#FF6A00` | Gradien tombol primer (border `accent-600` `#E25A00`); juga logo, promo, grafik |
+| `neutral-*` | abu netral murni | `800` teks utama, `600` teks sekunder, `500` label & caption, `200` garis |
+| `page.bg` | `#FFFFFF` | Background halaman |
 | `success-*` | skala hijau | Badge "published" / "terverifikasi", pesan sukses |
-| `warning-*` | skala kuning-emas | Badge "draft" / "perlu review" / "pending" |
+| `warning-*` | skala kuning | Badge "draft" / "perlu review" / "pending" |
 | `danger-*` | skala merah | Error, tombol delete, validasi gagal, batal |
 
 ---
 
 ## 3. Tipografi
 
+Dua font, peran tetap. Dimuat dari Google Fonts di `master-dashboard/index.html`.
+
 | Token | Font | Pemakaian |
 |---|---|---|
-| `font-heading` | DM Sans | Judul halaman, judul card, label sidebar |
-| `font-body` | DM Sans | Body text, input, tabel, paragraf |
+| `font-heading` | **Inter** (400–700) | Judul halaman, judul section/kartu, angka statistik, tombol, badge |
+| `font-body` | **Roboto** (400–700) | Teks isi: body, tabel, field, label form, menu sidebar, caption, tooltip grafik. Default `body`. |
+| `font-mono` | ui-monospace | Kode booking, nomor invoice, kode referral (`font-mono text-xs`) |
 
-Satu keluarga font (DM Sans) dipakai untuk heading maupun body — dibedakan lewat weight (mis. `font-semibold`/`font-bold` untuk heading, `font-normal`/`font-medium` untuk body), bukan font-family berbeda.
+Aturan:
+- Hierarki dari **ukuran dan warna abu**, bukan dari tebal huruf. Weight maksimal `font-semibold` (600); **jangan** `font-bold`/`font-extrabold`.
+- Angka di tabel, nominal rupiah, dan stat tile memakai `tabular-nums`.
+- Header tabel dan label sentence case, bukan huruf kapital semua (`uppercase` dilarang kecuali kode hex/inisial avatar).
+- Hanya skala Tailwind standar. Tidak ada `text-[13px]` atau ukuran arbitrary lain.
 
-Skala ukuran (dipetakan ke Tailwind text-* standar, tidak ada ukuran custom):
-- `text-xs` — label kecil, caption
-- `text-sm` — body default di tabel/form
-- `text-base` — body default halaman
-- `text-lg` — subjudul
-- `text-2xl` — judul halaman (PageHeader)
+| Elemen | Kelas |
+|---|---|
+| Judul halaman (`PageHeader`) | `font-heading text-lg md:text-xl font-semibold tracking-tight` |
+| Judul section / kartu ("Analitik") | `font-heading text-base md:text-lg font-semibold` |
+| Judul blok daftar ("Keberangkatan terdekat 50 >") | `font-body text-sm text-neutral-500` |
+| Angka statistik | `font-heading text-2xl md:text-3xl font-semibold tracking-tight tabular-nums` |
+| Body, tabel, field, item menu | `font-body text-sm` (item menu aktif `font-medium`) |
+| Label grup sidebar | `font-body text-sm text-sidebar-label` |
+| Header tabel (`<thead>` di `Table`) | `font-body text-xs font-medium text-neutral-500` (`<th>` mewarisi weight dari `<thead>`, lihat `index.css`) |
+| Nama baris yang bisa diklik di tabel | `font-body font-medium text-neutral-900 hover:text-primary-600` — isi, bukan judul; jangan `font-heading` |
+| Caption, keterangan | `font-body text-xs text-neutral-500` |
+| Tombol, badge | `font-heading font-medium` (lewat komponen `Button`/`Badge`) |
 
 ### 3.1 Scaling per breakpoint (WAJIB — lihat AGENTS.md bagian Responsivitas)
 
-Ukuran di atas adalah nilai **desktop (≥768px)**. Di mobile, turunkan 1 step Tailwind untuk elemen besar (judul, PageHeader) supaya proporsional — body text kecil (`text-sm`, `text-xs`) boleh tetap sama di semua breakpoint karena sudah cukup kecil:
+Elemen besar turun satu step di mobile (<768px); teks `text-sm`/`text-xs` sama di semua breakpoint:
 
-| Elemen | Mobile (default, <768px) | Desktop (`md:` ke atas) |
+| Elemen | Mobile (default) | Desktop (`md:` ke atas) |
 |---|---|---|
-| Judul halaman (PageHeader) | `text-xl` | `md:text-2xl` |
-| Judul MetaBox/Card | `text-sm` | tetap `text-sm` (sudah kecil) |
-| Input judul besar (kalau ada) | `text-xl` | `md:text-2xl lg:text-3xl` |
+| Judul halaman | `text-lg` | `md:text-xl` |
+| Judul section | `text-base` | `md:text-lg` |
+| Angka statistik | `text-2xl` | `md:text-3xl` |
 | Body/label form | `text-sm` | tetap `text-sm` |
-
-Contoh pemakaian di komponen: `className="text-xl md:text-2xl font-heading font-semibold"` — bukan `text-2xl` statis.
 
 ---
 
@@ -102,11 +113,13 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 - **Kolom kanan (320 px, sticky)**: SATU box berisi `SidebarSection`. Bagian pertama selalu aksi simpan (tombol primer selebar penuh; TIDAK ada tombol "Batal" — kembali lewat panah di header). Sisanya data pendukung (status, brand/kategori, ringkasan, berkas).
 - **Tab navigasi**: opsional; pakai prop `tabs` bila form punya ≥ 3 section. Tab mengikuti scroll (scroll-spy) dan klik meluncur ke section.
 - **Responsif**: di bawah `lg` sidebar turun di bawah kolom utama.
-- **Field**: komponen `Input`/`CustomDropdown`/`AutocompleteInput`; label di atas; tinggi seragam (`h-10`); field wajib bertanda `*`; info baca-saja (mis. terisi/sisa) berupa teks keterangan kecil di bawah field, BUKAN field yang tampak bisa diisi. Lebar field mengikuti kolom grid 2 kolom (atau penuh untuk teks panjang); jangan ada field setengah-lebar sendirian dengan ruang kosong di sampingnya.
+- **Field**: komponen `Input`/`CustomDropdown`/`AutocompleteInput`; label di atas; tinggi seragam `h-9` (36px), sama dengan `Button` md dan `ActionMenu` supaya baris toolbar rata; teks field `text-sm`, border `neutral-300`; field wajib bertanda `*`; info baca-saja (mis. terisi/sisa) berupa teks keterangan kecil di bawah field, BUKAN field yang tampak bisa diisi. Lebar field mengikuti kolom grid 2 kolom (atau penuh untuk teks panjang); jangan ada field setengah-lebar sendirian dengan ruang kosong di sampingnya.
 - **Tombol tambah baris** (transit, hotel transit, aktivitas, hari): tombol putus-putus selebar penuh "+ Tambah …"; baris dihapus lewat tombol sampah di kanan baris.
-- **Warna**: hanya oranye brand dan warna status; hindari biru/hijau dekoratif. Status/atribut memakai `Badge`.
+- **Warna**: hanya abu-hitam dan warna status (oranye `accent` hanya tombol primer, logo, promo, grafik); hindari biru/hijau dekoratif. Status/atribut memakai `Badge`.
 - **Setelah simpan**: pindah ke halaman daftar dengan `navigate(path, { state: { successMessage } })`; halaman daftar menampilkan `Alert variant="success"` dan membersihkan state.
 - **Scroll**: pindah halaman mereset scroll area utama (`DashboardLayout`).
+
+**Jarak vertikal halaman**: akar setiap halaman `space-y-6` (24px) dan itulah satu-satunya sumber jarak antar blok, termasuk dari `PageHeader` ke konten pertama. `PageHeader` dan komponen blok lain **tidak** boleh punya `mb-*`/`mt-*` sendiri: margin itu melebur dengan elemen block tapi tidak dengan elemen `inline-flex` (mis. `SegmentedTabs`), sehingga jarak jadi beda-beda antar halaman.
 
 **Table**: wrapper `overflow-x-auto` di sekeliling elemen `<table>` sebagai pendekatan default project ini (bukan card-list) — konsisten dipakai di semua halaman Table.
 
@@ -115,8 +128,9 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 ## 4. Spacing, Radius, Shadow
 
 - **Spacing**: pakai skala default Tailwind (4px based) — jangan ciptakan skala custom
-- **Radius standar**: `rounded-md` (input, button), `rounded-lg` (card, panel), `rounded-full` (badge/pill)
-- **Shadow standar**: `shadow-sm` untuk card, `shadow-md` untuk modal/dropdown mengambang
+- **Radius** (dikunci di `corner-radius.css`): `rounded-sm` 4px (badge, chip), `rounded-md`/`lg`/`xl` 6px (tombol, field, item menu), `rounded-2xl`/`3xl` 8px (kartu, tabel, modal, popover, dropdown). `rounded-full` hanya avatar, titik status, dan toggle — bukan badge.
+- **Shadow**: kartu, tabel, dan sidebar **datar** (`shadow-card` = `none`); batasnya border 1px `neutral-200`. Lapisan mengambang memakai `shadow-popover` (dropdown, popover, menu) atau `shadow-modal` (modal). Jangan pakai `shadow-sm`/`shadow-lg`/`shadow-xl` bawaan.
+- **Gerak**: hover/fokus 100ms; buka dropdown/drawer/modal 200ms dengan `ease-cf`. Tanpa animasi dekoratif.
 
 ---
 
@@ -124,7 +138,7 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 
 | Komponen | Varian | Catatan |
 |---|---|---|
-| `Button` | `primary`, `secondary`, `danger`, `ghost` × size `sm`, `md` | Semua tombol di seluruh app wajib pakai ini, tidak ada `<button>` mentah dengan class manual. Varian `primary` di `frontend/shared` membaca `--brand-primary`/`--brand-primary-text` (diisi `master-dashboard/src/index.css` dan tema brand travel) |
+| `Button` | `primary`, `secondary`, `dark`, `danger`, `danger-light`, `danger-outline` (hapus baris), `dashed` (+ Tambah …), `ghost` × size `sm`, `md`, `lg` | Semua tombol **aksi** (punya teks perintah atau tampil sebagai tombol berbingkai) wajib pakai ini. `<button>` mentah hanya boleh untuk: nama baris yang bisa diklik di tabel, link teks ("Lihat bukti", "Pilih semua"), tombol ikon tanpa bingkai, item menu/dropdown, tab/segmen pilihan, dan kartu yang bisa diklik. Tombol ikon berbingkai memakai ukuran `h-9 w-9`. |
 | `Input` | text, number, date, time | Wrapper konsisten: label + input + pesan error |
 | `Select` | — | Dropdown standar, dipakai untuk semua field "pilih dari data master" (hotel, maskapai, itinerary) |
 | `Textarea` | — | |

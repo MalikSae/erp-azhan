@@ -2,7 +2,7 @@
 // Membuat dokumen cetak di iframe tersembunyi lalu memanggil dialog cetak browser;
 // pilih "Simpan sebagai PDF" untuk mengunduh. Warna aksen mengikuti warna brand.
 
-const DEFAULT_ACCENT = '#F26522';
+const DEFAULT_ACCENT = '#FF5E1F';
 
 export const escapeHtml = (value) =>
   String(value ?? '')

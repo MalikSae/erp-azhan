@@ -50,7 +50,7 @@ const LogoCell = ({ url, name }) => {
 
 const CodeText = ({ code }) => (
   code
-    ? <span className="font-mono text-[13px] font-semibold tracking-wider text-neutral-800">{code}</span>
+    ? <span className="font-mono text-sm font-semibold tracking-wider text-neutral-800">{code}</span>
     : <span className="text-xs text-neutral-400 font-body">-</span>
 );
 
@@ -306,7 +306,7 @@ const AirlinesPage = () => {
             type="button"
             disabled={!canEdit}
             onClick={() => handleOpenAirlineModal(row)}
-            className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
+            className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
           >
             {row.name}
           </button>
@@ -338,7 +338,7 @@ const AirlinesPage = () => {
           type="button"
           disabled={!canEdit}
             onClick={() => handleOpenAirportModal(row)}
-          className="font-heading font-semibold text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
+          className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
         >
           {row.name}
         </button>
@@ -347,7 +347,7 @@ const AirlinesPage = () => {
     if (key === 'code') return <CodeText code={row.code} />;
     if (key === 'city') {
       return (
-        <span className="inline-flex items-center gap-1.5 text-[13px] font-body text-neutral-700">
+        <span className="inline-flex items-center gap-1.5 text-sm font-body text-neutral-700">
           <MapPin className="w-3.5 h-3.5 text-neutral-400" strokeWidth={1.75} />
           {row.city}
         </span>
@@ -386,7 +386,7 @@ const AirlinesPage = () => {
       )}
 
       {isLoadingTab ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : activeTab === 'airlines' ? (
         <DataTable
           key="airlines-table"

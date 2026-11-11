@@ -37,7 +37,7 @@ const CurrencyInput = ({
     }
   };
 
-  const inputBaseClasses = 'h-10 w-full min-w-0 rounded-lg border border-neutral-200 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body transition-all';
+  const inputBaseClasses = 'h-9 w-full min-w-0 rounded-lg border border-neutral-300 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body transition-all';
   const disabledClasses = disabled ? 'bg-neutral-50 text-neutral-500 cursor-not-allowed pointer-events-none' : 'bg-white';
   const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20' : '';
   const paddingClass = prefix ? 'pl-14 pr-3.5' : 'px-3.5';
@@ -46,7 +46,7 @@ const CurrencyInput = ({
     <FormField label={label} error={error} required={required} className={className}>
       <div className="relative">
         {prefix && (
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex w-11 items-center justify-center border-r border-neutral-200/90 text-xs font-bold text-neutral-500 font-heading bg-neutral-50/60 rounded-l-xl">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex w-11 items-center justify-center border-r border-neutral-200 text-xs font-semibold text-neutral-500 font-heading bg-neutral-50/60 rounded-l-xl">
             {prefix}
           </div>
         )}

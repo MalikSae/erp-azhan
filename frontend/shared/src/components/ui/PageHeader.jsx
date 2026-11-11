@@ -4,7 +4,7 @@ import { ArrowLeft, Home, ChevronRight } from 'lucide-react';
 
 const PageHeader = ({ title, actionLabel, onAction, secondaryActionLabel, onSecondaryAction, onBack, subtitle, breadcrumb = true, children }) => {
   return (
-    <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-3">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
       <div className="flex items-center gap-3">
         {onBack && (
           <Button
@@ -18,7 +18,7 @@ const PageHeader = ({ title, actionLabel, onAction, secondaryActionLabel, onSeco
           </Button>
         )}
         <div>
-          <h1 className="text-lg md:text-xl font-heading font-bold text-neutral-900 tracking-tight">{title}</h1>
+          <h1 className="text-lg md:text-xl font-heading font-semibold text-neutral-900 tracking-tight">{title}</h1>
           {breadcrumb && (
             <div className="mt-1 flex items-center gap-1.5 text-xs font-body text-neutral-500">
               <Home className="w-3.5 h-3.5" />

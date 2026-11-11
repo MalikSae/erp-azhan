@@ -15,13 +15,13 @@ import Alert from 'shared/ui/Alert';
 import Button from 'shared/ui/Button';
 import { AKSI_META, BAYAR_META, aksiTersedia, muatPengajuanAgen } from '../utils/pengajuanAgen';
 
-// Semua tombol di kartu ini setinggi tombol menu "Lainnya".
-const TINGGI = 'h-[38px]';
+// Semua tombol di kartu ini setinggi tombol menu "Lainnya" (ActionMenu, h-9).
+const TINGGI = 'h-9';
 
 // Label dan nilai berdampingan, rata kiri: mata tidak perlu menyeberang dari tepi kiri ke tepi kanan.
 const Baris = ({ label, children }) => (
   <div className="flex gap-3 text-sm">
-    <span className="w-24 shrink-0 text-[13px] font-body text-neutral-500">{label}</span>
+    <span className="w-24 shrink-0 text-sm font-body text-neutral-500">{label}</span>
     <span className="min-w-0 text-neutral-900 font-heading font-semibold break-words">{children}</span>
   </div>
 );
@@ -162,11 +162,11 @@ export default function TinjauPengajuanAgen({ akunId, onBerubah, onAda }) {
 
       {/* Satu kartu sempit, satu kolom: data pemohon, lalu biaya dengan pratinjau bukti, lalu keputusan.
           Tidak ada dua kolom, jadi tidak ada sisi yang kosong saat isinya sedikit. */}
-      <div className="bg-white border border-neutral-200/80 rounded-2xl shadow-card overflow-hidden">
+      <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
         <div className="p-5 space-y-4">
           {row.peringatan_nik?.length > 0 && (
             <div role="alert" className="rounded-xl border border-warning-300 bg-warning-50 px-3.5 py-2.5 text-xs text-warning-900">
-              <p className="flex items-center gap-2 font-bold"><TriangleAlert size={14} />Periksa NIK</p>
+              <p className="flex items-center gap-2 font-semibold"><TriangleAlert size={14} />Periksa NIK</p>
               <ul className="mt-1 list-disc pl-6 space-y-0.5">
                 {row.peringatan_nik.map((w) => <li key={w}>{w}</li>)}
               </ul>
@@ -186,7 +186,7 @@ export default function TinjauPengajuanAgen({ akunId, onBerubah, onAda }) {
           </div>
 
           {berbayar && (
-            <div className="flex items-center gap-4 border-t border-neutral-200/80 pt-4">
+            <div className="flex items-center gap-4 border-t border-neutral-200 pt-4">
               {/* Pratinjau bukti berukuran tetap; klik untuk memperbesar. */}
               {buktiTerbaru && !buktiPdf ? (
                 <button
@@ -197,19 +197,19 @@ export default function TinjauPengajuanAgen({ akunId, onBerubah, onAda }) {
                 >
                   {buktiSrc
                     ? <img src={buktiSrc} alt="Bukti transfer" className="h-full w-full object-cover object-top" />
-                    : <span className="flex h-full items-center justify-center px-1 text-center text-[10px] text-neutral-400">Tidak bisa ditampilkan</span>}
+                    : <span className="flex h-full items-center justify-center px-1 text-center text-xs text-neutral-400">Tidak bisa ditampilkan</span>}
                 </button>
               ) : (
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-1 text-center text-[11px] text-neutral-500">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-1 text-center text-xs text-neutral-500">
                   {buktiTerbaru ? 'PDF' : 'Belum ada bukti'}
                 </div>
               )}
 
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-body text-neutral-500">Biaya Pendaftaran</p>
-                <p className="text-lg font-heading font-bold text-neutral-900 leading-tight">{money(p.nominal_tagihan)}</p>
+                <p className="text-sm font-body text-neutral-500">Biaya Pendaftaran</p>
+                <p className="text-lg font-heading font-semibold text-neutral-900 leading-tight">{money(p.nominal_tagihan)}</p>
                 {bayarLabel && (
-                  <span className="mt-0.5 inline-flex items-center gap-1.5 text-[12px] font-body text-neutral-600">
+                  <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-body text-neutral-600">
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${bayarLabel.dot || 'bg-neutral-400'}`} />
                     {bayarLabel.label}
                   </span>
@@ -243,7 +243,7 @@ export default function TinjauPengajuanAgen({ akunId, onBerubah, onAda }) {
           {p?.catatan_admin && <p className="text-xs text-neutral-600">Catatan admin: {p.catatan_admin}</p>}
 
           {p?.riwayat_keputusan?.length > 0 && (
-            <ul className="space-y-1 border-t border-neutral-200/80 pt-3 text-xs text-neutral-600">
+            <ul className="space-y-1 border-t border-neutral-200 pt-3 text-xs text-neutral-600">
               {p.riwayat_keputusan.map((k, i) => (
                 <li key={i}>
                   <span className="font-semibold text-neutral-900">{AKSI_META[k.aksi]?.label || k.aksi}</span> · {k.oleh_nama || 'admin'} · {dateLabel(k.created_at)}{k.catatan ? ` · ${k.catatan}` : ''}
@@ -255,10 +255,10 @@ export default function TinjauPengajuanAgen({ akunId, onBerubah, onAda }) {
 
         {/* Kaki kartu: keputusan. Memilih belum menyimpan; konfirmasi muncul di tempat yang sama. */}
         {pilihan.length > 0 && (
-          <div className="border-t border-neutral-200/80 bg-neutral-50/70 px-5 py-3.5 space-y-3">
+          <div className="border-t border-neutral-200 bg-neutral-50/70 px-5 py-3.5 space-y-3">
             {aksiMeta?.wajibCatatan && (
               <div className="space-y-1.5">
-                <label htmlFor="catatan-keputusan" className="block text-xs font-bold text-neutral-700">
+                <label htmlFor="catatan-keputusan" className="block text-xs font-semibold text-neutral-700">
                   {aksiMeta.labelCatatan || 'Catatan admin'} <span className="text-danger-600">*</span>
                 </label>
                 <textarea

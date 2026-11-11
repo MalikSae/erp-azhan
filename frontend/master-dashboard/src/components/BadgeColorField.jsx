@@ -26,13 +26,13 @@ const BadgeColorField = ({ value, onChange, label }) => {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         {/* Kotak warna: <input type="color"> transparan di atas swatch agar tampilannya seragam */}
-        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-neutral-300 shadow-sm focus-within:ring-2 focus-within:ring-primary-500">
+        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-neutral-300 focus-within:ring-2 focus-within:ring-primary-500">
           <div
             aria-hidden="true"
             className="absolute inset-0"
             style={hasColor
               ? { backgroundColor: value }
-              : { backgroundImage: 'repeating-linear-gradient(45deg, #e5e7eb 0 6px, #f9fafb 6px 12px)' }}
+              : { backgroundImage: 'repeating-linear-gradient(45deg, #e5e5e5 0 6px, #fafafa 6px 12px)' }}
           />
           <input
             ref={pickerRef}
@@ -54,14 +54,14 @@ const BadgeColorField = ({ value, onChange, label }) => {
           onChange={(e) => setText(e.target.value)}
           onBlur={commitText}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitText(); } }}
-          className="h-10 w-28 rounded-lg border border-neutral-300 bg-white px-3 text-sm font-mono tracking-wide text-neutral-800 placeholder:font-body placeholder:tracking-normal placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+          className="h-9 w-28 rounded-lg border border-neutral-300 bg-white px-3 text-sm font-mono tracking-wide text-neutral-800 placeholder:font-body placeholder:tracking-normal placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30"
         />
 
         <button
           type="button"
           onClick={() => onChange('')}
           aria-pressed={!hasColor}
-          className={`h-10 rounded-lg border px-3 text-xs font-semibold cursor-pointer transition-colors ${!hasColor ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+          className={`h-9 rounded-lg border px-3 text-xs font-semibold cursor-pointer transition-colors ${!hasColor ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
         >
           Otomatis
         </button>
@@ -69,7 +69,7 @@ const BadgeColorField = ({ value, onChange, label }) => {
 
       {/* Pilihan cepat */}
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Pilihan cepat warna">
-        <span className="text-[11px] font-body text-neutral-500 mr-1">Cepat:</span>
+        <span className="text-xs font-body text-neutral-500 mr-1">Cepat:</span>
         {BADGE_PRESETS.map((c) => {
           const active = hasColor && value === c.hex;
           return (
@@ -91,14 +91,14 @@ const BadgeColorField = ({ value, onChange, label }) => {
 
       {/* Pratinjau */}
       <div className="flex items-center gap-2 rounded-lg bg-neutral-50 px-3 py-2">
-        <span className="text-[11px] font-body text-neutral-500">Pratinjau:</span>
+        <span className="text-xs font-body text-neutral-500">Pratinjau:</span>
         <span
-          className="inline-block rounded px-2.5 py-0.5 text-[11px] font-bold"
+          className="inline-block rounded px-2.5 py-0.5 text-xs font-semibold"
           style={{ backgroundColor: shown, color: badgeTextColor(shown) }}
         >
           {label || 'Kategori'}
         </span>
-        {!hasColor && <span className="text-[11px] font-body text-neutral-400">warna final ditentukan situs booking</span>}
+        {!hasColor && <span className="text-xs font-body text-neutral-400">warna final ditentukan situs booking</span>}
       </div>
     </div>
   );

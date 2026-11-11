@@ -34,6 +34,11 @@
     @apply font-body text-neutral-800 antialiased;
     background-color: theme('colors.page.bg', #F6F8FA);
   }
+
+  /* Browser menebalkan <th> secara bawaan (700); weight header tabel diatur dari <thead>. */
+  th {
+    font-weight: inherit;
+  }
 }
 
 @layer utilities {

@@ -77,15 +77,15 @@ const TopbarNotifikasi = () => {
         aria-haspopup="true"
         aria-expanded={terbuka}
       >
-        <Bell className="w-[18px] h-[18px]" />
+        <Bell className="w-5 h-5" />
         {total > 0 && (
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-danger-500 rounded-full ring-2 ring-white" />
         )}
       </button>
 
       {terbuka && (
-        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-lg border border-neutral-200/90 z-50 py-1.5">
-          <p className="px-4 py-2 border-b border-neutral-100 text-xs font-bold text-neutral-900 font-heading">
+        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-3xl shadow-popover border border-neutral-200 z-50 py-1.5">
+          <p className="px-4 py-2 border-b border-neutral-100 text-xs font-semibold text-neutral-900 font-heading">
             Menunggu keputusan
           </p>
           {gagal && menunggu.length === 0 ? (
@@ -104,7 +104,7 @@ const TopbarNotifikasi = () => {
                     onClick={() => setTerbuka(false)}
                     className="px-4 py-2.5 flex items-center gap-3 hover:bg-neutral-50 transition-colors"
                   >
-                    <span className="shrink-0 min-w-7 h-7 px-1.5 rounded-lg bg-danger-50 border border-danger-200 text-danger-700 text-xs font-bold font-heading flex items-center justify-center tabular-nums">
+                    <span className="shrink-0 min-w-7 h-7 px-1.5 rounded-lg bg-danger-50 border border-danger-200 text-danger-700 text-xs font-semibold font-heading flex items-center justify-center tabular-nums">
                       {a.jumlah}
                     </span>
                     <span className="flex-1 text-xs text-neutral-800 font-body">{ANTREAN[a.jenis].teks}</span>

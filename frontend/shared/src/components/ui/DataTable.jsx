@@ -88,20 +88,20 @@ const DataTable = ({
   }, [filteredData, pagination, currentPage, itemsPerPage, server]);
 
   return (
-    <div className="w-full bg-white rounded-2xl border border-neutral-200/80 shadow-card overflow-hidden">
+    <div className="w-full bg-white rounded-2xl border border-neutral-200 overflow-hidden">
       {/* Header / Toolbar */}
       {(searchable || toolbarActions || toolbarLeading) && (
-        <div className="p-4 border-b border-neutral-200/80 flex flex-col sm:flex-row sm:flex-wrap justify-between items-start sm:items-end bg-white gap-4">
+        <div className="p-4 border-b border-neutral-200 flex flex-col sm:flex-row sm:flex-wrap justify-between items-start sm:items-end bg-white gap-4">
           {/* Kiri: elemen pembuka (mis. tab) lalu kolom pencarian */}
           {/* Lebar minimal kiri = lebar minimal kolom pencarian, supaya filter di kanan turun baris dan tidak
               menimpa kolom pencarian saat toolbar penuh. */}
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:flex-1 min-w-0 sm:min-w-[12rem]">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:flex-1 min-w-0 sm:min-w-48">
           {toolbarLeading}
           {/* Di layar lebar kolom pencarian menyusut dulu sebelum turun baris, supaya sebaris dengan tab. */}
-          <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[12rem] max-w-sm relative">
+          <div className="w-full sm:w-auto sm:flex-1 sm:min-w-48 max-w-sm relative">
             {searchable && (
               <>
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
@@ -111,7 +111,7 @@ const DataTable = ({
                   placeholder={searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-neutral-200/90 pl-10 pr-3.5 text-[13px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body bg-white transition-all"
+                  className="h-9 w-full rounded-lg border border-neutral-300 pl-9 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body bg-white transition-all"
                 />
               </>
             )}
@@ -126,7 +126,7 @@ const DataTable = ({
       )}
 
       {toolbarPanel && (
-        <div className="p-4 border-b border-neutral-200/80 bg-neutral-50/60">
+        <div className="p-4 border-b border-neutral-200 bg-neutral-50/60">
           {toolbarPanel}
         </div>
       )}
@@ -144,7 +144,7 @@ const DataTable = ({
 
       {/* Footer / Pagination */}
       {pagination && totalCount > 0 && (
-        <div className="p-4 border-t border-neutral-200/80 flex flex-col sm:flex-row items-center justify-between bg-white gap-4">
+        <div className="p-4 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between bg-white gap-4">
           <div className="text-xs md:text-sm text-neutral-500 font-body text-center sm:text-left">
             Menampilkan <span className="font-semibold text-neutral-900">{(currentPage - 1) * itemsPerPage + 1}</span> hingga <span className="font-semibold text-neutral-900">{Math.min(currentPage * itemsPerPage, totalCount)}</span> dari <span className="font-semibold text-neutral-900">{totalCount}</span> entri
           </div>
@@ -176,7 +176,7 @@ const DataTable = ({
                 return getPageNumbers().map((page, index) => {
                   if (page === '...') {
                     return (
-                      <span key={`ellipsis-${index}`} className="px-2 text-neutral-400 text-xs font-bold">
+                      <span key={`ellipsis-${index}`} className="px-2 text-neutral-400 text-xs font-semibold">
                         ...
                       </span>
                     );
@@ -187,7 +187,7 @@ const DataTable = ({
                       variant={currentPage === page ? "dark" : "ghost"}
                       size="sm"
                       onClick={() => setCurrentPage(page)}
-                      className={`w-8 h-8 p-0 text-xs ${currentPage === page ? 'shadow-2xs font-bold' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                      className={`w-8 h-8 p-0 text-xs ${currentPage === page ? ' font-semibold' : 'text-neutral-600 hover:bg-neutral-100'}`}
                     >
                       {page}
                     </Button>

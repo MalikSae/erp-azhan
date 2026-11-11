@@ -129,7 +129,7 @@ const StrukturOrganisasiPage = () => {
     : (
       <div className="flex flex-wrap gap-x-2 gap-y-1">
         {unit.pemimpin.map(p => (
-          <button key={p.id} type="button" onClick={() => navigate(`/users/${p.id}`)} className="text-[13px] font-body text-neutral-800 hover:text-primary-600">
+          <button key={p.id} type="button" onClick={() => navigate(`/users/${p.id}`)} className="text-sm font-body text-neutral-800 hover:text-primary-600">
             {p.display_name}
           </button>
         ))}
@@ -184,18 +184,18 @@ const StrukturOrganisasiPage = () => {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>
+        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : visibleTree.length === 0 ? (
-        <div className="p-8 text-center text-sm font-body text-neutral-500 bg-white rounded-2xl border border-neutral-200 shadow-card">Belum ada divisi.</div>
+        <div className="p-8 text-center text-sm font-body text-neutral-500 bg-white rounded-2xl border border-neutral-200">Belum ada divisi.</div>
       ) : (
         <div className="space-y-4">
           {visibleTree.map(d => (
-            <section key={d.id} className={`bg-white rounded-2xl border border-neutral-200 shadow-card overflow-hidden ${d.is_active ? '' : 'bg-neutral-50'}`}>
+            <section key={d.id} className={`bg-white rounded-2xl border border-neutral-200 overflow-hidden ${d.is_active ? '' : 'bg-neutral-50'}`}>
               <div className="px-5 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className={`text-[15px] font-heading font-bold ${d.is_active ? 'text-neutral-900' : 'text-neutral-500'}`}>{d.nama}</h3>
-                    <span className="text-[11px] font-body text-neutral-400">Divisi</span>
+                    <h3 className={`text-base font-heading font-semibold ${d.is_active ? 'text-neutral-900' : 'text-neutral-500'}`}>{d.nama}</h3>
+                    <span className="text-xs font-body text-neutral-400">Divisi</span>
                     {!d.is_active && <StatusChip active={false} />}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-body text-neutral-500">
@@ -215,8 +215,8 @@ const StrukturOrganisasiPage = () => {
               {(d.tim || []).length === 0 ? (
                 <p className="px-5 py-4 text-xs font-body text-neutral-400">Belum ada tim di divisi ini.</p>
               ) : (
-                <table className="w-full text-left text-[13px] font-body text-neutral-700">
-                  <thead className="bg-neutral-50 text-neutral-800 font-heading font-semibold border-b border-neutral-200">
+                <table className="w-full text-left text-sm font-body text-neutral-700">
+                  <thead className="bg-neutral-50 text-neutral-500 font-body text-xs font-medium border-b border-neutral-200">
                     <tr>
                       <th className="px-5 py-2.5">Tim</th>
                       <th className="px-4 py-2.5">Pemimpin</th>
@@ -228,7 +228,7 @@ const StrukturOrganisasiPage = () => {
                   <tbody className="divide-y divide-neutral-100">
                     {d.tim.map(t => (
                       <tr key={t.id} className={t.is_active ? '' : 'bg-neutral-50/60 text-neutral-400'}>
-                        <td className={`px-5 py-3 font-heading font-medium ${t.is_active ? 'text-neutral-900' : 'text-neutral-500'}`}>{t.nama}</td>
+                        <td className={`px-5 py-3 font-body font-medium ${t.is_active ? 'text-neutral-900' : 'text-neutral-500'}`}>{t.nama}</td>
                         <td className="px-4 py-3"><PemimpinList unit={t} /></td>
                         <td className="px-4 py-3">{t.jumlah_anggota}</td>
                         <td className="px-4 py-3"><StatusChip active={t.is_active} /></td>

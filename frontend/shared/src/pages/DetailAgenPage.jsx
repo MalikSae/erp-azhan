@@ -16,7 +16,7 @@ import { dateLabel, HARI_TAHAN_KOMISI, money, STATUS_AGEN } from '../utils/agen'
 
 const Row = ({ label, children }) => (
   <div className="flex justify-between gap-3 border-b border-neutral-100 pb-2 last:border-b-0 last:pb-0 text-sm">
-    <span className="text-[13px] font-body text-neutral-500">{label}</span>
+    <span className="text-sm font-body text-neutral-500">{label}</span>
     <span className="text-neutral-900 text-right font-heading font-semibold">{children}</span>
   </div>
 );
@@ -33,7 +33,7 @@ const DOT_STYLE = {
 const StatusDot = ({ variant = 'neutral', children }) => {
   const s = DOT_STYLE[variant] || DOT_STYLE.neutral;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${s.text}`}>
+    <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${s.text}`}>
       <span className={`w-2 h-2 rounded-full ${s.dot}`} />
       {children}
     </span>
@@ -209,7 +209,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
                     <div key={p.id} className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-2 last:border-b-0 text-sm">
                       <div>
                         <p className="font-heading font-semibold text-neutral-900">{money(p.nominal_diajukan)}</p>
-                        <p className="text-[11px] text-neutral-400">{dateLabel(p.diajukan_at)}</p>
+                        <p className="text-xs text-neutral-400">{dateLabel(p.diajukan_at)}</p>
                       </div>
                       <StatusDot variant={meta.variant}>{meta.label}</StatusDot>
                     </div>
@@ -286,7 +286,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
                     <p className="font-heading font-semibold text-neutral-900">
                       {STATUS_AGEN[r.status_lama]?.label || r.status_lama} ke {STATUS_AGEN[r.status_baru]?.label || r.status_baru}
                     </p>
-                    <p className="text-[11px] text-neutral-400">{dateLabel(r.diubah_at)} oleh {r.oleh_nama || 'admin'}</p>
+                    <p className="text-xs text-neutral-400">{dateLabel(r.diubah_at)} oleh {r.oleh_nama || 'admin'}</p>
                     <p className="mt-1">{r.alasan}</p>
                   </div>
                 ))}
@@ -335,7 +335,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
               : `${agen.nama_lengkap} kembali bisa membuat booking dan menerima komisi.`}
           </p>
           <div className="space-y-1.5">
-            <label htmlFor="alasan-status-agen" className="block text-xs font-bold text-neutral-700">Alasan <span className="text-danger-600">*</span></label>
+            <label htmlFor="alasan-status-agen" className="block text-xs font-semibold text-neutral-700">Alasan <span className="text-danger-600">*</span></label>
             <textarea
               id="alasan-status-agen"
               value={alasan}
@@ -346,7 +346,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
               placeholder={targetStatus === 'nonaktif' ? 'Mis. melanggar ketentuan program, atas permintaan agen' : 'Mis. sudah diklarifikasi, agen kembali aktif'}
               className="w-full rounded-lg border border-neutral-300 bg-white p-2.5 text-xs text-neutral-800 placeholder-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
-            <p className="text-[11px] text-neutral-400">Minimal 5 karakter. Alasan, nama Anda, dan waktunya tercatat di riwayat status agen.</p>
+            <p className="text-xs text-neutral-400">Minimal 5 karakter. Alasan, nama Anda, dan waktunya tercatat di riwayat status agen.</p>
           </div>
         </div>
       </Modal>

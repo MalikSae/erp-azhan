@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 
-// Modal gaya SmartHR: dialog putih radius 10px tanpa border, backdrop redup
-// polos, header kompak dengan tombol tutup kotak berbingkai, footer putih.
+// Modal gaya Cloudflare (DESIGN.md): dialog putih radius 8px, shadow modal,
+// backdrop 40%, header kompak dengan tombol tutup kotak berbingkai, footer putih.
 const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
   // Prevent scrolling on body when modal is open
   useEffect(() => {
@@ -40,20 +40,20 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
       <div className="flex min-h-full items-center justify-center p-4 sm:p-0">
         {/* Backdrop */}
         <div
-          className="fixed inset-0 bg-neutral-900/60 transition-opacity animate-in fade-in duration-200"
+          className="fixed inset-0 bg-neutral-900/40 transition-opacity animate-in fade-in duration-200"
           onClick={onClose}
           aria-hidden="true"
         />
 
         {/* Modal Dialog */}
         <div
-          className={`bg-white rounded-[10px] shadow-xl ${sizeClasses[size]} relative z-50 animate-in fade-in zoom-in-95 duration-150 my-8`}
+          className={`bg-white rounded-3xl shadow-modal ${sizeClasses[size]} relative z-50 animate-in fade-in zoom-in-95 duration-150 my-8`}
           role="dialog"
           aria-modal="true"
         >
           {/* Header */}
           <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between gap-4">
-            <h3 className="text-[15px] md:text-base font-bold font-heading text-neutral-900 truncate">
+            <h3 className="text-base font-semibold font-heading text-neutral-900 truncate">
               {title}
             </h3>
             <button

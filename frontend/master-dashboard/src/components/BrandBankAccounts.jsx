@@ -188,13 +188,13 @@ const BrandBankAccounts = ({ brandId }) => {
             <li key={a.id} className="flex items-center gap-3 px-4 py-3">
               <BankLogo url={a.logo_url} name={a.bank_name} />
               <div className="min-w-0 flex-1">
-                <div className="font-heading text-sm font-semibold text-neutral-900 truncate">{a.bank_name}</div>
+                <div className="font-body text-sm font-medium text-neutral-900 truncate">{a.bank_name}</div>
                 <div className="text-xs font-body text-neutral-500 truncate">
                   <span className="font-mono font-semibold tracking-wider text-neutral-700">{a.account_number}</span>
                   {' · a.n. '}{a.account_holder}
                 </div>
               </div>
-              <span className={`inline-flex items-center gap-1.5 text-[12px] font-body whitespace-nowrap ${a.is_active ? 'text-success-700' : 'text-neutral-500'}`}>
+              <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${a.is_active ? 'text-success-700' : 'text-neutral-500'}`}>
                 <span className={`w-2 h-2 rounded-full ${a.is_active ? 'bg-success-500' : 'bg-neutral-300'}`} />
                 {a.is_active ? 'Aktif' : 'Nonaktif'}
               </span>

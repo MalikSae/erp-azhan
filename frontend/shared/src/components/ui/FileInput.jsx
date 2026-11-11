@@ -60,7 +60,7 @@ const FileInput = ({
       />
 
       {displayPreview && showPreview ? (
-        <div className="flex items-center gap-3 p-2 bg-neutral-50/80 border border-neutral-200/90 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3 p-2 bg-neutral-50/80 border border-neutral-200 rounded-xl">
           <div className="relative shrink-0 rounded-lg overflow-hidden bg-white border border-neutral-200 w-14 h-14 flex items-center justify-center">
             <img
               src={
@@ -92,7 +92,7 @@ const FileInput = ({
               type="button"
               onClick={handleTriggerClick}
               disabled={disabled || isUploading}
-              className="px-2.5 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 hover:text-neutral-900 transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+              className="px-2.5 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1"
               title="Ganti file"
             >
               <RefreshCw size={12} className={isUploading ? "animate-spin" : ""} />
@@ -114,14 +114,14 @@ const FileInput = ({
       ) : (
         <div
           onClick={handleTriggerClick}
-          className={`flex items-center justify-between gap-3 px-3.5 py-2.5 bg-white border rounded-xl shadow-2xs transition-all cursor-pointer group ${
+          className={`flex items-center justify-between gap-3 px-3.5 py-2.5 bg-white border rounded-xl transition-all cursor-pointer group ${
             error
               ? 'border-danger-500 ring-2 ring-danger-500/20'
-              : 'border-neutral-200/90 hover:border-primary-300 hover:bg-primary-50/40'
+              : 'border-neutral-200 hover:border-primary-300 hover:bg-primary-50/40'
           } ${disabled || isUploading ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-neutral-100 border border-neutral-200/80 flex items-center justify-center text-neutral-500 group-hover:text-primary-600 group-hover:bg-primary-50 group-hover:border-primary-200 transition-colors shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-500 group-hover:text-primary-600 group-hover:bg-primary-50 group-hover:border-primary-200 transition-colors shrink-0">
               {isUploading ? (
                 <Loader2 size={14} className="animate-spin text-neutral-700" />
               ) : (
@@ -136,7 +136,7 @@ const FileInput = ({
           </div>
 
           <div className="shrink-0">
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-neutral-100 text-neutral-700 border border-neutral-200 group-hover:bg-primary-50 group-hover:text-primary-700 group-hover:border-primary-300 transition-all shadow-2xs">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-neutral-100 text-neutral-700 border border-neutral-200 group-hover:bg-primary-50 group-hover:text-primary-700 group-hover:border-primary-300 transition-all">
               <Upload size={12} />
               <span>Pilih File</span>
             </span>

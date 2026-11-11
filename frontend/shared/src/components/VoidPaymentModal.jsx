@@ -52,7 +52,7 @@ const VoidPaymentModal = ({ payment, onClose, onDone }) => {
             bila keliru, catat ulang pembayarannya.
           </div>
           <div>
-            <label htmlFor="alasan-void" className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-1.5">
+            <label htmlFor="alasan-void" className="block text-xs font-semibold text-neutral-700 mb-1.5">
               Alasan Pembatalan <span className="text-danger-500">*</span>
             </label>
             <textarea
@@ -66,7 +66,7 @@ const VoidPaymentModal = ({ payment, onClose, onDone }) => {
               required
               disabled={saving}
             />
-            <p className="text-[11px] text-neutral-400 mt-1">
+            <p className="text-xs text-neutral-400 mt-1">
               Minimal {ALASAN_MIN} karakter. Alasan, nama Anda, dan waktu pembatalan tercatat pada pembayaran ini.
             </p>
           </div>

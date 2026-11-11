@@ -1,7 +1,7 @@
 // Util cetak dokumen HTML ke PDF (lewat dialog cetak browser; pilih "Simpan sebagai PDF").
 // Dokumen dibuat di iframe tersembunyi; warna aksen mengikuti warna brand.
 
-const DEFAULT_ACCENT = '#F26522';
+const DEFAULT_ACCENT = '#FF5E1F';
 
 export const escapeHtml = (value) =>
   String(value ?? '')

@@ -91,38 +91,38 @@ export default function RiwayatKomisiPage({ showBrandColumn = false, judul = 'Ri
 
   const renderCell = (row, key) => {
     const batal = row.ketersediaan === 'batal';
-    if (key === 'created_at') return <span className="text-[13px] font-body text-neutral-600">{dateLabel(row.created_at)}</span>;
+    if (key === 'created_at') return <span className="text-sm font-body text-neutral-600">{dateLabel(row.created_at)}</span>;
     if (key === 'penerima_nama') {
       return (
         <div className="min-w-0">
           <div className="font-heading font-semibold text-neutral-900 leading-snug">{row.penerima_nama}</div>
-          <div className="text-[11px] font-body text-neutral-400">{JENIS_KOMISI[row.jenis] || row.jenis}</div>
+          <div className="text-xs font-body text-neutral-400">{JENIS_KOMISI[row.jenis] || row.jenis}</div>
         </div>
       );
     }
     if (key === 'sumber_nama') {
       return (
         <div className="min-w-0">
-          <div className="text-[13px] font-body text-neutral-800">{row.sumber_nama || '-'}</div>
-          <div className="text-[11px] font-body text-neutral-400 font-mono">{row.booking_code}</div>
+          <div className="text-sm font-body text-neutral-800">{row.sumber_nama || '-'}</div>
+          <div className="text-xs font-body text-neutral-400 font-mono">{row.booking_code}</div>
         </div>
       );
     }
     if (key === 'nominal') {
-      return <span className={`text-[13px] font-body font-semibold ${batal ? 'text-neutral-400 line-through' : 'text-neutral-900'}`}>{money(row.nominal)}</span>;
+      return <span className={`text-sm font-body font-semibold ${batal ? 'text-neutral-400 line-through' : 'text-neutral-900'}`}>{money(row.nominal)}</span>;
     }
     if (key === 'ketersediaan') {
       const meta = KETERSEDIAAN_STYLE[row.ketersediaan] || { label: row.ketersediaan, text: 'text-neutral-500', dot: 'bg-neutral-300' };
       return (
         <div>
-          <span className={`inline-flex items-center gap-1.5 text-[12px] font-body ${meta.text}`}>
+          <span className={`inline-flex items-center gap-1.5 text-xs font-body ${meta.text}`}>
             <span className={`w-2 h-2 rounded-full ${meta.dot}`} />{meta.label}
           </span>
           {row.ketersediaan === 'tertahan' && (
-            <p className="mt-0.5 text-[11px] font-body text-neutral-400">Dapat dicairkan {dateLabel(row.tersedia_mulai)}</p>
+            <p className="mt-0.5 text-xs font-body text-neutral-400">Dapat dicairkan {dateLabel(row.tersedia_mulai)}</p>
           )}
           {batal && (
-            <p className="mt-0.5 text-[11px] font-body text-neutral-400">
+            <p className="mt-0.5 text-xs font-body text-neutral-400">
               {SEBAB_BATAL_KOMISI[row.sebab_batal] || 'Booking turun dari lunas'}, {dateLabel(row.dibatalkan_at)}
             </p>
           )}
@@ -173,7 +173,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false, judul = 'Ri
     </div>
   );
   const toolbarPanel = filter.agen_id && (
-    <span className="inline-flex h-10 items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 text-[13px] font-body text-primary-700">
+    <span className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 text-sm font-body text-primary-700">
       Agen: {agenTersaring?.nama_lengkap || `#${filter.agen_id}`}
       <button type="button" onClick={() => setFilter('agen_id', '')} className="font-semibold underline underline-offset-2 cursor-pointer">Lepas</button>
     </span>

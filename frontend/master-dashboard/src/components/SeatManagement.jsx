@@ -76,11 +76,11 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
       <div className="grid grid-cols-2 gap-3 divide-x divide-neutral-200">
         <div>
           <span className="text-xs text-neutral-500 block">Sisa Seat</span>
-          <span className="text-xl font-bold font-heading text-neutral-900">{overview.seat_sisa}</span>
+          <span className="text-xl font-semibold font-heading text-neutral-900">{overview.seat_sisa}</span>
         </div>
         <div className="pl-4">
           <span className="text-xs text-neutral-500 block">Total Kuota</span>
-          <span className="text-xl font-bold font-heading text-neutral-900">{overview.seat_total}</span>
+          <span className="text-xl font-semibold font-heading text-neutral-900">{overview.seat_total}</span>
         </div>
       </div>
 

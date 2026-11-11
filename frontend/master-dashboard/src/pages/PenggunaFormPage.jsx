@@ -271,7 +271,7 @@ const PenggunaFormPage = () => {
   const title = isEdit ? 'Edit Pengguna' : 'Tambah Pengguna';
 
   if (isLoading) {
-    return <div className="flex justify-center p-10 bg-white rounded-2xl border border-neutral-200 shadow-card"><LoadingSpinner /></div>;
+    return <div className="flex justify-center p-10 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>;
   }
 
   return (
@@ -279,7 +279,7 @@ const PenggunaFormPage = () => {
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Judul + breadcrumb */}
       <div>
-        <h1 className="text-lg md:text-xl font-heading font-bold text-neutral-900 tracking-tight">{title}</h1>
+        <h1 className="text-lg md:text-xl font-heading font-semibold text-neutral-900 tracking-tight">{title}</h1>
         <div className="mt-1 flex items-center gap-1.5 text-xs font-body text-neutral-500">
           <Home className="w-3.5 h-3.5" />
           <span>Dashboard</span>
@@ -307,7 +307,7 @@ const PenggunaFormPage = () => {
               <Input label="Jabatan" value={form.jabatan} placeholder="mis. Direktur"
                 onChange={(e) => setForm(p => ({ ...p, jabatan: e.target.value }))} />
             </div>
-            <p className="text-[11px] font-body text-neutral-400 -mt-1">Jabatan hanya label tampilan — tidak memengaruhi akses.</p>
+            <p className="text-xs font-body text-neutral-400 -mt-1">Jabatan hanya label tampilan — tidak memengaruhi akses.</p>
           </Panel>
 
           <Panel title="Akses Brand">
@@ -349,7 +349,7 @@ const PenggunaFormPage = () => {
             right={<span className="text-xs font-body text-neutral-500">{selectedRoles.length} dipilih · {totalPermissions} permission</span>}
           >
             {roleNotice && <div className="px-5 pt-4"><Alert variant="warning" onClose={() => setRoleNotice(null)}>{roleNotice}</Alert></div>}
-            <p className="px-5 pt-4 text-[11px] font-body text-neutral-400">
+            <p className="px-5 pt-4 text-xs font-body text-neutral-400">
               Hanya role yang sesuai akses {form.access === 'holding' ? 'Holding' : 'Brand'} yang ditampilkan. Klik baris untuk melihat permission.
             </p>
             <ul className="divide-y divide-neutral-100 mt-2 rounded-b-2xl overflow-hidden">
@@ -370,13 +370,13 @@ const PenggunaFormPage = () => {
                         onClick={(e) => e.stopPropagation()}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[13px] font-heading font-semibold truncate ${checked ? 'text-primary-600' : 'text-neutral-900'}`}>{role.name}</p>
-                        <p className="text-[11px] font-body text-neutral-400 truncate">
+                        <p className={`text-sm font-body font-medium truncate ${checked ? 'text-primary-600' : 'text-neutral-900'}`}>{role.name}</p>
+                        <p className="text-xs font-body text-neutral-400 truncate">
                           {role.slug}
                           {role.slug === SUPER_ADMIN ? ' · semua divisi' : role.divisi_nama ? ` · divisi ${role.divisi_nama}` : ''}
                         </p>
                       </div>
-                      <span className="text-[11px] font-body text-neutral-400 shrink-0">
+                      <span className="text-xs font-body text-neutral-400 shrink-0">
                         {(role.permissions || []).length} permission
                       </span>
                       <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`} />
@@ -384,7 +384,7 @@ const PenggunaFormPage = () => {
                     {expanded && (
                       <div className="px-5 pb-4 pt-1 bg-neutral-50/50 flex flex-wrap gap-1.5">
                         {(role.permissions || []).map(perm => (
-                          <span key={perm} className="text-[11px] font-mono text-neutral-600 bg-white border border-neutral-200 rounded-md px-2 py-0.5">{perm}</span>
+                          <span key={perm} className="text-xs font-mono text-neutral-600 bg-white border border-neutral-200 rounded-md px-2 py-0.5">{perm}</span>
                         ))}
                       </div>
                     )}
@@ -438,7 +438,7 @@ const PenggunaFormPage = () => {
                       />
                     </div>
                     <button type="button" title="Hapus baris" onClick={() => removeRow(i)}
-                      className="mb-4 w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:text-danger-600 hover:bg-danger-50 hover:border-danger-200">
+                      className="mb-4 w-9 h-9 shrink-0 flex items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:text-danger-600 hover:bg-danger-50 hover:border-danger-200">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -452,7 +452,7 @@ const PenggunaFormPage = () => {
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[13px] font-heading font-semibold text-neutral-900">Ganti password</p>
+                    <p className="text-sm font-heading font-semibold text-neutral-900">Ganti password</p>
                     <p className="text-xs font-body text-neutral-500">Sesi lama pengguna ini dicabut.</p>
                   </div>
                   <Button type="button" variant="secondary" size="sm" disabled={!user.is_active}
@@ -462,7 +462,7 @@ const PenggunaFormPage = () => {
                 </div>
                 <div className="flex items-start justify-between gap-4 pt-3 border-t border-neutral-100">
                   <div>
-                    <p className="text-[13px] font-heading font-semibold text-neutral-900">{user.is_active ? 'Nonaktifkan pengguna' : 'Aktifkan kembali'}</p>
+                    <p className="text-sm font-heading font-semibold text-neutral-900">{user.is_active ? 'Nonaktifkan pengguna' : 'Aktifkan kembali'}</p>
                     <p className="text-xs font-body text-neutral-500">
                       {user.is_active ? 'Cara offboarding: login ditolak & semua sesi dicabut. Riwayat tetap utuh.' : 'Pengguna bisa login lagi dengan role & akses tersimpan.'}
                     </p>
@@ -475,7 +475,7 @@ const PenggunaFormPage = () => {
                 </div>
                 <div className="flex items-start justify-between gap-4 pt-3 border-t border-neutral-100">
                   <div>
-                    <p className="text-[13px] font-heading font-semibold text-neutral-900">Hapus permanen</p>
+                    <p className="text-sm font-heading font-semibold text-neutral-900">Hapus permanen</p>
                     <p className="text-xs font-body text-neutral-500">Hanya untuk akun salah buat yang belum punya riwayat. Selebihnya, nonaktifkan.</p>
                   </div>
                   <Button type="button" variant="danger-light" size="sm" disabled={isSelf}
