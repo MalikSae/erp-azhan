@@ -5,7 +5,6 @@ export { default as JamaahFormPage } from './pages/JamaahFormPage';
 export { default as BookingsPage, BookingsPage as BookingListPage } from './pages/BookingsPage';
 export { default as BookingDetailPage } from './pages/BookingDetailPage';
 export { default as BookingFormPage } from './pages/BookingFormPage';
-export { default as DaftarAgenPage } from './pages/DaftarAgenPage';
 export { default as DetailAgenPage } from './pages/DetailAgenPage';
 export { default as DaftarAkunPage } from './pages/DaftarAkunPage';
 export { default as DetailAkunPage } from './pages/DetailAkunPage';

@@ -93,7 +93,9 @@ const DataTable = ({
       {(searchable || toolbarActions || toolbarLeading) && (
         <div className="p-4 border-b border-neutral-200/80 flex flex-col sm:flex-row sm:flex-wrap justify-between items-start sm:items-end bg-white gap-4">
           {/* Kiri: elemen pembuka (mis. tab) lalu kolom pencarian */}
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:flex-1 min-w-0">
+          {/* Lebar minimal kiri = lebar minimal kolom pencarian, supaya filter di kanan turun baris dan tidak
+              menimpa kolom pencarian saat toolbar penuh. */}
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:flex-1 min-w-0 sm:min-w-[12rem]">
           {toolbarLeading}
           {/* Di layar lebar kolom pencarian menyusut dulu sebelum turun baris, supaya sebaris dengan tab. */}
           <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[12rem] max-w-sm relative">

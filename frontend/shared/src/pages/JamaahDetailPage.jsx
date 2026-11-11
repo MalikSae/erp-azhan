@@ -422,7 +422,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
 
         {/* Kolom kanan: satu card */}
         <Surface className="divide-y divide-neutral-200/80">
-          <Section title="Akun Pelanggan">
+          <Section title="Akun">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-neutral-500 font-body">Status</span>
               <StatusDot

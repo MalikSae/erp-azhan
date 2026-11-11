@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { SlidersHorizontal, Receipt, Banknote, CheckCircle2, Clock3 } from 'lucide-react';
+import { Banknote, CheckCircle2, Clock3 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { listAgen, listRiwayatKomisi } from '../api/agen';
 import { listBrandOptions } from '../api/brands';
 import Alert from '../components/ui/Alert';
-import Button from '../components/ui/Button';
 import CustomDropdown from '../components/ui/CustomDropdown';
-import Input from '../components/ui/Input';
+import PeriodePicker from '../components/ui/PeriodePicker';
 import DataTable from '../components/ui/DataTable';
 import PageHeader from '../components/ui/PageHeader';
 import StatTile from '../components/ui/StatTile';
@@ -16,25 +15,19 @@ const PER_PAGE = 20;
 const valueOf = (v) => (v?.target ? v.target.value : v);
 
 const KETERSEDIAAN_STYLE = {
-  tersedia: { label: 'Tersedia', text: 'text-success-700', dot: 'bg-success-500' },
+  tersedia: { label: 'Dapat Dicairkan', text: 'text-success-700', dot: 'bg-success-500' },
   tertahan: { label: 'Tertahan', text: 'text-warning-700', dot: 'bg-warning-500' },
   kredit: { label: 'Kredit cashback', text: 'text-neutral-500', dot: 'bg-neutral-300' },
   batal: { label: 'Dibatalkan', text: 'text-neutral-500', dot: 'bg-neutral-400' },
 };
 
-const STATUS_OPTIONS = [
-  { value: '', label: 'Komisi aktif' },
-  { value: 'batal', label: 'Dibatalkan' },
-  { value: 'semua', label: 'Semua' },
-];
-
 // Screen B3: ledger transaksi_komisi lintas agen, hanya baca. Paginasi, pencarian, dan ringkasan dihitung
 // server, jadi angka di kartu mencakup seluruh hasil filter, bukan hanya halaman yang tampil.
 // Komisi mengikuti lunas terakhir: baris yang batal (booking turun dari lunas) tidak dihitung dan hanya
 // tampil lewat filter status. showBrandColumn: pengguna holding, dengan filter brand.
-export default function RiwayatKomisiPage({ showBrandColumn = false }) {
+// `judul` dan `subnav` (pemilih tab) diisi halaman pembungkus bertab (menu Komisi).
+export default function RiwayatKomisiPage({ showBrandColumn = false, judul = 'Riwayat Komisi', subnav }) {
   const [params, setParams] = useSearchParams();
-  const [panelOpen, setPanelOpen] = useState(false);
   const filter = {
     brand_id: showBrandColumn ? params.get('brand_id') || '' : '',
     agen_id: params.get('agen_id') || '',
@@ -63,14 +56,13 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
     return () => clearTimeout(timer);
   }, [input]);
 
-  const agenOptions = filter.brand_id ? agenList.filter((a) => String(a.brand_id) === filter.brand_id) : agenList;
-
   const filterKey = params.toString();
   useEffect(() => {
     let batal = false;
     setLoading(true);
     setError('');
-    listRiwayatKomisi({ ...filter, q, limit: PER_PAGE, offset: (page - 1) * PER_PAGE })
+    // Tanpa saringan status: tabel memuat semua komisi, statusnya terbaca di kolom Status.
+    listRiwayatKomisi({ ...filter, status: filter.status || 'semua', q, limit: PER_PAGE, offset: (page - 1) * PER_PAGE })
       .then((data) => { if (!batal) setHasil(data); })
       .catch(() => { if (!batal) setError('Riwayat komisi gagal dimuat. Silakan coba kembali.'); })
       .finally(() => { if (!batal) setLoading(false); });
@@ -90,11 +82,11 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
   });
 
   const columns = [
-    { header: 'Tanggal', key: 'created_at' },
+    { header: 'Tanggal Komisi', key: 'created_at' },
     { header: 'Penerima', key: 'penerima_nama' },
     { header: 'Sumber', key: 'sumber_nama' },
     { header: 'Nominal', key: 'nominal' },
-    { header: 'Ketersediaan', key: 'ketersediaan' },
+    { header: 'Status', key: 'ketersediaan' },
   ];
 
   const renderCell = (row, key) => {
@@ -127,7 +119,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
             <span className={`w-2 h-2 rounded-full ${meta.dot}`} />{meta.label}
           </span>
           {row.ketersediaan === 'tertahan' && (
-            <p className="mt-0.5 text-[11px] font-body text-neutral-400">tersedia mulai {dateLabel(row.tersedia_mulai)}</p>
+            <p className="mt-0.5 text-[11px] font-body text-neutral-400">Dapat dicairkan {dateLabel(row.tersedia_mulai)}</p>
           )}
           {batal && (
             <p className="mt-0.5 text-[11px] font-body text-neutral-400">
@@ -140,78 +132,66 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
     return row[key] ?? '-';
   };
 
-  const panelActive = ['brand_id', 'agen_id', 'dari', 'sampai'].filter((key) => filter[key]).length;
+  // Periode = rentang tanggal komisi tercatat, dipilih di satu kontrol (PeriodePicker).
+  const periode = params.get('periode') || (filter.dari && filter.sampai ? 'kustom' : '');
+  const pilihPeriode = ({ preset, dari, sampai }) => ubahParams((next) => {
+    ['periode', 'dari', 'sampai'].forEach((k) => next.delete(k));
+    if (!preset) return;
+    next.set('periode', preset);
+    next.set('dari', dari);
+    next.set('sampai', sampai);
+  });
+  // Saringan satu agen hanya datang dari tautan halaman agen ("Lihat riwayat lengkap"); di sini cukup
+  // ditampilkan dan bisa dilepas. Mencari agen lain memakai kotak cari.
+  const agenTersaring = filter.agen_id ? agenList.find((a) => String(a.akun_id) === filter.agen_id) : null;
+
   const toolbarActions = (
     <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-      <CustomDropdown
-        value={filter.status}
-        onChange={(v) => setFilter('status', valueOf(v))}
-        options={STATUS_OPTIONS}
-        placeholder="Komisi aktif"
-        className="!mb-0 flex-1 sm:w-40 sm:flex-none"
+      <PeriodePicker
+        value={{ preset: periode, dari: filter.dari, sampai: filter.sampai }}
+        onChange={pilihPeriode}
+        labelSemua="Semua periode"
+        className="flex-1 sm:w-48 sm:flex-none"
       />
       <CustomDropdown
         value={filter.jenis}
         onChange={(v) => setFilter('jenis', valueOf(v))}
         options={[{ value: '', label: 'Semua jenis' }, ...Object.entries(JENIS_KOMISI_FILTER).map(([value, label]) => ({ value, label }))]}
         placeholder="Semua jenis"
-        className="!mb-0 flex-1 sm:w-44 sm:flex-none"
+        className="!mb-0 flex-1 sm:w-40 sm:flex-none"
       />
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={() => setPanelOpen((open) => !open)}
-        className={`h-10 shrink-0 whitespace-nowrap ${panelOpen || panelActive ? '!border-primary-200 !bg-primary-50 !text-primary-700' : ''}`}
-        aria-expanded={panelOpen}
-      >
-        <SlidersHorizontal className="w-4 h-4" />
-        <span>Filter{panelActive ? ` (${panelActive})` : ''}</span>
-      </Button>
-    </div>
-  );
-  const toolbarPanel = panelOpen && (
-    <div className="space-y-3">
-      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${showBrandColumn ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-        {showBrandColumn && (
-          <CustomDropdown label="Brand" name="brand_id" value={filter.brand_id}
-            onChange={(v) => ubahParams((next) => {
-              const value = valueOf(v);
-              if (value) next.set('brand_id', value);
-              else next.delete('brand_id');
-              next.delete('agen_id');
-            })}
-            options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
-            placeholder="Semua brand" />
-        )}
-        <CustomDropdown label="Agen" name="agen_id" value={filter.agen_id}
-          onChange={(v) => setFilter('agen_id', valueOf(v))}
-          options={[{ value: '', label: 'Semua agen' }, ...agenOptions.map((a) => ({
-            value: String(a.akun_id),
-            label: showBrandColumn && !filter.brand_id ? `${a.nama_lengkap} (${a.brand_name})` : a.nama_lengkap,
-          }))]} placeholder="Semua agen" />
-        <Input label="Dari tanggal" type="date" name="dari" value={filter.dari} onChange={(e) => setFilter('dari', e.target.value)} />
-        <Input label="Sampai tanggal" type="date" name="sampai" value={filter.sampai} min={filter.dari || undefined} onChange={(e) => setFilter('sampai', e.target.value)} />
-      </div>
-      {Object.values(filter).some(Boolean) && (
-        <div className="flex justify-end">
-          <button type="button" onClick={() => ubahParams((next) => Object.keys(filter).forEach((key) => next.delete(key)))}
-            className="text-sm font-semibold text-neutral-900 underline underline-offset-2">Reset semua filter</button>
-        </div>
+      {showBrandColumn && brands.length > 0 && (
+        <CustomDropdown
+          name="brand_id"
+          value={filter.brand_id}
+          onChange={(v) => setFilter('brand_id', valueOf(v))}
+          options={[{ value: '', label: 'Semua brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
+          placeholder="Semua brand"
+          className="!mb-0 flex-1 sm:w-40 sm:flex-none"
+        />
       )}
     </div>
+  );
+  const toolbarPanel = filter.agen_id && (
+    <span className="inline-flex h-10 items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 text-[13px] font-body text-primary-700">
+      Agen: {agenTersaring?.nama_lengkap || `#${filter.agen_id}`}
+      <button type="button" onClick={() => setFilter('agen_id', '')} className="font-semibold underline underline-offset-2 cursor-pointer">Lepas</button>
+    </span>
   );
 
   const r = hasil.ringkasan || {};
   return (
     <div className="space-y-6">
-      <PageHeader title="Riwayat Komisi" />
+      <PageHeader title={judul} />
+      {subnav}
       {error && <Alert variant="error" message={error} />}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatTile icon={Receipt} variant="primary" value={r.jumlah ?? 0} label="Transaksi" hint="Sesuai filter" />
-        <StatTile icon={Banknote} variant="violet" value={money(r.total)} label="Total komisi" hint="Komisi aktif" />
-        <StatTile icon={CheckCircle2} variant="success" value={money(r.matang)} label="Sudah matang" hint="Belum dikurangi pencairan" />
-        <StatTile icon={Clock3} variant="warning" value={money(r.belum_matang)} label="Tertahan" hint={`Sampai H+${HARI_TAHAN_KOMISI} berangkat`} />
+      {/* Ringkasan baris komisi yang lolos filter. Total = Dapat Dicairkan + Tertahan. Labelnya sama dengan
+          kolom Status di tabel dan kartu saldo di halaman agen. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatTile icon={Banknote} variant="violet" value={money(r.total)} label="Total Komisi" hint={`${r.jumlah ?? 0} transaksi`} />
+        <StatTile icon={CheckCircle2} variant="success" value={money(r.matang)} label="Dapat Dicairkan" hint={`Lewat H+${HARI_TAHAN_KOMISI} keberangkatan`} />
+        <StatTile icon={Clock3} variant="warning" value={money(r.belum_matang)} label="Tertahan" hint={`Hingga H+${HARI_TAHAN_KOMISI} keberangkatan`} />
       </div>
 
       <DataTable

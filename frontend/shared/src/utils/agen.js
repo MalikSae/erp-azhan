@@ -38,7 +38,7 @@ export const SEBAB_BATAL_KOMISI = {
 
 // Ketersediaan per baris ledger (keputusan D4 & D6).
 export const KETERSEDIAAN = {
-  tersedia: { label: 'Tersedia', variant: 'success' },
+  tersedia: { label: 'Dapat dicairkan', variant: 'success' },
   tertahan: { label: 'Tertahan', variant: 'pending' },
   kredit: { label: 'Kredit cashback', variant: 'neutral' },
   batal: { label: 'Dibatalkan', variant: 'neutral' },

@@ -73,10 +73,16 @@ var jenisKomisi = map[string]bool{"langsung": true, "pembinaan": true, "repeat_o
 func syaratKomisi(f KomisiFilter) (string, []any) {
 	where := []string{"1=1"}
 	args := []any{}
+	// Status komisi di layar admin punya tiga nilai: tertahan, tersedia (dapat dicairkan), batal.
+	// "semua" = ketiganya; kosong = yang tidak batal (bawaan portal agen dan pemanggil lama).
 	switch f.Status {
 	case "semua":
 	case "batal":
 		where = append(where, "tk.dibatalkan_at IS NOT NULL")
+	case "tersedia":
+		where = append(where, "tk.dibatalkan_at IS NULL AND tk.jenis <> 'cashback' AND "+komisi.SQLTersediaMulai+" <= CURRENT_DATE")
+	case "tertahan":
+		where = append(where, "tk.dibatalkan_at IS NULL AND tk.jenis <> 'cashback' AND "+komisi.SQLTersediaMulai+" > CURRENT_DATE")
 	default:
 		where = append(where, "tk.dibatalkan_at IS NULL")
 	}
@@ -293,23 +299,50 @@ type AgenListItem struct {
 	KodeReferral    *string    `json:"kode_referral"`
 	StatusAgen      string     `json:"status_agen"`
 	DisetujuiAgenAt *time.Time `json:"disetujui_agen_at"`
-	// Sepanjang waktu. JumlahClosing = jamaah yang direkrut agen ini (sama
-	// dengan Detail Agen). TotalKomisi = langsung + pembinaan + repeat order;
-	// cashback tidak dihitung karena diterima agen sebagai pemesan, bukan hasil
-	// closing.
-	JumlahClosing int     `json:"jumlah_closing"`
-	TotalKomisi   float64 `json:"total_komisi"`
+	UplineID        *int64     `json:"upline_akun_id"`
+	UplineNama      *string    `json:"upline_nama"`
+	// JumlahClosing = jamaah yang terikat ke agen ini, sepanjang waktu (sama dengan Detail Agen).
+	JumlahClosing int `json:"jumlah_closing"`
+	// PaxClosing dan TotalKomisi mengikuti rentang waktu bila diisi, selain itu sepanjang waktu.
+	// PaxClosing = pax yang menghasilkan komisi langsung atau repeat order untuk agen ini (sama dengan
+	// peringkat agen). TotalKomisi = langsung + pembinaan + repeat order; cashback tidak dihitung karena
+	// diterima agen sebagai pemesan, bukan hasil closing.
+	PaxClosing  int     `json:"pax_closing"`
+	TotalKomisi float64 `json:"total_komisi"`
 }
 
-func listAgen(ctx context.Context, q querier, brandID *int64, cari string) ([]AgenListItem, error) {
+// RentangAgen: rentang waktu komisi tercatat (YYYY-MM-DD). Keduanya kosong = sepanjang waktu.
+type RentangAgen struct {
+	Dari, Sampai string
+}
+
+func (r RentangAgen) kosong() bool { return r.Dari == "" && r.Sampai == "" }
+
+func listAgen(ctx context.Context, q querier, brandID *int64, cari string, rentang RentangAgen) ([]AgenListItem, error) {
+	syaratRentang := ""
+	var argRentang []any
+	if !rentang.kosong() {
+		d1, err1 := time.Parse("2006-01-02", rentang.Dari)
+		d2, err2 := time.Parse("2006-01-02", rentang.Sampai)
+		if err1 != nil || err2 != nil || d1.After(d2) {
+			return nil, ErrPeriodeTidakValid
+		}
+		syaratRentang = ` AND tk.created_at >= ? AND tk.created_at < DATE_ADD(?, INTERVAL 1 DAY)`
+		argRentang = []any{rentang.Dari, rentang.Sampai}
+	}
+	// Upline agen: upline_akun_id (disalin saat disetujui); akun lama yang belum punya memakai direkrut_oleh_akun_id.
 	query := `
 		SELECT j.id, j.brand_id, b.name, j.nama_lengkap, j.kode_referral, j.status_agen, j.disetujui_agen_at,
+		       up.id, up.nama_lengkap,
 		       (SELECT COUNT(*) FROM jamaah r WHERE r.direkrut_oleh_akun_id = j.id),
+		       (SELECT COUNT(DISTINCT tk.booking_pax_id) FROM transaksi_komisi tk
+		         WHERE tk.akun_penerima_id = j.id AND tk.jenis IN ('langsung','repeat_order') AND tk.dibatalkan_at IS NULL` + syaratRentang + `),
 		       (SELECT COALESCE(SUM(tk.nominal),0) FROM transaksi_komisi tk
-		         WHERE tk.akun_penerima_id = j.id AND tk.jenis <> 'cashback' AND tk.dibatalkan_at IS NULL)
+		         WHERE tk.akun_penerima_id = j.id AND tk.jenis <> 'cashback' AND tk.dibatalkan_at IS NULL` + syaratRentang + `)
 		FROM customer_accounts j JOIN brands b ON b.id = j.brand_id
+		LEFT JOIN customer_accounts up ON up.id = COALESCE(j.upline_akun_id, j.direkrut_oleh_akun_id)
 		WHERE j.status_agen IN ('aktif','nonaktif')`
-	args := []any{}
+	args := append(append([]any{}, argRentang...), argRentang...)
 	if brandID != nil {
 		query += ` AND j.brand_id = ?`
 		args = append(args, *brandID)
@@ -327,9 +360,13 @@ func listAgen(ctx context.Context, q querier, brandID *int64, cari string) ([]Ag
 	items := []AgenListItem{}
 	for rows.Next() {
 		var a AgenListItem
+		var upline sql.NullInt64
 		if err := rows.Scan(&a.AkunID, &a.BrandID, &a.BrandName, &a.NamaLengkap, &a.KodeReferral, &a.StatusAgen, &a.DisetujuiAgenAt,
-			&a.JumlahClosing, &a.TotalKomisi); err != nil {
+			&upline, &a.UplineNama, &a.JumlahClosing, &a.PaxClosing, &a.TotalKomisi); err != nil {
 			return nil, fmt.Errorf("agen: scan agen: %w", err)
+		}
+		if upline.Valid {
+			a.UplineID = &upline.Int64
 		}
 		items = append(items, a)
 	}
@@ -363,6 +400,8 @@ type DetailAgen struct {
 	DiajukanAt        *time.Time `json:"diajukan_agen_at"`
 	DisetujuiAt       *time.Time `json:"disetujui_agen_at"`
 	DisetujuiOlehNama *string    `json:"disetujui_agen_oleh_nama"`
+	// NIKMasked: NIK agen tersamar; kosong bila belum tercatat.
+	NIKMasked string `json:"nik_masked"`
 	// c. Jaringan (agen ke agen)
 	UplineID       *int64  `json:"upline_akun_id"`
 	UplineNama     *string `json:"upline_nama"`
@@ -383,10 +422,11 @@ type DetailAgen struct {
 func getDetailAgen(ctx context.Context, q querier, akunID int64, brandID *int64) (*DetailAgen, error) {
 	var d DetailAgen
 	var upline sql.NullInt64
+	var nik sql.NullString
 	err := q.QueryRowContext(ctx, `
 		SELECT j.id, j.brand_id, b.name, j.nama_lengkap, j.no_hp, j.foto_url, j.domisili,
 		       j.menyetujui_syarat_ketentuan_agen_at, j.status_agen, j.kode_referral, j.diajukan_agen_at,
-		       j.disetujui_agen_at, COALESCE(au.display_name, au.email), j.upline_akun_id, up.nama_lengkap
+		       j.disetujui_agen_at, COALESCE(au.display_name, au.email), j.upline_akun_id, up.nama_lengkap, j.nik_agen
 		FROM customer_accounts j
 		JOIN brands b ON b.id = j.brand_id
 		LEFT JOIN admin_users au ON au.id = j.disetujui_agen_oleh
@@ -394,7 +434,7 @@ func getDetailAgen(ctx context.Context, q querier, akunID int64, brandID *int64)
 		WHERE j.id = ? AND j.status_agen IN ('aktif','nonaktif')`, akunID).
 		Scan(&d.AkunID, &d.BrandID, &d.BrandName, &d.NamaLengkap, &d.NoHP, &d.FotoURL, &d.Domisili,
 			&d.SetujuSKAt, &d.StatusAgen, &d.KodeReferral, &d.DiajukanAt,
-			&d.DisetujuiAt, &d.DisetujuiOlehNama, &upline, &d.UplineNama)
+			&d.DisetujuiAt, &d.DisetujuiOlehNama, &upline, &d.UplineNama, &nik)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != d.BrandID) {
 		return nil, ErrNotFound
 	}
@@ -403,6 +443,9 @@ func getDetailAgen(ctx context.Context, q querier, akunID int64, brandID *int64)
 	}
 	if upline.Valid {
 		d.UplineID = &upline.Int64
+	}
+	if nik.Valid && nik.String != "" {
+		d.NIKMasked = maskNIK(nik.String)
 	}
 	if d.JumlahDownline, d.JumlahClosing, err = jaringan(ctx, q, akunID); err != nil {
 		return nil, err
@@ -468,8 +511,8 @@ func listSiklus(ctx context.Context, q querier, akunID int64) ([]Pembayaran, err
 	return items, rows.Err()
 }
 
-func (r *Repository) ListAgen(ctx context.Context, brandID *int64, cari string) ([]AgenListItem, error) {
-	return listAgen(ctx, r.db, brandID, cari)
+func (r *Repository) ListAgen(ctx context.Context, brandID *int64, cari string, rentang RentangAgen) ([]AgenListItem, error) {
+	return listAgen(ctx, r.db, brandID, cari, rentang)
 }
 
 func (r *Repository) GetDetailAgen(ctx context.Context, akunID int64, brandID *int64) (*DetailAgen, error) {

@@ -21,11 +21,10 @@ import {
   UserRound,
   Wallet,
   Megaphone,
-  Banknote,
-  Trophy,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { listPerubahanJamaah, EVENT_PERUBAHAN_JAMAAH, listPencairanAdmin, EVENT_PENCAIRAN_KOMISI } from 'shared';
+import { useJumlahPengajuanAgen } from '../utils/pengajuanAgen';
 import KaabaIcon from '../../../shared/src/components/icons/KaabaIcon';
 
 const Sidebar = ({ isOpen, closeDrawer }) => {
@@ -82,10 +81,16 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     };
   }, [bolehCairkan, location.pathname]);
 
+  // Menu Komisi membuka tab pertama yang boleh dilihat pengguna.
+  const alamatKomisi = bolehCairkan ? '/komisi' : '/agen/komisi';
+  // Jumlah baris antrean pengajuan agen, tampil di menu Agen (antreannya di tab Pengajuan).
+  const menungguPengajuanAgen = useJumlahPengajuanAgen(hasPermission('agen.approve'));
+
   // Angka kecil di kanan item menu: path -> { jumlah, keterangan }.
   const penanda = {
     '/jamaah': { jumlah: menungguJamaah, keterangan: 'perubahan data menunggu persetujuan' },
-    '/komisi': { jumlah: menungguPencairan, keterangan: 'pengajuan pencairan menunggu keputusan' },
+    '/agen': { jumlah: menungguPengajuanAgen || 0, keterangan: 'pengajuan agen menunggu keputusan' },
+    [alamatKomisi]: { jumlah: menungguPencairan, keterangan: 'pengajuan pencairan menunggu keputusan' },
   };
 
   const toggleGroup = (groupName) => {
@@ -99,19 +104,19 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'JAMAAH & BOOKING',
       items: [
         { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
-        { name: 'Akun Pelanggan', path: '/akun', icon: UserRound, perm: 'akun.view' },
         { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
         { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
       ],
     },
     {
-      name: 'AGEN',
+      // Akun (orang yang bisa booking), agen (akun yang ikut program keagenan), dan komisinya.
+      name: 'AKUN & AGEN',
       items: [
-        { name: 'Daftar Agen', path: '/agen', icon: Users, perm: 'agen.view' },
-        { name: 'Riwayat Komisi', path: '/agen/komisi', icon: Wallet, perm: 'komisi.view' },
-        { name: 'Pengajuan Agen', path: '/agen/pengajuan', icon: UserCheck, perm: 'agen.approve' },
-        { name: 'Pencairan Komisi', path: '/komisi', icon: Banknote, perm: 'agen.payout.approve' },
-        { name: 'Peringkat Agen', path: '/analytics/peringkat-agen', icon: Trophy, perm: 'agen.view' },
+        // Satu menu per benda. `cocok` menentukan kapan menu aktif, karena alamat lama dipertahankan:
+        // /agen/komisi milik menu Komisi, dan Ganti Kaitan (/komisi/ganti-kaitan) dibuka dari detail akun.
+        { name: 'Akun', path: '/akun', icon: UserRound, perm: 'akun.view', cocok: (p) => p === '/akun' || p.startsWith('/akun/') || p.startsWith('/komisi/ganti-kaitan') },
+        { name: 'Agen', path: '/agen', icon: UserCheck, perm: 'agen.view', cocok: (p) => p === '/agen' || (p.startsWith('/agen/') && !p.startsWith('/agen/komisi')) },
+        { name: 'Komisi', path: alamatKomisi, icon: Wallet, permAny: ['agen.payout.approve', 'komisi.view'], cocok: (p) => p === '/komisi' || p.startsWith('/agen/komisi') },
       ],
     },
     {
@@ -151,7 +156,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
 
   const menuGroups = useMemo(
     () => allGroups
-      .map((g) => ({ ...g, items: g.items.filter((i) => (!i.holdingOnly || isHolding) && (!i.perm || hasPermission(i.perm))) }))
+      .map((g) => ({ ...g, items: g.items.filter((i) => (!i.holdingOnly || isHolding) && (!i.perm || hasPermission(i.perm)) && (!i.permAny || i.permAny.some(hasPermission))) }))
       .filter((g) => g.items.length > 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hasPermission, isHolding],
@@ -230,12 +235,11 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
                         <NavLink
                           key={item.path}
                           to={item.path}
-                          end={item.path === '/komisi' || item.path === '/agen'}
                           onClick={closeDrawer}
                           className={({ isActive: matched }) => {
                             // Item induk (mis. /jamaah) tidak aktif bila item yang lebih spesifik
                             // (mis. /jamaah/duplikat) sedang dibuka.
-                            const isActive = matched && !menuGroups.some((g) => g.items.some((o) =>
+                            const isActive = (item.cocok ? item.cocok(location.pathname) : matched) && !menuGroups.some((g) => g.items.some((o) =>
                               o.path !== item.path && o.path.startsWith(`${item.path}/`)
                               && (location.pathname === o.path || location.pathname.startsWith(`${o.path}/`))));
                             if (isInactive) {

@@ -40,9 +40,10 @@ export default function KelolaJamaahPage({ tab = 'daftar', showBrandColumn = fal
     return (
       <div className="space-y-6">
         <PageHeader title="Kelola Jamaah" actionLabel="+ Tambah Jamaah" onAction={() => navigate('/jamaah/new')} />
-        <PerubahanJamaahPanel toolbarLeading={pemilihTab} />
+        {pemilihTab}
+        <PerubahanJamaahPanel />
       </div>
     );
   }
-  return <JamaahPage showBrandColumn={showBrandColumn} toolbarLeading={pemilihTab} />;
+  return <JamaahPage showBrandColumn={showBrandColumn} subnav={pemilihTab} />;
 }

@@ -12,7 +12,7 @@ import (
 func TestListAkunAdminFilterDanBatasBrand(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
-	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
+	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
 	upline := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "VxqUpline", StatusAgen: "aktif"})
 	agen := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "VxqAgen", StatusAgen: "aktif", Direkrut: upline, Upline: upline})
 	biasa := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "VxqBiasa", Direkrut: upline})
@@ -50,7 +50,34 @@ func TestListAkunAdminFilterDanBatasBrand(t *testing.T) {
 	if baris == nil || baris.UplineID == nil || *baris.UplineID != upline || baris.UplineNama == nil || !strings.HasPrefix(*baris.UplineNama, "VxqUpline") {
 		t.Fatalf("baris agen = %+v", baris)
 	}
-	_ = biasa
+	// Filter agen: aktif dan nonaktif dihitung agen; akun biasa dan calon agen tidak.
+	testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "VxqCalon", StatusAgen: "pengajuan"})
+	testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "VxqMantan", StatusAgen: "nonaktif"})
+	hanyaAgen, err := listAkun(ctx, tx, &brand, FilterAkun{Cari: "Vxq", Agen: "agen"})
+	must(t, "filter agen", err)
+	bukanAgen, err := listAkun(ctx, tx, &brand, FilterAkun{Cari: "Vxq", Agen: "bukan"})
+	must(t, "filter bukan agen", err)
+	if hanyaAgen.Total != 3 || bukanAgen.Total != 3 {
+		t.Fatalf("agen=%d bukan=%d, want 3 dan 3", hanyaAgen.Total, bukanAgen.Total)
+	}
+	if _, err := listAkun(ctx, tx, &brand, FilterAkun{Agen: "mungkin"}); !errors.Is(err, ErrFilterAkun) {
+		t.Fatalf("filter agen tidak dikenal harus ditolak: %v", err)
+	}
+
+	// Jumlah booking per baris: akun biasa punya satu booking, lainnya nol.
+	_, err = tx.ExecContext(ctx, `INSERT INTO bookings (id_booking, schedule_id, seat_count, status, customer_account_id) VALUES ('VXQBK1', ?, 1, 'baru', ?)`, sched, biasa)
+	must(t, "booking uji", err)
+	semua, err := listAkun(ctx, tx, &brand, FilterAkun{Cari: "Vxq", PerPage: 50})
+	must(t, "jumlah booking", err)
+	for _, it := range semua.Items {
+		want := 0
+		if it.AkunID == biasa {
+			want = 1
+		}
+		if it.JumlahBooking != want {
+			t.Fatalf("jumlah_booking akun %d = %d, want %d", it.AkunID, it.JumlahBooking, want)
+		}
+	}
 
 	brandLain := brand + 999_999
 	kosong, err := listAkun(ctx, tx, &brandLain, FilterAkun{Cari: "Vxq"})
