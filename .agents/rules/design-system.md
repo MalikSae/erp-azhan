@@ -144,7 +144,7 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 | `Textarea` | — | |
 | `Label` | — | Dipakai internal oleh Input/Select, jarang dipanggil langsung |
 | `FormField` | — | Wrapper generik: label + children + error message, untuk kasus di luar Input/Select standar |
-| `Badge` | `draft` (warning), `published` (success), `archived` (neutral), `promo` (warning) | Status paket & promo SELALU pakai ini, bukan span berwarna manual |
+| `Badge` | nada `success`, `warning`, `danger`, `info`, `neutral`, `promo` | **Satu-satunya gaya status** — lihat §5.2. Juga dipakai untuk atribut (brand, kategori) dengan `PILL_STRONG`. |
 | `Card` | — | Container panel dengan padding & shadow standar |
 | `PageHeader` | — | Judul halaman + tombol aksi (mis. "+ Tambah Hotel") di kanan, dipakai di SETIAP halaman CRUD |
 | `Table` | — | Header, row, empty state bawaan — dipakai untuk semua list data (hotel, maskapai, itinerary, paket) |
@@ -164,6 +164,26 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 - Di halaman **daftar**, pakai `DataTable`; pencarian/filter/tab ada di toolbar kartu itu sendiri (`toolbarLeading`, `toolbarActions`, `toolbarPanel`).
 - Tabel lebar boleh dibungkus `overflow-x-auto` (bukan kotak berbingkai).
 - Pengecualian: kartu **widget dashboard** (judul + ringkasan + tabel mini dalam satu kartu).
+
+## 5.2 Aturan Status (WAJIB)
+
+Semua status di semua halaman tampil dengan **satu gaya**: komponen `Badge` (kotak tint tipis, radius 4px, `text-xs font-medium`, tanpa ikon, tanpa titik). Tidak ada lagi "titik + teks", pil bertitik, atau teks berwarna sebagai status.
+
+Halaman cukup memetakan status ke **nada** `Badge`:
+
+| Nada | Arti | Contoh |
+|---|---|---|
+| `success` | selesai / baik / aktif | Published, Aktif, Lunas, Terkonfirmasi, Disetujui, Tayang, Selesai |
+| `warning` | perlu tindakan / menunggu / setengah jalan | Draft, DP, Menunggu, Mengajukan, Akan tayang, Transit |
+| `danger` | gagal / dibatalkan | Batal, Ditolak |
+| `info` | informasi berwarna tanpa makna baik-buruk | Baru, Direct, Langsung tersimpan |
+| `neutral` | tidak aktif / selesai tanpa makna | Archived, Nonaktif, Berakhir, Dibatalkan (void) |
+| `promo` | label promo | Promo |
+
+Larangan:
+- Jangan menimpa warna `Badge` lewat `className` (`!bg-…`, `!text-…`). Kalau nada tidak cocok, pilih nada lain.
+- Jangan membuat `<span>` status sendiri. Tabel status lama yang memakai kelas titik (`dot: 'bg-success-500'`) boleh diubah lewat `toneFromClass(dot)` dari `Badge.jsx`.
+- Status Aktif/Nonaktif memakai `StatusChip` (`penggunaUi`), yang kini merender `Badge`.
 
 ## 6. Alur Kerja untuk Halaman Baru
 

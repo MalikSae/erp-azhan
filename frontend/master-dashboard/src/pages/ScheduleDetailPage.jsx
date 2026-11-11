@@ -62,16 +62,10 @@ const assetUrl = (url) =>
 
 const STATUS_LABEL = { published: 'Published', draft: 'Draft', archived: 'Archived' };
 
-// Warna dipertegas agar tetap terbaca di atas latar halaman abu-abu.
-const STATUS_STRONG = {
-  published: '!bg-success-100 !border-success-300 !text-success-800',
-  draft: '!border-neutral-400 !text-neutral-800',
-  archived: '!bg-neutral-200 !border-neutral-300 !text-neutral-800',
-};
-
-// Status paket memakai Badge bersama; atribut lain (brand, jenis penerbangan) memakai pil netral.
+// Status paket memakai Badge bersama (satu gaya status, lihat Badge.jsx);
+// atribut lain (brand, kategori) memakai pil netral.
 const StatusBadge = ({ status }) => (
-  <Badge variant={STATUS_LABEL[status] ? status : 'archived'} hideIcon className={STATUS_STRONG[status] || STATUS_STRONG.archived}>
+  <Badge variant={STATUS_LABEL[status] ? status : 'archived'}>
     {STATUS_LABEL[status] || '-'}
   </Badge>
 );
@@ -499,8 +493,8 @@ const ScheduleDetailPage = () => {
             title="Penerbangan"
             aside={
               schedule.is_direct_flight
-                ? <Badge variant="neutral" hideIcon className="!bg-info-600 !border-info-600 !text-white">Direct</Badge>
-                : <Badge variant="warning" hideIcon className="!bg-warning-600 !border-warning-600 !text-white">Transit</Badge>
+                ? <Badge variant="info">Direct</Badge>
+                : <Badge variant="warning">Transit</Badge>
             }
           >
             <div className="space-y-5 font-body">

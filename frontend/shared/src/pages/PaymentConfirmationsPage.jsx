@@ -17,9 +17,6 @@ import VoidPaymentModal from '../components/VoidPaymentModal';
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${String(value).slice(0, 10)}T00:00:00`));
 const statusMeta = PAYMENT_STATUS_META;
-const STATUS_STRONG = Object.fromEntries(
-  Object.entries(PAYMENT_STATUS_META).map(([key, meta]) => [key, meta.className]),
-);
 const EMPTY_FILTERS = { status: '', brand: '' };
 // Pembayaran yang dicatat admin langsung terkonfirmasi oleh orang yang sama; ditandai di detail pembayaran.
 const pencatatSama = (item) => item.dicatat_oleh != null && item.dicatat_oleh === item.verified_by;
@@ -279,7 +276,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
       const meta = statusMeta[row.status] || { label: row.status || '-', variant: 'archived' };
       return (
         <div className="max-w-44">
-          <Badge variant={meta.variant} hideIcon className={STATUS_STRONG[row.status]}>{meta.label}</Badge>
+          <Badge variant={meta.variant}>{meta.label}</Badge>
           {/* Alasan satu baris; teks lengkapnya ada di tooltip dan di detail pembayaran. */}
           {row.rejection_reason && <p className="mt-1 truncate text-xs font-body text-danger-700 leading-tight" title={row.rejection_reason}>{row.rejection_reason}</p>}
         </div>
@@ -433,7 +430,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                 <span className="font-heading text-3xl font-semibold tracking-tight text-neutral-900">
                   {money(selectedPayment.jumlah)}
                 </span>
-                {selectedMeta && <Badge variant={selectedMeta.variant} hideIcon className={STATUS_STRONG[selectedPayment.status]}>{selectedMeta.label}</Badge>}
+                {selectedMeta && <Badge variant={selectedMeta.variant}>{selectedMeta.label}</Badge>}
               </div>
 
               {selectedPayment.status === 'void' && (

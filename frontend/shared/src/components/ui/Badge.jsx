@@ -1,102 +1,54 @@
 import React from 'react';
 
-const defaultIcons = {
-  success: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-    </svg>
-  ),
-  published: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-    </svg>
-  ),
-  approved: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-    </svg>
-  ),
-  warning: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  pending: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  draft: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-    </svg>
-  ),
-  danger: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  failed: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  archived: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-    </svg>
-  ),
-  neutral: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
-    </svg>
-  ),
-  primary: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-    </svg>
-  ),
-  promo: (
-    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-    </svg>
-  ),
+// Badge — SATU-SATUNYA gaya status di dashboard (DESIGN.md, design-system.md §5.2):
+// kotak tint tipis, radius 4px, teks xs medium, tanpa ikon dan tanpa titik.
+// Halaman cukup memetakan statusnya ke salah satu nada di bawah; jangan
+// menimpa warna lewat className (`!bg-…`) atau membuat span status sendiri.
+//
+//   success  → selesai/baik: Published, Aktif, Lunas, Disetujui, Tayang
+//   warning  → perlu tindakan/menunggu: Draft, DP, Menunggu, Mengajukan, Akan tayang
+//   danger   → gagal/dibatalkan: Batal, Ditolak, Void
+//   info     → informasi netral berwarna: Langsung tersimpan, Direct
+//   neutral  → tidak aktif/selesai tanpa makna: Archived, Nonaktif, Berakhir
+//   promo    → label promo (oranye accent)
+const TONES = {
+  success: 'bg-success-50 text-success-700 border-success-200',
+  warning: 'bg-warning-50 text-warning-800 border-warning-200',
+  danger: 'bg-danger-50 text-danger-700 border-danger-200',
+  info: 'bg-info-50 text-info-600 border-info-100',
+  neutral: 'bg-neutral-100 text-neutral-700 border-neutral-200',
+  promo: 'bg-accent-50 text-accent-700 border-accent-100',
 };
 
-const Badge = ({ variant = 'draft', icon, showIcon = true, hideIcon = false, children, className = '' }) => {
-  const variants = {
-    // Pastel Soft Tint Style
-    published: 'bg-success-50 text-success-700 border border-success-200',
-    success: 'bg-success-50 text-success-700 border border-success-200',
-    approved: 'bg-success-50 text-success-700 border border-success-200',
-    
-    warning: 'bg-warning-50 text-warning-800 border border-warning-200',
-    pending: 'bg-warning-50 text-warning-800 border border-warning-200',
-    
-    draft: 'bg-white text-neutral-600 border border-dashed border-neutral-300',
-    
-    danger: 'bg-danger-50 text-danger-700 border border-danger-200',
-    failed: 'bg-danger-50 text-danger-700 border border-danger-200',
-    
-    archived: 'bg-neutral-100 text-neutral-700 border border-neutral-200',
-    neutral: 'bg-neutral-100 text-neutral-700 border border-neutral-200',
-    
-    primary: 'bg-primary-50 text-primary-700 border border-primary-200',
-    promo: 'bg-accent-50 text-accent-700 border border-accent-100',
-  };
+// Nama lama tetap diterima supaya pemanggil lama tidak rusak.
+const ALIASES = {
+  published: 'success', approved: 'success',
+  pending: 'warning', draft: 'warning',
+  failed: 'danger',
+  archived: 'neutral', primary: 'neutral',
+};
 
-  const selectedVariant = variants[variant] || variants.draft;
-  const badgeIcon = icon !== undefined ? icon : (defaultIcons[variant] || null);
-  const isIconVisible = hideIcon ? false : showIcon;
-
+// `icon` hanya untuk atribut non-status (mis. titik warna brand di BrandBadge).
+// `showIcon`/`hideIcon` diabaikan; dipertahankan agar pemanggil lama tetap jalan.
+// eslint-disable-next-line no-unused-vars
+const Badge = ({ variant = 'neutral', icon, showIcon, hideIcon, children, className = '' }) => {
+  const tone = TONES[variant] ? variant : (ALIASES[variant] || 'neutral');
   return (
-    <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading ${selectedVariant} ${className}`}
-    >
-      {isIconVisible && badgeIcon}
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border text-xs font-medium font-heading whitespace-nowrap ${TONES[tone]} ${className}`}>
+      {icon}
       <span>{children}</span>
     </span>
   );
+};
+
+// Peta lama berbasis kelas titik (mis. `dot: 'bg-success-500'`) ke nada Badge,
+// supaya tabel status lama bisa langsung dirender sebagai Badge.
+export const toneFromClass = (cls = '') => {
+  if (cls.includes('success')) return 'success';
+  if (cls.includes('warning')) return 'warning';
+  if (cls.includes('danger')) return 'danger';
+  if (cls.includes('info')) return 'info';
+  return 'neutral';
 };
 
 export default Badge;

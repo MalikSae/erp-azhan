@@ -44,6 +44,7 @@ import AutocompleteInput from "../components/ui/AutocompleteInput";
 import FormField from "../components/ui/FormField";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
+import Badge from "../components/ui/Badge";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 
@@ -1281,12 +1282,9 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                           <span className="font-medium text-neutral-900">
                             {selectedSchedule.maskapai?.name || "-"}
                           </span>
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-                            selectedSchedule.is_direct_flight ? "text-success-700" : "text-neutral-500"
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${selectedSchedule.is_direct_flight ? "bg-success-500" : "bg-neutral-400"}`} />
+                          <Badge variant={selectedSchedule.is_direct_flight ? "info" : "warning"}>
                             {selectedSchedule.is_direct_flight ? "Direct" : (transitInfo.badgeText || "Transit")}
-                          </span>
+                          </Badge>
                         </div>
                       </div>
                     </div>

@@ -8,7 +8,7 @@ import { listBookings } from "../api/bookings";
 import { listBrandOptions } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
 import { Surface, Section, Field, SummaryItem, PILL_STRONG, BrandBadge, TableCard } from "../components/ui/DetailLayout";
-import Badge from "../components/ui/Badge";
+import Badge, { toneFromClass } from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
 import ActionMenu from "../components/ui/ActionMenu";
@@ -96,13 +96,9 @@ const InfoItem = ({ label, value, colSpan = false }) => (
   </Field>
 );
 
-// Status = titik berwarna kecil + teks (bukan pil berwarna).
-const StatusDot = ({ label, text, dot }) => (
-  <span className={`inline-flex items-center gap-1.5 text-xs font-body whitespace-nowrap ${text}`}>
-    <span className={`w-2 h-2 rounded-full ${dot}`} />
-    {label}
-  </span>
-);
+// Status memakai Badge bersama (satu gaya status, lihat Badge.jsx).
+// eslint-disable-next-line no-unused-vars
+const StatusDot = ({ label, text, dot }) => <Badge variant={toneFromClass(dot)}>{label}</Badge>;
 
 const BOOKING_STATUS = {
   baru: { text: "text-info-700", dot: "bg-info-500" },

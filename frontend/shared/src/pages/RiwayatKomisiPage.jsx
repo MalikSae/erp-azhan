@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { listAgen, listRiwayatKomisi } from '../api/agen';
 import { listBrandOptions } from '../api/brands';
 import Alert from '../components/ui/Alert';
+import Badge, { toneFromClass } from '../components/ui/Badge';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import PeriodePicker from '../components/ui/PeriodePicker';
 import DataTable from '../components/ui/DataTable';
@@ -115,9 +116,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false, judul = 'Ri
       const meta = KETERSEDIAAN_STYLE[row.ketersediaan] || { label: row.ketersediaan, text: 'text-neutral-500', dot: 'bg-neutral-300' };
       return (
         <div>
-          <span className={`inline-flex items-center gap-1.5 text-xs font-body ${meta.text}`}>
-            <span className={`w-2 h-2 rounded-full ${meta.dot}`} />{meta.label}
-          </span>
+          <Badge variant={toneFromClass(meta.dot)}>{meta.label}</Badge>
           {row.ketersediaan === 'tertahan' && (
             <p className="mt-0.5 text-xs font-body text-neutral-400">Dapat dicairkan {dateLabel(row.tersedia_mulai)}</p>
           )}

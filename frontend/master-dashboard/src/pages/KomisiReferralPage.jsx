@@ -10,6 +10,7 @@ import {
   listBrandOptions,
 } from 'shared';
 import Alert from 'shared/ui/Alert';
+import Badge from 'shared/ui/Badge';
 import Button from 'shared/ui/Button';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import DataTable from 'shared/ui/DataTable';
@@ -21,10 +22,11 @@ import Textarea from 'shared/ui/Textarea';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+// Nada Badge per status pencairan (satu gaya status, lihat Badge.jsx).
 const statusMeta = {
-  pending: { label: 'Menunggu', chip: 'bg-warning-50 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
-  disetujui: { label: 'Disetujui', chip: 'bg-success-50 text-success-700 border-success-200', dot: 'bg-success-500' },
-  ditolak: { label: 'Ditolak', chip: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
+  pending: { label: 'Menunggu', variant: 'warning' },
+  disetujui: { label: 'Disetujui', variant: 'success' },
+  ditolak: { label: 'Ditolak', variant: 'danger' },
 };
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Menunggu' },
@@ -177,13 +179,8 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
     }
     if (key === 'diajukan_at') return <span className="text-sm font-body text-neutral-500 whitespace-nowrap">{dateLabel(row.diajukan_at)}</span>;
     if (key === 'status') {
-      const meta = statusMeta[row.status] || { label: row.status, chip: 'bg-neutral-50 text-neutral-600 border-neutral-200', dot: 'bg-neutral-400' };
-      return (
-        <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading border ${meta.chip}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
-          {meta.label}
-        </span>
-      );
+      const meta = statusMeta[row.status] || { label: row.status, variant: 'neutral' };
+      return <Badge variant={meta.variant}>{meta.label}</Badge>;
     }
     if (key === 'actions') {
       return (

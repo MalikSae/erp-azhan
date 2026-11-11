@@ -3,6 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import { listPengumuman, createPengumuman, updatePengumuman, deletePengumuman, listBrandOptions, listSchedulesAdmin } from 'shared';
 import Alert from 'shared/ui/Alert';
 import ActionMenu from 'shared/ui/ActionMenu';
+import Badge from 'shared/ui/Badge';
 import Button from 'shared/ui/Button';
 import DataTable from 'shared/ui/DataTable';
 import Input from 'shared/ui/Input';
@@ -14,20 +15,16 @@ import { Pencil, Trash2 } from 'lucide-react';
 
 const tgl = (v) => (!v ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${v}T00:00:00`)));
 
+// Nada Badge per status pengumuman (satu gaya status, lihat Badge.jsx).
 const STATUS = {
-  tayang: { label: 'Tayang', dot: 'bg-success-500' },
-  akan_tayang: { label: 'Akan tayang', dot: 'bg-warning-500' },
-  berakhir: { label: 'Berakhir', dot: 'bg-neutral-400' },
+  tayang: { label: 'Tayang', variant: 'success' },
+  akan_tayang: { label: 'Akan tayang', variant: 'warning' },
+  berakhir: { label: 'Berakhir', variant: 'neutral' },
 };
 
 const StatusDot = ({ status }) => {
-  const meta = STATUS[status] || { label: status, dot: 'bg-neutral-400' };
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-body text-neutral-700">
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
-      {meta.label}
-    </span>
-  );
+  const meta = STATUS[status] || { label: status, variant: 'neutral' };
+  return <Badge variant={meta.variant}>{meta.label}</Badge>;
 };
 
 const KOSONG = { brand_id: '', schedule_id: '', judul: '', isi: '', mulai: '', akhir: '' };
