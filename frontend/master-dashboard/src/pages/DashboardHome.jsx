@@ -9,7 +9,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import Alert from 'shared/ui/Alert';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 import { listSchedulesAdmin } from '../api/schedules';
 import { listHotels } from '../api/hotels';
 import { listAirlines } from '../api/airlines';
@@ -78,14 +78,21 @@ const DashboardHome = () => {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      listBrands(), listSchedulesAdmin(), listHotels(), listAirlines(),
+    // allSettled: peran yang tidak memegang semua izin tetap melihat bagian yang boleh ia lihat.
+    // Galat hanya ditampilkan bila tidak ada satu pun bagian yang berhasil dimuat.
+    Promise.allSettled([
+      listBrandOptions(), listSchedulesAdmin(), listHotels(), listAirlines(),
       listPax30Days(), listTransactions30Days(),
     ])
-      .then(([brands, schedules, hotels, airlines, pax, trx]) => {
-        if (active) setData({ brands: brands || [], schedules: schedules || [], hotels: hotels || [], airlines: airlines || [], pax: pax || [], trx: trx || [] });
+      .then((hasil) => {
+        if (!active) return;
+        const [brands, schedules, hotels, airlines, pax, trx] = hasil.map((h) => (h.status === 'fulfilled' ? h.value || [] : []));
+        setData({ brands, schedules, hotels, airlines, pax, trx });
+        const gagal = hasil.filter((h) => h.status === 'rejected');
+        if (gagal.length === hasil.length) {
+          setError(gagal[0].reason?.response?.data?.error || 'Ringkasan dashboard gagal dimuat.');
+        }
       })
-      .catch((err) => { if (active) setError(err.response?.data?.error || 'Ringkasan dashboard gagal dimuat.'); })
       .finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
   }, []);

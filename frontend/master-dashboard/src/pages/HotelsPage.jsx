@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { Hotel, MapPin, Star, Play, Pencil, Trash2 } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
+import { tautanAman } from 'shared';
 import DataTable from 'shared/ui/DataTable';
 import Button from 'shared/ui/Button';
 import Modal from 'shared/ui/Modal';
@@ -221,11 +222,9 @@ const HotelsPage = () => {
       fetchHotelsAndCities();
     } catch (error) {
       setDeleteConfirmId(null);
-      if (error.response?.status === 409) {
-        setErrorMessage(error.response?.data?.error || "Tidak bisa dihapus, masih dipakai oleh paket lain.");
-      } else {
-        setErrorMessage("Terjadi kesalahan saat menghapus data.");
-      }
+      setErrorMessage(error.response?.data?.error || (error.response?.status === 409
+        ? "Tidak bisa dihapus, masih dipakai oleh paket lain."
+        : "Terjadi kesalahan saat menghapus data."));
     }
   };
 
@@ -321,7 +320,7 @@ const HotelsPage = () => {
       if (!row.video_url) return <span className="text-xs text-neutral-400 font-body">-</span>;
       return (
         <a
-          href={row.video_url}
+          href={tautanAman(row.video_url)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}

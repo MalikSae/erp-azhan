@@ -686,15 +686,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     }
   };
 
-  const handleUpdatePaymentStatus = async (paymentId, newStatus, reason = null) => {
-    try {
-      await updatePaymentStatus(paymentId, newStatus, reason);
-      fetchAll();
-    } catch (err) {
-      setError(err.response?.data?.error || "Gagal mengubah status pembayaran");
-    }
-  };
-
   const handleRejectPaymentSubmit = async (e) => {
     e.preventDefault();
     if (!selectedPaymentForReject || rejectionReason.trim().length < 3) return;
@@ -1837,7 +1828,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </div>
 
             <p className="text-neutral-600 text-sm leading-relaxed">
-              Pastikan dana sudah benar-benar masuk ke rekening tujuan. Setelah dikonfirmasi, status booking akan disinkronkan dan alokasi seat akan dikunci.
+              Pastikan dana sudah benar-benar masuk ke rekening tujuan. Setelah dikonfirmasi, status booking akan disinkronkan dan seat booking ini di-hold.
             </p>
 
             <div className="flex justify-end gap-3 pt-2">
@@ -1897,7 +1888,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
         {blockSeatError && <Alert variant="error" className="mb-4">{blockSeatError}</Alert>}
         <div className="space-y-4 font-body">
           <p className="text-neutral-600 text-sm leading-relaxed">
-            Kunci seat untuk booking ini? Kuota seat ({regularActiveCount || booking.seat_count || 1} seat) pada jadwal akan ditahan sampai dilepas secara manual.
+            Hold seat untuk booking ini? Kuota seat ({regularActiveCount || booking.seat_count || 1} seat) pada jadwal di-hold sampai seat dilepas secara manual.
           </p>
           <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-1.5 font-body">
             <div className="flex justify-between items-center">
@@ -1905,8 +1896,8 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               <span className="font-semibold text-neutral-900">{regularActiveCount || booking.seat_count || 1} Seat</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-neutral-500 font-medium">Status Kunci:</span>
-              <span className="font-semibold text-neutral-900">Permanen (Manual)</span>
+              <span className="text-neutral-500 font-medium">Batas waktu hold:</span>
+              <span className="font-semibold text-neutral-900">Tanpa batas (lepas manual)</span>
             </div>
             {booking.schedule && booking.schedule.seat_sisa !== undefined && (
               <div className="flex justify-between items-center">

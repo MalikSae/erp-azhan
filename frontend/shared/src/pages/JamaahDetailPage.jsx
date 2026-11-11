@@ -5,7 +5,7 @@ import PerubahanJamaahPanel from "../components/PerubahanJamaahPanel";
 import { listDokumen, upsertDokumen } from "../api/dokumen";
 import { uploadMedia, openProtectedMedia } from "../api/media";
 import { listBookings } from "../api/bookings";
-import { listBrands } from "../api/brands";
+import { listBrandOptions } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
 import { Surface, Section, Field, SummaryItem, PILL_STRONG, BrandBadge, TableCard } from "../components/ui/DetailLayout";
 import Badge from "../components/ui/Badge";
@@ -158,7 +158,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
 
       if (showBrandColumn && jamaahRes?.brand_id) {
         try {
-          const brandsData = await listBrands();
+          const brandsData = await listBrandOptions();
           const found = (brandsData || []).find(b => b.id === jamaahRes.brand_id);
           setBrand(found || null);
         } catch (e) {

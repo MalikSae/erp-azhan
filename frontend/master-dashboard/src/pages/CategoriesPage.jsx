@@ -170,6 +170,10 @@ const CategoriesPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormErrors(null);
+    if (formData.brand_ids.length === 0) {
+      setFormErrors('Pilih minimal satu brand untuk kategori ini.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {

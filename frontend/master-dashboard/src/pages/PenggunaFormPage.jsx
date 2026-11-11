@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { passwordTerlaluPanjang } from 'shared';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Home, ChevronRight, ChevronDown, Plus, X, Power, Trash2, KeyRound } from 'lucide-react';
 import Button from 'shared/ui/Button';
@@ -13,7 +14,7 @@ import {
   setAdminUserStatus, resetAdminUserPassword, deleteAdminUser,
 } from '../api/adminUsers';
 import { listRoles } from '../api/roles';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 import { listOrgUnits } from '../api/orgUnits';
 import { errMsg, Panel, StatusChip } from '../components/penggunaUi';
 
@@ -69,7 +70,7 @@ const PenggunaFormPage = () => {
     const load = async () => {
       try {
         const [rolesData, brandsData, unitsData, userData] = await Promise.all([
-          listRoles(), listBrands(), listOrgUnits(), isEdit ? getAdminUser(id) : Promise.resolve(null),
+          listRoles(), listBrandOptions(), listOrgUnits(), isEdit ? getAdminUser(id) : Promise.resolve(null),
         ]);
         if (!active) return;
         setRoles(rolesData || []);
@@ -210,6 +211,7 @@ const PenggunaFormPage = () => {
     if (form.access === 'brand' && !form.brand_id) { setSubmitError('Pilih brand untuk akses Brand.'); return; }
     if (selectedRoles.length === 0) { setSubmitError('Pilih minimal satu role.'); return; }
     if (!isEdit && form.password.trim().length < 8) { setSubmitError('Password minimal 8 karakter.'); return; }
+    if (!isEdit && passwordTerlaluPanjang(form.password.trim())) { setSubmitError('Password maksimal 72 byte (sekitar 72 huruf biasa).'); return; }
 
     const payload = {
       display_name: form.display_name.trim(),
@@ -254,6 +256,7 @@ const PenggunaFormPage = () => {
         navigate('/users', { state: { successMessage: `Pengguna "${user.display_name}" dihapus permanen.` } });
       } else if (actionModal === 'password') {
         if (newPassword.trim().length < 8) { setActionError('Password minimal 8 karakter.'); setIsActing(false); return; }
+        if (passwordTerlaluPanjang(newPassword.trim())) { setActionError('Password maksimal 72 byte (sekitar 72 huruf biasa).'); setIsActing(false); return; }
         await resetAdminUserPassword(id, newPassword.trim());
         setActionModal(null);
         setNewPassword('');

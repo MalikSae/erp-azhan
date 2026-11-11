@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { SlidersHorizontal, Receipt, Banknote, CheckCircle2, Clock3 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { listAgen, listRiwayatKomisi } from '../api/agen';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 import Alert from '../components/ui/Alert';
 import Button from '../components/ui/Button';
 import CustomDropdown from '../components/ui/CustomDropdown';
@@ -54,7 +54,7 @@ export default function RiwayatKomisiPage({ showBrandColumn = false }) {
 
   useEffect(() => {
     listAgen().then((data) => setAgenList(data || [])).catch(() => {});
-    if (showBrandColumn) listBrands().then((b) => setBrands(b || [])).catch(() => {});
+    if (showBrandColumn) listBrandOptions().then((b) => setBrands(b || [])).catch(() => {});
   }, [showBrandColumn]);
 
   // Pencarian dikirim ke server setelah pengguna berhenti mengetik.

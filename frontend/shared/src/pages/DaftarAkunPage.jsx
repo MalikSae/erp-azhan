@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye } from 'lucide-react';
 import { listAkunPelanggan } from '../api/akun';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 import Alert from '../components/ui/Alert';
 import ActionMenu from '../components/ui/ActionMenu';
 import BrandLabel from '../components/ui/BrandLabel';
@@ -60,7 +60,7 @@ export default function DaftarAkunPage({ showBrandColumn = false }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (showBrandColumn) listBrands().then((b) => setBrands(b || [])).catch(() => {});
+    if (showBrandColumn) listBrandOptions().then((b) => setBrands(b || [])).catch(() => {});
   }, [showBrandColumn]);
 
   // Pencarian ditunda supaya API tidak dipanggil di tiap ketikan.

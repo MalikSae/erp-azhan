@@ -8,7 +8,7 @@ import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import { listPerlengkapanItems, listMutasiPerlengkapan } from '../api/perlengkapan';
-import { listBrands } from '../api/brands';
+import { listBrandOptions } from '../api/brands';
 
 const PAGE_SIZE = 100;
 
@@ -57,7 +57,7 @@ const InventoryRiwayatStokPage = () => {
   useEffect(() => {
     listPerlengkapanItems().then((i) => setItems(i || [])).catch(() => {});
     // Daftar brand hanya relevan (dan hanya boleh dimuat) untuk akun holding.
-    if (isHolding) listBrands().then((b) => setBrands(b || [])).catch(() => {});
+    if (isHolding) listBrandOptions().then((b) => setBrands(b || [])).catch(() => {});
   }, [isHolding]);
 
   const params = useMemo(() => ({

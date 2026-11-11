@@ -9,6 +9,7 @@ import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import ActionMenu from 'shared/ui/ActionMenu';
 import { listBrands, deleteBrand } from '../api/brands';
+import { useAuth } from '../context/AuthContext';
 import { BrandCell } from 'shared';
 
 const ColorCell = ({ color }) => {
@@ -25,6 +26,7 @@ const ColorCell = ({ color }) => {
 };
 
 const BrandsPage = () => {
+  const { isHolding } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [successMessage, setSuccessMessage] = useState(null);
@@ -70,11 +72,9 @@ const BrandsPage = () => {
       fetchBrands();
     } catch (error) {
       setDeleteConfirmId(null);
-      if (error.response?.status === 409) {
-        setErrorMessage(error.response?.data?.error || "Tidak bisa dihapus, masih dipakai.");
-      } else {
-        setErrorMessage("Terjadi kesalahan saat menghapus data.");
-      }
+      setErrorMessage(error.response?.data?.error || (error.response?.status === 409
+        ? "Tidak bisa dihapus, masih dipakai."
+        : "Terjadi kesalahan saat menghapus data."));
     }
   };
 
@@ -116,7 +116,7 @@ const BrandsPage = () => {
     if (key === 'aksi') {
       const menuItems = [
         { label: 'Edit', icon: Pencil, tooltip: 'Edit Brand', onClick: () => navigate(`/brands/${row.id}/edit`) },
-        { label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus Brand', onClick: () => confirmDelete(row.id) },
+        ...(isHolding ? [{ label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus Brand', onClick: () => confirmDelete(row.id) }] : []),
       ];
       return <ActionMenu items={menuItems} align="right" />;
     }
@@ -127,8 +127,8 @@ const BrandsPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Kelola Brand"
-        actionLabel="+ Tambah Brand"
-        onAction={() => navigate("/brands/new")}
+        actionLabel={isHolding ? "+ Tambah Brand" : undefined}
+        onAction={isHolding ? () => navigate("/brands/new") : undefined}
       />
 
       {successMessage && (

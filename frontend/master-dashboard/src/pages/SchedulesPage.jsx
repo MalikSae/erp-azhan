@@ -176,11 +176,9 @@ const SchedulesPage = () => {
       fetchSchedules();
     } catch (error) {
       handleCloseDeleteModal();
-      if (error.response?.status === 409) {
-        setErrorMessage(error.response?.data?.error || "Tidak bisa dihapus, data ini sedang digunakan.");
-      } else {
-        setErrorMessage("Terjadi kesalahan saat menghapus data.");
-      }
+      setErrorMessage(error.response?.data?.error || (error.response?.status === 409
+        ? "Tidak bisa dihapus, data ini sedang digunakan."
+        : "Terjadi kesalahan saat menghapus data."));
     }
   };
 
@@ -381,8 +379,11 @@ const SchedulesPage = () => {
             icon: Trash2,
             danger: true,
             tooltip: 'Hapus Paket',
-            disabled: hasBookings,
-            disabledTooltip: `Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`,
+            // API hanya menghapus paket draft yang belum pernah tayang; paket lain diarsipkan.
+            disabled: hasBookings || row.status !== 'draft',
+            disabledTooltip: hasBookings
+              ? `Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`
+              : 'Hanya paket draft yang bisa dihapus. Arsipkan paket ini.',
             onClick: () => handleDeleteClick(row.id),
           },
         ] : []),

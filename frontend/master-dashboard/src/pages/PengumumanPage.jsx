@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { listPengumuman, createPengumuman, updatePengumuman, deletePengumuman, listBrands, listSchedulesAdmin } from 'shared';
+import { listPengumuman, createPengumuman, updatePengumuman, deletePengumuman, listBrandOptions, listSchedulesAdmin } from 'shared';
 import Alert from 'shared/ui/Alert';
 import ActionMenu from 'shared/ui/ActionMenu';
 import Button from 'shared/ui/Button';
@@ -65,7 +65,7 @@ export default function PengumumanPage() {
   useEffect(() => {
     load();
     listSchedulesAdmin().then((d) => setJadwal(Array.isArray(d) ? d : d?.items || [])).catch(() => {});
-    if (isHolding) listBrands().then((d) => setBrands(Array.isArray(d) ? d : [])).catch(() => {});
+    if (isHolding) listBrandOptions().then((d) => setBrands(Array.isArray(d) ? d : [])).catch(() => {});
   }, [isHolding]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
