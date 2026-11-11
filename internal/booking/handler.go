@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 	"erp-azhan/api/internal/payment"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -37,6 +38,9 @@ var validRoomTypes = map[string]bool{
 
 // maxNominal adalah batas kolom nominal DECIMAL(12,0) pada booking_discounts.
 const maxNominal = 999_999_999_999
+
+// maksNamaDiskon: lebar kolom booking_discounts.nama.
+const maksNamaDiskon = 255
 
 // validStatuses berisi enum status booking yang valid.
 var validStatuses = map[string]bool{
@@ -629,8 +633,16 @@ func (h *Handler) AddBookingDiscount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "nama diskon tidak boleh kosong")
 		return
 	}
+	if len([]rune(req.Nama)) > maksNamaDiskon {
+		writeError(w, http.StatusBadRequest, "nama diskon maksimal 255 karakter")
+		return
+	}
 	if req.Nominal <= 0 {
 		writeError(w, http.StatusBadRequest, "nominal diskon harus lebih dari 0")
+		return
+	}
+	if !shared.RupiahBulat(req.Nominal) {
+		writeError(w, http.StatusBadRequest, "nominal diskon harus bilangan bulat rupiah")
 		return
 	}
 	if req.Nominal > maxNominal {
