@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -156,7 +157,7 @@ func TestCreateBookingSkipsCaptchaWhenDevBypass(t *testing.T) {
 	// dan berhenti di batas booking per akun (repo nil tidak tersentuh).
 	h := newTestHandler(t, "", 0)
 	for i := 0; i < bookingAccountSuccessLimit; i++ {
-		h.bookingByAccount.record("77")
+		h.bookingByAccount.Record("77")
 	}
 	body := strings.Replace(validBookingBody, `"captcha_token": "token-uji",`, "", 1)
 	rec := postBook(h, body, akunHandlerUji)
@@ -183,7 +184,7 @@ func TestCreateBookingAccountLimitBeforeProcessing(t *testing.T) {
 	// sebelum menyentuh repository (repo nil akan panic jika tersentuh).
 	h := newTestHandler(t, `{"success":true}`, http.StatusOK)
 	for i := 0; i < bookingAccountSuccessLimit; i++ {
-		h.bookingByAccount.record("77")
+		h.bookingByAccount.Record("77")
 	}
 	rec := postBook(h, validBookingBody, akunHandlerUji)
 	if rec.Code != http.StatusTooManyRequests {
@@ -193,13 +194,60 @@ func TestCreateBookingAccountLimitBeforeProcessing(t *testing.T) {
 
 func TestWindowLimiterResetsAfterWindow(t *testing.T) {
 	l := newWindowLimiter(2, 50*time.Millisecond)
-	l.record("k")
-	l.record("k")
-	if l.allow("k") {
-		t.Fatal("allow() = true setelah mencapai batas")
+	l.Record("k")
+	l.Record("k")
+	if l.Take("k") {
+		t.Fatal("Take() = true setelah mencapai batas")
 	}
 	time.Sleep(60 * time.Millisecond)
-	if !l.allow("k") {
-		t.Fatal("allow() = false setelah jendela berakhir")
+	if !l.Take("k") {
+		t.Fatal("Take() = false setelah jendela berakhir")
+	}
+}
+
+// Regresi audit keamanan 2026-11-12: slot booking per akun dipesan atomik sebelum transaksi. Dulu batas
+// diperiksa di awal tetapi baru dicatat setelah booking berhasil, sehingga request paralel lolos semua.
+func TestCreateBookingBatasAkunSaatParalel(t *testing.T) {
+	h := newTestHandler(t, "", 0)
+	lepas := make(chan struct{})
+	h.book = func(context.Context, int64, int64, BookingRequest) (*BookingResponse, error) {
+		<-lepas
+		return &BookingResponse{Status: "success"}, nil
+	}
+	const n = 10
+	kode := make(chan int, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			kode <- postBook(h, bodyCheckout, akunHandlerUji).Code
+		}()
+	}
+	time.Sleep(100 * time.Millisecond) // semua request sampai di gate sebelum booking pertama selesai
+	close(lepas)
+	wg.Wait()
+	close(kode)
+	ok := 0
+	for c := range kode {
+		if c == http.StatusOK {
+			ok++
+		}
+	}
+	if ok != bookingAccountSuccessLimit {
+		t.Fatalf("booking paralel berhasil %d, want tepat %d", ok, bookingAccountSuccessLimit)
+	}
+}
+
+// Booking yang gagal (mis. seat habis) mengembalikan slotnya: tidak menghabiskan batas booking harian.
+func TestCreateBookingGagalTidakMemakaiSlot(t *testing.T) {
+	h := newTestHandler(t, "", 0)
+	h.book = func(context.Context, int64, int64, BookingRequest) (*BookingResponse, error) {
+		return nil, ErrSeatHabis
+	}
+	for i := 0; i < bookingAccountSuccessLimit+2; i++ {
+		if rec := postBook(h, bodyCheckout, akunHandlerUji); rec.Code != http.StatusBadRequest {
+			t.Fatalf("percobaan %d: got %d %s, want 400 (bukan 429)", i+1, rec.Code, rec.Body.String())
+		}
 	}
 }

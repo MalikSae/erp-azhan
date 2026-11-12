@@ -112,6 +112,9 @@ func (h *Handler) SetujuiPencairan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bukti transfer keluar wajib diunggah")
 		return
 	}
+	if !validasiBuktiAdmin(w, r, h.repo.db, strings.TrimSpace(req.BuktiURL), "payment-proofs") {
+		return
+	}
 	adminID := identity.GetAdminUserID(r.Context())
 	if err := h.repo.SetujuiPencairan(r.Context(), id, adminID, strings.TrimSpace(req.BuktiURL), identity.GetBrandID(r.Context())); err != nil {
 		handlePencairanKaitanError(w, err)

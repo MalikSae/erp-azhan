@@ -183,17 +183,18 @@ func (h *Handler) RegisterAgen(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar) {
 	ip := shared.ClientIP(r)
-	if !h.regIP.Allow(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak pendaftaran, coba lagi dalam 1 jam")
-		return
-	}
 	var req registerRequest
 	if !decode(w, r, &req) {
 		return
 	}
-	h.regIP.Record(ip)
+	if !h.regIP.Take(ip) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak pendaftaran, coba lagi dalam 1 jam")
+		return
+	}
 
-	// Fail closed: tanpa TURNSTILE_SECRET_KEY Verify mengembalikan error (kecuali bypass dev eksplisit).
+	// Captcha opsional (keputusan 2026-10-28): tanpa TURNSTILE_SECRET_KEY, NewTurnstile memakai bypass dan Verify
+	// meloloskan semua request, sehingga pendaftaran hanya dibatasi rate limit. Bila secret diisi dan Cloudflare
+	// tidak bisa dihubungi, Verify mengembalikan error dan pendaftaran ditolak (fail closed).
 	if mode.captcha {
 		ok, err := h.captcha.Verify(r.Context(), strings.TrimSpace(req.CaptchaToken), ip)
 		if err != nil {
@@ -266,13 +267,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := ip + "|" + strconv.FormatInt(req.BrandID, 10) + "|" + NormalizeEmail(req.Email)
-	if !h.loginKey.Allow(key) || !h.loginIP.Allow(ip) {
+	// Slot percobaan diambil SEBELUM bcrypt (Take atomik): request paralel tidak bisa lolos bersamaan
+	// sebelum kegagalannya tercatat. Login berhasil mengembalikan slot itu.
+	if !h.loginKey.Take(key) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan masuk, coba lagi dalam 15 menit")
+		return
+	}
+	if !h.loginIP.Take(ip) {
+		h.loginKey.Refund(key)
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan masuk, coba lagi dalam 15 menit")
 		return
 	}
 	fail := func() {
-		h.loginKey.Record(key)
-		h.loginIP.Record(ip)
 		writeError(w, http.StatusUnauthorized, "email atau password salah")
 	}
 	if req.BrandID <= 0 || len(req.Password) > 72 {
@@ -292,13 +298,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
+	// Password benar: percobaan ini tidak dihitung sebagai kegagalan.
+	h.loginKey.Reset(key)
+	h.loginIP.Refund(ip)
 	token, err := h.repo.CreateSession(r.Context(), acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] customer session: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
-	h.loginKey.Reset(key)
 	h.repo.TouchLogin(r.Context(), acc.ID)
 	writeJSON(w, http.StatusOK, authResponse{Account: acc, SessionToken: token})
 }
@@ -374,9 +382,34 @@ type updateProfileRequest struct {
 	NoHP         string  `json:"no_hp"`
 	Domisili     *string `json:"domisili"`
 	TanggalLahir *string `json:"tanggal_lahir"`
+	// PasswordSaatIni wajib bila email diganti: sesi yang dicuri tidak cukup untuk memindahkan akun ke email lain.
+	PasswordSaatIni string `json:"password_saat_ini"`
+}
+
+// cekPasswordSaatIni memeriksa password saat ini dengan batas percobaan per akun (pwFail). Slot percobaan diambil
+// atomik sebelum bcrypt; hanya password salah yang tetap terhitung. ok=false berarti jawaban galat sudah ditulis.
+func (h *Handler) cekPasswordSaatIni(w http.ResponseWriter, acc *Account, password string) bool {
+	key := strconv.FormatInt(acc.ID, 10)
+	if !h.pwFail.Take(key) {
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		return false
+	}
+	if password == "" {
+		h.pwFail.Refund(key)
+		writeError(w, http.StatusBadRequest, "masukkan password saat ini")
+		return false
+	}
+	if len(password) > 72 || bcrypt.CompareHashAndPassword([]byte(acc.passwordHash), []byte(password)) != nil {
+		writeError(w, http.StatusBadRequest, "password saat ini salah")
+		return false
+	}
+	h.pwFail.Reset(key)
+	return true
 }
 
 // UpdateMe PATCH /api/account/me: ubah nama, email, nomor WhatsApp, domisili, dan tanggal lahir.
+// Mengganti email wajib menyertakan password saat ini; sesudahnya sesi lain dan tautan reset lama dicabut dan
+// alamat email lama diberi tahu.
 func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	acc := FromContext(r.Context())
 	var req updateProfileRequest
@@ -400,12 +433,15 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	gantiEmail := NormalizeEmail(req.Email) != NormalizeEmail(acc.Email)
+	if gantiEmail && !h.cekPasswordSaatIni(w, acc, req.PasswordSaatIni) {
+		return
+	}
 	key := strconv.FormatInt(acc.ID, 10)
-	if !h.profile.Allow(key) {
+	if !h.profile.Take(key) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak perubahan data, coba lagi dalam 1 jam")
 		return
 	}
-	h.profile.Record(key)
 
 	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir)
 	if errors.Is(err, ErrEmailTaken) {
@@ -420,6 +456,19 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ERROR] customer update profile: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
+	}
+	if gantiEmail {
+		// Email sudah berganti: sesi lain dan tautan reset yang terkirim ke alamat lama tidak boleh berlaku lagi.
+		if err := h.repo.RevokeOtherSessions(r.Context(), acc.ID, TokenFromContext(r.Context())); err != nil {
+			log.Printf("[ERROR] customer ganti email revoke sesi akun=%d: %v", acc.ID, err)
+		}
+		if err := h.repo.InvalidateTokens(r.Context(), acc.ID, PurposeResetPass); err != nil {
+			log.Printf("[ERROR] customer ganti email invalidate token akun=%d: %v", acc.ID, err)
+		}
+		if name, domain, err := h.repo.BrandSite(r.Context(), acc.BrandID); err == nil && domain != "" {
+			subject, text := mailer.EmailChanged(name, acc.NamaLengkap, req.Email)
+			h.sendAsync(mailer.Message{To: acc.Email, Subject: subject, Text: text})
+		}
 	}
 	updated, err := h.repo.GetByID(r.Context(), acc.ID)
 	if err != nil {
@@ -443,14 +492,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	key := strconv.FormatInt(acc.ID, 10)
-	if !h.pwFail.Allow(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
-		return
-	}
-	if len(req.PasswordSaatIni) > 72 || bcrypt.CompareHashAndPassword([]byte(acc.passwordHash), []byte(req.PasswordSaatIni)) != nil {
-		h.pwFail.Record(key)
-		writeError(w, http.StatusBadRequest, "password saat ini salah")
+	if !h.cekPasswordSaatIni(w, acc, req.PasswordSaatIni) {
 		return
 	}
 	if ok, msg := ValidPassword(req.PasswordBaru); !ok {
@@ -480,7 +522,6 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
-	h.pwFail.Reset(key)
 	if name, domain, err := h.repo.BrandSite(r.Context(), acc.BrandID); err == nil && domain != "" {
 		subject, text := mailer.PasswordChanged(name, acc.NamaLengkap, siteLink(domain, PathLupaPassword, nil))
 		h.sendAsync(mailer.Message{To: acc.Email, Subject: subject, Text: text})
@@ -504,18 +545,20 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	generic := map[string]string{"status": "ok", "message": "Jika email terdaftar, tautan atur ulang password sudah dikirim."}
 	emailKey := strconv.FormatInt(req.BrandID, 10) + "|" + NormalizeEmail(req.Email)
 	key := ip + "|" + emailKey
-	if !h.forgot.Allow(key) || !h.forgotIP.Allow(ip) {
+	if !h.forgot.Take(key) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan, coba lagi dalam 1 jam")
 		return
 	}
-	h.forgot.Record(key)
-	h.forgotIP.Record(ip)
+	if !h.forgotIP.Take(ip) {
+		h.forgot.Refund(key)
+		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan, coba lagi dalam 1 jam")
+		return
+	}
 	// Batas per email: jawaban tetap generik (200) agar tidak menjadi oracle, tetapi email tidak dikirim.
-	if !h.forgotEmail.Allow(emailKey) {
+	if !h.forgotEmail.Take(emailKey) {
 		writeJSON(w, http.StatusOK, generic)
 		return
 	}
-	h.forgotEmail.Record(emailKey)
 	acc, err := h.repo.GetByEmail(r.Context(), req.BrandID, req.Email)
 	if err != nil {
 		writeJSON(w, http.StatusOK, generic)
@@ -551,10 +594,17 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if !h.loginIP.Allow(ip) {
+	// Slot diambil atomik sebelum bcrypt; hanya token salah yang tetap terhitung sebagai kegagalan.
+	if !h.loginIP.Take(ip) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
 		return
 	}
+	tokenSalah := false
+	defer func() {
+		if !tokenSalah {
+			h.loginIP.Refund(ip)
+		}
+	}()
 	if ok, msg := ValidPassword(req.Password); !ok {
 		writeError(w, http.StatusBadRequest, msg)
 		return
@@ -566,7 +616,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	accountID, err := h.repo.ConsumeToken(r.Context(), strings.TrimSpace(req.Token), PurposeResetPass)
 	if errors.Is(err, ErrTokenInvalid) {
-		h.loginIP.Record(ip)
+		tokenSalah = true
 		writeError(w, http.StatusBadRequest, ErrTokenInvalid.Error())
 		return
 	}

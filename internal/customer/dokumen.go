@@ -217,7 +217,13 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := media.ValidateCustomerUpload(r.Context(), o.db, req.FileURL, acc.ID); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		var uploadErr *media.UploadError
+		if errors.As(err, &uploadErr) {
+			writeError(w, http.StatusBadRequest, uploadErr.Message)
+			return
+		}
+		log.Printf("[ERROR] account kirim dokumen validasi berkas: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
 	d, err := o.dokumen.Upsert(r.Context(), req.JamaahID, &dokumen.CreateDokumenRequest{Jenis: req.Jenis, FileURL: req.FileURL})

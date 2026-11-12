@@ -1,6 +1,7 @@
 package agen
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/media"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -21,6 +23,23 @@ type Handler struct {
 
 func NewHandler(repo *Repository) *Handler {
 	return &Handler{repo: repo}
+}
+
+// validasiBuktiAdmin memastikan URL bukti yang diisi admin menunjuk unggahan admin resmi milik brand token
+// (super admin: unggahan admin mana pun) dan berkasnya ada. false berarti jawaban galat sudah ditulis.
+func validasiBuktiAdmin(w http.ResponseWriter, r *http.Request, db *sql.DB, url string, categories ...string) bool {
+	err := media.ValidateAdminProof(r.Context(), db, url, identity.GetBrandID(r.Context()), categories...)
+	if err == nil {
+		return true
+	}
+	var uploadErr *media.UploadError
+	if errors.As(err, &uploadErr) {
+		writeError(w, http.StatusBadRequest, uploadErr.Message)
+		return false
+	}
+	log.Printf("[ERROR] agen validasi bukti: %v", err)
+	writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+	return false
 }
 
 // URL file hanya boleh hasil upload ke kategori media terproteksi, supaya
@@ -238,6 +257,10 @@ func (h *Handler) UploadBuktiAdmin(w http.ResponseWriter, r *http.Request) {
 	req.BuktiTransferURL = strings.TrimSpace(req.BuktiTransferURL)
 	if !buktiAdminURL.MatchString(req.BuktiTransferURL) {
 		writeError(w, http.StatusBadRequest, "bukti transfer wajib diunggah (gambar atau PDF)")
+		return
+	}
+	// Bentuk URL saja tidak cukup: berkas harus unggahan admin resmi milik brand ini.
+	if !validasiBuktiAdmin(w, r, h.repo.db, req.BuktiTransferURL, "dokumen-jamaah", "payment-proofs") {
 		return
 	}
 	if err := h.repo.UploadBuktiAdmin(r.Context(), id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), req.BuktiTransferURL); err != nil {

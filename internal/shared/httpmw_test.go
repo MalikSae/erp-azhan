@@ -2,6 +2,7 @@ package shared
 
 import (
 	"bytes"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -88,5 +89,30 @@ func TestTurnstileOpsional(t *testing.T) {
 	}
 	if err := ValidateCaptchaConfig(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLimitBody(t *testing.T) {
+	baca := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.ReadAll(r.Body); err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	h := LimitBody(10, "/upload")(baca)
+	for _, c := range []struct {
+		path, body string
+		want       int
+	}{
+		{"/api/x", "kecil", http.StatusOK},
+		{"/api/x", strings.Repeat("a", 11), http.StatusRequestEntityTooLarge},
+		{"/upload", strings.Repeat("a", 100), http.StatusOK},
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, c.path, strings.NewReader(c.body)))
+		if rec.Code != c.want {
+			t.Errorf("%s (%d byte): %d, want %d", c.path, len(c.body), rec.Code, c.want)
+		}
 	}
 }

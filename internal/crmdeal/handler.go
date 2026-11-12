@@ -3,11 +3,13 @@ package crmdeal
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/media"
 	"github.com/google/uuid"
 )
 
@@ -85,6 +87,24 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 	if req.CommitmentType != "book_seat" && req.PaymentAmount == nil {
 		writeError(w, http.StatusBadRequest, "payment_amount wajib diisi")
 		return
+	}
+	// Bukti bayar harus unggahan admin resmi milik brand pemanggil, sama seperti alur pembayaran biasa.
+	// URL bebas ditolak: payments.bukti_url menjadi dasar izin baca berkas lintas brand (media.canReadAdminFile).
+	if req.PaymentProofURL != nil {
+		if u := strings.TrimSpace(*req.PaymentProofURL); u == "" {
+			req.PaymentProofURL = nil
+		} else if err := media.ValidateAdminPaymentProof(r.Context(), h.repo.db, u, brandID); err != nil {
+			var uploadErr *media.UploadError
+			if errors.As(err, &uploadErr) {
+				writeError(w, http.StatusBadRequest, uploadErr.Message)
+				return
+			}
+			log.Printf("[ERROR] crmdeal validasi bukti: %v", err)
+			writeError(w, http.StatusInternalServerError, "proses Deal gagal")
+			return
+		} else {
+			req.PaymentProofURL = &u
+		}
 	}
 
 	response, err := h.repo.Process(r.Context(), finalBrandID, identity.GetAdminUserID(r.Context()), idempotencyKey, req)

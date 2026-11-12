@@ -129,15 +129,23 @@ func (h *Handler) CreateBookingAgen(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	agenID := identity.GetCustomerAccountID(r.Context())
 	limitKey := "agen:" + strconv.FormatInt(agenID, 10)
-	if !h.bookingByAgen.allow(limitKey) {
+	if !h.bookingByAgen.Take(limitKey) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak booking, coba lagi dalam 1 jam")
 		return
 	}
-	h.bookingByAgen.record(limitKey)
 	// Percobaan NIK yang gagal dibatasi per akun, sama seperti web publik (jangan jadi oracle data jamaah).
-	if h.identitasGagal != nil && !h.identitasGagal.allow(limitKey) {
-		writeErrorCode(w, http.StatusTooManyRequests, "Terlalu banyak percobaan dengan data jamaah yang belum dapat diproses. Coba lagi dalam 10 menit atau hubungi admin.", KodeIdentitasTerlaluSering)
-		return
+	// Slot dipesan atomik sebelum transaksi dan dikembalikan kecuali percobaan gagal karena identitas.
+	identitasSalah := false
+	if h.identitasGagal != nil {
+		if !h.identitasGagal.Take(limitKey) {
+			writeErrorCode(w, http.StatusTooManyRequests, "Terlalu banyak percobaan dengan data jamaah yang belum dapat diproses. Coba lagi dalam 10 menit atau hubungi admin.", KodeIdentitasTerlaluSering)
+			return
+		}
+		defer func() {
+			if !identitasSalah {
+				h.identitasGagal.Refund(limitKey)
+			}
+		}()
 	}
 
 	brandID, err := h.repo.brandAgen(r.Context(), agenID)
@@ -167,9 +175,7 @@ func (h *Handler) CreateBookingAgen(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.repo.ProcessBookingAgen(r.Context(), brandID, req, agenID)
 	if err != nil {
 		if errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrJamaahBukanMilik) {
-			if h.identitasGagal != nil {
-				h.identitasGagal.record(limitKey)
-			}
+			identitasSalah = true
 		}
 		h.writeAgenBookingError(w, err)
 		return
@@ -226,6 +232,8 @@ func (h *Handler) writeAgenBookingError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrBukanAgenAktif):
 		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, ErrBatasSeatAgen):
+		writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasSeatAgen)
 	case errors.Is(err, ErrJamaahBukanMilik), errors.Is(err, ErrNIKAtasNamaLain), errors.Is(err, ErrSayaSendiriBukanAnda), errors.Is(err, ErrNIKAgenBelumAda),
 		errors.Is(err, ErrSeatHabis), errors.Is(err, ErrDuplicate),
 		errors.Is(err, ErrDuplicatePaxInBooking), errors.Is(err, ErrCutoffBooking),

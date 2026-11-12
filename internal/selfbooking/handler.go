@@ -16,11 +16,6 @@ import (
 	"erp-azhan/api/internal/shared"
 )
 
-type checkAttempt struct {
-	Count     int
-	FirstFail time.Time
-}
-
 // Batas endpoint publik. Setiap booking menahan kursi 24 jam, jadi pembuatan
 // booking massal harus dibatasi.
 const (
@@ -78,11 +73,10 @@ func getClientIP(r *http.Request) string {
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	clientIP := getClientIP(r)
-	if !h.bookingByIP.allow(clientIP) {
+	if !h.bookingByIP.Take(clientIP) {
 		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan booking, coba lagi dalam 1 jam")
 		return
 	}
-	h.bookingByIP.record(clientIP)
 
 	account := customer.FromContext(r.Context())
 	if account == nil {
@@ -188,13 +182,30 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 
 	// Gate 8: Batas booking per akun
 	accountKey := strconv.FormatInt(account.ID, 10)
-	if !h.bookingByAccount.allow(accountKey) {
+	// Slot dipesan atomik sebelum transaksi booking: request paralel tidak bisa melampaui batas sebelum
+	// hasilnya tercatat. Slot booking dikembalikan bila booking tidak jadi dibuat (gagal atau jawaban ulang);
+	// slot identitas dikembalikan kecuali percobaan gagal karena NIK atas nama lain.
+	if !h.bookingByAccount.Take(accountKey) {
 		writeErrorCode(w, http.StatusTooManyRequests, ErrBatasBookingHarian.Error(), KodeBatasBookingHarian)
 		return
 	}
-	if h.identitasGagal != nil && !h.identitasGagal.allow(accountKey) {
-		writeErrorCode(w, http.StatusTooManyRequests, "Terlalu banyak percobaan dengan data jamaah yang belum dapat diproses. Coba lagi dalam 10 menit atau hubungi kami via WhatsApp.", KodeIdentitasTerlaluSering)
-		return
+	bookingBaru := false
+	defer func() {
+		if !bookingBaru {
+			h.bookingByAccount.Refund(accountKey)
+		}
+	}()
+	identitasSalah := false
+	if h.identitasGagal != nil {
+		if !h.identitasGagal.Take(accountKey) {
+			writeErrorCode(w, http.StatusTooManyRequests, "Terlalu banyak percobaan dengan data jamaah yang belum dapat diproses. Coba lagi dalam 10 menit atau hubungi kami via WhatsApp.", KodeIdentitasTerlaluSering)
+			return
+		}
+		defer func() {
+			if !identitasSalah {
+				h.identitasGagal.Refund(accountKey)
+			}
+		}()
 	}
 
 	// Process
@@ -221,9 +232,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, ErrNIKAtasNamaLain) {
-			if h.identitasGagal != nil {
-				h.identitasGagal.record(accountKey)
-			}
+			identitasSalah = true
 		}
 		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) ||
 			errors.Is(err, ErrDuplicatePaxInBooking) ||
@@ -241,7 +250,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !resp.Replayed {
-		h.bookingByAccount.record(accountKey)
+		bookingBaru = true
 		// Email hanya untuk booking baru; jawaban ulang (retry idempoten) tidak mengirim ulang.
 		h.notifyBookingCreated(account, req.ScheduleID, resp)
 	}

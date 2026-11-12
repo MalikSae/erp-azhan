@@ -94,6 +94,8 @@ func main() {
 	// True-Client-IP/X-Forwarded-For tanpa cek proxy, sehingga rate limit bisa
 	// diakali. IP client untuk rate limit diambil lewat shared.ClientIP.
 	r.Use(securityHeaders)
+	// Batas body 1 MB untuk semua request; unggahan berkas memasang batas 10 MB sendiri di paket media.
+	r.Use(shared.LimitBody(shared.MaxJSONBodyBytes, "/api/admin/media/upload", "/api/account/media/upload"))
 
 	allowedOrigins := corsOrigins(shared.IsProduction(), os.Getenv("CORS_ALLOWED_ORIGINS"))
 	r.Use(cors.Handler(cors.Options{
@@ -542,6 +544,9 @@ func main() {
 			r.Get("/komisi", agenHandler.RiwayatKomisiAdmin)
 			r.Get("/peringkat", agenHandler.PeringkatAgen)
 			r.Get("/{akunID}", agenHandler.DetailAgen)
+			// Batas hold seat agen (keputusan 12 November 2026): lihat dengan agen.view, ubah dengan agen.edit.
+			r.Get("/{akunID}/batas-seat", agenHandler.GetBatasSeat)
+			r.With(identity.RequirePermission("agen.edit")).Put("/{akunID}/batas-seat", agenHandler.UbahBatasSeat)
 			r.With(identity.RequirePermission("agen.approve")).Post("/{akunID}/setujui", agenHandler.Setujui)
 			r.With(identity.RequirePermission("agen.approve")).Post("/{akunID}/tolak", agenHandler.Tolak)
 			r.With(identity.RequirePermission("agen.approve")).Post("/{akunID}/keputusan", agenHandler.Keputusan)

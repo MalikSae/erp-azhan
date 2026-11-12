@@ -92,3 +92,25 @@ func PublicCache(maxAgeSeconds int) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// MaxJSONBodyBytes batas body bawaan semua request. Handler boleh memasang batas lebih ketat; unggahan
+// multipart (yang memasang batasnya sendiri) dikecualikan lewat LimitBody.
+const MaxJSONBodyBytes = 1 << 20
+
+// LimitBody membatasi ukuran body setiap request ke max byte, kecuali path pada exempt (unggahan berkas).
+// Tanpa ini, handler yang men-decode JSON langsung dari r.Body menampung body ratusan MB ke memori
+// (audit keamanan 2026-11-12). Body yang melebihi batas membuat pembacaan gagal sehingga handler menjawab 400/413.
+func LimitBody(max int64, exempt ...string) func(http.Handler) http.Handler {
+	skip := make(map[string]bool, len(exempt))
+	for _, p := range exempt {
+		skip[p] = true
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil && !skip[r.URL.Path] {
+				r.Body = http.MaxBytesReader(w, r.Body, max)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

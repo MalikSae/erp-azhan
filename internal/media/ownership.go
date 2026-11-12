@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"erp-azhan/api/internal/identity"
-	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"net/http"
@@ -31,22 +30,25 @@ func protectedPath(raw string) (string, string, bool) {
 
 // ValidateCustomerUpload memastikan berkas (mis. bukti transfer) adalah unggahan akun
 // pelanggan itu sendiri dan masih ada di disk.
+//
+// Galat untuk pengguna berupa *UploadError (pesannya aman ditampilkan); galat database dibungkus biasa
+// supaya pemanggil mencatatnya dan menjawab pesan umum, bukan teks galat driver.
 func ValidateCustomerUpload(ctx context.Context, db *sql.DB, raw string, accountID int64) error {
 	category, name, ok := protectedPath(raw)
 	if !ok || category != "dokumen-jamaah" {
-		return errors.New("berkas harus berasal dari unggahan akun Anda")
+		return &UploadError{"berkas harus berasal dari unggahan akun Anda"}
 	}
 	canonical := "/api/admin/media/" + category + "/" + name
 	var owned bool
 	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM media_uploads WHERE path=? AND customer_account_id=?)`, canonical, accountID).Scan(&owned); err != nil {
-		return err
+		return fmt.Errorf("media.ValidateCustomerUpload: %w", err)
 	}
 	if !owned {
-		return errors.New("berkas bukan unggahan akun Anda")
+		return &UploadError{"berkas bukan unggahan akun Anda"}
 	}
 	info, err := os.Stat(filepath.Join("uploads", category, name))
 	if err != nil || info.IsDir() {
-		return errors.New("berkas unggahan tidak ditemukan")
+		return &UploadError{"berkas unggahan tidak ditemukan"}
 	}
 	return nil
 }
@@ -54,19 +56,19 @@ func ValidateCustomerUpload(ctx context.Context, db *sql.DB, raw string, account
 func ValidatePortalUpload(ctx context.Context, db *sql.DB, raw string, id int64) error {
 	category, name, ok := protectedPath(raw)
 	if !ok || category != "dokumen-jamaah" {
-		return errors.New("berkas harus berasal dari unggahan akun Anda")
+		return &UploadError{"berkas harus berasal dari unggahan akun Anda"}
 	}
 	canonical := "/api/admin/media/" + category + "/" + name
 	var owned bool
 	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM media_uploads WHERE path=? AND jamaah_id=?)`, canonical, id).Scan(&owned); err != nil {
-		return err
+		return fmt.Errorf("media.ValidatePortalUpload: %w", err)
 	}
 	if !owned {
-		return errors.New("berkas bukan unggahan akun Anda")
+		return &UploadError{"berkas bukan unggahan akun Anda"}
 	}
 	info, err := os.Stat(filepath.Join("uploads", category, name))
 	if err != nil || info.IsDir() {
-		return errors.New("berkas unggahan tidak ditemukan")
+		return &UploadError{"berkas unggahan tidak ditemukan"}
 	}
 	return nil
 }
@@ -134,8 +136,21 @@ func (h *Handler) canReadAdminFile(r *http.Request, category, name string) bool 
 // berkas yang tercatat untuk brand-nya; super admin (brandID nil) boleh memakai unggahan admin mana pun.
 // URL eksternal (https://...), path buatan, dan berkas yang tidak ada ditolak.
 func ValidateAdminPaymentProof(ctx context.Context, db *sql.DB, raw string, brandID *int64) error {
+	return ValidateAdminProof(ctx, db, raw, brandID, "payment-proofs")
+}
+
+// ValidateAdminProof sama dengan ValidateAdminPaymentProof untuk kategori yang diizinkan (mis. bukti bayar
+// agen boleh berupa dokumen-jamaah atau payment-proofs). Dipakai setiap kolom bukti yang diisi admin, supaya
+// URL bukti tidak bisa menunjuk berkas brand lain (canReadAdminFile mempercayai payments.bukti_url).
+func ValidateAdminProof(ctx context.Context, db *sql.DB, raw string, brandID *int64, categories ...string) error {
 	category, name, ok := protectedPath(raw)
-	if !ok || category != "payment-proofs" {
+	allowed := false
+	for _, c := range categories {
+		if ok && category == c {
+			allowed = true
+		}
+	}
+	if !allowed {
 		return &UploadError{"bukti pembayaran harus diunggah melalui formulir pembayaran"}
 	}
 	canonical := "/api/admin/media/" + category + "/" + name

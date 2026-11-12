@@ -278,7 +278,7 @@ func TestUpdateMe(t *testing.T) {
 		t.Fatalf("nomor akun lain harus 409, dapat %d", rec.Code)
 	}
 	// Email akun lain ditolak.
-	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailB, "no_hp": hpA2}); rec.Code != http.StatusConflict {
+	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailB, "no_hp": hpA2, "password_saat_ini": "rahasia-123"}); rec.Code != http.StatusConflict {
 		t.Fatalf("email akun lain harus 409, dapat %d", rec.Code)
 	}
 	// Format tidak valid ditolak.
@@ -286,16 +286,45 @@ func TestUpdateMe(t *testing.T) {
 		t.Fatalf("email tidak valid harus 400, dapat %d", rec.Code)
 	}
 
-	// Email baru langsung berlaku, tanpa verifikasi ulang dan tanpa email apa pun.
-	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailA2, "no_hp": hpA2}); rec.Code != http.StatusOK {
+	// Audit keamanan 2026-11-12: ganti email wajib password saat ini. Sesi curian saja tidak cukup untuk
+	// memindahkan akun ke email penyerang lalu mengambil alih lewat lupa password.
+	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailA2, "no_hp": hpA2}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("ganti email tanpa password harus 400, dapat %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailA2, "no_hp": hpA2, "password_saat_ini": "salah-salah"}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("ganti email dengan password salah harus 400, dapat %d %s", rec.Code, rec.Body)
+	}
+	if got, _ = h.repo.GetByID(ctx, idA.ID); got.Email != emailA {
+		t.Fatalf("email tidak boleh berubah tanpa password benar: %+v", got)
+	}
+	// Sesi lain milik akun A harus dicabut setelah email berganti.
+	var lain authResponse
+	if rec := post(h.Login, map[string]any{"brand_id": brandID, "email": emailA, "password": "rahasia-123"}, ""); rec.Code != http.StatusOK {
+		t.Fatalf("login sesi kedua: %d %s", rec.Code, rec.Body)
+	} else {
+		_ = json.Unmarshal(rec.Body.Bytes(), &lain)
+	}
+
+	// Dengan password benar: email baru langsung berlaku (tanpa email verifikasi ke alamat baru),
+	// alamat lama diberi tahu, dan sesi lain dikeluarkan.
+	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailA2, "no_hp": hpA2, "password_saat_ini": "rahasia-123"}); rec.Code != http.StatusOK {
 		t.Fatalf("ubah email: %d %s", rec.Code, rec.Body)
 	}
 	got, _ = h.repo.GetByID(ctx, idA.ID)
 	if got.Email != emailA2 {
 		t.Fatalf("email harus berubah: %+v", got)
 	}
+	if m, ok := mail.last(emailA); !ok || !strings.Contains(m.Subject, "Email akun") || !strings.Contains(m.Text, emailA2) {
+		t.Fatalf("pemberitahuan ke email lama tidak terkirim: %+v", m)
+	}
 	if _, ok := mail.last(emailA2); ok {
-		t.Fatal("ganti email tidak boleh mengirim email verifikasi")
+		t.Fatal("ganti email tidak boleh mengirim email verifikasi ke alamat baru")
+	}
+	if _, err := h.repo.AccountBySession(ctx, lain.SessionToken); err == nil {
+		t.Fatal("sesi lain harus dicabut setelah email berganti")
+	}
+	if _, err := h.repo.AccountBySession(ctx, tokA); err != nil {
+		t.Fatalf("sesi yang dipakai harus tetap aktif: %v", err)
 	}
 
 	// Kota domisili dan tanggal lahir: opsional. Tidak dikirim = tidak berubah, kosong = dihapus.
