@@ -30,6 +30,7 @@ _Hindari_: agen pengikat, perekrut, pengajak sebagai istilah tersendiri.
 **Booking**: pemesanan satu jadwal untuk satu atau beberapa pax. Ada dua jalur: didaftarkan agen di portal agen, atau mandiri di web publik lewat link ref.
 
 **Pax**: satu kursi dalam booking (`booking_pax`). Jenis: reguler atau bayi (infant).
+**Pax DP+**: pax aktif di booking berstatus dp atau lunas. Satuan KPI marketing di Dashboard Utama (keputusan 12 November 2026): pax per channel dan grafik Pax DP+. Pax per channel membagi pax DP+ menjadi "dari agen" (jamaah terikat agen) dan "tanpa agen" (tanpa agen atau belum ditentukan, keadaan normal jamaah web tanpa referral). Seat terisi hanya menghitung pax DP+ reguler, karena infant tidak memakai seat.
 
 **Kuota seat**: jumlah seat yang dijual untuk satu jadwal (`schedules.seat_total`). Padanan "block seat" atau allotment yang travel pesan dari maskapai.
 
