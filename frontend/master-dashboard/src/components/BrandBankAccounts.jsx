@@ -203,7 +203,7 @@ const BrandBankAccounts = ({ brandId }) => {
                 title="Edit rekening"
                 className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 cursor-pointer"
               >
-                <Pencil size={15} strokeWidth={1.75} />
+                <Pencil size={16} strokeWidth={1.75} />
               </button>
               <button
                 type="button"
@@ -212,7 +212,7 @@ const BrandBankAccounts = ({ brandId }) => {
                 title="Hapus rekening"
                 className="p-1.5 rounded-md text-neutral-500 hover:text-danger-600 hover:bg-danger-50 cursor-pointer"
               >
-                <Trash2 size={15} strokeWidth={1.75} />
+                <Trash2 size={16} strokeWidth={1.75} />
               </button>
             </li>
           ))}
@@ -225,7 +225,7 @@ const BrandBankAccounts = ({ brandId }) => {
         title={editingId ? 'Edit Rekening Bank' : 'Tambah Rekening Bank'}
         footer={
           <>
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={isSaving}>Batal</Button>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={isSaving}>Batal</Button>
             <Button type="button" onClick={save} isLoading={isSaving} disabled={isUploadingLogo}>Simpan</Button>
           </>
         }
@@ -300,7 +300,7 @@ const BrandBankAccounts = ({ brandId }) => {
         size="sm"
         footer={
           <>
-            <Button type="button" variant="ghost" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>Batal</Button>
+            <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>Batal</Button>
             <Button type="button" variant="danger" onClick={confirmDelete} isLoading={isDeleting}>Hapus</Button>
           </>
         }

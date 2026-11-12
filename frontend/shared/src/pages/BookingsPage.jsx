@@ -320,9 +320,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
       )}
 
       {loading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200">
-          <LoadingSpinner />
-        </div>
+        <LoadingSpinner variant="card" />
       ) : (
         <DataTable
           columns={columns}
@@ -379,7 +377,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
         </p>
         <div className="flex justify-end gap-3">
           <Button
-            variant="ghost"
+            variant="secondary"
             onClick={() => setIsDeleteModalOpen(false)}
             disabled={deleteLoading}
           >

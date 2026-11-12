@@ -96,7 +96,7 @@ const KreditCashbackPanel = ({ bookingId, refreshKey, onApplied }) => {
               Tercatat sebagai diskon booking. Menghapus diskon ini mengembalikan kredit jamaah.
             </p>
             <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-              <Button type="button" variant="ghost" onClick={() => setSelected(null)} disabled={saving}>Batal</Button>
+              <Button type="button" variant="secondary" onClick={() => setSelected(null)} disabled={saving}>Batal</Button>
               <Button type="submit" variant="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Pakai Kredit'}</Button>
             </div>
           </form>

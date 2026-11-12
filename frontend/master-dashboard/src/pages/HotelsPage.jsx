@@ -358,7 +358,7 @@ const HotelsPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
+        <LoadingSpinner variant="card" />
       ) : (
         <DataTable
           columns={columns}
@@ -497,7 +497,7 @@ const HotelsPage = () => {
           )}
 
           <div className="pt-4 flex justify-end space-x-3 border-t border-neutral-200">
-            <Button type="button" variant="ghost" onClick={handleCloseModal} disabled={isSubmitting}>
+            <Button type="button" variant="secondary" onClick={handleCloseModal} disabled={isSubmitting}>
               Batal
             </Button>
             <Button type="submit" variant="primary" isLoading={isSubmitting}>
@@ -515,7 +515,7 @@ const HotelsPage = () => {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={cancelDelete}>Batal</Button>
+            <Button variant="secondary" onClick={cancelDelete}>Batal</Button>
             <Button variant="danger" onClick={handleDelete}>Hapus</Button>
           </>
         }

@@ -184,7 +184,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="space-y-6 lg:col-span-2">
-          <MetaBox title="Komisi & Saldo" subtitle="Total komisi per jenis" icon={<Wallet size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+          <MetaBox title="Komisi & Saldo" subtitle="Total komisi per jenis" icon={<Wallet size={16} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="space-y-2">
               <Row label="Total komisi langsung">{money(agen.total_per_jenis.langsung)}</Row>
               <Row label="Total bonus pembinaan">{money(agen.total_per_jenis.pembinaan)}</Row>
@@ -195,7 +195,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
           </MetaBox>
 
           {/* f. Riwayat pencairan (read-only) */}
-          <MetaBox title="Pencairan Terbaru" subtitle="Tiga pengajuan terakhir. Persetujuan dan riwayat lengkap ada di menu Komisi." icon={<Banknote size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+          <MetaBox title="Pencairan Terbaru" subtitle="Tiga pengajuan terakhir. Persetujuan dan riwayat lengkap ada di menu Komisi." icon={<Banknote size={16} strokeWidth={1.75} className="text-neutral-700" />}>
             {pencairanTerbaru.length === 0 ? (
               <EmptyState variant="inline" message="Belum ada pengajuan pencairan." />
             ) : (
@@ -217,7 +217,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
           </MetaBox>
 
           {/* g. Riwayat pengajuan: satu baris per pengajuan (tanggal, keputusan, biaya). */}
-          <MetaBox title="Riwayat Pengajuan" icon={<History size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+          <MetaBox title="Riwayat Pengajuan" icon={<History size={16} strokeWidth={1.75} className="text-neutral-700" />}>
             {agen.siklus.length === 0 ? (
               <EmptyState variant="inline" message="Tidak ada riwayat pengajuan." />
             ) : (
@@ -248,7 +248,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
           {/* b. Status keagenan */}
           <MetaBox
             title="Status Keagenan"
-            icon={<UserCheck size={18} strokeWidth={1.75} className="text-neutral-700" />}
+            icon={<UserCheck size={16} strokeWidth={1.75} className="text-neutral-700" />}
             headerAction={izin.ubahNik ? (
               <Button variant="secondary" size="sm" onClick={() => { setNikForm({ nik: '', alasan: '' }); setNikGalat(''); setNikOpen(true); }}>
                 <Pencil size={14} className="mr-1.5" />Ubah NIK
@@ -276,7 +276,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
 
           {/* h. Riwayat perubahan status aktif dan nonaktif */}
           {agen.riwayat_status?.length > 0 && (
-            <MetaBox title="Riwayat Status" icon={<History size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+            <MetaBox title="Riwayat Status" icon={<History size={16} strokeWidth={1.75} className="text-neutral-700" />}>
               <div className="space-y-3">
                 {agen.riwayat_status.map((r, i) => (
                   <div key={i} className="text-xs text-neutral-700 border-b border-neutral-100 pb-2 last:border-b-0 last:pb-0">
@@ -292,7 +292,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
           )}
 
           {/* c. Jaringan & d. Performa closing */}
-          <MetaBox title="Jaringan" icon={<Network size={18} strokeWidth={1.75} className="text-neutral-700" />}>
+          <MetaBox title="Jaringan" icon={<Network size={16} strokeWidth={1.75} className="text-neutral-700" />}>
             <div className="space-y-2">
               <Row label="Upline">
                 {agen.upline_akun_id ? (

@@ -405,7 +405,7 @@ const SchedulesPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
+        <LoadingSpinner variant="card" />
       ) : (
         <DataTable
           columns={columns}
@@ -459,7 +459,7 @@ const SchedulesPage = () => {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={handleCloseDeleteModal}>Batal</Button>
+            <Button variant="secondary" onClick={handleCloseDeleteModal}>Batal</Button>
             <Button
               variant="danger"
               onClick={handleConfirmDelete}

@@ -574,7 +574,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
                   onClick={handleSaveCatatan}
                   className="flex items-center gap-1.5 text-xs"
                 >
-                  <Save size={13} />
+                  <Save size={14} />
                   <span>{savingCatatan ? "Menyimpan..." : "Simpan Catatan"}</span>
                 </Button>
               </div>

@@ -7,6 +7,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { listBrandOptions } from '../api/brands';
 import { listSchedulesAdmin } from '../api/schedules';
 import { listHotels } from '../api/hotels';
@@ -55,7 +56,7 @@ const ListBlock = ({ title, count, to, isLoading, emptyText, children }) => {
       </Link>
       <ul className="mt-2">
         {isLoading ? (
-          <li className="h-12 flex items-center text-sm font-body text-neutral-500 border-b border-neutral-200">Memuat…</li>
+          <li className="border-b border-neutral-200"><LoadingSpinner /></li>
         ) : rows.length === 0 ? (
           <li className="h-12 flex items-center text-sm font-body text-neutral-500 border-b border-neutral-200">{emptyText}</li>
         ) : rows}

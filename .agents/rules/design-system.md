@@ -234,6 +234,23 @@ Pesan berupa kalimat biasa `text-sm text-neutral-500`, boleh disertai petunjuk a
 | Pita toolbar & paginasi `DataTable`, header/footer `Modal` | `p-4` / `px-5 py-4` |
 | Sel tabel | `px-4 py-3` |
 
+## 5.5 Modal, Ikon, Memuat, Paginasi (WAJIB)
+
+**Footer modal** — rata kanan, urutan tetap: `Button variant="secondary"` "Batal" lalu aksi utama (`primary`, atau `danger` untuk hapus/batal permanen). "Batal"/"Kembali" tidak pernah `ghost`. Tombol aksi baru menampilkan `isLoading` saat menyimpan, bukan mengganti teksnya ("Menyimpan..."); 34 tombol lama yang masih mengganti teks dirapikan bertahap.
+
+**Ukuran ikon** (lucide, `strokeWidth` bawaan atau 1.75):
+| Konteks | Ukuran |
+|---|---|
+| Tombol, item menu, baris daftar, field | 16px (`size={16}` / `w-4 h-4`) |
+| Teks kecil: badge, link `text-xs`, caption, label stat tile | 14px (`size={14}` / `w-3.5 h-3.5`) |
+| Panah urut kolom tabel, penanda mikro | 12px |
+| Tombol kembali header, topbar | 20px |
+Tanpa ukuran ganjil (11, 13, 15, 18, 22). Ikon besar dekoratif di empty state tidak dipakai.
+
+**Memuat** — selalu `LoadingSpinner`. `variant="card"` untuk blok yang belum termuat (pengganti kartu), `inline` di dalam wadah. Tabel: `DataTable loading={…}` (toolbar tetap tampil). Tombol: `isLoading`. Tidak ada teks "Memuat..." buatan sendiri.
+
+**Paginasi** — halaman aktif `secondary` (berbingkai) dengan `aria-current="page"`, bukan latar hitam.
+
 ## 6. Alur Kerja untuk Halaman Baru
 
 1. Cek dulu apakah komponen yang dibutuhkan sudah ada di `components/ui/`

@@ -181,7 +181,8 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
         onRowClick={(row) => navigate(`/agen/${row.akun_id}`)}
         itemsPerPage={20}
         searchPlaceholder="Cari nama, kode referral, atau upline..."
-        emptyMessage={loading ? 'Memuat...' : tab === 'pengajuan' ? 'Tidak ada pengajuan agen dalam antrean' : 'Belum ada agen'}
+        loading={loading}
+        emptyMessage={tab === 'pengajuan' ? 'Tidak ada pengajuan agen dalam antrean' : 'Belum ada agen'}
         toolbarActions={(
           <div className="flex flex-wrap items-center gap-2">
             {/* Calon agen belum punya closing dan komisi, jadi rentang waktu tidak berlaku di tab Pengajuan. */}

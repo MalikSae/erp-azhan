@@ -205,9 +205,7 @@ export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
       {error && <Alert variant="error" onClose={() => setError(null)}>{error}</Alert>}
 
       {loading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200">
-          <LoadingSpinner />
-        </div>
+        <LoadingSpinner variant="card" />
       ) : (
         <DataTable
           columns={columns}
@@ -252,7 +250,7 @@ export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
           Data yang dihapus tidak dapat dikembalikan.
         </p>
         <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>Batal</Button>
+          <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Batal</Button>
           <Button variant="danger" onClick={confirmDelete}>Hapus</Button>
         </div>
       </Modal>

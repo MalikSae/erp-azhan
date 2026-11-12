@@ -953,11 +953,11 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                             <div className="flex justify-center">
                               {pax.progress_paspor ? (
                                 <span title="Paspor sudah diunggah" className="text-success-600 inline-flex items-center gap-1 text-xs font-medium">
-                                  <CheckCircle size={18} />
+                                  <CheckCircle size={16} />
                                 </span>
                               ) : (
                                 <span title="Paspor belum diunggah" className="text-neutral-400 inline-flex items-center gap-1 text-xs font-medium">
-                                  <X size={18} />
+                                  <X size={16} />
                                 </span>
                               )}
                             </div>
@@ -1073,7 +1073,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                     return pax.perlengkapan_status === 'sudah_diberikan' ? (
                       <Button
                         size="sm"
-                        variant="ghost"
+                        variant="secondary"
                         className="!py-1.5 !px-3 text-xs text-danger-600 hover:bg-danger-50"
                         disabled={perlengkapanLoading}
                         onClick={() => {
@@ -1192,7 +1192,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                         className="inline-flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                         title="Lihat Bukti Pembayaran"
                       >
-                        <FileText size={13} strokeWidth={1.75} className="text-neutral-400" />
+                        <FileText size={14} strokeWidth={1.75} className="text-neutral-400" />
                         <span>Lihat Bukti</span>
                       </button>
                     ) : (
@@ -1509,7 +1509,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-100">
             <Button 
               type="button" 
-              variant="ghost" 
+              variant="secondary" 
               onClick={() => setIsPaymentModalOpen(false)}
               disabled={paymentSubmitting}
             >
@@ -1542,7 +1542,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               className="text-xs inline-flex items-center gap-1.5 font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
             >
               <span>Buka di Tab Baru</span>
-              <ExternalLink size={13} />
+              <ExternalLink size={14} />
             </a>
             <Button type="button" variant="secondary" onClick={() => setSelectedBuktiUrl(null)}>
               Tutup
@@ -1590,7 +1590,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             placeholder="Misal: Promo Early Bird, Diskon Keluarga"
           />
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-            <Button type="button" variant="ghost" onClick={() => setIsDiskonModalOpen(false)}>Batal</Button>
+            <Button type="button" variant="secondary" onClick={() => setIsDiskonModalOpen(false)}>Batal</Button>
             <Button type="submit" variant="primary" disabled={diskonSubmitting}>
               {diskonSubmitting ? "Menyimpan..." : "Simpan Diskon"}
             </Button>
@@ -1628,7 +1628,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           Stok barang akan dikembalikan ke inventaris.
         </p>
         <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setIsBatalkanModalOpen(false)}>Batal</Button>
+          <Button variant="secondary" onClick={() => setIsBatalkanModalOpen(false)}>Batal</Button>
           <Button variant="danger" disabled={perlengkapanLoading} onClick={handleBatalkanPerlengkapan}>
             {perlengkapanLoading ? "Memproses..." : "Ya, Batalkan"}
           </Button>
@@ -1646,7 +1646,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           Jika seat sedang di-hold, seat dikembalikan ke sisa seat jadwal.
         </p>
         <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setCancelConfirmModal(false)}>Batal</Button>
+          <Button variant="secondary" onClick={() => setCancelConfirmModal(false)}>Batal</Button>
           <Button variant="danger" onClick={() => executeStatusChange("batal")}>
             Ya, Batalkan Booking
           </Button>
@@ -1702,7 +1702,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             })()}
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-100">
-            <Button type="button" variant="ghost" onClick={() => setIsChangeRoomModalOpen(false)}>Batal</Button>
+            <Button type="button" variant="secondary" onClick={() => setIsChangeRoomModalOpen(false)}>Batal</Button>
             <Button type="submit" variant="primary" disabled={changeRoomSubmitting} isLoading={changeRoomSubmitting}>
               {changeRoomSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
             </Button>
@@ -1725,7 +1725,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </p>
         )}
         <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setIsCancelPaxModalOpen(false)}>Batal</Button>
+          <Button variant="secondary" onClick={() => setIsCancelPaxModalOpen(false)}>Batal</Button>
           <Button variant="danger" disabled={cancelPaxSubmitting} onClick={handleCancelPaxSubmit}>
             {cancelPaxSubmitting ? "Memproses..." : "Ya, Batalkan Pax"}
           </Button>
@@ -1775,7 +1775,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           <div className="flex justify-end gap-3 pt-2">
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               onClick={() => setSelectedPaymentForReject(null)}
               disabled={rejectSubmitting}
             >
@@ -1835,7 +1835,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             <div className="flex justify-end gap-3 pt-2">
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 onClick={() => setSelectedPaymentForConfirm(null)}
                 disabled={confirmSubmitting}
               >
@@ -1871,7 +1871,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </p>
         )}
         <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setCancelSeatBlockModal(false)} disabled={seatBlockLoading}>
+          <Button variant="secondary" onClick={() => setCancelSeatBlockModal(false)} disabled={seatBlockLoading}>
             Batal
           </Button>
           <Button variant="danger" disabled={seatBlockLoading} isLoading={seatBlockLoading} onClick={handleCancelSeatBlock}>
@@ -1909,7 +1909,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="ghost" onClick={() => setBlockSeatModal(false)} disabled={blockSeatLoading}>
+            <Button variant="secondary" onClick={() => setBlockSeatModal(false)} disabled={blockSeatLoading}>
               Batal
             </Button>
             <Button variant="primary" disabled={blockSeatLoading} isLoading={blockSeatLoading} onClick={handleBlockSeatSubmit}>

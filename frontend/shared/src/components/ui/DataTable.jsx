@@ -11,6 +11,7 @@ const DataTable = ({
   pagination = true,
   itemsPerPage = 10,
   emptyMessage = "Tidak ada data",
+  loading = false, // true: tabel menampilkan LoadingSpinner, toolbar tetap tampil
   renderCell,
   toolbarLeading,
   toolbarActions,
@@ -140,6 +141,7 @@ const DataTable = ({
         sortConfig={sortConfig}
         onSort={handleSort}
         onRowClick={onRowClick}
+        loading={loading}
       />
 
       {/* Footer / Pagination */}
@@ -184,10 +186,11 @@ const DataTable = ({
                   return (
                     <Button
                       key={page}
-                      variant={currentPage === page ? "dark" : "ghost"}
+                      variant={currentPage === page ? "secondary" : "ghost"}
+                      aria-current={currentPage === page ? "page" : undefined}
                       size="sm"
                       onClick={() => setCurrentPage(page)}
-                      className={`w-8 h-8 p-0 text-xs ${currentPage === page ? ' font-semibold' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                      className={`w-8 h-8 p-0 text-xs ${currentPage === page ? "font-semibold text-neutral-900" : "text-neutral-600 hover:bg-neutral-100"}`}
                     >
                       {page}
                     </Button>

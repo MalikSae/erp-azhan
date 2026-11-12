@@ -386,7 +386,7 @@ const AirlinesPage = () => {
       )}
 
       {isLoadingTab ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
+        <LoadingSpinner variant="card" />
       ) : activeTab === 'airlines' ? (
         <DataTable
           key="airlines-table"
@@ -462,7 +462,7 @@ const AirlinesPage = () => {
           )}
 
           <div className="pt-4 flex justify-end space-x-3 border-t border-neutral-200">
-            <Button type="button" variant="ghost" onClick={handleCloseAirlineModal} disabled={isSubmittingAirline}>
+            <Button type="button" variant="secondary" onClick={handleCloseAirlineModal} disabled={isSubmittingAirline}>
               Batal
             </Button>
             <Button type="submit" variant="primary" isLoading={isSubmittingAirline}>
@@ -521,7 +521,7 @@ const AirlinesPage = () => {
           )}
 
           <div className="pt-4 flex justify-end space-x-3 border-t border-neutral-200">
-            <Button type="button" variant="ghost" onClick={handleCloseAirportModal} disabled={isSubmittingAirport}>
+            <Button type="button" variant="secondary" onClick={handleCloseAirportModal} disabled={isSubmittingAirport}>
               Batal
             </Button>
             <Button type="submit" variant="primary" isLoading={isSubmittingAirport}>
@@ -539,7 +539,7 @@ const AirlinesPage = () => {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDeleteConfirmAirlineId(null)}>Batal</Button>
+            <Button variant="secondary" onClick={() => setDeleteConfirmAirlineId(null)}>Batal</Button>
             <Button variant="danger" onClick={handleDeleteAirline}>Hapus</Button>
           </>
         }
@@ -557,7 +557,7 @@ const AirlinesPage = () => {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDeleteConfirmAirportId(null)}>Batal</Button>
+            <Button variant="secondary" onClick={() => setDeleteConfirmAirportId(null)}>Batal</Button>
             <Button variant="danger" onClick={handleDeleteAirport}>Hapus</Button>
           </>
         }

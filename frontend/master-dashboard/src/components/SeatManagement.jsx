@@ -148,7 +148,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
         title="Sesuaikan Sisa Seat"
         footer={
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setIsOpen(false)} disabled={isSaving}>Batal</Button>
+            <Button variant="secondary" onClick={() => setIsOpen(false)} disabled={isSaving}>Batal</Button>
             <Button variant="primary" onClick={simpan} isLoading={isSaving}>Simpan</Button>
           </div>
         }

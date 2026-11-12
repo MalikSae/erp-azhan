@@ -113,8 +113,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'Akun & Agen',
       items: [
         // Satu menu per benda. `cocok` menentukan kapan menu aktif, karena alamat lama dipertahankan:
-        // /agen/komisi milik menu Komisi, dan Ganti Kaitan (/komisi/ganti-kaitan) dibuka dari detail akun.
-        { name: 'Akun', path: '/akun', icon: UserRound, perm: 'akun.view', cocok: (p) => p === '/akun' || p.startsWith('/akun/') || p.startsWith('/komisi/ganti-kaitan') },
+        // /agen/komisi milik menu Komisi.
+        { name: 'Akun', path: '/akun', icon: UserRound, perm: 'akun.view', cocok: (p) => p === '/akun' || p.startsWith('/akun/') },
         { name: 'Agen', path: '/agen', icon: UserCheck, perm: 'agen.view', cocok: (p) => p === '/agen' || (p.startsWith('/agen/') && !p.startsWith('/agen/komisi')) },
         { name: 'Komisi', path: alamatKomisi, icon: Wallet, permAny: ['agen.payout.approve', 'komisi.view'], cocok: (p) => p === '/komisi' || p.startsWith('/agen/komisi') },
       ],
