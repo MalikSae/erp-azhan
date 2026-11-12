@@ -2,6 +2,7 @@ package selfbooking
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -89,5 +90,17 @@ func TestWriteAgenBookingErrorBatasSeat(t *testing.T) {
 	h.writeAgenBookingError(rec, &BatasSeatAgenError{BatasPerJadwal: 20, BatasTotal: 45, SisaPerJadwal: 3, SisaTotal: 10})
 	if rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), KodeBatasSeatAgen) || !strings.Contains(rec.Body.String(), "menahan 3 seat") {
 		t.Fatalf("got %d %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		BatasPerJadwal int `json:"batas_per_jadwal"`
+		BatasTotal     int `json:"batas_total"`
+		SisaPerJadwal  int `json:"sisa_per_jadwal"`
+		SisaTotal      int `json:"sisa_total"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body.BatasPerJadwal != 20 || body.BatasTotal != 45 || body.SisaPerJadwal != 3 || body.SisaTotal != 10 {
+		t.Fatalf("sisa seat tidak dikirim sebagai data: %+v", body)
 	}
 }
