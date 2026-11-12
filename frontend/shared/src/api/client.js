@@ -21,6 +21,14 @@ function setToken(token) {
   }
 }
 
+function setRefreshToken(token) {
+  if (localStorage.getItem('refresh_token') !== null && localStorage.getItem('erp_refresh_token') === null) {
+    localStorage.setItem('refresh_token', token);
+  } else {
+    localStorage.setItem('erp_refresh_token', token);
+  }
+}
+
 function removeTokens() {
   localStorage.removeItem('erp_access_token');
   localStorage.removeItem('erp_refresh_token');
@@ -70,6 +78,8 @@ client.interceptors.response.use(
 
         const newAccessToken = res.data.access_token;
         setToken(newAccessToken);
+        // Refresh token dirotasi tiap refresh: token lama tidak berlaku lagi.
+        if (res.data.refresh_token) setRefreshToken(res.data.refresh_token);
 
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return client(originalRequest);

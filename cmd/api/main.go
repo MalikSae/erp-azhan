@@ -320,12 +320,12 @@ func main() {
 
 		// RBAC Fase 1: manajemen role & permission (SPEK-RBAC-2026-10-02.md).
 		r.Route("/roles", func(r chi.Router) {
-			r.Use(identity.RequirePermission("user.admin"))
+			r.Use(identity.RequireHoldingPermission("user.admin"))
 			r.Get("/", rbacHandler.ListRoles)
 		})
-		r.With(identity.RequirePermission("user.admin")).Get("/permissions", rbacHandler.ListPermissions)
+		r.With(identity.RequireHoldingPermission("user.admin")).Get("/permissions", rbacHandler.ListPermissions)
 		r.Route("/users/{id}/roles", func(r chi.Router) {
-			r.Use(identity.RequirePermission("user.admin"))
+			r.Use(identity.RequireHoldingPermission("user.admin"))
 			r.Get("/", rbacHandler.GetUserRoles)
 			r.Put("/", rbacHandler.SetUserRoles)
 		})
@@ -391,7 +391,7 @@ func main() {
 
 		// Users: satu permission dengan manajemen role (user.admin).
 		r.Route("/users", func(r chi.Router) {
-			r.Use(identity.RequirePermission("user.admin"))
+			r.Use(identity.RequireHoldingPermission("user.admin"))
 			r.Get("/", adminuserHandler.ListUsers)
 			r.Post("/", adminuserHandler.CreateUser)
 			r.Get("/{id}", adminuserHandler.GetUser)
@@ -403,7 +403,7 @@ func main() {
 
 		// Struktur Organisasi (SPEK-PENGGUNA-ORGANISASI §5): divisi -> tim.
 		r.Route("/org-units", func(r chi.Router) {
-			r.Use(identity.RequirePermission("user.admin"))
+			r.Use(identity.RequireHoldingPermission("user.admin"))
 			r.Get("/", orgUnitHandler.List)
 			r.Post("/", orgUnitHandler.Create)
 			r.Put("/{id}", orgUnitHandler.Update)

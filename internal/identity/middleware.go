@@ -83,6 +83,22 @@ func RequirePermission(perm string) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireHoldingPermission seperti RequirePermission, tetapi juga menolak token akun brand.
+// Dipakai untuk izin tingkat holding (user.admin: kelola user, role, struktur organisasi) yang
+// handlernya tidak memfilter brand. Hari ini izin itu hanya ada di role holding; penjaga ini
+// memastikan role brand yang keliru diberi izin itu tetap tidak bisa mengubah user holding.
+func RequireHoldingPermission(perm string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !HasPermission(r.Context(), perm) || GetBrandID(r.Context()) != nil {
+				writeError(w, http.StatusForbidden, "anda tidak memiliki izin untuk aksi ini")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // HasPermission true bila klaim perms pada context memuat permission tsb.
 func HasPermission(ctx context.Context, perm string) bool {
 	for _, p := range GetPerms(ctx) {
