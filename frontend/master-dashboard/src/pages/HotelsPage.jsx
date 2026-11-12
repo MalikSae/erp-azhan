@@ -324,7 +324,7 @@ const HotelsPage = () => {
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 text-xs font-medium font-body text-primary-600 hover:text-primary-700 hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-body font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
           title={row.video_url}
         >
           <Play className="w-3 h-3 fill-current" />
@@ -430,7 +430,7 @@ const HotelsPage = () => {
                     setIsNewCity(false);
                     setFormData(prev => ({ ...prev, city: cities[0] || '' }));
                   }}
-                  className="text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors cursor-pointer flex items-center gap-1"
+                  className="text-xs cursor-pointer flex items-center gap-1 font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                 >
                   ← Pilih dari daftar
                 </button>

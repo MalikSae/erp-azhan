@@ -23,13 +23,14 @@ import { listBrands } from "../api/brands";
 import { uploadMedia, openProtectedMedia } from "../api/media";
 import { getSeatLockIcon, getPaymentStatusMeta } from "../utils/bookingStatus";
 import PageHeader from "../components/ui/PageHeader";
-import { Surface, Section, TableCard, Field, SummaryItem, PILL_STRONG, BrandBadge } from "../components/ui/DetailLayout";
+import { Surface, Section, TableCard, Field, SummaryItem } from "../components/ui/DetailLayout";
 import Badge from "../components/ui/Badge";
 import ActionMenu from "../components/ui/ActionMenu";
 import Button from "../components/ui/Button";
 import { printInvoice } from "../utils/printInvoice";
 import client from "../api/client";
 import Alert from "../components/ui/Alert";
+import EmptyState from '../components/ui/EmptyState';
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Table from "../components/ui/Table";
 import Modal from "../components/ui/Modal";
@@ -67,6 +68,15 @@ const formatTanggal = (dateStr) => {
 // Status ringan memakai Badge bersama (satu gaya status, lihat Badge.jsx).
 const DotText = ({ tone, children }) => <Badge variant={tone}>{children}</Badge>;
 
+// Nada Badge status booking di header, sama dengan daftar Booking.
+const STATUS_BOOKING_BADGE = {
+  draft: { label: 'Draft', variant: 'warning' },
+  baru: { label: 'Baru', variant: 'info' },
+  dp: { label: 'DP', variant: 'warning' },
+  lunas: { label: 'Lunas', variant: 'success' },
+  batal: { label: 'Batal', variant: 'danger' },
+};
+
 const PROGRESS_HEADER_MANUAL_ITEMS = [
   { key: 'tiket', label: 'Tiket PP' },
   { key: 'hotel', label: 'Hotel' },
@@ -83,6 +93,8 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [brand, setBrand] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Diskon yang sedang dikonfirmasi untuk dihapus: { id, saving, error } atau null.
+  const [hapusDiskon, setHapusDiskon] = useState(null);
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -486,13 +498,20 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     }
   };
 
-  const handleDeleteDiscount = async (discountId) => {
-    if (!window.confirm("Yakin ingin menghapus diskon ini?")) return;
+  // Hapus diskon lewat Modal konfirmasi (bukan window.confirm/alert bawaan browser).
+  const handleDeleteDiscount = (discountId) => {
+    setHapusDiskon({ id: discountId, saving: false, error: "" });
+  };
+
+  const konfirmasiHapusDiskon = async () => {
+    if (!hapusDiskon) return;
+    setHapusDiskon((s) => ({ ...s, saving: true, error: "" }));
     try {
-      await removeBookingDiscount(id, discountId);
+      await removeBookingDiscount(id, hapusDiskon.id);
+      setHapusDiskon(null);
       fetchAll();
     } catch (err) {
-      alert(err.response?.data?.error || "Gagal menghapus diskon");
+      setHapusDiskon((s) => ({ ...s, saving: false, error: err.response?.data?.error || "Gagal menghapus diskon" }));
     }
   };
 
@@ -720,20 +739,22 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
       {/* Header: judul + status, pil brand / seat, aksi */}
       <PageHeader
         title={booking.id_booking || `Booking #${booking.id}`}
-        breadcrumb={false}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            {showBrandColumn && (brand || booking.brand_id) && (
-              <BrandBadge name={brand?.name || `Brand #${booking.brand_id}`} color={brand?.primary_color} />
-            )}
+        meta={[
+          showBrandColumn && (brand?.name || (booking.brand_id ? `Brand #${booking.brand_id}` : null)),
+          `Dibuat ${formatTanggal(booking.created_at)}`,
+        ]}
+        badges={(
+          <>
+            <Badge variant={STATUS_BOOKING_BADGE[booking.status]?.variant || 'neutral'}>
+              {STATUS_BOOKING_BADGE[booking.status]?.label || booking.status}
+            </Badge>
             {seatLockInfo && (
               <Badge variant={booking.is_seat_blocked ? 'success' : 'warning'}>
                 {seatLockInfo.label}
               </Badge>
             )}
-            <span className="text-xs font-body text-neutral-500">Dibuat pada {formatTanggal(booking.created_at)}</span>
-          </span>
-        }
+          </>
+        )}
         onBack={() => navigate("/bookings")}
       >
         <div className="flex flex-wrap items-center gap-2">
@@ -810,7 +831,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             }
           >
             {paxList.length === 0 ? (
-              <p className="p-5 text-xs text-neutral-500 font-body">Tidak ada data pax.</p>
+              <EmptyState variant="section" message="Tidak ada data pax." />
             ) : (
               <div className="overflow-x-auto">
               <Table
@@ -889,7 +910,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             title="Kesiapan Dokumen & Operasional"
           >
             {activePaxList.length === 0 ? (
-              <p className="p-5 text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
+              <EmptyState variant="section" message="Tidak ada jamaah aktif." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm font-body text-neutral-700 border-collapse">
@@ -1005,7 +1026,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             {perlengkapanError && <Alert variant="error" className="m-5 mb-0">{perlengkapanError}</Alert>}
 
             {activePaxList.length === 0 ? (
-              <p className="p-5 text-xs text-neutral-500 font-body">Tidak ada jamaah aktif.</p>
+              <EmptyState variant="section" message="Tidak ada jamaah aktif." />
             ) : (
               <div className="overflow-x-auto">
               <Table
@@ -1093,7 +1114,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             }
           >
             {discounts.length === 0 ? (
-              <p className="p-5 text-xs text-neutral-500 font-body">Belum ada diskon. Tambahkan program diskon jika ada.</p>
+              <EmptyState variant="section" message="Belum ada diskon. Tambahkan program diskon jika ada." />
             ) : (
               <div className="divide-y divide-neutral-200">
                 {discounts.map((d) => (
@@ -1146,7 +1167,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   : "Riwayat pembayaran gagal dimuat. Muat ulang halaman untuk mencoba lagi."}
               </p>
             ) : payments.length === 0 ? (
-              <p className="p-5 text-xs text-neutral-500 font-body">Belum ada pembayaran. Catat pembayaran dari jamaah di sini.</p>
+              <EmptyState variant="section" message="Belum ada pembayaran. Catat pembayaran dari jamaah di sini." />
             ) : (
               <div className="overflow-x-auto">
               <Table
@@ -1168,7 +1189,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                       <button
                         type="button"
                         onClick={() => openProtectedMedia(p.bukti_url, 'Bukti Pembayaran')}
-                        className="text-neutral-700 hover:text-primary-700 font-medium inline-flex items-center gap-1.5 text-xs hover:underline transition-colors cursor-pointer whitespace-nowrap"
+                        className="inline-flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                         title="Lihat Bukti Pembayaran"
                       >
                         <FileText size={13} strokeWidth={1.75} className="text-neutral-400" />
@@ -1518,7 +1539,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               href={selectedBuktiUrl || "#"}
               target="_blank"
               rel="noreferrer"
-              className="text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline inline-flex items-center gap-1.5"
+              className="text-xs inline-flex items-center gap-1.5 font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
             >
               <span>Buka di Tab Baru</span>
               <ExternalLink size={13} />
@@ -1575,6 +1596,25 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: Konfirmasi hapus diskon */}
+      <Modal
+        isOpen={Boolean(hapusDiskon)}
+        onClose={() => !hapusDiskon?.saving && setHapusDiskon(null)}
+        title="Hapus diskon"
+        size="sm"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setHapusDiskon(null)} disabled={hapusDiskon?.saving}>Batal</Button>
+            <Button variant="danger" onClick={konfirmasiHapusDiskon} isLoading={hapusDiskon?.saving}>Hapus diskon</Button>
+          </>
+        )}
+      >
+        <div className="space-y-3">
+          {hapusDiskon?.error && <Alert variant="error">{hapusDiskon.error}</Alert>}
+          <p className="text-sm font-body text-neutral-700">Diskon ini akan dihapus dari booking.</p>
+        </div>
       </Modal>
 
       {/* Modal: Batalkan Perlengkapan */}
@@ -1720,7 +1760,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             </label>
             <textarea
               rows={3}
-              className="w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 resize-none disabled:bg-neutral-100"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-body text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 resize-none disabled:bg-neutral-100"
               placeholder="Contoh: bukti transfer tidak sesuai jumlah"
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}

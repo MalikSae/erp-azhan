@@ -150,6 +150,13 @@ export async function listKaitanAkunLog(akunId) {
   return data || [];
 }
 
+// Jumlah jamaah yang ikut pindah bila upline akun diganti sekarang (keputusan 12 November 2026).
+export async function jumlahJamaahIkutUpline(akunId) {
+  const { data } = await client.get(`/api/admin/kaitan-agen/akun/${akunId}/jamaah-ikut`);
+  return Number(data?.jumlah) || 0;
+}
+
+// Respons berisi jamaah_dipindah: jumlah jamaah yang ikut pindah ke upline baru.
 export async function gantiAgenAkun(akunId, { agenAkunId, alasan }) {
   const { data } = await client.put(`/api/admin/kaitan-agen/akun/${akunId}`, {
     agen_akun_id: agenAkunId ?? null,

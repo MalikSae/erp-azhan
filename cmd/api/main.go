@@ -566,6 +566,7 @@ func main() {
 			r.Put("/kaitan-agen/{jamaahID}", agenHandler.GantiKaitan)
 			r.Get("/kaitan-agen/akun", agenHandler.CariAkunKaitan)
 			r.Get("/kaitan-agen/akun/{akunID}/log", agenHandler.LogKaitanAkun)
+			r.Get("/kaitan-agen/akun/{akunID}/jamaah-ikut", agenHandler.JamaahIkutUpline)
 			r.Put("/kaitan-agen/akun/{akunID}", agenHandler.GantiAgenAkun)
 		})
 

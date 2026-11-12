@@ -17,7 +17,7 @@ import React, { Children, isValidElement, useEffect, useRef, useState } from 're
 
 // Satu section di kolom utama.
 export const FormSection = ({ id, title, aside, children }) => (
-  <section id={id} className="scroll-mt-16 px-5 py-6 sm:px-6">
+  <section id={id} className="scroll-mt-16 p-5">
     <div className="mb-5 flex items-center justify-between gap-3">
       <h3 className="font-heading text-base font-semibold text-neutral-900">{title}</h3>
       {aside}
@@ -28,7 +28,7 @@ export const FormSection = ({ id, title, aside, children }) => (
 
 // Satu bagian di sidebar.
 export const SidebarSection = ({ title, children }) => (
-  <section className="p-4">
+  <section className="p-5">
     {title && <h3 className="mb-3 font-heading text-sm font-semibold text-neutral-900">{title}</h3>}
     {children}
   </section>
@@ -98,14 +98,14 @@ const FormLayout = ({ tabs = [], children }) => {
           </nav>
         )}
 
-        <div className="divide-y divide-neutral-200 rounded-xl border border-neutral-200 bg-white">
+        <div className="divide-y divide-neutral-200 rounded-2xl border border-neutral-200 bg-white">
           {mainNodes}
         </div>
       </div>
 
       {asideNodes.length > 0 && (
         <aside className="lg:sticky lg:top-4">
-          <div className="divide-y divide-neutral-200 rounded-xl border border-neutral-200 bg-white">
+          <div className="divide-y divide-neutral-200 rounded-2xl border border-neutral-200 bg-white">
             {asideNodes}
           </div>
         </aside>
@@ -151,13 +151,13 @@ export const FormTabs = ({ tabs = [], children }) => {
         </div>
       </nav>
 
-      <div className="min-w-0 rounded-xl border border-neutral-200 bg-white">
+      <div className="min-w-0 rounded-2xl border border-neutral-200 bg-white">
         {activeNode}
       </div>
 
       {asideNodes.length > 0 && (
         <aside className="lg:sticky lg:top-4">
-          <div className="divide-y divide-neutral-200 rounded-xl border border-neutral-200 bg-white">
+          <div className="divide-y divide-neutral-200 rounded-2xl border border-neutral-200 bg-white">
             {asideNodes}
           </div>
         </aside>

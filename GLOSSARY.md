@@ -56,9 +56,9 @@ _Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti k
 
 **Pengikatan akun**: pencatatan upline akun saat akun dibuat, dari cookie referral. Setelah akun ada, cookie diabaikan. Akun tanpa agen tetap tanpa agen kecuali admin memasangkannya.
 
-**Kunci (kaitan)**: ikatan jamaah ke agen yang pertama membawanya. Seumur hidup. Hanya override admin yang memindahkan. Pemilik kunci menerima komisi atas jamaah itu siapa pun yang memesan.
+**Kunci (kaitan)**: ikatan jamaah ke agen yang pertama membawanya. Seumur hidup. Hanya override admin yang memindahkan. Pemilik kunci menerima komisi atas jamaah itu siapa pun yang memesan. Pengecualian (keputusan 12 November 2026): saat admin mengganti upline sebuah akun, jamaah yang booking pertamanya dibuat akun itu dan masih terikat ke upline lama ikut pindah ke upline baru (atau jadi tanpa agen bila upline dilepas). Komisi yang sudah tercatat tetap milik agen lama; kaitan yang dipilih admin per jamaah (jalur3) tidak ikut.
 
-**Override admin**: pemindahan kunci jamaah atau pemasangan agen akun oleh Admin Master (layar C4).
+**Override admin**: pemindahan kunci jamaah atau pemasangan upline akun oleh Admin Master (izin `agen.kaitan.edit`), lewat modal "Ganti agen" di detail Jamaah dan "Ganti upline" di detail Akun. Halaman terpisah `/komisi/ganti-kaitan` (layar C4) sudah dihapus.
 
 **Saya sendiri**: pilihan di form booking portal agen untuk jamaah pertama. Menandai booking pribadi agen; agen tidak mendapat komisi dari booking dirinya sendiri, komisinya mengalir ke upline agen.
 

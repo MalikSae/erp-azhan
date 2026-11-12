@@ -465,7 +465,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                         href={`/bookings/${selectedPayment.booking_id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="ml-2 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
+                        className="ml-2 text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                         title="Buka Detail Booking di tab baru"
                       >
                         Buka ↗
@@ -565,7 +565,7 @@ export default function PaymentConfirmationsPage({ showBrandColumn = false }) {
                       <button
                         type="button"
                         onClick={() => window.open(proofBlobUrl, '_blank')}
-                        className="mt-2 cursor-pointer text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
+                        className="mt-2 cursor-pointer text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                       >
                         Buka gambar penuh ↗
                       </button>

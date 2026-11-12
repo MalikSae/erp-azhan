@@ -59,7 +59,7 @@ const VoidPaymentModal = ({ payment, onClose, onDone }) => {
               id="alasan-void"
               rows={3}
               maxLength={ALASAN_MAKS}
-              className="w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 resize-none disabled:bg-neutral-100"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-body text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 resize-none disabled:bg-neutral-100"
               placeholder="Contoh: salah ketik nominal, seharusnya Rp 2.500.000"
               value={alasan}
               onChange={(e) => setAlasan(e.target.value)}

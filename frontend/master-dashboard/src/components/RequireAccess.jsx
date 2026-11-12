@@ -20,7 +20,7 @@ const RequireAccess = ({ perm, anyOf, holdingOnly = false, children }) => {
   if (allowed) return children;
 
   return (
-    <div className="mx-auto mt-16 max-w-md rounded-xl border border-neutral-200 bg-white p-8 text-center">
+    <div className="mx-auto mt-16 max-w-md rounded-2xl border border-neutral-200 bg-white p-8 text-center">
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-warning-50 text-warning-600">
         <ShieldAlert size={22} strokeWidth={1.75} />
       </div>
@@ -30,7 +30,7 @@ const RequireAccess = ({ perm, anyOf, holdingOnly = false, children }) => {
       </p>
       <Link
         to="/"
-        className="mt-5 inline-flex items-center rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+        className="mt-5 inline-flex items-center h-9 px-3 rounded-2xl border border-neutral-200 bg-white shadow-btn-secondary text-sm font-medium font-heading text-neutral-800 hover:bg-neutral-50"
       >
         Kembali ke Dashboard
       </Link>

@@ -4,6 +4,7 @@ import { getDetailAgen, ubahStatusAgen } from '../api/agen';
 import { ubahNikAgen } from '../api/akun';
 import { Banknote, Clock3, History, Network, Pencil, TrendingUp, UserCheck, Wallet } from 'lucide-react';
 import Alert from '../components/ui/Alert';
+import EmptyState from '../components/ui/EmptyState';
 import Badge, { toneFromClass } from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -143,16 +144,11 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
       <div className="space-y-6">
         <PageHeader
           title={masihCalon ? calon.nama_lengkap : 'Agen'}
-          subtitle={masihCalon ? (
-            <>
-              {calon.no_hp || '-'} · Pengajuan agen{calon.diajukan_agen_at ? ` · Diajukan ${dateLabel(calon.diajukan_agen_at)}` : ''}
-              {izin.lihatAkun && <> · <Link to={`/akun/${id}`} className="font-semibold text-primary-600 hover:underline">Lihat akun</Link></>}
-            </>
-          ) : undefined}
+          meta={masihCalon ? [calon.no_hp || '-', calon.diajukan_agen_at ? `Diajukan ${dateLabel(calon.diajukan_agen_at)}` : null] : undefined}
+          badges={masihCalon ? <Badge variant="warning">Mengajukan agen</Badge> : undefined}
           onBack={() => navigate(masihCalon ? '/agen/pengajuan' : '/agen')}
-          breadcrumb={false}
         >
-          {null}
+          {masihCalon && tautanAkun}
         </PageHeader>
         {atas}
         {menunggu && <p className="text-sm text-neutral-500">Memuat data agen...</p>}
@@ -166,7 +162,12 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
 
   return (
     <div className="space-y-6">
-      <PageHeader title={agen.nama_lengkap} subtitle={`${agen.no_hp || '-'} · kode ${agen.kode_referral || '-'}`} onBack={() => navigate('/agen')} breadcrumb={false}>
+      <PageHeader
+        title={agen.nama_lengkap}
+        meta={[agen.no_hp || '-', `Kode ${agen.kode_referral || '-'}`]}
+        badges={<Badge variant={toneFromClass((DOT_STYLE[statusMeta.variant] || DOT_STYLE.neutral).dot)}>{statusMeta.label}</Badge>}
+        onBack={() => navigate('/agen')}
+      >
         {tautanAkun}
         <Button variant={agen.status_agen === 'aktif' ? 'danger-light' : 'primary'} onClick={() => { setAlasan(''); setActionError(''); setConfirmOpen(true); }}>
           {agen.status_agen === 'aktif' ? 'Nonaktifkan Agen' : 'Aktifkan Kembali'}
@@ -188,7 +189,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
               <Row label="Total komisi langsung">{money(agen.total_per_jenis.langsung)}</Row>
               <Row label="Total bonus pembinaan">{money(agen.total_per_jenis.pembinaan)}</Row>
             </div>
-            <Link to={`/agen/komisi?agen_id=${agen.akun_id}`} className="inline-block text-sm font-semibold text-neutral-900 underline underline-offset-2">
+            <Link to={`/agen/komisi?agen_id=${agen.akun_id}`} className="inline-block text-sm font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">
               Lihat riwayat lengkap
             </Link>
           </MetaBox>
@@ -196,7 +197,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
           {/* f. Riwayat pencairan (read-only) */}
           <MetaBox title="Pencairan Terbaru" subtitle="Tiga pengajuan terakhir. Persetujuan dan riwayat lengkap ada di menu Komisi." icon={<Banknote size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             {pencairanTerbaru.length === 0 ? (
-              <p className="text-sm text-neutral-500">Belum ada pengajuan pencairan.</p>
+              <EmptyState variant="inline" message="Belum ada pengajuan pencairan." />
             ) : (
               <div className="space-y-2">
                 {pencairanTerbaru.map((p) => {
@@ -218,7 +219,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
           {/* g. Riwayat pengajuan: satu baris per pengajuan (tanggal, keputusan, biaya). */}
           <MetaBox title="Riwayat Pengajuan" icon={<History size={18} strokeWidth={1.75} className="text-neutral-700" />}>
             {agen.siklus.length === 0 ? (
-              <p className="text-sm text-neutral-500">Tidak ada riwayat pengajuan.</p>
+              <EmptyState variant="inline" message="Tidak ada riwayat pengajuan." />
             ) : (
               <div className="divide-y divide-neutral-100">
                 {agen.siklus.map((s) => {
@@ -295,7 +296,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
             <div className="space-y-2">
               <Row label="Upline">
                 {agen.upline_akun_id ? (
-                  <Link to={`/agen/${agen.upline_akun_id}`} className="underline underline-offset-2">{agen.upline_nama}</Link>
+                  <Link to={`/agen/${agen.upline_akun_id}`} className="font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">{agen.upline_nama}</Link>
                 ) : 'Tidak ada'}
               </Row>
               <Row label="Jumlah downline (agen)">{agen.jumlah_downline}</Row>

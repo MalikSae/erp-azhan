@@ -417,7 +417,7 @@ const CategoriesPage = () => {
                 <button
                   type="button"
                   onClick={() => handleSelectAllBrands(true)}
-                  className="text-primary-600 hover:text-primary-700 font-medium cursor-pointer"
+                  className="cursor-pointer font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                 >
                   Pilih Semua
                 </button>

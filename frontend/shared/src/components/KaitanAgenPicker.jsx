@@ -28,8 +28,8 @@ export function toKaitanPayload(value) {
 const agenLabel = (a) => (a.kode_referral ? `${a.nama_lengkap} · ${a.kode_referral}` : a.nama_lengkap);
 
 // excludeAgenId: sembunyikan satu agen dari hasil (mis. agen yang sedang terkait
-// di Ganti Kaitan Agen, karena memilihnya tidak mengubah apa pun).
-const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequired = false, error, hint, name = 'kaitan_agen', excludeAgenId, tanpaAgenLabel = 'Tanpa Agen' }) => {
+// di modal ganti upline/agen, karena memilihnya tidak mengubah apa pun).
+const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequired = false, error, hint, name = 'kaitan_agen', excludeAgenId, tanpaAgenLabel = 'Tanpa Agen', label = 'Kaitan Agen', pilihAgenLabel = 'Kaitkan ke Agen' }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -64,11 +64,11 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
   return (
     <div className="flex flex-col gap-2">
       <label className="text-sm font-semibold text-neutral-900 font-heading">
-        Kaitan Agen <span className="text-danger-500">*</span>
+        {label} <span className="text-danger-500">*</span>
       </label>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         {[
-          { mode: 'agen', label: 'Kaitkan ke Agen' },
+          { mode: 'agen', label: pilihAgenLabel },
           { mode: 'tanpa_agen', label: tanpaAgenLabel },
         ].map((opt) => (
           <label key={opt.mode} className="flex items-center gap-2 text-sm font-body cursor-pointer text-neutral-700 hover:text-neutral-900">
@@ -116,7 +116,7 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Cari nama, no HP, atau kode referral agen..."
-              className="h-11 w-full min-w-0 rounded-xl border border-neutral-200 bg-white pl-9 pr-3.5 text-xs md:text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 font-body"
+              className="h-9 w-full min-w-0 rounded-lg border border-neutral-300 bg-white pl-9 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40 font-body"
             />
           </div>
           <div className="max-h-52 overflow-y-auto rounded-xl border border-neutral-200 bg-white">

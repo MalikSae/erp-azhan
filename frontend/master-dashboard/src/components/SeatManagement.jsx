@@ -165,7 +165,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
             onChange={(e) => setNilai(e.target.value)}
           />
           {overview.seat_sisa !== overview.seat_sisa_maks && (
-            <button type="button" className="text-xs text-primary-700 underline" onClick={() => setNilai(String(overview.seat_sisa_maks))}>
+            <button type="button" className="text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900" onClick={() => setNilai(String(overview.seat_sisa_maks))}>
               Isi sesuai booking ({overview.seat_sisa_maks})
             </button>
           )}

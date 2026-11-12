@@ -182,7 +182,7 @@ const DashboardHome = () => {
   );
 
   return (
-    <main className="space-y-10 pb-10">
+    <main className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h1 className="text-lg md:text-xl font-heading font-semibold text-neutral-900 tracking-tight">Dashboard Utama</h1>
         <div className="flex items-center gap-2 flex-wrap">

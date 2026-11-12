@@ -1765,7 +1765,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   <div className="flex justify-center px-4 pt-6 pb-6 border-2 border-neutral-300 border-dashed rounded-xl hover:border-primary-400 transition-colors bg-neutral-50">
                     <div className="space-y-2 text-center">
                       <div className="text-xs text-neutral-600">
-                        <label htmlFor="brosur-upload" className="cursor-pointer font-semibold text-primary-600 hover:text-primary-700">
+                        <label htmlFor="brosur-upload" className="cursor-pointer font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">
                           <span>{isUploadingBrosur ? 'Mengupload...' : 'Upload Gambar Utama'}</span>
                           <input id="brosur-upload" name="brosur-upload" type="file" className="sr-only" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
                         </label>

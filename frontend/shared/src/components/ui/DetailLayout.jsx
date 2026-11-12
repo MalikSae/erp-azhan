@@ -16,12 +16,12 @@ import Badge from './Badge';
 // Satu card per kolom, section dipisah garis tipis; tanpa kotak bersarang dan tanpa ikon di judul.
 
 export const Surface = ({ children, className = '' }) => (
-  <div className={`bg-white border border-neutral-200 rounded-xl ${className}`}>{children}</div>
+  <div className={`bg-white border border-neutral-200 rounded-2xl ${className}`}>{children}</div>
 );
 
 // Satu section di dalam Surface: heading (+ aside opsional) lalu isi.
 export const Section = ({ title, aside, children }) => (
-  <section className="p-5 sm:p-6">
+  <section className="p-5">
     <div className="flex items-center justify-between gap-3 mb-4">
       <h3 className="font-heading text-sm font-semibold text-neutral-900 flex items-center gap-2">
         {title}

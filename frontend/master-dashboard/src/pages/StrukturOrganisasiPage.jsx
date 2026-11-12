@@ -7,6 +7,7 @@ import Modal from 'shared/ui/Modal';
 import Input from 'shared/ui/Input';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import Alert from 'shared/ui/Alert';
+import EmptyState from 'shared/ui/EmptyState';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import StatTile from 'shared/ui/StatTile';
 import ActionMenu from 'shared/ui/ActionMenu';
@@ -186,7 +187,7 @@ const StrukturOrganisasiPage = () => {
       {isLoading ? (
         <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
       ) : visibleTree.length === 0 ? (
-        <div className="p-8 text-center text-sm font-body text-neutral-500 bg-white rounded-2xl border border-neutral-200">Belum ada divisi.</div>
+        <div className="bg-white rounded-2xl border border-neutral-200"><EmptyState message="Belum ada divisi." /></div>
       ) : (
         <div className="space-y-4">
           {visibleTree.map(d => (
@@ -213,7 +214,7 @@ const StrukturOrganisasiPage = () => {
               </div>
 
               {(d.tim || []).length === 0 ? (
-                <p className="px-5 py-4 text-xs font-body text-neutral-400">Belum ada tim di divisi ini.</p>
+                <EmptyState variant="section" message="Belum ada tim di divisi ini." />
               ) : (
                 <table className="w-full text-left text-sm font-body text-neutral-700">
                   <thead className="bg-neutral-50 text-neutral-500 font-body text-xs font-medium border-b border-neutral-200">
