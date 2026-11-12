@@ -73,6 +73,16 @@ type LogData struct {
 	DiubahAt   time.Time `json:"diubah_at"`
 }
 
+// BookingAkun: satu booking yang dibuat akun ini, untuk riwayat booking di detail akun.
+type BookingAkun struct {
+	ID               int64   `json:"id"`
+	IDBooking        *string `json:"id_booking"`
+	JadwalNama       string  `json:"jadwal_nama"`
+	BerangkatTanggal *string `json:"berangkat_tanggal"` // YYYY-MM-DD
+	Status           string  `json:"status"`
+	JumlahPax        int     `json:"jumlah_pax"`
+}
+
 type AkunDetail struct {
 	AkunID          int64      `json:"akun_id"`
 	BrandID         int64      `json:"brand_id"`
@@ -98,6 +108,8 @@ type AkunDetail struct {
 	JumlahJamaahAgen int        `json:"jumlah_jamaah_agen"`
 	JumlahDiajak   int        `json:"jumlah_diajak"`
 	JumlahBooking    int        `json:"jumlah_booking"`
+	// Booking: semua booking akun ini, terbaru dulu, termasuk yang batal.
+	Booking []BookingAkun `json:"booking"`
 	// Jamaah milik akun sendiri (yang dipakai sebagai PIC booking).
 	Jamaah *JamaahRingkas        `json:"jamaah"`
 	Log    []agen.AkunKaitanLog `json:"riwayat_upline"`
@@ -257,7 +269,33 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if d.Booking, err = bookingAkun(ctx, q, akunID); err != nil {
+		return nil, err
+	}
 	return &d, nil
+}
+
+// bookingAkun: booking yang dibuat akun ini, terbaru dulu. JumlahPax menghitung pax aktif.
+func bookingAkun(ctx context.Context, q adminQuerier, akunID int64) ([]BookingAkun, error) {
+	rows, err := q.QueryContext(ctx, `
+		SELECT b.id, b.id_booking, s.jadwal_nama, DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d'), b.status,
+		       (SELECT COUNT(*) FROM booking_pax bp WHERE bp.booking_id = b.id AND bp.pax_status = 'aktif')
+		FROM bookings b JOIN schedules s ON s.id = b.schedule_id
+		WHERE b.customer_account_id = ?
+		ORDER BY b.created_at DESC, b.id DESC`, akunID)
+	if err != nil {
+		return nil, fmt.Errorf("customer: booking akun: %w", err)
+	}
+	defer rows.Close()
+	out := []BookingAkun{}
+	for rows.Next() {
+		var b BookingAkun
+		if err := rows.Scan(&b.ID, &b.IDBooking, &b.JadwalNama, &b.BerangkatTanggal, &b.Status, &b.JumlahPax); err != nil {
+			return nil, fmt.Errorf("customer: scan booking akun: %w", err)
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
 }
 
 // AdminAkun melayani layar Akun Pelanggan di dashboard admin.

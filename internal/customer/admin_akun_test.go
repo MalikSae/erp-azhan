@@ -135,6 +135,11 @@ func TestDetailAkunAdmin(t *testing.T) {
 	if d.Domisili == nil || *d.Domisili != "Kota Bandung" {
 		t.Fatalf("domisili = %v", d.Domisili)
 	}
+	// Riwayat booking akun: satu booking, satu pax aktif, jadwal berangkat 2099-01-01.
+	if len(d.Booking) != 1 || d.Booking[0].ID != b || d.Booking[0].JumlahPax != 1 || d.Booking[0].Status != "dp" ||
+		d.Booking[0].BerangkatTanggal == nil || *d.Booking[0].BerangkatTanggal != "2099-01-01" {
+		t.Fatalf("booking akun = %+v", d.Booking)
+	}
 
 	brandLain := brand + 999_999
 	if _, err := getAkunDetail(ctx, tx, &brandLain, agen); !errors.Is(err, ErrNotFound) {

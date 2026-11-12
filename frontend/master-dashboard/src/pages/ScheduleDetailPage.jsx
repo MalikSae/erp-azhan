@@ -146,11 +146,11 @@ const FlightLeg = ({ title, iconClass, code, tanggal, jam, asal, transit, tujuan
         <Field label="Rute">
           <span className="flex items-center gap-1.5 flex-wrap">
             <span>{asal || '-'}</span>
-            <ArrowRight size={13} strokeWidth={1.75} className="text-neutral-400 shrink-0" />
+            <ArrowRight size={14} strokeWidth={1.75} className="text-neutral-400 shrink-0" />
             {transit && (
               <>
                 <span>{transit}</span>
-                <ArrowRight size={13} strokeWidth={1.75} className="text-neutral-400 shrink-0" />
+                <ArrowRight size={14} strokeWidth={1.75} className="text-neutral-400 shrink-0" />
               </>
             )}
             <span>{tujuan || '-'}</span>
@@ -321,9 +321,7 @@ const ScheduleDetailPage = () => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center p-12 bg-white rounded-2xl border border-neutral-200">
-        <LoadingSpinner />
-      </div>
+      <LoadingSpinner variant="card" />
     );
   }
 
@@ -496,7 +494,7 @@ const ScheduleDetailPage = () => {
                   />
                 ) : (
                   <div className="w-10 h-10 bg-neutral-100 rounded-lg flex items-center justify-center text-neutral-500">
-                    <Plane size={18} strokeWidth={1.75} />
+                    <Plane size={16} strokeWidth={1.75} />
                   </div>
                 )}
                 <div>
@@ -648,7 +646,7 @@ const ScheduleDetailPage = () => {
                   />
                   <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-neutral-700 opacity-0 transition-opacity group-hover:opacity-100">
                     Buka penuh
-                    <ExternalLink size={11} strokeWidth={1.75} />
+                    <ExternalLink size={12} strokeWidth={1.75} />
                   </span>
                 </a>
               ) : (

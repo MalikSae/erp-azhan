@@ -180,9 +180,7 @@ const ItineraryFormPage = () => {
 
   if (isLoadingDetail) {
     return (
-      <div className="flex justify-center p-12 bg-white rounded-2xl border border-neutral-200">
-        <LoadingSpinner />
-      </div>
+      <LoadingSpinner variant="card" />
     );
   }
 

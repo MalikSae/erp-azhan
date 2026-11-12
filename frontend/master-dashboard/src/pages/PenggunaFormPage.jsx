@@ -271,7 +271,7 @@ const PenggunaFormPage = () => {
   const title = isEdit ? 'Edit Pengguna' : 'Tambah Pengguna';
 
   if (isLoading) {
-    return <div className="flex justify-center p-10 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>;
+    return <LoadingSpinner variant="card" />;
   }
 
   return (

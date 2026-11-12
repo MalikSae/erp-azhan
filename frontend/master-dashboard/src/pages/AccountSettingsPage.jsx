@@ -73,7 +73,7 @@ export default function AccountSettingsPage() {
           <div className="border-b border-neutral-100 px-5 py-5 md:px-6">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
-                <KeyRound size={19} strokeWidth={1.75} />
+                <KeyRound size={20} strokeWidth={1.75} />
               </div>
               <div>
                 <h2 className="font-heading text-base font-semibold text-neutral-900">Informasi akun</h2>
@@ -125,7 +125,7 @@ export default function AccountSettingsPage() {
             </div>
 
             <div className="flex justify-end border-t border-neutral-100 pt-5">
-              <Button type="submit" isLoading={saving} disabled={saving} icon={<LockKeyhole size={15} />}>
+              <Button type="submit" isLoading={saving} disabled={saving} icon={<LockKeyhole size={16} />}>
                 Simpan password
               </Button>
             </div>
@@ -134,7 +134,7 @@ export default function AccountSettingsPage() {
 
         <Card className="h-fit bg-neutral-50/70">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-100 text-success-600">
-            <ShieldCheck size={19} strokeWidth={1.75} />
+            <ShieldCheck size={20} strokeWidth={1.75} />
           </div>
           <h2 className="mt-4 font-heading text-base font-semibold text-neutral-900">Akses aman</h2>
           <p className="mt-2 text-sm leading-6 text-neutral-500">

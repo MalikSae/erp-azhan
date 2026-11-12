@@ -870,9 +870,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
 
   if (isLoadingInitial) {
     return (
-      <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200">
-        <LoadingSpinner />
-      </div>
+      <LoadingSpinner variant="card" />
     );
   }
 

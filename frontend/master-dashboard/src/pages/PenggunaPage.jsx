@@ -151,7 +151,7 @@ const PenggunaPage = () => {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
+        <LoadingSpinner variant="card" />
       ) : (
         <DataTable
           columns={columns}

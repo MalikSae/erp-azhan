@@ -71,7 +71,7 @@ const VoidPaymentModal = ({ payment, onClose, onDone }) => {
             </p>
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Kembali</Button>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Kembali</Button>
             <Button type="submit" variant="danger" disabled={saving || !valid} isLoading={saving}>
               {saving ? 'Membatalkan...' : 'Batalkan Pembayaran'}
             </Button>

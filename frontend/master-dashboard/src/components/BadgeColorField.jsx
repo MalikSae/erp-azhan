@@ -83,7 +83,7 @@ const BadgeColorField = ({ value, onChange, label }) => {
               style={{ backgroundColor: c.hex, color: badgeTextColor(c.hex) }}
               className={`flex h-6 w-6 items-center justify-center rounded-full cursor-pointer ring-offset-1 transition-shadow ${active ? 'ring-2 ring-neutral-900' : 'hover:ring-2 hover:ring-neutral-300'}`}
             >
-              {active && <Check size={13} strokeWidth={3} />}
+              {active && <Check size={14} strokeWidth={3} />}
             </button>
           );
         })}

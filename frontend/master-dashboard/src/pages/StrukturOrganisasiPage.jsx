@@ -185,7 +185,7 @@ const StrukturOrganisasiPage = () => {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
+        <LoadingSpinner variant="card" />
       ) : visibleTree.length === 0 ? (
         <div className="bg-white rounded-2xl border border-neutral-200"><EmptyState message="Belum ada divisi." /></div>
       ) : (

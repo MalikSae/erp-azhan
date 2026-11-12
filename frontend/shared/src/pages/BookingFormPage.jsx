@@ -1552,7 +1552,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                               title="Tambah jamaah baru langsung dari sini"
                               aria-label="Tambah jamaah baru"
                             >
-                              <UserPlus size={15} />
+                              <UserPlus size={16} />
                             </button>
                             )}
                           </div>
@@ -1923,7 +1923,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
           </p>
           {quickCreateError && (
             <div className="flex items-center gap-2 text-xs text-danger-700 bg-danger-50 border border-danger-200 rounded-lg px-3 py-2">
-              <AlertCircle size={13} className="shrink-0" />
+              <AlertCircle size={14} className="shrink-0" />
               <span>{quickCreateError}</span>
             </div>
           )}

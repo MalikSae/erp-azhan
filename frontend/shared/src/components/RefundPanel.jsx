@@ -121,7 +121,7 @@ const RefundPanel = ({ booking, onRecorded }) => {
             Catatan pengembalian tidak dapat diubah atau dihapus setelah disimpan.
           </p>
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={saving}>Batal</Button>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={saving}>Batal</Button>
             <Button type="submit" variant="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
           </div>
         </form>

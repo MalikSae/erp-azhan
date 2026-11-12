@@ -20,9 +20,9 @@ const RequireAccess = ({ perm, anyOf, holdingOnly = false, children }) => {
   if (allowed) return children;
 
   return (
-    <div className="mx-auto mt-16 max-w-md rounded-2xl border border-neutral-200 bg-white p-8 text-center">
+    <div className="mx-auto mt-16 max-w-md rounded-2xl border border-neutral-200 bg-white p-5 text-center">
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-warning-50 text-warning-600">
-        <ShieldAlert size={22} strokeWidth={1.75} />
+        <ShieldAlert size={20} strokeWidth={1.75} />
       </div>
       <h2 className="font-heading text-base font-semibold text-neutral-900">Anda tidak punya akses ke halaman ini</h2>
       <p className="mt-1.5 text-sm font-body text-neutral-500">

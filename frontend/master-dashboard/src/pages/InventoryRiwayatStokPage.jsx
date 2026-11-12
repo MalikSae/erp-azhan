@@ -139,7 +139,7 @@ const InventoryRiwayatStokPage = () => {
       {errorMessage && <Alert variant="error" onClose={() => setErrorMessage(null)}>{errorMessage}</Alert>}
 
       {isLoading ? (
-        <div className="flex justify-center p-8 bg-white rounded-2xl border border-neutral-200"><LoadingSpinner /></div>
+        <LoadingSpinner variant="card" />
       ) : (
         <div className="space-y-4">
           <DataTable
@@ -176,8 +176,8 @@ const InventoryRiwayatStokPage = () => {
           />
           {hasMore && (
             <div className="flex justify-center">
-              <Button variant="secondary" onClick={loadMore} disabled={isLoadingMore}>
-                {isLoadingMore ? 'Memuat...' : 'Muat riwayat lebih lama'}
+              <Button variant="secondary" onClick={loadMore} isLoading={isLoadingMore}>
+                Muat riwayat lebih lama
               </Button>
             </div>
           )}

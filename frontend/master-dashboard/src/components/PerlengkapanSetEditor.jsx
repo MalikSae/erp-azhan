@@ -87,7 +87,7 @@ const PerlengkapanSetEditor = ({ catalog = [], value = [], onChange }) => {
               title="Hapus item"
               className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-danger-600"
             >
-              <Trash2 size={15} strokeWidth={1.75} />
+              <Trash2 size={16} strokeWidth={1.75} />
             </button>
           </div>
         );
