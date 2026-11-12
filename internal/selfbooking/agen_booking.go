@@ -233,6 +233,16 @@ func (h *Handler) writeAgenBookingError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrBukanAgenAktif):
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrBatasSeatAgen):
+		var be *BatasSeatAgenError
+		if errors.As(err, &be) {
+			// Sisa seat dikirim sebagai data juga, bukan hanya di dalam pesan, agar portal agen bisa menampilkannya.
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{
+				"error": err.Error(), "code": KodeBatasSeatAgen,
+				"batas_per_jadwal": be.BatasPerJadwal, "batas_total": be.BatasTotal,
+				"sisa_per_jadwal": be.SisaPerJadwal, "sisa_total": be.SisaTotal,
+			})
+			return
+		}
 		writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasSeatAgen)
 	case errors.Is(err, ErrJamaahBukanMilik), errors.Is(err, ErrNIKAtasNamaLain), errors.Is(err, ErrSayaSendiriBukanAnda), errors.Is(err, ErrNIKAgenBelumAda),
 		errors.Is(err, ErrSeatHabis), errors.Is(err, ErrDuplicate),

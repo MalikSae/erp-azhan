@@ -158,3 +158,24 @@ func TestLepasUplineMembuatJamaahBawaanTanpaAgen(t *testing.T) {
 		t.Fatalf("Rina ikut berubah: %s/%d", st, by)
 	}
 }
+
+// Booking draft (belum mengikat siapa pun) yang lebih dulu dibuat tidak boleh menentukan asal ikatan.
+// Eko punya draft admin lebih dulu, lalu booking pertamanya yang sungguhan dibuat akun Rudi: Eko ikut pindah.
+func TestGantiUplineMengabaikanBookingDraft(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	s := siapkanSimUpline(t, tx)
+
+	eko := testdb.NewJamaah(t, tx, s.brand, testdb.JamaahOpts{Nama: "Eko", Direkrut: s.hannah})
+	testdb.Exec(t, tx, `UPDATE jamaah SET kaitan_sumber = 'jalur2' WHERE id = ?`, eko)
+	draft, _ := testdb.NewBookingPax(t, tx, s.sched, "draft", 1000, testdb.Pax{JamaahID: eko})
+	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id = NULL WHERE id = ?`, draft)
+	b, _ := testdb.NewBookingPax(t, tx, s.sched, "baru", 1000, testdb.Pax{JamaahID: eko})
+	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id = ? WHERE id = ?`, s.rudi, b)
+
+	ids, err := jamaahIkutUpline(ctx, tx, s.rudi, s.hannah, false)
+	must(t, "pratinjau", err)
+	if len(ids) != 2 || ids[0] != s.budi || ids[1] != eko {
+		t.Fatalf("pratinjau = %v, want Budi (%d) dan Eko (%d)", ids, s.budi, eko)
+	}
+}
