@@ -293,7 +293,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Booking"
+        title="Booking"
         actionLabel="+ Buat Booking"
         onAction={() => navigate("/bookings/new")}
       />

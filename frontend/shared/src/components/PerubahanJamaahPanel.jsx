@@ -36,7 +36,7 @@ export const EVENT_PERUBAHAN_JAMAAH = 'perubahan-jamaah-diputuskan';
 // dibaca pelanggan.
 //
 // Dua pemakaian:
-// - tab "Menunggu persetujuan" di Kelola Jamaah: semua jamaah, hanya yang menunggu;
+// - tab "Menunggu persetujuan" di halaman Jamaah: semua jamaah, hanya yang menunggu;
 // - detail jamaah (jamaahId diisi): seluruh riwayat satu jamaah, tanpa kolom nama dan tanpa pencarian.
 export default function PerubahanJamaahPanel({ jamaahId, toolbarLeading, onChanged }) {
   const perJamaah = Boolean(jamaahId);

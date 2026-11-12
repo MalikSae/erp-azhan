@@ -392,7 +392,7 @@ const SchedulesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Paket"
+        title="Paket"
         {...(canEdit ? { actionLabel: '+ Tambah Paket', onAction: () => navigate('/schedules/new') } : {})}
       />
 

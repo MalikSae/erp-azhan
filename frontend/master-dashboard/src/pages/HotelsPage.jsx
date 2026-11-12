@@ -349,7 +349,7 @@ const HotelsPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Hotel"
+        title="Hotel"
         {...(canEdit ? { actionLabel: "+ Tambah Hotel", onAction: () => handleOpenModal() } : {})}
       />
 

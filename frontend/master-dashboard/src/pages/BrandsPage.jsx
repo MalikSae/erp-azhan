@@ -126,7 +126,7 @@ const BrandsPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Brand"
+        title="Brand"
         actionLabel={isHolding ? "+ Tambah Brand" : undefined}
         onAction={isHolding ? () => navigate("/brands/new") : undefined}
       />

@@ -209,7 +209,7 @@ const DestinationsPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Destinasi"
+        title="Destinasi"
         {...(canEdit ? { actionLabel: '+ Tambah Destinasi', onAction: () => handleOpenModal() } : {})}
       />
 

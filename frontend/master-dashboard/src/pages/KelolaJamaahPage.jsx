@@ -5,7 +5,7 @@ import PageHeader from 'shared/ui/PageHeader';
 import SegmentedTabs from 'shared/ui/SegmentedTabs';
 import { AuthContext } from '../context/AuthContext';
 
-// Kelola Jamaah: daftar jamaah dan antrean persetujuan perubahan data dalam satu halaman.
+// Halaman Jamaah: daftar jamaah dan antrean persetujuan perubahan data dalam satu halaman.
 // tab "daftar" = /jamaah, tab "persetujuan" = /jamaah/perubahan (URL lama tetap berlaku).
 // Tab persetujuan hanya tampil untuk pemegang izin jamaah.perubahan.approve.
 export default function KelolaJamaahPage({ tab = 'daftar', showBrandColumn = false }) {
@@ -39,7 +39,7 @@ export default function KelolaJamaahPage({ tab = 'daftar', showBrandColumn = fal
   if (tab === 'persetujuan') {
     return (
       <div className="space-y-6">
-        <PageHeader title="Kelola Jamaah" actionLabel="+ Tambah Jamaah" onAction={() => navigate('/jamaah/new')} />
+        <PageHeader title="Jamaah" actionLabel="+ Tambah Jamaah" onAction={() => navigate('/jamaah/new')} />
         {pemilihTab}
         <PerubahanJamaahPanel />
       </div>

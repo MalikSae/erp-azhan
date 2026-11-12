@@ -138,7 +138,7 @@ const ItinerariesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Itinerary"
+        title="Itinerary"
         {...(canEdit ? { actionLabel: "+ Tambah Itinerary", onAction: () => navigate('/itineraries/new') } : {})}
       />
 

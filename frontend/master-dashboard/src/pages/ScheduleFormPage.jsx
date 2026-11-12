@@ -1600,7 +1600,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 ) : (
                   <div>
                     <p className="mb-1 text-xs font-body text-neutral-400">{perlInheritedLabel || 'Set bawaan'}</p>
-                    <PerlengkapanSetList items={perlInherited} emptyText="Belum ada set bawaan. Atur di Kelola Kategori atau pilih set khusus." />
+                    <PerlengkapanSetList items={perlInherited} emptyText="Belum ada set bawaan. Atur di menu Kategori atau pilih set khusus." />
                   </div>
                 )}
               </div>

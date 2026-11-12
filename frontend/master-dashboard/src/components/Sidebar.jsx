@@ -49,7 +49,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     if (aktif) setOpenGroup(aktif.name);
   }, [location.pathname]);
 
-  // Jumlah perubahan data jamaah yang menunggu persetujuan, tampil sebagai angka kecil di menu Kelola Jamaah
+  // Jumlah perubahan data jamaah yang menunggu persetujuan, tampil sebagai angka kecil di menu Jamaah
   // (antreannya ada di tab "Menunggu persetujuan" halaman itu).
   const bolehSetujui = hasPermission('jamaah.perubahan.approve');
   const [menungguJamaah, setMenungguJamaah] = useState(0);
@@ -103,8 +103,8 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     {
       name: 'Jamaah & Booking',
       items: [
-        { name: 'Kelola Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
-        { name: 'Kelola Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
+        { name: 'Jamaah', path: '/jamaah', icon: Users, perm: 'jamaah.view' },
+        { name: 'Booking', path: '/bookings', icon: CalendarDays, perm: 'booking.view' },
         { name: 'Pembayaran', path: '/payments', icon: CreditCard, perm: 'payment.view' },
       ],
     },
@@ -122,12 +122,12 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     {
       name: 'Paket',
       items: [
-        { name: 'Kelola Paket', path: '/schedules', icon: Package, perm: 'schedule.view' },
-        { name: 'Kelola Kategori', path: '/categories', icon: FolderTree, perm: 'masterdata.view' },
-        { name: 'Kelola Hotel', path: '/hotels', icon: Hotel, perm: 'masterdata.view' },
+        { name: 'Paket', path: '/schedules', icon: Package, perm: 'schedule.view' },
+        { name: 'Kategori', path: '/categories', icon: FolderTree, perm: 'masterdata.view' },
+        { name: 'Hotel', path: '/hotels', icon: Hotel, perm: 'masterdata.view' },
         { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, perm: 'masterdata.view' },
-        { name: 'Kelola Destinasi', path: '/destinations', icon: Globe, perm: 'masterdata.view' },
-        { name: 'Kelola Itinerary', path: '/itineraries', icon: MapPin, perm: 'masterdata.view' },
+        { name: 'Destinasi', path: '/destinations', icon: Globe, perm: 'masterdata.view' },
+        { name: 'Itinerary', path: '/itineraries', icon: MapPin, perm: 'masterdata.view' },
       ],
     },
     {
@@ -147,7 +147,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
     {
       name: 'Administrasi',
       items: [
-        { name: 'Kelola Brand', path: '/brands', icon: Building2, perm: 'brand.edit' },
+        { name: 'Brand', path: '/brands', icon: Building2, perm: 'brand.edit' },
         { name: 'Pengguna', path: '/users', icon: UserCog, perm: 'user.admin' },
         { name: 'Struktur Organisasi', path: '/organisasi', icon: Network, perm: 'user.admin' },
       ],
@@ -171,7 +171,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         />
       )}
 
-      <aside className={`w-64 bg-sidebar-bg text-neutral-600 h-screen flex flex-col fixed left-0 top-0 border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out select-none ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <aside className={`w-56 bg-sidebar-bg text-neutral-600 h-screen flex flex-col fixed left-0 top-0 border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out select-none ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Brand Header */}
         <div className="px-5 h-16 border-b border-sidebar-border shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -330,7 +330,7 @@ const ScheduleDetailPage = () => {
       <div className="space-y-4">
         <Alert variant="error">{errorMessage || "Data paket tidak ditemukan."}</Alert>
         <Button variant="ghost" onClick={() => navigate('/schedules')}>
-          ← Kembali ke Kelola Paket
+          ← Kembali ke daftar Paket
         </Button>
       </div>
     );
