@@ -49,6 +49,8 @@ client.interceptors.response.use(
         
         const newAccessToken = res.data.access_token;
         localStorage.setItem('erp_access_token', newAccessToken);
+        // Refresh token dirotasi tiap refresh: token lama tidak berlaku lagi.
+        if (res.data.refresh_token) localStorage.setItem('erp_refresh_token', res.data.refresh_token);
         
         // Update header & retry
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;

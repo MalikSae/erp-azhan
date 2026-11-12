@@ -42,20 +42,6 @@ func (r *Repository) SaveRefreshToken(ctx context.Context, jti string, adminUser
 	return nil
 }
 
-// IsRefreshTokenActive true jika jti tercatat untuk user tsb, belum dicabut,
-// dan belum kedaluwarsa.
-func (r *Repository) IsRefreshTokenActive(ctx context.Context, jti string, adminUserID int64) (bool, error) {
-	var n int
-	err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM admin_refresh_tokens
-		 WHERE jti = ? AND admin_user_id = ? AND revoked_at IS NULL AND expires_at > NOW()`,
-		jti, adminUserID).Scan(&n)
-	if err != nil {
-		return false, fmt.Errorf("identity.IsRefreshTokenActive: %w", err)
-	}
-	return n > 0, nil
-}
-
 // RevokeRefreshToken mencabut satu refresh token (logout).
 func (r *Repository) RevokeRefreshToken(ctx context.Context, jti string) error {
 	_, err := r.db.ExecContext(ctx,

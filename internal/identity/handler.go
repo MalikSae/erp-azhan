@@ -324,17 +324,6 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	active, err := h.repo.IsRefreshTokenActive(r.Context(), jti, adminUserID)
-	if err != nil {
-		log.Printf("[ERROR] identity.Refresh IsRefreshTokenActive: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
-		return
-	}
-	if !active {
-		writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
-		return
-	}
-
 	user, err := h.repo.GetByID(r.Context(), adminUserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -348,6 +337,27 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	if !user.IsActive {
 		writeError(w, http.StatusUnauthorized, "user tidak ditemukan")
+		return
+	}
+
+	// Rotasi: token lama dicabut, klien wajib menyimpan refresh_token baru dari respons ini.
+	refreshToken, refreshJTI, refreshExp, err := GenerateRefreshToken(user.ID)
+	if err != nil {
+		log.Printf("[ERROR] identity.Refresh GenerateRefreshToken: %v", err)
+		writeError(w, http.StatusInternalServerError, "gagal membuat refresh token")
+		return
+	}
+	if err := h.repo.RotasiRefreshToken(r.Context(), jti, user.ID, refreshJTI, refreshExp); err != nil {
+		switch {
+		case errors.Is(err, ErrRefreshDipakaiUlang):
+			log.Printf("[WARN] identity.Refresh token lama dipakai ulang, semua sesi user=%d dicabut", user.ID)
+			writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
+		case errors.Is(err, ErrRefreshTidakValid):
+			writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
+		default:
+			log.Printf("[ERROR] identity.Refresh RotasiRefreshToken: %v", err)
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		}
 		return
 	}
 
@@ -369,9 +379,10 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		Role:        user.Role,
 		Roles:       access.Roles,
 		Permissions: access.Permissions,
-		AccessToken: accessToken,
-		ExpiresIn:   ttl,
-		TokenType:   "Bearer",
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    ttl,
+		TokenType:    "Bearer",
 	})
 }
 
