@@ -70,3 +70,30 @@ func TestHandlerProcessDealPaxValidation(t *testing.T) {
 		t.Fatalf("expected error message %q, got %q", expectedMsg, resp["error"])
 	}
 }
+
+// Regresi audit keamanan 2026-11-12: payment_proof_url dulu disimpan apa adanya ke payments.bukti_url,
+// padahal kolom itu menjadi dasar izin baca berkas lintas brand. URL di luar unggahan admin resmi ditolak
+// sebelum transaksi (repo tanpa DB tidak tersentuh).
+func TestHandlerProcessDealMenolakBuktiURLBebas(t *testing.T) {
+	handler := NewHandler(NewRepository(nil))
+	for _, bukti := range []string{
+		"https://evil.example/bukti.jpg",
+		"/api/admin/media/dokumen-jamaah/0e3d2396-4751-4500-98a8-d5076da128da.jpg",
+		"/uploads/../.env",
+	} {
+		body, _ := json.Marshal(map[string]any{
+			"crm_lead_id": uuid.NewString(), "schedule_id": 1, "room_type": "Quad", "pax": 1,
+			"jamaah":          map[string]any{"nama_lengkap": "Test Jamaah", "no_hp": "081234567890"},
+			"commitment_type": "dp", "payment_amount": 5000000, "payment_proof_url": bukti,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/admin/crm/deals", bytes.NewReader(body))
+		req.Header.Set("Idempotency-Key", uuid.NewString())
+		brandID := int64(1)
+		req = req.WithContext(context.WithValue(req.Context(), identity.BrandIDKey, &brandID))
+		rec := httptest.NewRecorder()
+		handler.ProcessDeal(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("bukti %q: status %d %s, want 400", bukti, rec.Code, rec.Body.String())
+		}
+	}
+}

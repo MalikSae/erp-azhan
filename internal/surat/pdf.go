@@ -16,6 +16,8 @@ import (
 
 	"github.com/go-pdf/fpdf"
 	_ "golang.org/x/image/webp"
+
+	"erp-azhan/api/internal/shared"
 )
 
 // Merek adalah identitas brand di kop teks dan footer izin.
@@ -70,6 +72,10 @@ func bacaGambar(url string) []byte {
 	}
 	data, err := os.ReadFile(filepath.Join("uploads", "brand-logos", nama))
 	if err != nil {
+		return nil
+	}
+	// Cek dimensi dari header dulu: gambar raksasa (bom dekompresi) dilewati, tidak didekode.
+	if err := shared.CekDimensiGambar(bytes.NewReader(data), shared.MaxLogoPixels); err != nil {
 		return nil
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))

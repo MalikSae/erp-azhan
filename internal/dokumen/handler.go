@@ -3,7 +3,6 @@ package dokumen
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -189,7 +188,9 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "data tidak ditemukan")
 	default:
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("terjadi kesalahan internal: %v", err))
+		// Teks galat database tidak dikirim ke klien; cukup dicatat di log.
+		log.Printf("[ERROR] dokumen: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 	}
 }
 

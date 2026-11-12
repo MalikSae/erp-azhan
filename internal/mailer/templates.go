@@ -55,6 +55,21 @@ Jika ini bukan Anda, atur ulang password sekarang lewat tautan berikut:
 	return
 }
 
+// EmailChanged dikirim ke alamat email LAMA setelah email akun diganti, agar pemilik tahu bila bukan dia yang menggantinya.
+// Tautan lupa password tidak disertakan: tautan itu kini terkirim ke alamat baru, jadi pemilik diarahkan ke admin.
+func EmailChanged(brandName, nama, emailBaru string) (subject, text string) {
+	brandName, nama, emailBaru = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(emailBaru, maxInlineTeks)
+	subject = "Email akun " + brandName + " diubah"
+	text = fmt.Sprintf(`Halo %s,
+
+Email akun Anda di %s baru saja diubah menjadi %s, dan perangkat lain yang masuk ke akun ini sudah dikeluarkan. Email berikutnya dari kami akan dikirim ke alamat baru tersebut.
+
+Jika ini bukan Anda, segera hubungi admin %s lewat WhatsApp resmi agar akun Anda dipulihkan.
+
+%s`, nama, brandName, emailBaru, brandName, brandName)
+	return
+}
+
 func ResetPassword(brandName, nama, link string) (subject, text string) {
 	brandName, nama, link = inline(brandName, maxInlineTeks), inline(nama, maxInlineNama), inline(link, maxInlineTautan)
 	subject = "Atur ulang password " + brandName

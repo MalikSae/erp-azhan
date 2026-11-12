@@ -232,6 +232,8 @@ type DashboardAgen struct {
 	JumlahDownline int           `json:"jumlah_downline"`
 	Total          TotalPerJenis `json:"total_per_jenis"`
 	KomisiTerbaru  []KomisiItem  `json:"komisi_terbaru"`
+	// BatasSeat: batas hold seat agen yang berlaku dan seat yang sedang ditahan ("Seat ditahan: X dari Y").
+	BatasSeat *BatasSeatAgen `json:"batas_seat"`
 }
 
 func requireAgenAktif(ctx context.Context, q querier, akunID int64) (*string, error) {
@@ -269,6 +271,9 @@ func getDashboardAgen(ctx context.Context, q querier, akunID int64) (*DashboardA
 		return nil, err
 	}
 	if d.KomisiTerbaru, err = listKomisi(ctx, q, KomisiFilter{PenerimaID: akunID, Limit: 5}); err != nil {
+		return nil, err
+	}
+	if d.BatasSeat, err = getBatasSeatAgen(ctx, q, akunID, nil, false); err != nil {
 		return nil, err
 	}
 	return &d, nil

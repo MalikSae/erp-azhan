@@ -28,3 +28,8 @@ Thumbs.db
 !/uploads/brand-logos/**
 /scratch/
 .runlogs/
+
+# Berkas kerja lokal: dump database (berisi hash password dan data pribadi jamaah) dan sejenisnya.
+/tmp/
+*.sql.gz
+backup-*.sql

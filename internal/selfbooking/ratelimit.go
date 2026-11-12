@@ -1,57 +1,16 @@
 package selfbooking
 
 import (
-	"sync"
 	"time"
+
+	"erp-azhan/api/internal/shared"
 )
 
-// windowLimiter membatasi jumlah kejadian per key dalam jendela waktu tetap.
-// Disimpan di memori; reset saat server restart.
-type windowLimiter struct {
-	mu     sync.Mutex
-	limit  int
-	window time.Duration
-	hits   map[string]*checkAttempt
-}
+// windowLimiter memakai pembatas bersama (shared.WindowLimiter). Salinan lokal lama memisahkan allow dan
+// record, sehingga request paralel lolos bersamaan sebelum satu pun tercatat (audit keamanan 2026-11-12).
+// Periksa sekaligus catat lewat Take; kembalikan slot lewat Refund bila kejadian ternyata tidak dihitung.
+type windowLimiter = shared.WindowLimiter
 
 func newWindowLimiter(limit int, window time.Duration) *windowLimiter {
-	return &windowLimiter{limit: limit, window: window, hits: make(map[string]*checkAttempt)}
-}
-
-// allow mengembalikan false jika key sudah mencapai batas di jendela aktif.
-func (l *windowLimiter) allow(key string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	attempt, exists := l.hits[key]
-	if !exists {
-		return true
-	}
-	if time.Since(attempt.FirstFail) > l.window {
-		delete(l.hits, key)
-		return true
-	}
-	return attempt.Count < l.limit
-}
-
-// record mencatat satu kejadian untuk key.
-func (l *windowLimiter) record(key string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	// Bersihkan entri kedaluwarsa agar map tidak tumbuh tanpa batas.
-	if len(l.hits) > 10000 {
-		for k, a := range l.hits {
-			if time.Since(a.FirstFail) > l.window {
-				delete(l.hits, k)
-			}
-		}
-	}
-
-	attempt, exists := l.hits[key]
-	if !exists || time.Since(attempt.FirstFail) > l.window {
-		l.hits[key] = &checkAttempt{Count: 1, FirstFail: time.Now()}
-		return
-	}
-	attempt.Count++
+	return shared.NewWindowLimiter(limit, window)
 }

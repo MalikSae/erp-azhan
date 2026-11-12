@@ -213,11 +213,10 @@ func safeFilename(name string) bool {
 // POST /api/admin/media/upload
 func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	if ip := shared.ClientIP(r); h.adminIP != nil {
-		if !h.adminIP.Allow(ip) {
+		if !h.adminIP.Take(ip) {
 			writeError(w, http.StatusTooManyRequests, "terlalu banyak unggahan, coba lagi nanti")
 			return
 		}
-		h.adminIP.Record(ip)
 	}
 	// Batasi body SEBELUM FormValue mem-parse multipart.
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadBytes+multipartOverhead)
@@ -250,11 +249,10 @@ func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UploadPortalMedia(w http.ResponseWriter, r *http.Request) {
 	ip := shared.ClientIP(r)
 	if h.customerIP != nil {
-		if !h.customerIP.Allow(ip) {
+		if !h.customerIP.Take(ip) {
 			writeError(w, http.StatusTooManyRequests, "terlalu banyak unggahan, coba lagi dalam 1 jam")
 			return
 		}
-		h.customerIP.Record(ip)
 	}
 	key := "ip:" + ip
 	if id := identity.GetCustomerAccountID(r.Context()); id > 0 {
@@ -312,6 +310,22 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		writeError(w, http.StatusInternalServerError, "gagal memproses file")
 		return
+	}
+	// Gambar: dimensi dibaca dari header (tanpa mendekode piksel). Gambar yang mengaku raksasa ditolak agar
+	// tidak bisa dipakai sebagai bom dekompresi; logo brand didekode server untuk surat PDF, jadi batasnya lebih ketat.
+	if isImage {
+		batas := int64(shared.MaxImagePixels)
+		if category == "brand-logos" {
+			batas = shared.MaxLogoPixels
+		}
+		if err := shared.CekDimensiGambar(file, batas); err != nil {
+			writeError(w, http.StatusBadRequest, "gambar rusak atau dimensinya terlalu besar")
+			return
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			writeError(w, http.StatusInternalServerError, "gagal memproses file")
+			return
+		}
 	}
 
 	// 3. Generate unique name

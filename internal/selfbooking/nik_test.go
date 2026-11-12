@@ -87,3 +87,54 @@ func TestResolveAnggotaPublikNIK(t *testing.T) {
 		t.Fatalf("dua NIK dengan nomor sama: id1=%d id2=%d err=%v, want dua jamaah", satu, dua, err)
 	}
 }
+
+// Regresi audit keamanan 2026-11-12: NIK yang belum terdaftar tidak boleh mengklaim jamaah lama lewat
+// nama + tanggal lahir. Dulu NIK acak + nama + tanggal lahir korban mengembalikan jamaah korban, lalu
+// jamaah itu terikat ke agen penyerang dan NIK-nya bisa diisi NIK palsu.
+func TestResolveAnggotaPublikNIKBaruTidakMengklaimJamaahLama(t *testing.T) {
+	tx, _, brandID, _ := setupAgenBooking(t)
+	ctx := context.Background()
+	lahir := "1980-05-17"
+	nikKorban := "3174010101016666"
+	nikPenyerang := "3174010101015555"
+
+	// Korban ber-NIK: NIK lain dengan nama + tanggal lahir sama menghasilkan jamaah baru.
+	korban, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "Korban Ber NIK", JenisKelamin: "L", NIK: &nikKorban, TanggalLahir: &lahir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	klaim, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "korban ber nik", JenisKelamin: "L", NIK: &nikPenyerang, TanggalLahir: &lahir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if klaim == korban {
+		t.Fatalf("NIK baru + nama + tanggal lahir korban mengembalikan jamaah korban %d", korban)
+	}
+	// Tanpa NIK pun jamaah ber-NIK tidak boleh cocok lewat nama + tanggal lahir.
+	tanpaNIK, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "Korban Ber NIK", JenisKelamin: "L", TanggalLahir: &lahir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tanpaNIK == korban {
+		t.Fatalf("pax tanpa NIK cocok ke jamaah ber-NIK %d", korban)
+	}
+
+	// Korban tanpa NIK (mis. impor CRM): NIK baru tidak mengklaim dan tidak mengisi NIK korban.
+	lahir2 := "1975-02-03"
+	korban2, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "Korban Tanpa NIK", JenisKelamin: "P", TanggalLahir: &lahir2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nikPenyerang2 := "3174010101014444"
+	klaim2, err := resolveAnggotaPublik(ctx, tx, brandID, 0, AnggotaInput{PaxType: "reguler", NamaLengkap: "Korban Tanpa NIK", JenisKelamin: "P", NIK: &nikPenyerang2, TanggalLahir: &lahir2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if klaim2 == korban2 {
+		t.Fatalf("NIK baru mengklaim jamaah tanpa NIK %d", korban2)
+	}
+	var nik sql.NullString
+	if err := tx.QueryRow(`SELECT nik FROM jamaah WHERE id=?`, korban2).Scan(&nik); err != nil || nik.String != "" {
+		t.Fatalf("NIK korban tanpa NIK berubah menjadi %q (err %v)", nik.String, err)
+	}
+}

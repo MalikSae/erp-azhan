@@ -83,31 +83,43 @@ func (h *Handler) resolveAccess(ctx context.Context, adminUserID int64) *UserAcc
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 
-func (h *Handler) checkRateLimit(key string) (bool, time.Duration) {
+// reserveLoginAttempt memeriksa batas DAN mencatat satu percobaan dalam satu kunci, sebelum bcrypt berjalan.
+// Dulu pemeriksaan dan pencatatan terpisah, sehingga request paralel lolos semua sebelum kegagalannya tercatat.
+// Percobaan yang ternyata berhasil dihapus lewat recordSuccessLogin; yang gagal karena galat server lewat
+// releaseLoginAttempt.
+func (h *Handler) reserveLoginAttempt(key string) (bool, time.Duration) {
 	h.failedLoginMu.Lock()
 	defer h.failedLoginMu.Unlock()
 
-	attempt, exists := h.failedLogins[key]
-	if !exists {
-		return true, 0
+	if attempt, exists := h.failedLogins[key]; exists && time.Since(attempt.FirstFail) < loginAttemptWindow &&
+		attempt.Count >= loginAttemptLimit {
+		return false, time.Until(attempt.FirstFail.Add(loginAttemptWindow))
 	}
+	h.recordFailedLoginLocked(key)
+	return true, 0
+}
 
-	if time.Since(attempt.FirstFail) >= loginAttemptWindow {
-		// Reset setelah 15 menit
-		delete(h.failedLogins, key)
-		return true, 0
+// releaseLoginAttempt mengembalikan satu percobaan yang dipesan tetapi tidak sampai memeriksa password.
+func (h *Handler) releaseLoginAttempt(key string) {
+	h.failedLoginMu.Lock()
+	defer h.failedLoginMu.Unlock()
+	if attempt, exists := h.failedLogins[key]; exists {
+		if attempt.Count <= 1 {
+			delete(h.failedLogins, key)
+		} else {
+			attempt.Count--
+		}
 	}
-
-	if attempt.Count < loginAttemptLimit {
-		return true, 0
-	}
-
-	return false, time.Until(attempt.FirstFail.Add(loginAttemptWindow))
 }
 
 func (h *Handler) recordFailedLogin(key string) {
 	h.failedLoginMu.Lock()
 	defer h.failedLoginMu.Unlock()
+	h.recordFailedLoginLocked(key)
+}
+
+// recordFailedLoginLocked mencatat satu percobaan gagal. Pemanggil memegang failedLoginMu.
+func (h *Handler) recordFailedLoginLocked(key string) {
 
 	// Bersihkan entri kedaluwarsa berkala agar map tidak tumbuh tanpa batas.
 	if now := time.Now(); now.Sub(h.lastPrune) >= time.Minute {
@@ -184,21 +196,19 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// pengguna di balik Nginx/Cloudflare memblokir seluruh admin lainnya.
 	rateLimitKey := loginRateLimitKey(r, req.Email)
 	clientIP := getClientIP(r)
-	if allowed, retryAfter := h.checkRateLimit(rateLimitKey); !allowed {
+	// Slot percobaan (per akun+IP dan per IP) diambil atomik SEBELUM bcrypt; password benar mengembalikannya.
+	if allowed, retryAfter := h.reserveLoginAttempt(rateLimitKey); !allowed {
 		log.Printf("[AUDIT] login_rate_limited ip=%s email=%s", clientIP, maskEmail(req.Email))
 		writeRateLimitError(w, retryAfter)
 		return
 	}
-	if h.loginIP != nil && !h.loginIP.Allow(clientIP) {
+	if h.loginIP != nil && !h.loginIP.Take(clientIP) {
+		h.releaseLoginAttempt(rateLimitKey)
 		log.Printf("[AUDIT] login_rate_limited ip=%s scope=ip", clientIP)
 		writeRateLimitError(w, loginAttemptWindow)
 		return
 	}
 	fail := func(reason string) {
-		h.recordFailedLogin(rateLimitKey)
-		if h.loginIP != nil {
-			h.loginIP.Record(clientIP)
-		}
 		log.Printf("[AUDIT] login_failed ip=%s email=%s reason=%s", clientIP, maskEmail(req.Email), reason)
 		writeError(w, http.StatusUnauthorized, "email atau password salah")
 	}
@@ -210,6 +220,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	user, err := h.repo.GetByEmail(r.Context(), req.Email)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		log.Printf("[ERROR] identity.Login GetByEmail: %v", err)
+		// Galat server, password belum diperiksa: percobaan tidak dihitung.
+		h.releaseLoginAttempt(rateLimitKey)
+		if h.loginIP != nil {
+			h.loginIP.Refund(clientIP)
+		}
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 		return
 	}
@@ -231,7 +246,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sukses
+	// Sukses: percobaan ini dikembalikan (slot IP) dan riwayat gagal akun dihapus.
+	if h.loginIP != nil {
+		h.loginIP.Refund(clientIP)
+	}
 	h.recordSuccessLogin(rateLimitKey)
 	log.Printf("[AUDIT] login_success ip=%s user_id=%d role=%s", getClientIP(r), user.ID, user.Role)
 

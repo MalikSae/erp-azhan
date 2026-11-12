@@ -124,6 +124,8 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		if err := cekBatasAkun(ctx, tx, ini.accountID, req.ScheduleID, butuh, batasAkunDefault); err != nil {
 			return nil, err
 		}
+	} else if err := cekBatasSeatAgen(ctx, tx, ini.agenID, req.ScheduleID, seatDibutuhkan(req)); err != nil {
+		return nil, err
 	}
 
 	for _, pax := range req.Anggota {
@@ -522,29 +524,32 @@ func stringPtr(s string) *string {
 // resolveAnggotaPublik mencari atau membuat jamaah untuk anggota booking publik.
 // Jamaah dikenali dari NIK (nama harus cocok); tanpa NIK (bayi) dari nama dan tanggal lahir.
 // pembuatAkunID: akun pemesan; dicatat sebagai pembuat hanya bila jamaah baru dibuat di sini (0 = tidak dicatat).
+//
+// NIK yang belum terdaftar selalu membuat jamaah baru. Jamaah lama TIDAK dicocokkan lewat nama + tanggal lahir
+// bila NIK diisi: nama dan tanggal lahir mudah diketahui orang lain, sehingga pencocokan itu membuat siapa pun bisa
+// mengklaim jamaah orang lain (mengikatnya ke agen, mengisi NIK palsu, dan mendapat akses terbatas ke datanya).
 func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID, pembuatAkunID int64, a AnggotaInput) (int64, error) {
 	nik := nikBersih(a.NIK)
-	if nik != "" {
-		// NIK sudah terdaftar: pakai ulang bila nama cocok, tolak bila beda.
-		id, nama, ada, err := cariJamaahByNIK(ctx, tx, brandID, nik)
-		if err != nil {
-			return 0, err
-		}
-		if ada {
-			if normalizeName(a.NamaLengkap) != normalizeName(nama) {
-				return 0, errNIKBeda(a.Nomor)
-			}
-			return id, nil
-		}
+	if nik == "" {
+		return resolveAnggotaTanpaNIK(ctx, tx, brandID, pembuatAkunID, a)
 	}
-	id, err := resolveAnggotaTanpaNIK(ctx, tx, brandID, pembuatAkunID, a)
+	// NIK sudah terdaftar: pakai ulang bila nama cocok, tolak bila beda.
+	id, nama, ada, err := cariJamaahByNIK(ctx, tx, brandID, nik)
 	if err != nil {
 		return 0, err
 	}
-	if nik != "" {
-		if err := isiNIKBilaKosong(ctx, tx, id, nik); err != nil {
-			return 0, err
+	if ada {
+		if normalizeName(a.NamaLengkap) != normalizeName(nama) {
+			return 0, errNIKBeda(a.Nomor)
 		}
+		return id, nil
+	}
+	id, err = buatAnggotaBaru(ctx, tx, brandID, pembuatAkunID, a, tanggalLahirOrNil(a.TanggalLahir))
+	if err != nil {
+		return 0, err
+	}
+	if err := isiNIKBilaKosong(ctx, tx, id, nik); err != nil {
+		return 0, err
 	}
 	return id, nil
 }
@@ -552,10 +557,11 @@ func resolveAnggotaPublik(ctx context.Context, tx *sql.Tx, brandID, pembuatAkunI
 // resolveAnggotaTanpaNIK mencari atau membuat jamaah untuk pax tanpa NIK (bayi). Nomor WhatsApp bukan kunci
 // identitas (spek 4.3): bayi dicocokkan lewat nama dan tanggal lahir; bila tidak ada yang cocok, jamaah baru
 // dibuat dengan nomor sebagai kontak biasa. Jamaah lama yang cocok dipakai ulang tanpa menimpa data apa pun.
+// Hanya jamaah yang belum punya NIK yang boleh cocok: jamaah ber-NIK hanya dikenali lewat NIK-nya.
 func resolveAnggotaTanpaNIK(ctx context.Context, tx *sql.Tx, brandID, pembuatAkunID int64, a AnggotaInput) (int64, error) {
 	dob := tanggalLahirOrNil(a.TanggalLahir)
 	if dob != nil {
-		rows, err := tx.QueryContext(ctx, `SELECT id, nama_lengkap FROM jamaah WHERE brand_id=? AND tanggal_lahir=? ORDER BY id FOR UPDATE`, brandID, dob)
+		rows, err := tx.QueryContext(ctx, `SELECT id, nama_lengkap FROM jamaah WHERE brand_id=? AND tanggal_lahir=? AND (nik IS NULL OR nik='') ORDER BY id FOR UPDATE`, brandID, dob)
 		if err != nil {
 			return 0, fmt.Errorf("cari jamaah by nama dan tanggal lahir: %w", err)
 		}
@@ -579,6 +585,11 @@ func resolveAnggotaTanpaNIK(ctx context.Context, tx *sql.Tx, brandID, pembuatAku
 			return cocok, nil
 		}
 	}
+	return buatAnggotaBaru(ctx, tx, brandID, pembuatAkunID, a, dob)
+}
+
+// buatAnggotaBaru membuat jamaah baru untuk anggota booking publik, mencatat akun pembuat dan tanggal lahir.
+func buatAnggotaBaru(ctx context.Context, tx *sql.Tx, brandID, pembuatAkunID int64, a AnggotaInput, dob any) (int64, error) {
 	var hp string
 	if a.NoHP != nil {
 		hp = strings.TrimSpace(*a.NoHP)
