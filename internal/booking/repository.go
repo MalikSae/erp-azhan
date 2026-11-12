@@ -2683,7 +2683,8 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 	return r.GetByID(ctx, bookingID, brandID)
 }
 
-// ListDailyBrandPax mengambil agregasi pendaftaran pax aktif selama 30 hari terakhir per brand.
+// ListDailyBrandPax mengambil agregasi pax DP+ (pax aktif di booking dp atau lunas) selama 30 hari
+// terakhir per brand, menurut tanggal pax dibuat. Definisinya sama dengan kartu Pax per channel (analitik).
 func (r *Repository) ListDailyBrandPax(ctx context.Context, brandID *int64) ([]DailyBrandPax, error) {
 	q := `
 		SELECT DATE_FORMAT(bp.created_at, '%Y-%m-%d') AS reg_date,
@@ -2693,7 +2694,7 @@ func (r *Repository) ListDailyBrandPax(ctx context.Context, brandID *int64) ([]D
 		JOIN bookings b ON b.id = bp.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE bp.pax_status = 'aktif'
-			AND b.status != 'batal'
+			AND b.status IN ('dp', 'lunas')
 			AND DATE(bp.created_at) BETWEEN CURDATE() - INTERVAL 29 DAY AND CURDATE()`
 	var args []any
 	if brandID != nil {
