@@ -118,7 +118,7 @@ Oranye pindah ke token `accent`. Pakai `accent-*` hanya untuk tombol primer, log
 |---|---|
 | Tombol primer | gradien `bg-btn-primary` (`accent-400` ke `accent-500`), border `accent-600`, `shadow-btn-primary`, teks putih |
 | Menu aktif | latar `sidebar.active` (`#F0F0F0`), teks `neutral-900` weight 500 |
-| Link | `primary-700` + garis bawah (warna saja tidak cukup membedakan) |
+| Link teks | `font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300`, hover `decoration-neutral-900` (warna saja tidak cukup membedakan) |
 | Baris terpilih | `primary-50` |
 | Fokus | cincin 2px `primary-500` |
 | Logo, promo | `accent-500` |
@@ -183,3 +183,8 @@ Cincin fokus 2px wajib di semua elemen interaktif. Target sentuh mobile minimal 
 - [2026-11-11] (buttons) Tombol primer meniru "Watch now" dash.cloudflare.com: gradien oranye #FF8130 ke #FF6A00, border #E25A00, kilap tepi atas, bayangan oranye lembut, radius 8px — User minta tombol sama dengan Cloudflare. Konsekuensi diterima: teks putih di oranye ini 2.5–2.9:1, gagal WCAG AA; kalau jadi masalah, gelapkan gradien ke accent-700 tanpa mengubah bentuk.
 - [2026-11-11] (typography) Inter untuk judul, angka statistik, tombol, dan badge (font-heading); Roboto untuk semua teks isi (font-body, default body) — Permintaan user. Weight maksimal font-semibold; font-bold disapu dari seluruh halaman.
 - [2026-11-12] (status) Semua status memakai satu gaya: komponen Badge (kotak tint, tanpa ikon, tanpa titik) dengan nada success/warning/danger/info/neutral/promo; override warna lewat className dan span status buatan sendiri dilarang — User melihat status beda-beda antar halaman (Badge kotak, titik + teks, pil bertitik) dan memilih satu gaya.
+- [2026-11-12] (links) Link teks memakai garis bawah abu tipis (decoration-neutral-300) yang menebal saat hover, teks neutral-900 font-medium; text-primary-* tidak dipakai untuk link — Setelah primary monokrom, link tidak bisa dibedakan dari teks biasa.
+- [2026-11-12] (dialogs) Konfirmasi aksi memakai Modal kecil, bukan window.confirm/alert bawaan browser — Dialog bawaan tidak ikut gaya dan tidak bisa menampilkan galat di tempat.
+- [2026-11-12] (cards) Kartu selalu rounded-2xl (8px) datar berbingkai lewat Surface/Section/Card; MetaBox ditampilkan sama dengan Section (tanpa pita header dan kotak ikon); empty state lewat EmptyState varian list/section/inline; tab lewat SegmentedTabs — Sebelumnya radius kartu campur 6/8px, MetaBox bergaya lama, dan pesan kosong ditulis manual dengan padding beda-beda.
+- [2026-11-12] (header) Semua halaman memakai PageHeader; halaman detail: ikon kembali tanpa breadcrumb, judul nama, baris meta teks abu, baris badge status/atribut, aksi di kanan; tanpa foto di header — Sebelumnya Detail Akun, Agen, dan Jamaah punya tiga bentuk header berbeda.
+- [2026-11-12] (spacing) Jarak baku: konten pt-6/pb-6 (md: 8), antar blok space-y-6, grid kartu gap-6, padding isi kartu p-5 di semua breakpoint, judul section ke isi mb-4, antar field 16px — Padding kartu sebelumnya campur p-4/p-5/p-6 dan jarak bawah halaman tidak sama dengan atas.

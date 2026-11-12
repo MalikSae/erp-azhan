@@ -97,7 +97,7 @@ const PerlengkapanSetEditor = ({ catalog = [], value = [], onChange }) => {
         type="button"
         onClick={add}
         disabled={!canAdd}
-        className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700 disabled:cursor-not-allowed disabled:text-neutral-400"
+        className="inline-flex cursor-pointer items-center gap-1.5 text-xs disabled:cursor-not-allowed disabled:text-neutral-400 font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
       >
         <Plus size={14} strokeWidth={2} />
         Tambah item

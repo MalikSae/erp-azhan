@@ -17,7 +17,7 @@ function Pratinjau({ preview }) {
           : type === 'application/pdf' ? <iframe src={objectUrl} title="Berkas dokumen" className="h-[56vh] w-full rounded border-0 bg-white" />
           : <p className="text-sm text-neutral-500">Pratinjau tidak tersedia untuk jenis berkas ini. Gunakan tombol Download.</p>}
       </div>
-      <a href={objectUrl} download={name} className="inline-block text-sm font-medium text-primary-600 hover:underline">Download berkas</a>
+      <a href={objectUrl} download={name} className="inline-block text-sm font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">Download berkas</a>
     </div>
   );
 }

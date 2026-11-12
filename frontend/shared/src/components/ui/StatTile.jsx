@@ -13,7 +13,7 @@ const VARIANTS = {
 };
 
 const StatTile = ({ icon: Icon, label, value, hint, variant = 'primary' }) => (
-  <div className="bg-white rounded-2xl border border-neutral-200 p-4 min-w-0">
+  <div className="bg-white rounded-2xl border border-neutral-200 p-5 min-w-0">
     <div className="flex items-center gap-1.5 text-xs font-body font-medium text-neutral-600">
       {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${VARIANTS[variant] || VARIANTS.primary}`} strokeWidth={2} />}
       <span className="truncate">{label}</span>

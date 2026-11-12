@@ -217,7 +217,7 @@ export default function TinjauPengajuanAgen({ akunId, onBerubah, onAda }) {
               </div>
 
               <div className="flex shrink-0 flex-col items-end gap-1 text-xs font-semibold">
-                {buktiTerbaru && <button type="button" onClick={() => bukaBukti(buktiTerbaru)} className="text-primary-600 hover:underline cursor-pointer">Lihat bukti</button>}
+                {buktiTerbaru && <button type="button" onClick={() => bukaBukti(buktiTerbaru)} className="cursor-pointer font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">Lihat bukti</button>}
                 {bisaUnggah && (
                   <label className={`text-primary-600 hover:underline ${saving ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
                     {buktiTerbaru ? 'Unggah bukti baru' : 'Unggah bukti'}
@@ -233,7 +233,7 @@ export default function TinjauPengajuanAgen({ akunId, onBerubah, onAda }) {
             <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
               {p.uploads.map((u, i) => (
                 <li key={u.id}>
-                  <button type="button" onClick={() => bukaBukti(u)} className="text-primary-600 font-semibold hover:underline cursor-pointer">Bukti {i + 1}</button>
+                  <button type="button" onClick={() => bukaBukti(u)} className="cursor-pointer font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">Bukti {i + 1}</button>
                   <span className="text-neutral-500"> · {dateLabel(u.created_at)}{u.diupload_oleh_tipe === 'admin' ? ' · admin' : ''}</span>
                 </li>
               ))}

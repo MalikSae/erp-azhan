@@ -13,11 +13,12 @@ import {
 import PageHeader from 'shared/ui/PageHeader';
 import Button from 'shared/ui/Button';
 import Badge from 'shared/ui/Badge';
-import { Surface, Section, Field, SummaryItem, PILL_STRONG, BrandBadge } from 'shared/ui/DetailLayout';
+import { Surface, Section, Field, SummaryItem } from 'shared/ui/DetailLayout';
 import RichText from 'shared/ui/RichText';
 import { printItinerary } from '../utils/printItinerary';
 import { printPackage } from '../utils/printPackage';
 import Alert from 'shared/ui/Alert';
+import EmptyState from 'shared/ui/EmptyState';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import SeatManagement from '../components/SeatManagement';
 import { AuthContext } from '../context/AuthContext';
@@ -216,7 +217,7 @@ const ItineraryTimeline = ({ itinerary }) => {
                   ))}
                 </ul>
               ) : (
-                <p className="mt-1 text-xs text-neutral-400">Belum ada rincian kegiatan.</p>
+                <p className="mt-1 text-xs font-body text-neutral-500">Belum ada rincian kegiatan.</p>
               )}
             </li>
           );
@@ -227,7 +228,7 @@ const ItineraryTimeline = ({ itinerary }) => {
         <button
           type="button"
           onClick={() => setExpanded(v => !v)}
-          className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 cursor-pointer"
+          className="mt-4 inline-flex items-center gap-1 text-xs cursor-pointer font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
         >
           <ChevronDown size={14} strokeWidth={2} className={expanded ? 'rotate-180' : ''} />
           {expanded ? 'Ringkas itinerary' : `Tampilkan ${hidden} hari lainnya`}
@@ -250,7 +251,7 @@ const FacilityList = ({ title, items, icon: Icon, iconClass }) => (
         ))}
       </ul>
     ) : (
-      <p className="text-xs text-neutral-400">Tidak ada item tercatat.</p>
+      <p className="text-xs font-body text-neutral-500">Tidak ada item tercatat.</p>
     )}
   </div>
 );
@@ -446,21 +447,9 @@ const ScheduleDetailPage = () => {
   return (
     <div className="w-full space-y-6">
       <PageHeader
-        title={
-          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-            {schedule.jadwal_nama}
-            <StatusBadge status={schedule.status} />
-          </span>
-        }
-        breadcrumb={false}
-        subtitle={
-          (brand || schedule.category?.name) ? (
-            <span className="inline-flex flex-wrap items-center gap-2">
-              {brand && <BrandBadge name={brand.name} color={brand.primary_color} />}
-              {schedule.category?.name && <Badge variant="neutral" hideIcon className={PILL_STRONG}>{schedule.category.name}</Badge>}
-            </span>
-          ) : undefined
-        }
+        title={schedule.jadwal_nama}
+        meta={[brand?.name, schedule.category?.name]}
+        badges={<StatusBadge status={schedule.status} />}
         onBack={() => navigate('/schedules')}
         {...(canEdit ? { actionLabel: 'Edit Paket', onAction: () => navigate(`/schedules/${id}/edit`) } : {})}
       >
@@ -595,7 +584,7 @@ const ScheduleDetailPage = () => {
             {hasItinerary ? (
               <ItineraryTimeline itinerary={itinerary} />
             ) : (
-              <p className="text-sm text-neutral-500 font-body">Belum ada data itinerary untuk paket ini.</p>
+              <EmptyState variant="inline" message="Belum ada data itinerary untuk paket ini." />
             )}
           </Section>
 
@@ -663,7 +652,7 @@ const ScheduleDetailPage = () => {
                   </span>
                 </a>
               ) : (
-                <p className="text-xs text-neutral-400 font-body">Belum ada gambar utama.</p>
+                <p className="text-xs font-body text-neutral-500">Belum ada gambar utama.</p>
               )}
             </Section>
           </Surface>

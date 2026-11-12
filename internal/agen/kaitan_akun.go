@@ -102,8 +102,80 @@ func cariAkunKaitan(ctx context.Context, q querier, brandID *int64, cari string)
 	return items, rows.Err()
 }
 
+// Jamaah yang ikut pindah saat upline akun diganti (keputusan 12 November 2026): booking pertamanya
+// dibuat akun ini dan masih terikat ke upline lama akun ini. Jamaah lain tidak disentuh: yang terikat ke
+// agen lain (datang lewat link agen lain, atau dibawa upline lama lewat akunnya sendiri) dan yang
+// kaitannya sudah dipilih admin per jamaah (jalur3). Ikatan jamaah terjadi sekali saat booking
+// pertamanya, jadi booking pertama menunjukkan dari akun mana ikatan itu berasal.
+const qJamaahIkutUpline = `
+	SELECT j.id FROM jamaah j
+	WHERE j.direkrut_oleh_akun_id = ? AND j.kaitan_status = 'terikat_agen'
+	  AND COALESCE(j.kaitan_sumber, '') <> 'jalur3'
+	  AND (SELECT b.customer_account_id FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
+	       WHERE bp.jamaah_id = j.id ORDER BY b.id LIMIT 1) = ?
+	ORDER BY j.id`
+
+func jamaahIkutUpline(ctx context.Context, q querier, akunID, uplineLamaID int64, kunci bool) ([]int64, error) {
+	query := qJamaahIkutUpline
+	if kunci {
+		query += ` FOR UPDATE OF j`
+	}
+	rows, err := q.QueryContext(ctx, query, uplineLamaID, akunID)
+	if err != nil {
+		return nil, fmt.Errorf("agen: cari jamaah ikut upline: %w", err)
+	}
+	defer rows.Close()
+	ids := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("agen: scan jamaah ikut upline: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// pindahkanJamaahIkutUplineTx memindahkan ikatan jamaah tersebut ke upline baru (nil = tanpa agen).
+// Komisi yang sudah tercatat tetap milik agen lama; booking yang belum lunas mengikuti agen baru saat lunas.
+// kaitan_sumber dibiarkan supaya penggantian upline berikutnya tetap membawa jamaah yang sama.
+func pindahkanJamaahIkutUplineTx(ctx context.Context, tx *sql.Tx, a AkunKaitan, baru *int64, adminID int64, alasan string) (int, error) {
+	if a.AgenID == nil {
+		return 0, nil
+	}
+	ids, err := jamaahIkutUpline(ctx, tx, a.AkunID, *a.AgenID, true)
+	if err != nil {
+		return 0, err
+	}
+	var agenBaru any
+	status := kaitanTanpaAgen
+	if baru != nil {
+		agenBaru, status = *baru, kaitanTerikatAgen
+	}
+	catatan := fmt.Sprintf("Ikut ganti upline akun %s: %s", a.NamaLengkap, alasan)
+	for _, id := range ids {
+		if _, err := tx.ExecContext(ctx, `UPDATE jamaah SET direkrut_oleh_akun_id = ?, kaitan_status = ? WHERE id = ?`, agenBaru, status, id); err != nil {
+			return 0, fmt.Errorf("agen: pindah jamaah ikut upline: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO jamaah_kaitan_log (jamaah_id, direkrut_oleh_akun_id_lama, direkrut_oleh_akun_id_baru,
+			                               kaitan_status_lama, kaitan_status_baru, diganti_oleh, alasan, komisi_dipindah, komisi_dihapus)
+			VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)`, id, *a.AgenID, agenBaru, kaitanTerikatAgen, status, adminID, catatan); err != nil {
+			return 0, fmt.Errorf("agen: log jamaah ikut upline: %w", err)
+		}
+	}
+	return len(ids), nil
+}
+
 // gantiAgenAkunTx: brandID nil = Super Admin (semua brand); admin brand hanya boleh mengubah akun brand-nya sendiri.
 func gantiAgenAkunTx(ctx context.Context, tx *sql.Tx, brandID *int64, akunID, adminID int64, req GantiAgenAkunRequest) error {
+	var dipindah int
+	return gantiAgenAkunDanJamaahTx(ctx, tx, brandID, akunID, adminID, req, &dipindah)
+}
+
+// gantiAgenAkunDanJamaahTx mengganti upline akun lalu memindahkan jamaah yang ikut (lihat qJamaahIkutUpline);
+// jumlahnya ditulis ke dipindah.
+func gantiAgenAkunDanJamaahTx(ctx context.Context, tx *sql.Tx, brandID *int64, akunID, adminID int64, req GantiAgenAkunRequest, dipindah *int) error {
 	a, err := scanAkunKaitan(tx.QueryRowContext(ctx, qAkunKaitan+` WHERE a.id = ? FOR UPDATE OF a`, akunID))
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != a.BrandID) {
 		return ErrNotFound
@@ -156,7 +228,28 @@ func gantiAgenAkunTx(ctx context.Context, tx *sql.Tx, brandID *int64, akunID, ad
 		VALUES (?, ?, ?, ?, ?, ?)`, akunID, a.AgenID, baru, ubahUpline, adminID, req.Alasan); err != nil {
 		return fmt.Errorf("agen: log kaitan akun: %w", err)
 	}
+	n, err := pindahkanJamaahIkutUplineTx(ctx, tx, a, req.AgenAkunID, adminID, req.Alasan)
+	if err != nil {
+		return err
+	}
+	*dipindah = n
 	return nil
+}
+
+// JamaahIkutUpline mengembalikan jumlah jamaah yang akan ikut pindah bila upline akun diganti sekarang.
+func (r *Repository) JamaahIkutUpline(ctx context.Context, brandID *int64, akunID int64) (int, error) {
+	a, err := scanAkunKaitan(r.db.QueryRowContext(ctx, qAkunKaitan+` WHERE a.id = ?`, akunID))
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != a.BrandID) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("agen: baca akun kaitan: %w", err)
+	}
+	if a.AgenID == nil {
+		return 0, nil
+	}
+	ids, err := jamaahIkutUpline(ctx, r.db, akunID, *a.AgenID, false)
+	return len(ids), err
 }
 
 func listAkunKaitanLog(ctx context.Context, q querier, brandID *int64, akunID int64) ([]AkunKaitanLog, error) {
@@ -194,8 +287,13 @@ func (r *Repository) CariAkunKaitan(ctx context.Context, brandID *int64, cari st
 	return cariAkunKaitan(ctx, r.db, brandID, cari)
 }
 
-func (r *Repository) GantiAgenAkun(ctx context.Context, brandID *int64, akunID, adminID int64, req GantiAgenAkunRequest) error {
-	return r.withTx(ctx, func(tx *sql.Tx) error { return gantiAgenAkunTx(ctx, tx, brandID, akunID, adminID, req) })
+// GantiAgenAkun mengganti upline akun; mengembalikan jumlah jamaah yang ikut pindah.
+func (r *Repository) GantiAgenAkun(ctx context.Context, brandID *int64, akunID, adminID int64, req GantiAgenAkunRequest) (int, error) {
+	var dipindah int
+	err := r.withTx(ctx, func(tx *sql.Tx) error {
+		return gantiAgenAkunDanJamaahTx(ctx, tx, brandID, akunID, adminID, req, &dipindah)
+	})
+	return dipindah, err
 }
 
 func (r *Repository) ListAkunKaitanLog(ctx context.Context, brandID *int64, akunID int64) ([]AkunKaitanLog, error) {
@@ -243,10 +341,26 @@ func (h *Handler) GantiAgenAkun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
-	if err := h.repo.GantiAgenAkun(r.Context(), adminBrandScope(r), id, adminID, req); err != nil {
+	dipindah, err := h.repo.GantiAgenAkun(r.Context(), adminBrandScope(r), id, adminID, req)
+	if err != nil {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	log.Printf("[AUDIT] kaitan_akun_diganti akun_id=%d admin_id=%d", id, adminID)
-	writeJSON(w, http.StatusOK, map[string]string{"message": "agen akun diganti"})
+	log.Printf("[AUDIT] kaitan_akun_diganti akun_id=%d admin_id=%d jamaah_ikut=%d", id, adminID, dipindah)
+	writeJSON(w, http.StatusOK, map[string]any{"message": "agen akun diganti", "jamaah_dipindah": dipindah})
+}
+
+// JamaahIkutUpline GET /api/admin/kaitan-agen/akun/{akunID}/jamaah-ikut → {jumlah}
+// Pratinjau untuk modal "Ganti upline": berapa jamaah yang ikut pindah bila upline diganti.
+func (h *Handler) JamaahIkutUpline(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r, "akunID")
+	if !ok {
+		return
+	}
+	n, err := h.repo.JamaahIkutUpline(r.Context(), adminBrandScope(r), id)
+	if err != nil {
+		handlePencairanKaitanError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"jumlah": n})
 }

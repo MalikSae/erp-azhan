@@ -25,7 +25,7 @@ function MetricCard({ label, value, note, icon: Icon, tone = "primary", onClick 
 }
 
 function SectionHeader({ title, subtitle, action, onAction }) {
-  return <div className="flex items-end justify-between gap-3"><div><h2 className="text-base font-heading font-semibold text-neutral-900">{title}</h2><p className="mt-0.5 text-xs text-neutral-400">{subtitle}</p></div>{action && <button type="button" onClick={onAction} className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700">{action}<ArrowRight size={13} /></button>}</div>;
+  return <div className="flex items-end justify-between gap-3"><div><h2 className="text-base font-heading font-semibold text-neutral-900">{title}</h2><p className="mt-0.5 text-xs text-neutral-400">{subtitle}</p></div>{action && <button type="button" onClick={onAction} className="flex shrink-0 items-center gap-1 text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">{action}<ArrowRight size={13} /></button>}</div>;
 }
 
 function PaxChart({ bookings }) {
@@ -198,7 +198,7 @@ return items.slice(0, 4);
 
   if (loading) return <div className="flex min-h-[420px] items-center justify-center"><LoadingSpinner /></div>;
 
-  return <div className="space-y-6 pb-8">
+  return <div className="space-y-6">
     <PageHeader title="Dashboard" breadcrumb={false} secondaryActionLabel="Tambah Jamaah" onSecondaryAction={() => navigate("/jamaah/new")} actionLabel="Booking Baru" onAction={() => navigate("/bookings/new")} />
     {error && <Alert variant="error" message={error} onClose={() => setError("")} />}
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

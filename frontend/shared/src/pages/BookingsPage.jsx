@@ -312,7 +312,7 @@ export const BookingsPage = ({ showBrandColumn = false }) => {
           <button
             type="button"
             onClick={clearScheduleFilter}
-            className="shrink-0 cursor-pointer text-xs font-semibold text-primary-600 hover:text-primary-700"
+            className="shrink-0 cursor-pointer text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
           >
             Tampilkan semua
           </button>

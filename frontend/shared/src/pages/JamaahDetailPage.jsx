@@ -1,16 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { getJamaah, updateCatatan } from "../api/jamaah";
+import { listKaitanLog } from "../api/agen";
+
+const formatDate = (v) => (!v ? "-" : new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(v)));
 import PerubahanJamaahPanel from "../components/PerubahanJamaahPanel";
 import { listDokumen, upsertDokumen } from "../api/dokumen";
 import { uploadMedia, openProtectedMedia } from "../api/media";
 import { listBookings } from "../api/bookings";
 import { listBrandOptions } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
-import { Surface, Section, Field, SummaryItem, PILL_STRONG, BrandBadge, TableCard } from "../components/ui/DetailLayout";
+import { Surface, Section, Field, SummaryItem, TableCard } from "../components/ui/DetailLayout";
 import Badge, { toneFromClass } from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 import Alert from "../components/ui/Alert";
+import { GantiAgenJamaahModal } from "../components/GantiKaitanModal";
+import EmptyState from '../components/ui/EmptyState';
 import ActionMenu from "../components/ui/ActionMenu";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Table from "../components/ui/Table";
@@ -114,7 +119,8 @@ const AGEN_STATUS_STYLE = {
 
 // bolehLihatPerubahan: pengguna memegang izin jamaah.perubahan.approve, sehingga riwayat perubahan data dan
 // pengajuan yang menunggu untuk jamaah ini bisa ditampilkan dan diputuskan dari halaman ini.
-export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan = false }) => {
+// bolehGantiAgen: izin agen.kaitan.edit, menampilkan tombol "Ganti" agen tempat jamaah terikat.
+export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan = false, bolehGantiAgen = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -127,6 +133,23 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [gantiAgenBuka, setGantiAgenBuka] = useState(false);
+  const [logKaitan, setLogKaitan] = useState([]);
+
+  // Riwayat ganti agen hanya untuk pemegang izin agen.kaitan.edit (endpoint admin kaitan).
+  const muatLogKaitan = async () => {
+    if (!bolehGantiAgen) return;
+    try {
+      setLogKaitan(await listKaitanLog(id));
+    } catch {
+      setLogKaitan([]);
+    }
+  };
+
+  useEffect(() => {
+    muatLogKaitan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, bolehGantiAgen]);
 
   // Catatan
   const [catatanText, setCatatanText] = useState("");
@@ -322,17 +345,11 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
       {/* Header */}
       <PageHeader
         title={jamaah.nama_lengkap || jamaah.id_jamaah || `ID: ${jamaah.id}`}
-        breadcrumb={false}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <Badge variant="neutral" hideIcon className={`${PILL_STRONG} !font-mono`}>
-              {jamaah.id_jamaah || jamaah.kode_jamaah || `ID: ${jamaah.id}`}
-            </Badge>
-            {showBrandColumn && (brand || jamaah.brand_id) && (
-              <BrandBadge name={brand?.name || `Brand #${jamaah.brand_id}`} color={brand?.primary_color} />
-            )}
-          </span>
-        }
+        meta={[
+          jamaah.id_jamaah || jamaah.kode_jamaah || `ID: ${jamaah.id}`,
+          jamaah.no_hp,
+          showBrandColumn && (brand?.name || (jamaah.brand_id ? `Brand #${jamaah.brand_id}` : null)),
+        ]}
         onBack={() => navigate("/jamaah")}
         actionLabel="Edit Data"
         onAction={() => navigate(`/jamaah/${id}/edit`)}
@@ -431,19 +448,24 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
           <Section title="Agen Syiar">
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-medium text-neutral-500 font-body">Agen yang mengajak</span>
-                {jamaah.kaitan_status === "terikat_agen" && jamaah.direkrut_oleh_akun_id ? (
-                  <Link
-                    to={`/agen/${jamaah.direkrut_oleh_akun_id}`}
-                    className="text-sm font-semibold text-neutral-900 underline underline-offset-2 text-right"
-                  >
-                    {jamaah.direkrut_oleh_nama || `#${jamaah.direkrut_oleh_akun_id}`}
-                  </Link>
-                ) : (
-                  <span className="text-sm font-medium text-neutral-700">
-                    {jamaah.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}
-                  </span>
-                )}
+                <span className="text-xs font-medium text-neutral-500 font-body">Terikat ke agen</span>
+                <span className="flex items-center gap-2 text-right">
+                  {jamaah.kaitan_status === "terikat_agen" && jamaah.direkrut_oleh_akun_id ? (
+                    <Link
+                      to={`/agen/${jamaah.direkrut_oleh_akun_id}`}
+                      className="text-sm font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
+                    >
+                      {jamaah.direkrut_oleh_nama || `#${jamaah.direkrut_oleh_akun_id}`}
+                    </Link>
+                  ) : (
+                    <span className="text-sm font-medium text-neutral-700">
+                      {jamaah.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}
+                    </span>
+                  )}
+                  {bolehGantiAgen && (
+                    <Button variant="secondary" size="sm" onClick={() => setGantiAgenBuka(true)}>Ganti</Button>
+                  )}
+                </span>
               </div>
               {STATUS_AGEN[jamaah.status_agen] && (
                 <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-3">
@@ -454,6 +476,23 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
                       {...(AGEN_STATUS_STYLE[STATUS_AGEN[jamaah.status_agen].variant] || NEUTRAL_STATUS)}
                     />
                   </Link>
+                </div>
+              )}
+              {bolehGantiAgen && logKaitan.length > 0 && (
+                <div className="border-t border-neutral-100 pt-3">
+                  <span className="text-xs font-medium text-neutral-500 font-body">Riwayat ganti agen</span>
+                  <ul className="mt-2 space-y-2">
+                    {logKaitan.map((l) => (
+                      <li key={l.id} className="text-sm font-body">
+                        <p className="font-medium text-neutral-900">
+                          {(l.kaitan_status_lama === "terikat_agen" ? l.agen_lama_nama : "Tanpa agen") || "-"}
+                          {" → "}
+                          {(l.kaitan_status_baru === "terikat_agen" ? l.agen_baru_nama : "Tanpa agen") || "-"}
+                        </p>
+                        <p className="text-xs text-neutral-500">{l.alasan} · {l.diganti_oleh} · {formatDate(l.diganti_at)}</p>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
@@ -547,7 +586,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
       {/* Riwayat Booking: judul di luar kartu, kartu hanya berisi tabel (aturan tabel) */}
       <TableCard title="Riwayat Booking & Keberangkatan">
         {bookings.length === 0 ? (
-          <p className="p-5 text-sm text-neutral-500 font-body">Belum ada riwayat booking untuk jamaah ini.</p>
+          <EmptyState variant="section" message="Belum ada riwayat booking untuk jamaah ini." />
         ) : (
           <div className="overflow-x-auto">
           <Table
@@ -602,6 +641,15 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
           <h3 className="mb-3 font-heading text-sm font-semibold text-neutral-900">Riwayat Perubahan Data</h3>
           <PerubahanJamaahPanel jamaahId={id} onChanged={(aksi) => { if (aksi === 'setujui') muatUlangJamaah(); }} />
         </div>
+      )}
+
+      {bolehGantiAgen && (
+        <GantiAgenJamaahModal
+          jamaah={jamaah}
+          isOpen={gantiAgenBuka}
+          onClose={() => setGantiAgenBuka(false)}
+          onSaved={() => { muatUlangJamaah(); muatLogKaitan(); setSuccess("Agen jamaah berhasil diganti dan tercatat di riwayat."); }}
+        />
       )}
 
     </div>

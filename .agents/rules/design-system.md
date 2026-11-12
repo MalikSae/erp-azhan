@@ -80,6 +80,7 @@ Aturan:
 | Nama baris yang bisa diklik di tabel | `font-body font-medium text-neutral-900 hover:text-primary-600` — isi, bukan judul; jangan `font-heading` |
 | Caption, keterangan | `font-body text-xs text-neutral-500` |
 | Tombol, badge | `font-heading font-medium` (lewat komponen `Button`/`Badge`) |
+| Link teks ("Lihat bukti", "Pilih semua", "Tampilkan semua") | `font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900` — garis bawah wajib karena `primary` monokrom; jangan `text-primary-*` untuk link. Nama baris di tabel tetap tanpa garis bawah. |
 
 ### 3.1 Scaling per breakpoint (WAJIB — lihat AGENTS.md bagian Responsivitas)
 
@@ -164,6 +165,8 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 - Di halaman **daftar**, pakai `DataTable`; pencarian/filter/tab ada di toolbar kartu itu sendiri (`toolbarLeading`, `toolbarActions`, `toolbarPanel`).
 - Tabel lebar boleh dibungkus `overflow-x-auto` (bukan kotak berbingkai).
 - Pengecualian: kartu **widget dashboard** (judul + ringkasan + tabel mini dalam satu kartu).
+**Konfirmasi & pesan**: jangan `window.confirm`, `window.alert`, atau `window.prompt`. Konfirmasi aksi berisiko memakai `Modal` (`size="sm"`, tombol `secondary` "Batal" lalu `danger`/`primary` aksi di footer kanan); pesan gagal tampil sebagai `Alert variant="error"` di dalam modal atau di atas halaman.
+
 
 ## 5.2 Aturan Status (WAJIB)
 
@@ -184,6 +187,52 @@ Larangan:
 - Jangan menimpa warna `Badge` lewat `className` (`!bg-…`, `!text-…`). Kalau nada tidak cocok, pilih nada lain.
 - Jangan membuat `<span>` status sendiri. Tabel status lama yang memakai kelas titik (`dot: 'bg-success-500'`) boleh diubah lewat `toneFromClass(dot)` dari `Badge.jsx`.
 - Status Aktif/Nonaktif memakai `StatusChip` (`penggunaUi`), yang kini merender `Badge`.
+
+## 5.3 Kartu, Empty State, Tab (WAJIB)
+
+**Kartu**
+- Kartu = `bg-white border border-neutral-200 rounded-2xl` (8px), tanpa bayangan. Pakai `Surface` + `Section` (DetailLayout) atau `Card`; jangan tulis ulang kelasnya di halaman.
+- Kartu berjudul lama `MetaBox` kini tampil sama dengan `Surface` + `Section` (judul di atas isi, tanpa pita abu, tanpa kotak ikon). Halaman baru pakai `Surface` + `Section`.
+- Kotak info di dalam modal/kartu (ringkasan, catatan) boleh `rounded-xl` (6px) `bg-neutral-50 border border-neutral-200`.
+
+**Empty state** — komponen `EmptyState`, tiga varian:
+| Varian | Kapan | Tampilan |
+|---|---|---|
+| `list` (default) | tabel/daftar kosong (otomatis di `Table`/`DataTable`) | teks di tengah, `py-12` |
+| `section` | satu bagian kartu kosong ("Belum ada pembayaran") | teks rata kiri, `px-5 py-5` |
+| `inline` | di dalam wadah yang sudah berpadding (`Section`, `MetaBox`) | teks saja |
+
+Pesan berupa kalimat biasa `text-sm text-neutral-500`, boleh disertai petunjuk aksi. Tanpa ilustrasi, ikon, atau kotak putus-putus. Pesan mikro di dalam baris/dropdown ("Tidak ada pilihan") cukup `text-xs text-neutral-500`.
+
+**Tab** — semua tab pindah daftar memakai `SegmentedTabs`. Jangan membuat `role="tablist"` sendiri.
+
+## 5.4 Header Halaman & Jarak (WAJIB)
+
+**Header** — semua halaman memakai `PageHeader`; tidak ada header buatan sendiri (judul `<h1>` di dalam kartu, teks "← Kembali" di atas kartu).
+
+| Jenis halaman | Pola |
+|---|---|
+| Daftar | `title` + breadcrumb (otomatis) + tombol aksi utama di kanan (`actionLabel`) |
+| Detail | `onBack` (ikon ←, breadcrumb otomatis mati) + `title` = nama/ID dengan `badges` sebaris di kanannya + `meta` di baris kedua + tombol aksi di kanan (`children`). Maksimal dua baris. |
+| Form tambah/edit | `onBack` + `title`; tombol simpan ada di `FormLayout`, bukan di header |
+
+- `meta`: array teks pendek (ID/kode, WA, email, brand, tanggal dibuat). Dirender sebagai teks abu `text-sm` dipisah "·". Tanpa pil, tanpa ikon.
+- `badges`: status (`Badge`) dan atribut penting dengan tautannya, mis. `<Badge>Upline: <Link>…</Link></Badge>` + tautan "Ganti". Tampil sebaris dengan judul (jarak 12px), turun baris hanya bila layar sempit.
+- Tombol aksi selalu di kanan header (Ubah, Edit Data, Cetak / PDF, Nonaktifkan, menu "Aksi"), tidak di dalam kartu. Tanpa foto/avatar di header; foto masuk kartu profil.
+
+**Jarak (semua nilai skala Tailwind, kelipatan 4px)**
+
+| Tempat | Nilai |
+|---|---|
+| Area konten (`DashboardLayout`) | `px-4 md:px-8`, atas `pt-6 md:pt-8`, bawah `pb-6 md:pb-8` — halaman tidak menambah `pt-*`/`pb-*` sendiri |
+| Antar blok halaman (header, tab, kartu, tabel) | akar halaman `space-y-6` (24px); tanpa `mb-*`/`mt-*` di komponen blok (lihat "Jarak vertikal halaman") |
+| Grid kartu (kolom kiri/kanan) | `gap-6` (24px); baris stat tile `gap-4` |
+| Header: judul + badges → meta | badge sebaris dengan judul (`gap-x-3`), meta `mt-1` (4px), diatur `PageHeader` |
+| Padding isi kartu (`Card`, `Section`, `FormSection`, `SidebarSection`, `StatTile`, `MetaBox`, isi `Modal`) | `p-5` (20px), sama di semua breakpoint |
+| Judul section → isi | `mb-4` (16px) |
+| Antar field / baris data dalam kartu | `space-y-4` atau `gap-y-4` (16px); label → nilai `mt-0.5` |
+| Pita toolbar & paginasi `DataTable`, header/footer `Modal` | `p-4` / `px-5 py-4` |
+| Sel tabel | `px-4 py-3` |
 
 ## 6. Alur Kerja untuk Halaman Baru
 

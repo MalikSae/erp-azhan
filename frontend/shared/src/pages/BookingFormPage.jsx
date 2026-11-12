@@ -1433,7 +1433,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                               href={tautanAman(selectedSchedule.brosur_url)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
+                              className="inline-flex items-center gap-1 text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                             >
                               <span>Lihat Brosur</span>
                               <ExternalLink size={12} />
