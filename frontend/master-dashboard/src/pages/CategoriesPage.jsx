@@ -325,7 +325,7 @@ const CategoriesPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Kategori"
+        title="Kategori"
         {...(canEdit ? { actionLabel: "+ Tambah Kategori", onAction: () => handleOpenModal() } : {})}
       />
 

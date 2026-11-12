@@ -4,7 +4,7 @@ import { ArrowLeft, Home, ChevronRight } from 'lucide-react';
 
 // PageHeader — satu-satunya header halaman (design-system.md §5.4).
 //
-// Halaman daftar:  <PageHeader title="Kelola Booking" actionLabel="+ Buat Booking" onAction={…} />
+// Halaman daftar:  <PageHeader title="Booking" actionLabel="+ Buat Booking" onAction={…} />
 // Halaman detail:  <PageHeader title={nama} onBack={…} meta={['HN-123', '0812…', brand]}
 //                              badges={<><Badge variant="success">Agen aktif</Badge>…</>}>
 //                    <Button …>Ubah</Button>

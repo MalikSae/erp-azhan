@@ -445,7 +445,7 @@ const InventoryPerlengkapanPage = () => {
           />
 
           <p className="text-xs font-body text-neutral-500">
-            Jumlah per jamaah diatur di Kelola Kategori (bawaan) atau di form Paket (khusus paket).
+            Jumlah per jamaah diatur di menu Kategori (bawaan) atau di form Paket (khusus paket).
           </p>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">

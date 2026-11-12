@@ -18,7 +18,7 @@ const DashboardLayout = () => {
   return (
     <div className="h-screen bg-page-bg flex overflow-hidden font-body">
       <Sidebar isOpen={isSidebarOpen} closeDrawer={closeSidebar} />
-      <div className="flex-1 min-w-0 ml-0 md:ml-64 flex flex-col h-screen">
+      <div className="flex-1 min-w-0 ml-0 md:ml-56 flex flex-col h-screen">
         <Topbar toggleSidebar={toggleSidebar} />
         <main ref={mainRef} className="flex-1 px-4 md:px-8 pt-6 md:pt-8 overflow-y-auto relative">
           <div className="max-w-7xl mx-auto min-h-[calc(100vh-8rem)] pb-6 md:pb-8">

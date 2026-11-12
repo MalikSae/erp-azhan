@@ -53,7 +53,7 @@ typography:
 
 spacing:
   base: 4px
-  sidebar-width: 256px
+  sidebar-width: 224px   # w-56; nama menu tanpa kata "Kelola" (mis. "Jamaah", bukan "Kelola Jamaah")
   topbar-height: 64px
   nav-item-height: 36px
   control-height: 36px     # h-9: tombol md, field, dropdown, kolom cari, ActionMenu — wajib sama
@@ -153,7 +153,7 @@ Aturan:
 
 ## 5. Layout
 
-- **Sidebar** 256px, putih, border kanan. Item menu 36px, radius 6px, ikon 16px abu. Aktif: latar `#F0F0F0`, tanpa garis warna. Hover: `neutral-100`.
+- **Sidebar** 224px (`w-56`), putih, border kanan. Item menu 36px, radius 6px, ikon 16px abu. Aktif: latar `#F0F0F0`, tanpa garis warna. Hover: `neutral-100`.
 - **Topbar** 64px, putih, border bawah, tanpa bayangan.
 - **Konten** di atas putih, padding 16px mobile dan 32px desktop. Blok dipisah jarak, bukan latar berbeda.
 
@@ -189,3 +189,4 @@ Cincin fokus 2px wajib di semua elemen interaktif. Target sentuh mobile minimal 
 - [2026-11-12] (header) Semua halaman memakai PageHeader; halaman detail: ikon kembali tanpa breadcrumb, judul nama, baris meta teks abu, baris badge status/atribut, aksi di kanan; tanpa foto di header — Sebelumnya Detail Akun, Agen, dan Jamaah punya tiga bentuk header berbeda.
 - [2026-11-12] (spacing) Jarak baku: konten pt-6/pb-6 (md: 8), antar blok space-y-6, grid kartu gap-6, padding isi kartu p-5 di semua breakpoint, judul section ke isi mb-4, antar field 16px — Padding kartu sebelumnya campur p-4/p-5/p-6 dan jarak bawah halaman tidak sama dengan atas.
 - [2026-11-12] (modal/ikon/memuat) Footer modal: Batal secondary lalu aksi utama; ikon 16/14/12/20px per konteks; memuat selalu LoadingSpinner (variant card untuk blok); halaman aktif paginasi berbingkai, bukan hitam — Sebelumnya Batal campur ghost/secondary, ikon 11–22px tanpa pola, 17 kotak loading buatan sendiri, dan paginasi aktif hitam penuh.
+- [2026-11-12] (sidebar) Sidebar 224px (w-56) dan nama menu cukup nama bendanya ("Jamaah", "Booking", "Paket"), tanpa kata "Kelola" — Permintaan user: sidebar terlalu lebar dan kata "Kelola" berulang tanpa menambah arti.

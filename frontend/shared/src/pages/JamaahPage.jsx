@@ -195,7 +195,7 @@ export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kelola Jamaah"
+        title="Jamaah"
         actionLabel="+ Tambah Jamaah"
         onAction={() => navigate("/jamaah/new")}
       />
