@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/shared"
 	"context"
 	"database/sql"
@@ -236,8 +237,16 @@ func (r *Repository) ListPublic(ctx context.Context, brandID int64) ([]*PublicSc
 		log.Printf("[WARN] schedule.ListPublic hotel transit: %v", err)
 		transit = map[int64][]TransitHotel{}
 	}
+	// Benefit seluruh paket diambil dalam satu query. Kegagalannya tidak menggagalkan daftar paket:
+	// paket tetap tayang tanpa benefit.
+	benefits, err := benefit.UntukJadwal(ctx, r.db, ids)
+	if err != nil {
+		log.Printf("[WARN] schedule.ListPublic benefit: %v", err)
+		benefits = map[int64][]benefit.Ref{}
+	}
 	items := make([]*PublicSchedule, 0, len(list))
 	for _, s := range list {
+		s.Benefits = benefits[s.ID]
 		s.TransitHotels = transit[s.ID]
 		if s.TransitHotels == nil {
 			s.TransitHotels = []TransitHotel{}
@@ -360,6 +369,11 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 	if err := r.UpdateTransitHotels(ctx, tx, id, inp.TransitHotelIDs); err != nil {
 		return nil, fmt.Errorf("schedule.Create transit hotels: %w", err)
 	}
+	if inp.BenefitIDs != nil {
+		if err := benefit.GantiTautan(ctx, tx, id, *inp.BenefitIDs); err != nil {
+			return nil, err
+		}
+	}
 
 	if err := setKlasifikasiTx(ctx, tx, id, inp.Klasifikasi); err != nil {
 		return nil, err
@@ -428,6 +442,12 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 
 	if err := r.UpdateTransitHotels(ctx, tx, id, inp.TransitHotelIDs); err != nil {
 		return nil, fmt.Errorf("schedule.Update transit hotels: %w", err)
+	}
+	// nil: klien lama yang tidak mengirim benefit_ids tidak menghapus benefit yang tersimpan.
+	if inp.BenefitIDs != nil {
+		if err := benefit.GantiTautan(ctx, tx, id, *inp.BenefitIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := setKlasifikasiTx(ctx, tx, id, inp.Klasifikasi); err != nil {
@@ -683,6 +703,15 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 		return nil, fmt.Errorf("schedule.GetByID hotel transit: %w", err)
 	}
 	s.TransitHotels = th
+
+	bf, err := benefit.UntukJadwal(ctx, r.db, []int64{s.ID})
+	if err != nil {
+		return nil, fmt.Errorf("schedule.GetByID benefit: %w", err)
+	}
+	s.Benefits = bf[s.ID]
+	if s.Benefits == nil {
+		s.Benefits = []benefit.Ref{}
+	}
 
 	var bCount int
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id = ?`, s.ID).Scan(&bCount); err != nil {
@@ -1070,4 +1099,19 @@ func tolakHapusPaket(status string, pernahTayang bool) string {
 		return "paket ini pernah tayang, jadi tidak dapat dihapus. Arsipkan paket ini"
 	}
 	return ""
+}
+
+// ValidasiBenefit memeriksa daftar highlight benefit sebuah paket (milik brand paket, tidak kembar, paling
+// banyak empat, benefit nonaktif hanya bila paket sudah memakainya). scheduleID 0 untuk paket baru.
+func (r *Repository) ValidasiBenefit(ctx context.Context, brandID, scheduleID int64, ids []int64) error {
+	return benefit.ValidasiPilihan(ctx, r.db, brandID, scheduleID, ids)
+}
+
+// JumlahBenefit menghitung highlight benefit yang tersimpan pada sebuah paket.
+func (r *Repository) JumlahBenefit(ctx context.Context, scheduleID int64) (int, error) {
+	n, err := benefit.JumlahTautan(ctx, r.db, scheduleID)
+	if err != nil {
+		return 0, fmt.Errorf("schedule.JumlahBenefit: %w", err)
+	}
+	return n, nil
 }

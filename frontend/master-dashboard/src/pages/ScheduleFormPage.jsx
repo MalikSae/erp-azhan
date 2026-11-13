@@ -21,6 +21,7 @@ import {
   putSchedulePerlengkapan,
 } from '../api/perlengkapan';
 import PerlengkapanSetEditor, { PerlengkapanSetList } from '../components/PerlengkapanSetEditor';
+import HighlightBenefitSection, { JUMLAH_BENEFIT_PAKET } from '../components/HighlightBenefitSection';
 import { listHotels } from '../api/hotels';
 import { listAirlines } from '../api/airlines';
 import { listAirports } from '../api/airports';
@@ -43,6 +44,7 @@ const serverErrorField = (msg) => {
   const m = /^([a-z_]+) /.exec(msg || '');
   if (m && SERVER_ERROR_FIELDS.has(m[1])) return m[1];
   if (/nama dan tanggal berangkat/.test(msg || '')) return 'jadwal_nama';
+  if (/highlight benefit|^benefit(_ids)? /.test(msg || '')) return 'benefit_ids';
   return null;
 };
 
@@ -51,6 +53,7 @@ const SECTION_LINKS = [
   { id: 'sec-harga', label: 'Harga' },
   { id: 'sec-penerbangan', label: 'Penerbangan' },
   { id: 'sec-hotel', label: 'Hotel' },
+  { id: 'sec-benefit', label: 'Benefit' },
   { id: 'sec-fasilitas', label: 'Fasilitas' },
   { id: 'sec-perlengkapan', label: 'Perlengkapan' },
   { id: 'sec-itinerary', label: 'Itinerary' },
@@ -150,7 +153,9 @@ const ScheduleFormPage = () => {
     category_id: '',
     journey_type: 'umroh',
     program_slug: '',
-    destination_id: ''
+    destination_id: '',
+    // Highlight benefit terpilih, berurutan: [{ id, teks, ikon, is_active }].
+    benefits: []
   });
 
   useEffect(() => {
@@ -333,7 +338,8 @@ const ScheduleFormPage = () => {
             category_id: scheduleData.category_id || (scheduleData.category?.id || ''),
             journey_type: scheduleData.journey_type || 'umroh',
             program_slug: scheduleData.program_slug || '',
-            destination_id: scheduleData.destination_id || scheduleData.destination?.id || ''
+            destination_id: scheduleData.destination_id || scheduleData.destination?.id || '',
+            benefits: (Array.isArray(scheduleData.benefits) ? scheduleData.benefits : []).map(b => ({ id: b.id, teks: b.teks, ikon: b.ikon, is_active: b.is_active !== false }))
           };
 
           // Salinan: tanggal diisi ulang, seat terisi direset, dan selalu mulai sebagai draft.
@@ -345,6 +351,8 @@ const ScheduleFormPage = () => {
             kuota_terisi: '',
             berangkat_tanggal: '',
             pulang_tanggal: '',
+            // Benefit nonaktif tidak ikut disalin: server menolaknya sebagai pilihan paket baru.
+            benefits: loadedForm.benefits.filter(b => b.is_active),
           });
 
           setIncludeItemsText(safeArray(scheduleData.include_items).join('\n'));
@@ -723,6 +731,9 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
       if (butuhAlasanTanggal && !(formData.alasan_ubah_tanggal || '').trim()) errors.alasan_ubah_tanggal = 'Alasan ubah tanggal berangkat wajib diisi.';
       if (hargaTriple < hargaQuad) errors.harga_triple = 'Harga Triple tidak boleh lebih murah dari harga Quad.';
       if (hargaDouble < hargaTriple) errors.harga_double = 'Harga Double tidak boleh lebih murah dari harga Triple.';
+      if (formData.status === 'published' && formData.benefits.length !== JUMLAH_BENEFIT_PAKET) {
+        errors.benefit_ids = `Paket yang dijual wajib punya ${JUMLAH_BENEFIT_PAKET} highlight benefit.`;
+      }
       if (Object.keys(errors).length) {
         setFieldErrors(errors); setFormError('Periksa kembali isian paket berikut.'); return;
       }
@@ -795,7 +806,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         include_items: includeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
         exclude_items: excludeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
         brosur_url: formData.brosur_url || '',
-        brosur_thumb_url: formData.brosur_thumb_url || ''
+        brosur_thumb_url: formData.brosur_thumb_url || '',
+        benefit_ids: formData.benefits.map(b => b.id)
       };
 
       let savedId = id;
@@ -1546,6 +1558,15 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
               </div>
             </FormSection>
 
+            <FormSection id="sec-benefit" title="Highlight Benefit">
+              <HighlightBenefitSection
+                brandId={formData.brand_id}
+                value={formData.benefits}
+                onChange={(daftar) => setFormData(prev => ({ ...prev, benefits: daftar }))}
+                error={fieldErrors.benefit_ids}
+              />
+            </FormSection>
+
             <FormSection id="sec-fasilitas" title="Fasilitas Paket">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Include */}
@@ -1666,6 +1687,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       value={formData.brand_id}
                       onChange={(val) => {
                         handleChange({ target: { name: 'brand_id', value: val } });
+                        // Benefit milik satu brand: ganti brand mengosongkan pilihan.
+                        if (String(val) !== String(formData.brand_id)) setFormData(prev => ({ ...prev, benefits: [] }));
                         const selectedBid = parseInt(val, 10);
                         const currentCat = categoryOptions.find(c => String(c.id) === String(formData.category_id));
                         if (currentCat && currentCat.brands && currentCat.brands.length > 0) {

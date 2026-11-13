@@ -17,6 +17,7 @@ import AccountSettingsPage from './pages/AccountSettingsPage';
 import HotelsPage from './pages/HotelsPage';
 import AirlinesPage from './pages/AirlinesPage';
 import ItinerariesPage from './pages/ItinerariesPage';
+import BenefitsPage from './pages/BenefitsPage';
 import ItineraryFormPage from './pages/ItineraryFormPage';
 import SchedulesPage from './pages/SchedulesPage';
 import ScheduleDetailPage from './pages/ScheduleDetailPage';
@@ -62,6 +63,7 @@ function AppRoutes() {
           <Route path="/airlines" element={<RequireAccess perm="masterdata.view"><AirlinesPage /></RequireAccess>} />
           <Route path="/categories" element={<RequireAccess perm="masterdata.view"><CategoriesPage /></RequireAccess>} />
           <Route path="/destinations" element={<RequireAccess perm="masterdata.view"><DestinationsPage /></RequireAccess>} />
+          <Route path="/benefits" element={<RequireAccess perm="masterdata.view"><BenefitsPage /></RequireAccess>} />
           <Route path="/itineraries" element={<RequireAccess perm="masterdata.view"><ItinerariesPage /></RequireAccess>} />
           <Route path="/itineraries/new" element={<RequireAccess perm="masterdata.edit"><ItineraryFormPage /></RequireAccess>} />
           <Route path="/itineraries/:id/edit" element={<RequireAccess perm="masterdata.edit"><ItineraryFormPage /></RequireAccess>} />

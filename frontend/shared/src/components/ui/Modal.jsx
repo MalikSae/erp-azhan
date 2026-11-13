@@ -57,6 +57,7 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
               {title}
             </h3>
             <button
+              type="button"
               onClick={onClose}
               className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50 transition-colors focus:outline-none"
               aria-label="Close modal"

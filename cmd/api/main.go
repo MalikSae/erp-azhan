@@ -21,6 +21,7 @@ import (
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/airline"
+	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/airport"
 	"erp-azhan/api/internal/bankaccount"
 	"erp-azhan/api/internal/booking"
@@ -117,6 +118,7 @@ func main() {
 
 	airlineRepo := airline.NewRepository(db)
 	airlineHandler := airline.NewHandler(airlineRepo)
+	benefitHandler := benefit.NewHandler(benefit.NewRepository(db))
 
 	airportRepo := airport.NewRepository(db)
 	airportHandler := airport.NewHandler(airportRepo)
@@ -348,6 +350,12 @@ func main() {
 		masterEdit.Post("/airlines", airlineHandler.CreateAirline)
 		masterEdit.Put("/airlines/{id}", airlineHandler.UpdateAirline)
 		masterEdit.Delete("/airlines/{id}", airlineHandler.DeleteAirline)
+		// Master highlight benefit paket (per brand).
+		masterView.Get("/benefits", benefitHandler.ListBenefits)
+		masterView.Get("/benefits/ikon", benefitHandler.ListIkon)
+		masterEdit.Post("/benefits", benefitHandler.CreateBenefit)
+		masterEdit.Put("/benefits/{id}", benefitHandler.UpdateBenefit)
+		masterEdit.Delete("/benefits/{id}", benefitHandler.DeleteBenefit)
 
 		// Airports
 		masterView.Get("/airports", airportHandler.ListAirports)
@@ -426,6 +434,11 @@ func main() {
 		scheduleView := r.With(identity.RequirePermission("schedule.view"))
 		scheduleEdit := r.With(identity.RequirePermission("schedule.edit"))
 		scheduleView.Get("/schedules", scheduleHandler.ListSchedulesAdmin)
+		// Pilihan benefit untuk form paket: admin paket boleh memilih dan membuat benefit baru tanpa izin
+		// master, tetapi tidak mengubah atau menonaktifkan yang sudah ada. Didaftarkan sebelum /schedules/{id};
+		// chi mendahulukan segmen statis, jadi "benefit-options" tidak terbaca sebagai id.
+		scheduleView.Get("/schedules/benefit-options", benefitHandler.ListOpsi)
+		scheduleEdit.Post("/schedules/benefit-options", benefitHandler.CreateBenefit)
 		scheduleView.Get("/schedules/{id}", scheduleHandler.GetScheduleAdmin)
 		scheduleView.Get("/schedules/{id}/seat", scheduleHandler.GetScheduleSeat)
 		scheduleEdit.Post("/schedules", scheduleHandler.CreateSchedule)

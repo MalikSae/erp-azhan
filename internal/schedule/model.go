@@ -2,6 +2,8 @@ package schedule
 
 import (
 	"time"
+
+	"erp-azhan/api/internal/benefit"
 )
 
 // CategoryRef menyimpan data relasi kategori paket.
@@ -82,6 +84,8 @@ type Schedule struct {
 	HotelMadinahID           *int64          `json:"hotel_madinah_id"`
 	HotelMadinah             HotelRef        `json:"hotel_madinah"`
 	TransitHotels            []TransitHotel  `json:"transit_hotels"`
+	// Benefits: highlight benefit paket, terurut sesuai pilihan admin; [] bila belum diisi.
+	Benefits []benefit.Ref `json:"benefits"`
 	HargaQuad                float64         `json:"harga_quad"`
 	HargaTriple              float64         `json:"harga_triple"`
 	HargaDouble              float64         `json:"harga_double"`
@@ -126,6 +130,8 @@ type PublicSchedule struct {
 	HotelMekkah              HotelRef       `json:"hotel_mekkah"`
 	HotelMadinah             HotelRef       `json:"hotel_madinah"`
 	TransitHotels            []TransitHotel `json:"transit_hotels"`
+	// Benefits: highlight benefit paket untuk web dan app publik, terurut; [] bila belum diisi.
+	Benefits []benefit.RefPublik `json:"benefits"`
 	HargaQuad                float64        `json:"harga_quad"`
 	HargaTriple              float64        `json:"harga_triple"`
 	HargaDouble              float64        `json:"harga_double"`
@@ -168,6 +174,7 @@ func (s *Schedule) ToPublic() *PublicSchedule {
 		HotelMekkah:              s.HotelMekkah,
 		HotelMadinah:             s.HotelMadinah,
 		TransitHotels:            s.TransitHotels,
+		Benefits:                 benefit.KePublik(s.Benefits),
 		HargaQuad:                s.HargaQuad,
 		HargaTriple:              s.HargaTriple,
 		HargaDouble:              s.HargaDouble,
@@ -237,6 +244,8 @@ type ScheduleInput struct {
 	HotelMekkahID            int64
 	HotelMadinahID           int64
 	TransitHotelIDs          []int64
+	// BenefitIDs: nil berarti tautan benefit tidak diubah; daftar (boleh kosong) berarti diganti.
+	BenefitIDs *[]int64
 	HargaQuad                float64
 	HargaTriple              float64
 	HargaDouble              float64
@@ -283,6 +292,8 @@ type CreateScheduleRequest struct {
 	HotelMekkahID            int64    `json:"hotel_mekkah_id"`
 	HotelMadinahID           int64    `json:"hotel_madinah_id"`
 	TransitHotelIDs          []int64  `json:"transit_hotel_ids"`
+	// BenefitIDs: highlight benefit terurut. Kunci tidak dikirim = tautan lama dipertahankan.
+	BenefitIDs *[]int64 `json:"benefit_ids"`
 	HargaQuad                float64  `json:"harga_quad"`
 	HargaTriple              float64  `json:"harga_triple"`
 	HargaDouble              float64  `json:"harga_double"`
