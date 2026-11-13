@@ -20,6 +20,7 @@ import (
 
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/agen"
+	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/airline"
 	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/airport"
@@ -202,6 +203,7 @@ func main() {
 
 	agenRepo := agen.NewRepository(db)
 	agenHandler := agen.NewHandler(agenRepo)
+	analitikHandler := analitik.NewHandler(analitik.NewRepository(db, agenRepo))
 	adminAkunHandler := customer.NewAdminAkun(db, agenRepo)
 
 	// ─── Routes ───────────────────────────────────────────────────────────────
@@ -591,6 +593,7 @@ func main() {
 		// Analytics lintas brand
 		r.With(identity.RequirePermission("report.analytics.view")).Get("/analytics/transactions-30-days", paymentHandler.ListDailyBrandTransactions)
 		r.With(identity.RequirePermission("report.analytics.view")).Get("/analytics/pax-30-days", bookingHandler.ListDailyBrandPax)
+		r.With(identity.RequirePermission("report.analytics.view")).Get("/analytics/marketing-ringkas", analitikHandler.MarketingRingkas)
 	})
 
 	// ─── Start Server ─────────────────────────────────────────────────────────

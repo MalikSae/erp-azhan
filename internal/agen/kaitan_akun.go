@@ -106,13 +106,15 @@ func cariAkunKaitan(ctx context.Context, q querier, brandID *int64, cari string)
 // dibuat akun ini dan masih terikat ke upline lama akun ini. Jamaah lain tidak disentuh: yang terikat ke
 // agen lain (datang lewat link agen lain, atau dibawa upline lama lewat akunnya sendiri) dan yang
 // kaitannya sudah dipilih admin per jamaah (jalur3). Ikatan jamaah terjadi sekali saat booking
-// pertamanya, jadi booking pertama menunjukkan dari akun mana ikatan itu berasal.
+// pertamanya, jadi booking pertama menunjukkan dari akun mana ikatan itu berasal. Booking yang masih draft
+// tidak dihitung: draft belum mengikat siapa pun (pengikatan baru terjadi saat finalisasi). Booking batal
+// tetap dihitung karena ikatannya sudah terjadi saat booking itu dibuat.
 const qJamaahIkutUpline = `
 	SELECT j.id FROM jamaah j
 	WHERE j.direkrut_oleh_akun_id = ? AND j.kaitan_status = 'terikat_agen'
 	  AND COALESCE(j.kaitan_sumber, '') <> 'jalur3'
 	  AND (SELECT b.customer_account_id FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
-	       WHERE bp.jamaah_id = j.id ORDER BY b.id LIMIT 1) = ?
+	       WHERE bp.jamaah_id = j.id AND b.status <> 'draft' ORDER BY b.id LIMIT 1) = ?
 	ORDER BY j.id`
 
 func jamaahIkutUpline(ctx context.Context, q querier, akunID, uplineLamaID int64, kunci bool) ([]int64, error) {
