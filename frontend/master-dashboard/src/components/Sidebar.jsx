@@ -21,6 +21,7 @@ import {
   UserRound,
   Wallet,
   Megaphone,
+  Sparkles,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { listPerubahanJamaah, EVENT_PERUBAHAN_JAMAAH, listPencairanAdmin, EVENT_PENCAIRAN_KOMISI } from 'shared';
@@ -128,6 +129,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, perm: 'masterdata.view' },
         { name: 'Destinasi', path: '/destinations', icon: Globe, perm: 'masterdata.view' },
         { name: 'Itinerary', path: '/itineraries', icon: MapPin, perm: 'masterdata.view' },
+        { name: 'Benefit Paket', path: '/benefits', icon: Sparkles, perm: 'masterdata.view' },
       ],
     },
     {

@@ -19,6 +19,7 @@ import { printItinerary } from '../utils/printItinerary';
 import { printPackage } from '../utils/printPackage';
 import Alert from 'shared/ui/Alert';
 import EmptyState from 'shared/ui/EmptyState';
+import BenefitIcon from 'shared/ui/BenefitIcon';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import SeatManagement from '../components/SeatManagement';
 import { AuthContext } from '../context/AuthContext';
@@ -583,6 +584,22 @@ const ScheduleDetailPage = () => {
               <ItineraryTimeline itinerary={itinerary} />
             ) : (
               <EmptyState variant="inline" message="Belum ada data itinerary untuk paket ini." />
+            )}
+          </Section>
+
+          <Section title="Highlight Benefit">
+            {(schedule.benefits || []).length > 0 ? (
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 font-body">
+                {schedule.benefits.map((b) => (
+                  <li key={b.id} className="flex items-center gap-3 text-sm text-neutral-900">
+                    <BenefitIcon name={b.ikon} className="shrink-0 text-neutral-700" />
+                    <span className="min-w-0 flex-1 truncate">{b.teks}</span>
+                    {b.is_active === false && <Badge variant="neutral">Nonaktif</Badge>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState variant="inline" message="Belum ada highlight benefit untuk paket ini." />
             )}
           </Section>
 

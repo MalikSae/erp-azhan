@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"erp-azhan/api/internal/benefit"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -147,6 +148,17 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errPublishLampau)
 		return
 	}
+	ids := []int64{}
+	if req.BenefitIDs != nil {
+		ids = *req.BenefitIDs
+	}
+	if !h.benefitSah(r.Context(), w, inp.BrandID, 0, ids) {
+		return
+	}
+	if !benefitCukup(w, inp.Status, len(ids)) {
+		return
+	}
+	inp.BenefitIDs = &ids
 	s, err := h.repo.Create(r.Context(), *inp)
 	if err != nil {
 		handleRepoError(w, err)
@@ -222,6 +234,30 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Highlight benefit: daftar baru bila dikirim, selain itu yang tersimpan. Paket yang dijual wajib 4.
+	jumlahBenefit := 0
+	if req.BenefitIDs != nil {
+		if !h.benefitSah(r.Context(), w, finalBrandID, id, *req.BenefitIDs) {
+			return
+		}
+		inp.BenefitIDs = req.BenefitIDs
+		jumlahBenefit = len(*req.BenefitIDs)
+	} else if finalBrandID != existing.BrandID {
+		// Benefit milik satu brand. Brand paket diganti tanpa daftar benefit baru: tautan lama dilepas,
+		// supaya paket tidak membawa benefit brand lain.
+		kosong := []int64{}
+		inp.BenefitIDs = &kosong
+	} else {
+		n, err := h.repo.JumlahBenefit(r.Context(), id)
+		if err != nil {
+			handleRepoError(w, err)
+			return
+		}
+		jumlahBenefit = n
+	}
+	if !benefitCukup(w, finalStatus, jumlahBenefit) {
+		return
+	}
 	inp.AlasanUbahTanggal = strings.TrimSpace(req.AlasanUbahTanggal)
 	if err := validateMaxLen("alasan_ubah_tanggal", inp.AlasanUbahTanggal, maxAlasanTanggal); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -271,6 +307,9 @@ func (h *Handler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Status == StatusPublished && s.BerangkatTanggal < todayWIB() {
 			writeError(w, http.StatusBadRequest, errPublishLampau)
+			return
+		}
+		if !benefitCukup(w, req.Status, len(s.Benefits)) {
 			return
 		}
 		if req.Status == StatusArchived && s.Status != StatusArchived {
@@ -849,6 +888,35 @@ func (h *Handler) bolehArsip(ctx context.Context, w http.ResponseWriter, id int6
 }
 
 // errPublishLampau: paket tidak boleh terbit bila keberangkatan sudah lewat (MP-04).
+// errBenefitKurang: paket yang tampil ke publik selalu membawa empat highlight benefit (keputusan 13 November
+// 2026). Draf boleh belum lengkap.
+const errBenefitKurang = "paket yang dijual wajib punya 4 highlight benefit"
+
+// benefitCukup menolak status published bila jumlah benefit bukan empat. Draf dan arsip tidak diperiksa.
+func benefitCukup(w http.ResponseWriter, status string, jumlah int) bool {
+	if status == StatusPublished && jumlah != benefit.JumlahPerPaket {
+		writeError(w, http.StatusBadRequest, errBenefitKurang)
+		return false
+	}
+	return true
+}
+
+// benefitSah memeriksa daftar benefit yang dipilih; pesan untuk pengguna ditulis sebagai 400.
+func (h *Handler) benefitSah(ctx context.Context, w http.ResponseWriter, brandID, scheduleID int64, ids []int64) bool {
+	err := h.repo.ValidasiBenefit(ctx, brandID, scheduleID, ids)
+	if err == nil {
+		return true
+	}
+	var pe benefit.PilihanError
+	if errors.As(err, &pe) {
+		writeError(w, http.StatusBadRequest, pe.Error())
+		return false
+	}
+	log.Printf("[ERROR] schedule: validasi benefit: %v", err)
+	writeError(w, http.StatusInternalServerError, "gagal memeriksa highlight benefit")
+	return false
+}
+
 const errPublishLampau = "paket dengan tanggal berangkat yang sudah lewat tidak dapat diterbitkan"
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
