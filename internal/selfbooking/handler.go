@@ -71,6 +71,17 @@ func getClientIP(r *http.Request) string {
 
 // CreateBooking POST /api/account/bookings (butuh sesi akun pelanggan).
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
+	h.buatBooking(w, r, true)
+}
+
+// CreateBookingApp POST /api/account/bookings-app: booking dari app Hana/Alsha (keputusan 14 November 2026).
+// App native tidak bisa menjalankan captcha web, jadi endpoint ini tanpa captcha. Pengguna app selalu sudah
+// masuk, dan pembatas yang sama tetap berlaku: per IP, booking harian per akun, dan hold seat per akun.
+func (h *Handler) CreateBookingApp(w http.ResponseWriter, r *http.Request) {
+	h.buatBooking(w, r, false)
+}
+
+func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptcha bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	clientIP := getClientIP(r)
 	if !h.bookingByIP.Take(clientIP) {
@@ -101,19 +112,8 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		req.PIC.NoHP = account.NoHP
 		req.PIC.Email = &account.Email
 	}
-	// Gate 1: Captcha. Opsional: tanpa TURNSTILE_SECRET_KEY gate ini dilewati, lihat turnstile.go.
-	if h.captcha.required() && strings.TrimSpace(req.CaptchaToken) == "" {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
-		return
-	}
-	valid, err := h.captcha.verify(r.Context(), strings.TrimSpace(req.CaptchaToken), clientIP)
-	if err != nil {
-		log.Printf("[ERROR] selfbooking captcha: %v", err)
-		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
-		return
-	}
-	if !valid {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+	// Gate 1: Captcha (web saja). Opsional: tanpa TURNSTILE_SECRET_KEY gate ini dilewati, lihat turnstile.go.
+	if pakaiCaptcha && !h.lolosCaptcha(w, r.Context(), req.CaptchaToken, clientIP) {
 		return
 	}
 
@@ -258,6 +258,26 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
+}
+
+// lolosCaptcha memeriksa token captcha booking web dan menulis galat bila gagal.
+func (h *Handler) lolosCaptcha(w http.ResponseWriter, ctx context.Context, token, clientIP string) bool {
+	token = strings.TrimSpace(token)
+	if h.captcha.required() && token == "" {
+		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+		return false
+	}
+	valid, err := h.captcha.verify(ctx, token, clientIP)
+	if err != nil {
+		log.Printf("[ERROR] selfbooking captcha: %v", err)
+		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
+		return false
+	}
+	if !valid {
+		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+		return false
+	}
+	return true
 }
 
 func writeError(w http.ResponseWriter, status int, msg string) {

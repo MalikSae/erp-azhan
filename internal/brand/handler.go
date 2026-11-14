@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
@@ -222,6 +223,11 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	req.City = sanitizeString(req.City)
 	req.Province = sanitizeString(req.Province)
 	req.GmapsURL = sanitizeString(req.GmapsURL)
+	req.JamKantor = sanitizeString(req.JamKantor)
+	if req.JamKantor != nil && utf8.RuneCountInString(*req.JamKantor) > 100 {
+		writeError(w, http.StatusBadRequest, "jam kantor maksimal 100 karakter")
+		return
+	}
 	req.Legalitas = sanitizeString(req.Legalitas)
 	req.PPIUNumber = sanitizeString(req.PPIUNumber)
 	req.PIHKNumber = sanitizeString(req.PIHKNumber)
@@ -383,6 +389,11 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	req.City = sanitizeString(req.City)
 	req.Province = sanitizeString(req.Province)
 	req.GmapsURL = sanitizeString(req.GmapsURL)
+	req.JamKantor = sanitizeString(req.JamKantor)
+	if req.JamKantor != nil && utf8.RuneCountInString(*req.JamKantor) > 100 {
+		writeError(w, http.StatusBadRequest, "jam kantor maksimal 100 karakter")
+		return
+	}
 	req.Legalitas = sanitizeString(req.Legalitas)
 	req.PPIUNumber = sanitizeString(req.PPIUNumber)
 	req.PIHKNumber = sanitizeString(req.PIHKNumber)
@@ -513,6 +524,7 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 		"city":                     b.City,
 		"province":                 b.Province,
 		"gmaps_url":                b.GmapsURL,
+		"jam_kantor":               b.JamKantor,
 		"legalitas":                legalInfo,
 		"legal_info":               legalInfo,
 		"ppiu_number":              b.PPIUNumber,
