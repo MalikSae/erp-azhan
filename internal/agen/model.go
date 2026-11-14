@@ -9,7 +9,9 @@ import (
 )
 
 var (
-	ErrNotFound                = errors.New("data tidak ditemukan")
+	ErrNotFound = errors.New("data tidak ditemukan")
+	// ErrMoUWajib: brand punya draft MoU agen dan pemohon belum menyetujuinya.
+	ErrMoUWajib                = errors.New("anda wajib membaca dan menyetujui MoU Agen")
 	ErrSudahMengajukan         = errors.New("anda sudah terdaftar atau sedang mengajukan sebagai agen")
 	ErrBukanPengajuan          = errors.New("akun ini tidak sedang mengajukan keagenan")
 	ErrStatusTidakValid        = errors.New("status agen hanya bisa diubah antara aktif dan nonaktif")
@@ -72,14 +74,16 @@ type Upload struct {
 
 // StatusPortal adalah state Syiar milik akun yang login (screen A1–A4).
 type StatusPortal struct {
-	StatusAgen           string      `json:"status_agen"`
-	KodeReferral         *string     `json:"kode_referral"`
-	FotoURL              *string     `json:"foto_url"`
-	Domisili             *string     `json:"domisili"`
-	BrandName            string      `json:"brand_name"`
-	BiayaPendaftaranAgen float64     `json:"biaya_pendaftaran_agen"`
-	NoWAAdminTravel      *string     `json:"no_wa_admin_travel"`
-	Pembayaran           *Pembayaran `json:"pembayaran"` // siklus terakhir, nil jika belum pernah
+	StatusAgen           string  `json:"status_agen"`
+	KodeReferral         *string `json:"kode_referral"`
+	FotoURL              *string `json:"foto_url"`
+	Domisili             *string `json:"domisili"`
+	BrandName            string  `json:"brand_name"`
+	BiayaPendaftaranAgen float64 `json:"biaya_pendaftaran_agen"`
+	NoWAAdminTravel      *string `json:"no_wa_admin_travel"`
+	// AkunJamaah: akun punya booking minimal DP; pengajuannya disetujui otomatis tanpa biaya (keputusan 14 November 2026).
+	AkunJamaah bool        `json:"akun_jamaah"`
+	Pembayaran *Pembayaran `json:"pembayaran"` // siklus terakhir, nil jika belum pernah
 }
 
 // Pengajuan adalah satu baris antrian Persetujuan Agen (screen B1).
@@ -108,6 +112,10 @@ type AjukanRequest struct {
 	JenisKelamin          string `json:"jenis_kelamin"` // L atau P
 	TanggalLahir          string `json:"tanggal_lahir"` // YYYY-MM-DD, minimal 17 tahun
 	SetujuSyaratKetentuan bool   `json:"setuju_syarat_ketentuan"`
+	// SetujuMoU wajib bila brand punya draft MoU agen (app, keputusan 14 November 2026); salinan MoU disimpan.
+	SetujuMoU bool `json:"setuju_mou"`
+	// FotoURL opsional: foto yang diunggah di form app (lewat /api/account/media/upload) menjadi foto profil akun.
+	FotoURL string `json:"foto_url"`
 }
 
 type BuktiRequest struct {

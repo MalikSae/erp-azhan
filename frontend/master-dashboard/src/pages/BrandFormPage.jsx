@@ -16,6 +16,7 @@ import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { getBrand, createBrand, updateBrand } from '../api/brands';
 import { uploadMedia } from '../api/media';
+import EditorTeks from '../components/EditorTeks';
 
 const SECTION_LINKS = [
   { id: 'sec-identitas', label: 'Identitas Brand' },
@@ -68,7 +69,10 @@ const initialFormData = {
   ujroh_closing: '',
   ujroh_pembinaan: '',
   ujroh_repeat_booking: '',
-  syarat_ketentuan_agen: ''
+  syarat_ketentuan_agen: '',
+  gambar_rekrutmen_agen: '',
+  benefit_agen: '',
+  mou_agen: ''
 };
 
 const BrandFormPage = () => {
@@ -134,7 +138,10 @@ const BrandFormPage = () => {
             ujroh_closing: data.ujroh_closing ? String(data.ujroh_closing) : '',
             ujroh_pembinaan: data.ujroh_pembinaan ? String(data.ujroh_pembinaan) : '',
             ujroh_repeat_booking: data.ujroh_repeat_booking ? String(data.ujroh_repeat_booking) : '',
-            syarat_ketentuan_agen: data.syarat_ketentuan_agen || ''
+            syarat_ketentuan_agen: data.syarat_ketentuan_agen || '',
+            gambar_rekrutmen_agen: data.gambar_rekrutmen_agen || '',
+            benefit_agen: data.benefit_agen || '',
+            mou_agen: data.mou_agen || ''
           });
         } catch (err) {
           if (err.response?.status === 404) {
@@ -222,6 +229,26 @@ const BrandFormPage = () => {
     }
   };
 
+  // Gambar rekrutmen agen: tampil di atas halaman Jadi Agen di app (16:9).
+  const [localGambarAgenPreview, setLocalGambarAgenPreview] = useState(null);
+  const [isUploadingGambarAgen, setIsUploadingGambarAgen] = useState(false);
+  const handleGambarAgenUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setLocalGambarAgenPreview(URL.createObjectURL(file));
+    setIsUploadingGambarAgen(true);
+    setFormErrors(null);
+    try {
+      const url = await uploadMedia(file, 'brand-og');
+      setFormData(prev => ({ ...prev, gambar_rekrutmen_agen: url }));
+    } catch (err) {
+      console.error(err);
+      setFormErrors('Gagal mengunggah gambar rekrutmen agen.');
+    } finally {
+      setIsUploadingGambarAgen(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormErrors(null);
@@ -285,6 +312,9 @@ const BrandFormPage = () => {
         ujroh_pembinaan: Number(String(formData.ujroh_pembinaan).replace(/\D/g, '')) || 0,
         ujroh_repeat_booking: Number(String(formData.ujroh_repeat_booking).replace(/\D/g, '')) || 0,
         syarat_ketentuan_agen: formData.syarat_ketentuan_agen ? formData.syarat_ketentuan_agen.trim() : null,
+        gambar_rekrutmen_agen: formData.gambar_rekrutmen_agen || null,
+        benefit_agen: formData.benefit_agen ? formData.benefit_agen.trim() : null,
+        mou_agen: formData.mou_agen ? formData.mou_agen.trim() : null,
         no_wa_admin_travel: formData.no_wa_admin_travel ? formData.no_wa_admin_travel.trim() : null,
         // Wajib dikirim: backend menyimpan minimal_dp apa adanya, jadi field
         // yang tidak terkirim akan me-reset nilainya ke 0.
@@ -688,7 +718,7 @@ const BrandFormPage = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <CustomDropdown
-                  label="Biaya Pendaftaran"
+                  label="Biaya Komitmen Agen"
                   value={formData.biaya_mode}
                   onChange={(val) => setFormData(prev => ({ ...prev, biaya_mode: val }))}
                   options={[
@@ -736,14 +766,47 @@ const BrandFormPage = () => {
                 booking dibuat.
               </p>
 
+              <FileInput
+                label="Gambar Rekrutmen Agen (16:9)"
+                value={formData.gambar_rekrutmen_agen}
+                previewUrl={localGambarAgenPreview}
+                onChange={handleGambarAgenUpload}
+                onRemove={() => {
+                  setLocalGambarAgenPreview(null);
+                  setFormData(prev => ({ ...prev, gambar_rekrutmen_agen: '' }));
+                }}
+                isUploading={isUploadingGambarAgen}
+                uploadingText="Mengunggah gambar..."
+                placeholder="Pilih file..."
+              />
+              <p className="-mt-2 text-xs text-neutral-500 font-body">Tampil di atas halaman Jadi Agen di aplikasi. Kosongkan bila belum ada.</p>
+
               <Textarea
-                label="Syarat & Ketentuan"
-                name="syarat_ketentuan_agen"
-                value={formData.syarat_ketentuan_agen}
+                label="Benefit Agen"
+                name="benefit_agen"
+                value={formData.benefit_agen}
                 onChange={handleChange}
-                placeholder="Syarat dan ketentuan yang disetujui agen saat mendaftar..."
-                rows={8}
+                placeholder={'Komisi langsung untuk setiap jamaah yang Anda ajak\nBonus pembinaan dari agen binaan\nTautan referral pribadi'}
+                rows={5}
+                maxLength={3000}
                 className="!mb-0"
+              />
+              <p className="-mt-2 text-xs text-neutral-500 font-body">Satu benefit per baris. Tampil sebagai daftar di halaman Jadi Agen.</p>
+
+              <EditorTeks
+                label="Syarat & Ketentuan Agen"
+                value={formData.syarat_ketentuan_agen}
+                onChange={(html) => setFormData(prev => ({ ...prev, syarat_ketentuan_agen: html }))}
+                placeholder="Syarat dan ketentuan yang disetujui agen saat mendaftar..."
+              />
+
+              <EditorTeks
+                label="Draft MoU Agen"
+                value={formData.mou_agen}
+                onChange={(html) => setFormData(prev => ({ ...prev, mou_agen: html }))}
+                placeholder="Isi MoU yang dibaca calon agen sebelum mendaftar..."
+                helpText="Calon agen wajib membaca dan menyetujui MoU ini. Salinan MoU yang disetujui tersimpan di pengajuannya."
+                minTinggi="min-h-64"
               />
             </div>
           </FormSection>
