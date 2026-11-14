@@ -45,6 +45,7 @@ const initialFormData = {
   city: '',
   province: '',
   gmaps_url: '',
+  jam_kantor: '',
   ppiu_number: '',
   pihk_number: '',
   bank_name: '',
@@ -110,6 +111,7 @@ const BrandFormPage = () => {
             city: data.city || '',
             province: data.province || '',
             gmaps_url: data.gmaps_url || '',
+            jam_kantor: data.jam_kantor || '',
             ppiu_number: data.ppiu_number || '',
             pihk_number: data.pihk_number || '',
             bank_name: data.bank_name || '',
@@ -259,6 +261,7 @@ const BrandFormPage = () => {
         city: formData.city ? formData.city.trim() : null,
         province: formData.province ? formData.province.trim() : null,
         gmaps_url: formData.gmaps_url ? formData.gmaps_url.trim() : null,
+        jam_kantor: formData.jam_kantor ? formData.jam_kantor.trim() : null,
         ppiu_number: formData.ppiu_number ? formData.ppiu_number.trim() : null,
         pihk_number: formData.pihk_number ? formData.pihk_number.trim() : null,
         bank_name: formData.bank_name ? formData.bank_name.trim() : null,
@@ -528,6 +531,17 @@ const BrandFormPage = () => {
                   value={formData.gmaps_url}
                   onChange={handleChange}
                   placeholder="https://maps.google.com/..."
+                  className="!mb-0"
+                />
+
+                <Input
+                  label="Jam Kantor"
+                  name="jam_kantor"
+                  value={formData.jam_kantor}
+                  onChange={handleChange}
+                  placeholder="Senin–Sabtu, 08.00–17.00 WIB"
+                  maxLength={100}
+                  helpText="Tampil di layar pembayaran tunai pada aplikasi."
                   className="!mb-0"
                 />
 

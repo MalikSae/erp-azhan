@@ -294,6 +294,7 @@ func main() {
 		r.Put("/jamaah/{id}", jamaahAkunHandler.Simpan)
 		r.Get("/bookings", customerOrders.List)
 		r.Post("/bookings", selfBookingHandler.CreateBooking)
+		r.Post("/bookings-app", selfBookingHandler.CreateBookingApp)
 		r.Get("/bookings/{id}", customerOrders.Detail)
 		r.Post("/bookings/{id}/cancel", customerOrders.Cancel)
 		r.Get("/bookings/{id}/dokumen", customerOrders.Dokumen)

@@ -16,6 +16,8 @@ type Brand struct {
 	City                   *string   `json:"city"`
 	Province               *string   `json:"province"`
 	GmapsURL               *string   `json:"gmaps_url"`
+	// JamKantor: jam kerja kantor (teks bebas), tampil di layar bayar tunai app.
+	JamKantor              *string   `json:"jam_kantor"`
 	Legalitas              *string   `json:"legalitas"`
 	PPIUNumber             *string   `json:"ppiu_number"`
 	PIHKNumber             *string   `json:"pihk_number"`
@@ -59,6 +61,7 @@ type CreateBrandRequest struct {
 	City                   *string `json:"city"`
 	Province               *string `json:"province"`
 	GmapsURL               *string `json:"gmaps_url"`
+	JamKantor              *string `json:"jam_kantor"`
 	Legalitas              *string `json:"legalitas"`
 	PPIUNumber             *string `json:"ppiu_number"`
 	PIHKNumber             *string `json:"pihk_number"`
@@ -101,6 +104,7 @@ type UpdateBrandRequest struct {
 	City                   *string `json:"city"`
 	Province               *string `json:"province"`
 	GmapsURL               *string `json:"gmaps_url"`
+	JamKantor              *string `json:"jam_kantor"`
 	Legalitas              *string `json:"legalitas"`
 	PPIUNumber             *string `json:"ppiu_number"`
 	PIHKNumber             *string `json:"pihk_number"`
