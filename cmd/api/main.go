@@ -239,6 +239,7 @@ func main() {
 		r.Use(requireDB(db))
 		r.Post("/register", customerHandler.Register)
 		r.Post("/register-agen", customerHandler.RegisterAgen)
+		r.Post("/register-app", customerHandler.RegisterApp)
 		r.Post("/login", customerHandler.Login)
 		r.Post("/forgot-password", customerHandler.ForgotPassword)
 		r.Post("/reset-password", customerHandler.ResetPassword)
