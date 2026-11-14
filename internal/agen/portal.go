@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/komisi"
@@ -60,12 +61,24 @@ type UjrohPublik struct {
 	BonusPembinaan       *Rentang `json:"bonus_pembinaan"`
 	BiayaPendaftaranAgen float64  `json:"biaya_pendaftaran_agen"`
 	SyaratKetentuanAgen  *string  `json:"syarat_ketentuan_agen"`
+	// Konten halaman Jadi Agen di app, diatur admin di form Brand: gambar rekrutmen (URL relatif ke API), benefit
+	// (satu per butir), dan draft MoU (HTML terbatas). S&K juga HTML terbatas; teks lama tanpa tag tetap terbaca.
+	GambarRekrutmenAgen *string  `json:"gambar_rekrutmen_agen"`
+	BenefitAgen         []string `json:"benefit_agen"`
+	MouAgen             *string  `json:"mou_agen"`
 }
 
 func rentangUjroh(ctx context.Context, q querier, brandID int64) (*UjrohPublik, error) {
 	u := UjrohPublik{BrandID: brandID}
-	err := q.QueryRowContext(ctx, `SELECT biaya_pendaftaran_agen, syarat_ketentuan_agen FROM brands WHERE id = ?`, brandID).
-		Scan(&u.BiayaPendaftaranAgen, &u.SyaratKetentuanAgen)
+	var benefit sql.NullString
+	err := q.QueryRowContext(ctx, `SELECT biaya_pendaftaran_agen, syarat_ketentuan_agen, gambar_rekrutmen_agen, benefit_agen, mou_agen FROM brands WHERE id = ?`, brandID).
+		Scan(&u.BiayaPendaftaranAgen, &u.SyaratKetentuanAgen, &u.GambarRekrutmenAgen, &benefit, &u.MouAgen)
+	u.BenefitAgen = []string{}
+	for _, b := range strings.Split(benefit.String, "\n") {
+		if t := strings.TrimSpace(b); t != "" {
+			u.BenefitAgen = append(u.BenefitAgen, t)
+		}
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

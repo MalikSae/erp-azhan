@@ -45,6 +45,11 @@ type Brand struct {
 	UjrohPembinaan         float64   `json:"ujroh_pembinaan"`
 	UjrohRepeatBooking     float64   `json:"ujroh_repeat_booking"`
 	SyaratKetentuanAgen    *string   `json:"syarat_ketentuan_agen"`
+	// Konten halaman Jadi Agen di app (keputusan 14 November 2026): gambar rekrutmen, benefit (satu per baris),
+	// dan draft MoU (HTML terbatas dari editor admin, seperti syarat_ketentuan_agen).
+	GambarRekrutmenAgen    *string   `json:"gambar_rekrutmen_agen"`
+	BenefitAgen            *string   `json:"benefit_agen"`
+	MouAgen                *string   `json:"mou_agen"`
 	NoWAAdminTravel        *string   `json:"no_wa_admin_travel"`
 	CreatedAt              time.Time `json:"created_at"`
 }
@@ -89,6 +94,9 @@ type CreateBrandRequest struct {
 	UjrohPembinaan         float64 `json:"ujroh_pembinaan"`
 	UjrohRepeatBooking     float64 `json:"ujroh_repeat_booking"`
 	SyaratKetentuanAgen    *string `json:"syarat_ketentuan_agen"`
+	GambarRekrutmenAgen    *string `json:"gambar_rekrutmen_agen"`
+	BenefitAgen            *string `json:"benefit_agen"`
+	MouAgen                *string `json:"mou_agen"`
 	NoWAAdminTravel        *string `json:"no_wa_admin_travel"`
 }
 
@@ -132,5 +140,8 @@ type UpdateBrandRequest struct {
 	UjrohPembinaan         float64 `json:"ujroh_pembinaan"`
 	UjrohRepeatBooking     float64 `json:"ujroh_repeat_booking"`
 	SyaratKetentuanAgen    *string `json:"syarat_ketentuan_agen"`
+	GambarRekrutmenAgen    *string `json:"gambar_rekrutmen_agen"`
+	BenefitAgen            *string `json:"benefit_agen"`
+	MouAgen                *string `json:"mou_agen"`
 	NoWAAdminTravel        *string `json:"no_wa_admin_travel"`
 }

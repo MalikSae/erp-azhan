@@ -99,6 +99,9 @@ func getStatusPortal(ctx context.Context, q querier, akunID int64) (*StatusPorta
 	if err != nil {
 		return nil, fmt.Errorf("agen.GetStatusPortal: %w", err)
 	}
+	if s.AkunJamaah, err = akunJamaah(ctx, q, akunID); err != nil {
+		return nil, err
+	}
 	if s.Pembayaran, err = latestPembayaran(ctx, q, akunID); err != nil {
 		return nil, err
 	}
@@ -116,10 +119,11 @@ func ajukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) 
 	var status string
 	var brandID int64
 	var biaya float64
+	var mou sql.NullString
 	err := tx.QueryRowContext(ctx, `
-		SELECT j.status_agen, j.brand_id, b.biaya_pendaftaran_agen
+		SELECT j.status_agen, j.brand_id, b.biaya_pendaftaran_agen, b.mou_agen
 		FROM customer_accounts j JOIN brands b ON b.id = j.brand_id
-		WHERE j.id = ? FOR UPDATE`, akunID).Scan(&status, &brandID, &biaya)
+		WHERE j.id = ? FOR UPDATE`, akunID).Scan(&status, &brandID, &biaya, &mou)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -128,6 +132,10 @@ func ajukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) 
 	}
 	if status != StatusAgenTidakAktif {
 		return ErrSudahMengajukan
+	}
+	adaMoU := mou.Valid && strings.TrimSpace(mou.String) != ""
+	if adaMoU && !req.SetujuMoU {
+		return ErrMoUWajib
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -140,19 +148,55 @@ func ajukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) 
 		}
 		return fmt.Errorf("agen.Ajukan update akun: %w", err)
 	}
+	if req.FotoURL != "" {
+		if _, err := tx.ExecContext(ctx, `UPDATE customer_accounts SET foto_url = ? WHERE id = ?`, req.FotoURL, akunID); err != nil {
+			return fmt.Errorf("agen.Ajukan foto: %w", err)
+		}
+	}
+	// Akun jamaah (booking minimal DP) langsung aktif tanpa biaya (keputusan 14 November 2026).
+	jamaah, err := akunJamaah(ctx, tx, akunID)
+	if err != nil {
+		return err
+	}
 
 	// Biaya Rp0: langkah pembayaran dilewati, status langsung terverifikasi
 	// tanpa diverifikasi_oleh (dianggap otomatis oleh sistem).
 	statusBayar := "menunggu_verifikasi"
-	if biaya <= 0 {
+	var catatan *string
+	switch {
+	case jamaah && biaya > 0:
+		statusBayar = "dibebaskan"
+		c := catatanOtomatisJamaah
+		catatan = &c
+	case biaya <= 0:
 		statusBayar = "terverifikasi"
 	}
+	var mouSalinan *string
+	if adaMoU {
+		mouSalinan = &mou.String
+	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO pembayaran_pendaftaran_agen (akun_id, brand_id, nominal_tagihan, status)
-		VALUES (?, ?, ?, ?)`, akunID, brandID, biaya, statusBayar); err != nil {
+		INSERT INTO pembayaran_pendaftaran_agen (akun_id, brand_id, nominal_tagihan, status, catatan_admin, mou_disetujui, mou_disetujui_at, disetujui_otomatis)
+		VALUES (?, ?, ?, ?, ?, ?, IF(? IS NULL, NULL, NOW()), ?)`, akunID, brandID, biaya, statusBayar, catatan, mouSalinan, mouSalinan, jamaah); err != nil {
 		return fmt.Errorf("agen.Ajukan insert pembayaran: %w", err)
 	}
+	if jamaah {
+		return setujuiTx(ctx, tx, akunID, nil, 0)
+	}
 	return nil
+}
+
+// catatanOtomatisJamaah: catatan admin pada tagihan yang dibebaskan sistem untuk akun jamaah.
+const catatanOtomatisJamaah = "Dibebaskan otomatis: akun jamaah (booking minimal DP)."
+
+// akunJamaah melaporkan akun yang punya booking dengan pembayaran minimal DP (status dp atau lunas, termasuk yang
+// sudah berangkat). Definisi "akun jamaah" untuk pendaftaran agen (keputusan 14 November 2026).
+func akunJamaah(ctx context.Context, q querier, akunID int64) (bool, error) {
+	var ada bool
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM bookings WHERE customer_account_id = ? AND status IN ('dp', 'lunas'))`, akunID).Scan(&ada); err != nil {
+		return false, fmt.Errorf("agen: cek akun jamaah: %w", err)
+	}
+	return ada, nil
 }
 
 // uploadBuktiAkunTx mencatat bukti transfer dari pemohon untuk siklus terakhirnya.
@@ -283,7 +327,7 @@ func setujuiTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, ad
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE customer_accounts SET status_agen = 'aktif', kode_referral = ?, upline_akun_id = direkrut_oleh_akun_id,
-		       disetujui_agen_at = NOW(), disetujui_agen_oleh = ?
+		       disetujui_agen_at = NOW(), disetujui_agen_oleh = NULLIF(?, 0)
 		WHERE id = ?`, kode.String, adminID, akunID); err != nil {
 		return fmt.Errorf("agen.Setujui update: %w", err)
 	}

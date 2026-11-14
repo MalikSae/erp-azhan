@@ -92,6 +92,22 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	akunID := identity.GetCustomerAccountID(r.Context())
+	// Foto dari form app: harus unggahan akun ini sendiri (sama seperti PUT /api/account/foto).
+	req.FotoURL = strings.TrimSpace(req.FotoURL)
+	if req.FotoURL != "" {
+		ok := FotoPortalURL.MatchString(req.FotoURL)
+		if ok {
+			var err error
+			if ok, err = mediaMilikAkun(r.Context(), h.repo.db, akunID, req.FotoURL); err != nil {
+				handleError(w, err)
+				return
+			}
+		}
+		if !ok {
+			writeError(w, http.StatusBadRequest, "foto wajib berupa gambar yang diunggah dari akun Anda")
+			return
+		}
+	}
 	if err := h.repo.Ajukan(r.Context(), akunID, req); err != nil {
 		handleError(w, err)
 		return
@@ -301,7 +317,7 @@ func handleError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrTidakAdaPengajuan), errors.Is(err, ErrAksiTidakValid), errors.Is(err, ErrCatatanWajib),
-		errors.Is(err, ErrNIKAgenTidakValid), errors.Is(err, ErrNIKAgenTidakBisaDipakai):
+		errors.Is(err, ErrNIKAgenTidakValid), errors.Is(err, ErrNIKAgenTidakBisaDipakai), errors.Is(err, ErrMoUWajib):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrStatusTidakValid), errors.Is(err, ErrAlasanStatusWajib):
 		writeError(w, http.StatusBadRequest, err.Error())

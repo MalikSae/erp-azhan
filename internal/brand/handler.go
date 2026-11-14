@@ -150,6 +150,9 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.SyaratKetentuanAgen = sanitizeString(req.SyaratKetentuanAgen)
+	if !rapikanKontenAgen(w, &req.SyaratKetentuanAgen, &req.GambarRekrutmenAgen, &req.BenefitAgen, &req.MouAgen) {
+		return
+	}
 	if req.BatasPelunasanHari == 0 {
 		req.BatasPelunasanHari = 30
 	}
@@ -316,6 +319,9 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.SyaratKetentuanAgen = sanitizeString(req.SyaratKetentuanAgen)
+	if !rapikanKontenAgen(w, &req.SyaratKetentuanAgen, &req.GambarRekrutmenAgen, &req.BenefitAgen, &req.MouAgen) {
+		return
+	}
 	if req.BatasPelunasanHari == 0 {
 		req.BatasPelunasanHari = 30
 	}
@@ -654,6 +660,61 @@ func normalizeAgenSettings(w http.ResponseWriter, biaya *float64, noWA **string)
 			return false
 		}
 		*noWA = &canonical
+	}
+	return true
+}
+
+// Batas konten halaman Jadi Agen. MoU dan S&K bisa panjang, tetapi tetap dibatasi supaya badan permintaan wajar.
+const (
+	maksBenefitAgen   = 3000
+	maksHTMLAgen      = 200000
+	maksGambarAgenURL = 500
+)
+
+// rapikanKontenAgen membersihkan konten agen dari form Brand: S&K dan MoU menjadi HTML terbatas (lihat
+// shared.SanitasiHTML; isi kosong dari editor disimpan NULL), benefit dirapikan per baris, dan gambar rekrutmen
+// harus unggahan ERP (/uploads/...) atau URL https. false berarti jawaban galat sudah ditulis.
+func rapikanKontenAgen(w http.ResponseWriter, sk, gambar, benefit, mou **string) bool {
+	for _, p := range []**string{sk, mou} {
+		if *p == nil {
+			continue
+		}
+		bersih := shared.SanitasiHTML(**p)
+		if shared.HTMLKosong(bersih) {
+			*p = nil
+			continue
+		}
+		if len(bersih) > maksHTMLAgen {
+			writeError(w, http.StatusBadRequest, "syarat & ketentuan atau MoU agen terlalu panjang")
+			return false
+		}
+		*p = &bersih
+	}
+	if *benefit != nil {
+		var baris []string
+		for _, b := range strings.Split(**benefit, "\n") {
+			if t := strings.TrimSpace(b); t != "" {
+				baris = append(baris, t)
+			}
+		}
+		gabung := strings.Join(baris, "\n")
+		if utf8.RuneCountInString(gabung) > maksBenefitAgen {
+			writeError(w, http.StatusBadRequest, "benefit agen maksimal 3000 karakter")
+			return false
+		}
+		if gabung == "" {
+			*benefit = nil
+		} else {
+			*benefit = &gabung
+		}
+	}
+	*gambar = sanitizeString(*gambar)
+	if *gambar != nil {
+		g := **gambar
+		if len(g) > maksGambarAgenURL || !(strings.HasPrefix(g, "/uploads/") || strings.HasPrefix(g, "https://")) {
+			writeError(w, http.StatusBadRequest, "gambar rekrutmen agen harus diunggah lewat ERP")
+			return false
+		}
 	}
 	return true
 }
