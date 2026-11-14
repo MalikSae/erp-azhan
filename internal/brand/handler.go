@@ -537,8 +537,10 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 		"og_image_url":             b.OgImageURL,
 		"google_verification_code": b.GoogleVerificationCode,
 		"minimal_dp":               b.MinimalDP,
-		"ketentuan_pembatalan":     b.KetentuanPembatalan,
-		"social_media":             socialMedia,
+		// Hari sebelum berangkat saat pelunasan jatuh tempo; app memakainya untuk aturan bayar lunas.
+		"batas_pelunasan_hari": b.BatasPelunasanHari,
+		"ketentuan_pembatalan": b.KetentuanPembatalan,
+		"social_media":         socialMedia,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
