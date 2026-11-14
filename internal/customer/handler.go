@@ -142,6 +142,23 @@ func validateDomisiliLahir(domisili, tanggalLahir *string, sekarang time.Time) s
 	return ""
 }
 
+// biodataDaftar merapikan dan memeriksa biodata opsional saat daftar. Mengembalikan biodata yang sudah dirapikan,
+// atau pesan galat untuk pengguna.
+func biodataDaftar(jenisKelamin, domisili, tanggalLahir string, sekarang time.Time) (Biodata, string) {
+	bio := Biodata{
+		JenisKelamin: strings.ToUpper(strings.TrimSpace(jenisKelamin)),
+		Domisili:     strings.TrimSpace(domisili),
+		TanggalLahir: strings.TrimSpace(tanggalLahir),
+	}
+	if bio.JenisKelamin != "" && bio.JenisKelamin != "L" && bio.JenisKelamin != "P" {
+		return Biodata{}, "jenis kelamin harus L atau P"
+	}
+	if msg := validateDomisiliLahir(&bio.Domisili, &bio.TanggalLahir, sekarang); msg != "" {
+		return Biodata{}, msg
+	}
+	return bio, ""
+}
+
 func validateProfile(nama, email, noHP string) string {
 	switch {
 	case !ValidName(nama):
@@ -164,6 +181,11 @@ type registerRequest struct {
 	// KodeReferral diisi route handler web publik dari cookie azhan_ref (klik terakhir, 90 hari), bukan dari input
 	// pengguna. Hanya dibaca di sini, saat akun dibuat: akun terikat ke agen pemilik kode (spek 4.1).
 	KodeReferral string `json:"kode_referral"`
+	// Biodata opsional (dipakai form daftar app, keputusan 14 November 2026): jenis kelamin L/P, domisili,
+	// dan tanggal lahir YYYY-MM-DD. Kosong = tidak diisi.
+	JenisKelamin string `json:"jenis_kelamin"`
+	Domisili     string `json:"domisili"`
+	TanggalLahir string `json:"tanggal_lahir"`
 }
 
 // modeDaftar membedakan pendaftaran akun biasa dari pendaftaran lewat form agen (K2): form agen tanpa captcha.
@@ -174,6 +196,13 @@ type modeDaftar struct {
 // Register POST /api/public/auth/register
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	h.daftar(w, r, modeDaftar{captcha: true})
+}
+
+// RegisterApp POST /api/public/auth/register-app: daftar dari app Hana/Alsha. App native tidak bisa menjalankan
+// captcha web, jadi endpoint ini tanpa captcha dan hanya dibatasi pembatas per IP (keputusan 14 November 2026).
+// Verifikasi perangkat (Play Integrity / App Attest) direncanakan sebelum rilis di toko aplikasi.
+func (h *Handler) RegisterApp(w http.ResponseWriter, r *http.Request) {
+	h.daftar(w, r, modeDaftar{})
 }
 
 // RegisterAgen POST /api/public/auth/register-agen: akun untuk calon agen. Pembatas per IP tetap berlaku.
@@ -222,13 +251,18 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	bio, msg := biodataDaftar(req.JenisKelamin, req.Domisili, req.TanggalLahir, time.Now())
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
 		log.Printf("[ERROR] customer hash: %v", err)
 		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
 		return
 	}
-	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), req.KodeReferral)
+	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), req.KodeReferral, bio)
 	if errors.Is(err, ErrEmailTaken) {
 		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
 		// Penebakan email tetap dibatasi captcha + registerIPLimit.

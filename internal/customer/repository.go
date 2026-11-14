@@ -50,6 +50,13 @@ type Account struct {
 	passwordHash string
 }
 
+// Biodata adalah isian opsional saat daftar. String kosong disimpan sebagai NULL.
+type Biodata struct {
+	JenisKelamin string // L atau P
+	Domisili     string
+	TanggalLahir string // YYYY-MM-DD
+}
+
 type Repository struct{ db *sql.DB }
 
 func NewRepository(db *sql.DB) *Repository { return &Repository{db: db} }
@@ -102,14 +109,16 @@ func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 
 // Create membuat akun. kodeReferral (cookie azhan_ref) diselesaikan menjadi agen aktif pemilik kode di brand yang
 // sama dan disimpan sebagai direkrut_oleh_akun_id; kode kosong, tidak dikenal, atau milik agen nonaktif diabaikan.
-func (r *Repository) Create(ctx context.Context, brandID int64, nama, email, noHP, passwordHash, kodeReferral string) (*Account, error) {
+func (r *Repository) Create(ctx context.Context, brandID int64, nama, email, noHP, passwordHash, kodeReferral string, bio Biodata) (*Account, error) {
 	agenID, err := agen.ResolveKodeReferral(ctx, r.db, brandID, kodeReferral)
 	if err != nil {
 		return nil, err
 	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash, direkrut_oleh_akun_id) VALUES (?,?,?,?,?,?,?)`,
-		brandID, nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, passwordHash, nullableAgen(agenID))
+		`INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash, direkrut_oleh_akun_id,
+		 jenis_kelamin, domisili, tanggal_lahir) VALUES (?,?,?,?,?,?,?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''))`,
+		brandID, nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, passwordHash, nullableAgen(agenID),
+		bio.JenisKelamin, bio.Domisili, bio.TanggalLahir)
 	if err != nil {
 		return nil, mapDuplicate(err, "create account")
 	}
