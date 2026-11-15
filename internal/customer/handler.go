@@ -393,7 +393,8 @@ func buildMeView(ctx context.Context, q rowQuerier, a *Account) meView {
 	if a != nil && a.JamaahID != nil {
 		var jk, nik sql.NullString
 		if err := q.QueryRowContext(ctx, `SELECT jenis_kelamin, nik FROM jamaah WHERE id=?`, *a.JamaahID).Scan(&jk, &nik); err == nil {
-			if jk.String != "" {
+			// Jenis kelamin akun (diisi saat daftar, bisa diubah di Pengaturan app) diutamakan; data jamaah cadangan.
+			if view.JenisKelamin == "" && jk.String != "" {
 				view.JenisKelamin = jk.String
 			}
 			view.NIKMasked = MaskNIK(nik.String)
@@ -416,6 +417,8 @@ type updateProfileRequest struct {
 	NoHP         string  `json:"no_hp"`
 	Domisili     *string `json:"domisili"`
 	TanggalLahir *string `json:"tanggal_lahir"`
+	// JenisKelamin opsional: "L" atau "P"; tidak dikirim = tidak berubah.
+	JenisKelamin *string `json:"jenis_kelamin"`
 	// PasswordSaatIni wajib bila email diganti: sesi yang dicuri tidak cukup untuk memindahkan akun ke email lain.
 	PasswordSaatIni string `json:"password_saat_ini"`
 }
@@ -467,6 +470,14 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	if req.JenisKelamin != nil {
+		jk := strings.ToUpper(strings.TrimSpace(*req.JenisKelamin))
+		if jk != "L" && jk != "P" {
+			writeError(w, http.StatusBadRequest, "jenis kelamin harus L atau P")
+			return
+		}
+		req.JenisKelamin = &jk
+	}
 	gantiEmail := NormalizeEmail(req.Email) != NormalizeEmail(acc.Email)
 	if gantiEmail && !h.cekPasswordSaatIni(w, acc, req.PasswordSaatIni) {
 		return
@@ -477,7 +488,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir)
+	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir, req.JenisKelamin)
 	if errors.Is(err, ErrEmailTaken) {
 		writeError(w, http.StatusConflict, "email ini tidak dapat digunakan, coba email lain")
 		return

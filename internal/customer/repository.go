@@ -27,23 +27,23 @@ var (
 )
 
 const (
-	SessionTTL        = 30 * 24 * time.Hour
-	ResetTokenTTL     = time.Hour
-	PurposeResetPass  = "reset_password"
+	SessionTTL       = 30 * 24 * time.Hour
+	ResetTokenTTL    = time.Hour
+	PurposeResetPass = "reset_password"
 )
 
 type Account struct {
-	ID              int64      `json:"id"`
-	BrandID         int64      `json:"brand_id"`
-	NamaLengkap     string     `json:"nama_lengkap"`
-	Email           string     `json:"email"`
-	NoHP            string     `json:"no_hp"`
-	JamaahID        *int64     `json:"-"`
+	ID          int64  `json:"id"`
+	BrandID     int64  `json:"brand_id"`
+	NamaLengkap string `json:"nama_lengkap"`
+	Email       string `json:"email"`
+	NoHP        string `json:"no_hp"`
+	JamaahID    *int64 `json:"-"`
 	// Status keagenan akun (spek 6.3) dan kode referral bila sudah pernah disetujui.
 	StatusAgen   string  `json:"status_agen"`
 	KodeReferral *string `json:"kode_referral"`
 	// FotoURL: foto profil akun (privat, disajikan lewat GET /api/account/foto).
-	FotoURL      *string `json:"foto_url"`
+	FotoURL *string `json:"foto_url"`
 	// Domisili (kota atau kabupaten) dan tanggal lahir (YYYY-MM-DD): opsional, diisi pemilik akun di Profil.
 	Domisili     *string `json:"domisili"`
 	TanggalLahir *string `json:"tanggal_lahir"`
@@ -140,9 +140,12 @@ func mapDuplicate(err error, op string) error {
 
 // UpdateProfile mengganti nama, email, dan nomor WhatsApp akun.
 // domisili dan tanggalLahir: nil = tidak berubah, string kosong = dihapus.
-func (r *Repository) UpdateProfile(ctx context.Context, id int64, nama, email, noHP string, domisili, tanggalLahir *string) error {
-	var ubahDom, ubahLahir bool
-	var dom, lahir string
+func (r *Repository) UpdateProfile(ctx context.Context, id int64, nama, email, noHP string, domisili, tanggalLahir, jenisKelamin *string) error {
+	var ubahDom, ubahLahir, ubahJK bool
+	var dom, lahir, jk string
+	if jenisKelamin != nil {
+		ubahJK, jk = true, *jenisKelamin
+	}
 	if domisili != nil {
 		ubahDom, dom = true, *domisili
 	}
@@ -152,8 +155,9 @@ func (r *Repository) UpdateProfile(ctx context.Context, id int64, nama, email, n
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE customer_accounts SET
 		 nama_lengkap=?, email=?, email_normal=?, no_hp=?,
-		 domisili = IF(?, NULLIF(?, ''), domisili), tanggal_lahir = IF(?, NULLIF(?, ''), tanggal_lahir) WHERE id=?`,
-		nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, ubahDom, dom, ubahLahir, lahir, id)
+		 domisili = IF(?, NULLIF(?, ''), domisili), tanggal_lahir = IF(?, NULLIF(?, ''), tanggal_lahir),
+		 jenis_kelamin = IF(?, ?, jenis_kelamin) WHERE id=?`,
+		nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, ubahDom, dom, ubahLahir, lahir, ubahJK, jk, id)
 	if err != nil {
 		return mapDuplicate(err, "update profile")
 	}
