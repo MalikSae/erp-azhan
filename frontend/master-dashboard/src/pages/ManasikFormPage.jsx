@@ -71,10 +71,10 @@ const ManasikFormPage = () => {
     try {
       if (isEdit) {
         await updateManasik(id, payload);
-        navigate(`/manasik/${id}`, { state: { successMessage: 'Manasik diperbarui.' } });
+        navigate(`/manasik/${id}`, { state: { successMessage: 'Manasik disimpan.' } });
       } else {
         const d = await createManasik({ ...payload, schedule_ids: scheduleIds });
-        navigate(`/manasik/${d.manasik.id}`, { state: { successMessage: 'Manasik dibuat dan tampil di app untuk jamaah paket terkait.' } });
+        navigate(`/manasik/${d.manasik.id}`, { state: { successMessage: 'Manasik dibuat.' } });
       }
     } catch (err) {
       setErrorMessage(err.response?.data?.error || 'Gagal menyimpan manasik.');
@@ -113,7 +113,7 @@ const ManasikFormPage = () => {
               rows={6}
               value={form.agenda}
               onChange={ubah('agenda')}
-              helpText="Satu butir per baris, maksimal 30 butir."
+              helpText="Satu butir per baris."
               placeholder={'08.00 Pembukaan\n09.00 Praktik thawaf dan sa\'i'}
             />
           </div>
@@ -129,7 +129,6 @@ const ManasikFormPage = () => {
               value={form.gmaps_url}
               onChange={ubah('gmaps_url')}
               placeholder="https://maps.app.goo.gl/..."
-              helpText="Opsional. Tanpa link, app membuka petunjuk arah ke alamat di atas."
             />
           </div>
         </FormSection>
@@ -150,16 +149,6 @@ const ManasikFormPage = () => {
             <Button className="w-full" onClick={simpan} isLoading={isSaving} disabled={!isEdit && scheduleIds.length === 0}>
               {isEdit ? 'Simpan Perubahan' : 'Simpan Manasik'}
             </Button>
-            {!isEdit && scheduleIds.length === 0 && (
-              <p className="mt-2 text-xs text-neutral-500 font-body">Pilih minimal satu paket.</p>
-            )}
-          </SidebarSection>
-          <SidebarSection title="Ketentuan">
-            <ul className="list-disc space-y-1 pl-4 text-xs text-neutral-600 font-body">
-              <li>Satu paket hanya bisa ikut satu manasik.</li>
-              <li>Semua paket harus dari brand yang sama.</li>
-              <li>Tanggal manasik harus sebelum keberangkatan paket paling awal.</li>
-            </ul>
           </SidebarSection>
         </FormAside>
       </FormLayout>

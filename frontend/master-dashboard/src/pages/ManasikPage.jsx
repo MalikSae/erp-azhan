@@ -69,7 +69,7 @@ const ManasikPage = () => {
     { header: 'Waktu', key: 'tanggal' },
     { header: 'Paket', key: 'jumlah_paket', align: 'right' },
     { header: 'Jamaah', key: 'jumlah_jamaah', align: 'right' },
-    { header: 'Berniat hadir', key: 'berniat_hadir', align: 'right' },
+    { header: 'Konfirmasi hadir', key: 'berniat_hadir', align: 'right' },
     ...(tab === 'selesai' ? [{ header: 'Hadir', key: 'hadir', align: 'right' }] : []),
   ];
 
@@ -110,8 +110,8 @@ const ManasikPage = () => {
         data={rows}
         loading={isLoading}
         itemsPerPage={20}
-        searchPlaceholder="Cari judul atau tempat..."
-        emptyMessage={tab === 'selesai' ? 'Belum ada manasik yang sudah lewat.' : 'Belum ada manasik terjadwal. Buat manasik lalu pilih paketnya.'}
+        searchPlaceholder="Cari manasik"
+        emptyMessage="Belum ada manasik."
         toolbarLeading={<SegmentedTabs tabs={TABS} value={tab} onChange={(v) => setFilter('tab', v === 'akan_datang' ? '' : v)} />}
         toolbarActions={isHolding ? (
           <CustomDropdown

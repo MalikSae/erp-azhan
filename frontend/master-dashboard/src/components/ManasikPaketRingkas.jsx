@@ -22,12 +22,7 @@ const ManasikPaketRingkas = ({ scheduleId, bolehLihat }) => {
   if (!manasik) {
     return (
       <p className="font-body text-sm text-neutral-500">
-        Belum ada manasik.{' '}
-        {bolehLihat && (
-          <Link to="/manasik" className="font-medium text-neutral-900 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-900">
-            Buka menu Manasik
-          </Link>
-        )}
+        Belum ada manasik.
       </p>
     );
   }

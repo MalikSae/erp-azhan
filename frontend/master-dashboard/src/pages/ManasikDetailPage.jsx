@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ExternalLink, Search } from 'lucide-react';
+import { Check, ExternalLink } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import Button from 'shared/ui/Button';
 import Badge from 'shared/ui/Badge';
@@ -24,14 +24,14 @@ const tanggalPanjang = (iso) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 const waktuCatat = (s) => (s ? `${tanggalPendek(s)}, ${s.slice(11, 16).replace(':', '.')}` : '');
 
-const FILTER_JAWABAN = [
-  { value: '', label: 'Semua jawaban' },
-  { value: 'hadir', label: 'Berniat hadir' },
+const FILTER_KONFIRMASI = [
+  { value: '', label: 'Semua konfirmasi' },
+  { value: 'hadir', label: 'Konfirmasi hadir' },
   { value: 'tidak', label: 'Tidak hadir' },
-  { value: 'belum', label: 'Belum menjawab' },
+  { value: 'belum', label: 'Belum konfirmasi' },
 ];
 
-// Detail manasik: info, paket terkait, rekap jawaban di app dan kehadiran nyata, serta daftar jamaah dewasa. Mulai hari
+// Detail manasik: info, paket terkait, rekap konfirmasi hadir di app dan kehadiran nyata, serta daftar jamaah dewasa. Mulai hari
 // manasik, petugas mencentang jamaah yang datang; centang itu mengisi penanda "sudah manasik" di booking jamaah.
 const ManasikDetailPage = () => {
   const { id } = useParams();
@@ -170,7 +170,7 @@ const ManasikDetailPage = () => {
   const kolomJamaah = [
     { header: 'Jamaah', key: 'nama' },
     { header: 'Paket', key: 'paket' },
-    { header: 'Jawaban di app', key: 'jawaban' },
+    { header: 'Konfirmasi hadir', key: 'jawaban' },
     { header: 'Kehadiran', key: 'hadir' },
   ];
   const selJamaah = (j, key) => {
@@ -186,9 +186,9 @@ const ManasikDetailPage = () => {
     }
     if (key === 'paket') return <span className="text-neutral-700">{namaPaket[j.schedule_id] || '-'}</span>;
     if (key === 'jawaban') {
-      if (j.jawaban === true) return <Badge variant="success">Berniat hadir</Badge>;
-      if (j.jawaban === false) return <Badge variant="danger">Tidak hadir</Badge>;
-      return <Badge variant="neutral">Belum menjawab</Badge>;
+      if (j.jawaban === true) return <Check size={16} className="text-neutral-900" aria-label="Konfirmasi hadir" />;
+      if (j.jawaban === false) return <span className="text-sm text-neutral-500">Tidak hadir</span>;
+      return <span className="text-neutral-400" aria-label="Belum konfirmasi">–</span>;
     }
     if (key === 'hadir') {
       const catatan = j.dicatat_at ? `${j.dicatat_oleh ? `${j.dicatat_oleh}, ` : ''}${waktuCatat(j.dicatat_at)}` : '';
@@ -210,10 +210,10 @@ const ManasikDetailPage = () => {
           </label>
         );
       }
-      if (!data.absensi_terbuka) return <span className="text-xs text-neutral-500">Dibuka hari manasik</span>;
+      if (!data.absensi_terbuka) return <span className="text-neutral-400">–</span>;
       return (
         <div>
-          {j.hadir ? <Badge variant="success">Hadir</Badge> : <Badge variant="neutral">Tidak tercatat</Badge>}
+          {j.hadir ? <Badge variant="success">Hadir</Badge> : <span className="text-neutral-400">–</span>}
           {catatan && <div className="mt-0.5 text-xs text-neutral-500">{catatan}</div>}
         </div>
       );
@@ -242,10 +242,10 @@ const ManasikDetailPage = () => {
 
       <Surface className="grid grid-cols-2 divide-neutral-200 md:grid-cols-5 md:divide-x">
         <SummaryItem label="Jamaah" value={data.rekap.jamaah} />
-        <SummaryItem label="Berniat hadir" value={data.rekap.berniat_hadir} />
+        <SummaryItem label="Konfirmasi hadir" value={data.rekap.berniat_hadir} />
         <SummaryItem label="Tidak hadir" value={data.rekap.tidak_hadir} />
-        <SummaryItem label="Belum menjawab" value={data.rekap.belum} />
-        <SummaryItem label="Hadir" value={data.absensi_terbuka ? data.rekap.hadir : '-'} hint={data.absensi_terbuka ? null : 'Dicatat mulai hari manasik'} />
+        <SummaryItem label="Belum konfirmasi" value={data.rekap.belum} />
+        <SummaryItem label="Hadir" value={data.absensi_terbuka ? data.rekap.hadir : '-'} />
       </Surface>
 
       <Surface className="divide-y divide-neutral-200">
@@ -267,7 +267,7 @@ const ManasikDetailPage = () => {
               {m.agenda.map((a, i) => <li key={i}>{a}</li>)}
             </ul>
           ) : (
-            <EmptyState variant="inline" message="Agenda belum diisi." />
+            <EmptyState variant="inline" message="Belum ada agenda." />
           )}
         </Section>
       </Surface>
@@ -284,7 +284,7 @@ const ManasikDetailPage = () => {
       <TableCard title={`Jamaah (${data.jamaah.length})`}>
         <div className="flex flex-col gap-2 border-b border-neutral-200 p-4 md:flex-row md:items-center">
           <div className="md:w-64">
-            <Input name="cari_jamaah" value={cari} onChange={(e) => setCari(e.target.value)} placeholder="Cari nama atau kode booking" prefixIcon={<Search size={16} />} />
+            <Input name="cari_jamaah" className="!mb-0" value={cari} onChange={(e) => setCari(e.target.value)} placeholder="Cari jamaah atau kode booking" />
           </div>
           <CustomDropdown
             value={filterPaket}
@@ -292,14 +292,14 @@ const ManasikDetailPage = () => {
             className="!mb-0 md:w-56"
             options={[{ value: '', label: 'Semua paket' }, ...data.paket.map((p) => ({ value: String(p.schedule_id), label: p.nama }))]}
           />
-          <CustomDropdown value={filterJawaban} onChange={(v) => setFilterJawaban(valueOf(v))} className="!mb-0 md:w-48" options={FILTER_JAWABAN} />
+          <CustomDropdown value={filterJawaban} onChange={(v) => setFilterJawaban(valueOf(v))} className="!mb-0 md:w-48" options={FILTER_KONFIRMASI} />
         </div>
         <div className="overflow-x-auto">
           <Table
             columns={kolomJamaah}
             data={jamaahTampil}
             renderCell={selJamaah}
-            emptyMessage={data.jamaah.length === 0 ? 'Belum ada jamaah di paket-paket ini.' : 'Tidak ada jamaah yang cocok.'}
+            emptyMessage={data.jamaah.length === 0 ? 'Belum ada jamaah.' : 'Tidak ditemukan.'}
           />
         </div>
       </TableCard>
@@ -324,7 +324,7 @@ const ManasikDetailPage = () => {
       >
         {modalError && <div className="mb-3"><Alert variant="error">{modalError}</Alert></div>}
         <p className="font-body text-sm text-neutral-700">
-          Manasik ini, kaitannya dengan {data.paket.length} paket, dan semua jawaban kehadiran jamaah akan dihapus. Manasik hilang dari app jamaah.
+          Hapus {m.judul}? Konfirmasi hadir jamaah ikut terhapus.
         </p>
       </Modal>
 
@@ -339,7 +339,7 @@ const ManasikDetailPage = () => {
             <Button
               variant="danger"
               isLoading={memproses}
-              onClick={() => jalankan(() => lepasPaketManasik(id, lepas.schedule_id), `Paket ${lepas.nama} dilepas dari manasik.`, () => setLepas(null))}
+              onClick={() => jalankan(() => lepasPaketManasik(id, lepas.schedule_id), 'Paket dilepas.', () => setLepas(null))}
             >
               Lepas
             </Button>
@@ -348,8 +348,7 @@ const ManasikDetailPage = () => {
       >
         {modalError && <div className="mb-3"><Alert variant="error">{modalError}</Alert></div>}
         <p className="font-body text-sm text-neutral-700">
-          Paket {lepas?.nama} dilepas dari manasik ini.
-          {jawabanLepas > 0 ? ` ${jawabanLepas} jamaah paket ini sudah menjawab kehadiran; jawaban mereka akan dihapus.` : ''}
+          Lepas {lepas?.nama}?{jawabanLepas > 0 ? ` ${jawabanLepas} konfirmasi hadir ikut terhapus.` : ''}
         </p>
       </Modal>
 
@@ -363,7 +362,7 @@ const ManasikDetailPage = () => {
             <Button
               isLoading={memproses}
               disabled={!tambah?.dipilih.length}
-              onClick={() => jalankan(() => tambahPaketManasik(id, tambah.dipilih), `${tambah.dipilih.length} paket ditambahkan.`, () => setTambah(null))}
+              onClick={() => jalankan(() => tambahPaketManasik(id, tambah.dipilih), 'Paket ditambahkan.', () => setTambah(null))}
             >
               Tambah
             </Button>
