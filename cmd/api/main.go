@@ -20,14 +20,13 @@ import (
 
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/agen"
-	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/airline"
-	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/airport"
+	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/bankaccount"
+	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
-	"erp-azhan/api/internal/surat"
 	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/crmdeal"
 	"erp-azhan/api/internal/customer"
@@ -47,6 +46,7 @@ import (
 	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/selfbooking"
 	"erp-azhan/api/internal/shared"
+	"erp-azhan/api/internal/surat"
 	"erp-azhan/api/internal/topbar"
 )
 
@@ -102,7 +102,7 @@ func main() {
 	allowedOrigins := corsOrigins(shared.IsProduction(), os.Getenv("CORS_ALLOWED_ORIGINS"))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Brand-Id"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -288,6 +288,8 @@ func main() {
 		r.Get("/upline/foto", customerHandler.UplineFoto)
 		r.Post("/password", customerHandler.ChangePassword)
 		r.Post("/password/buat", customerHandler.BuatPassword)
+		r.Get("/hapus", customerHandler.CekHapusAkun)
+		r.Post("/hapus", customerHandler.HapusAkun)
 		r.Post("/logout", customerHandler.Logout)
 		r.Get("/bank-accounts", customerOrders.BankAccounts)
 		r.Get("/travelers", customerOrders.Travelers)
