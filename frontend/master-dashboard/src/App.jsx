@@ -21,6 +21,9 @@ import BenefitsPage from './pages/BenefitsPage';
 import ItineraryFormPage from './pages/ItineraryFormPage';
 import SchedulesPage from './pages/SchedulesPage';
 import ScheduleDetailPage from './pages/ScheduleDetailPage';
+import ManasikPage from './pages/ManasikPage';
+import ManasikFormPage from './pages/ManasikFormPage';
+import ManasikDetailPage from './pages/ManasikDetailPage';
 import ScheduleFormPage from './pages/ScheduleFormPage';
 import CategoriesPage from './pages/CategoriesPage';
 import DestinationsPage from './pages/DestinationsPage';
@@ -72,6 +75,10 @@ function AppRoutes() {
           <Route path="/schedules/new" element={<RequireAccess perm="schedule.edit"><ScheduleFormPage /></RequireAccess>} />
           <Route path="/schedules/:id" element={<RequireAccess perm="schedule.view"><ScheduleDetailPage /></RequireAccess>} />
           <Route path="/schedules/:id/edit" element={<RequireAccess perm="schedule.edit"><ScheduleFormPage /></RequireAccess>} />
+          <Route path="/manasik" element={<RequireAccess perm="manasik.view"><ManasikPage /></RequireAccess>} />
+          <Route path="/manasik/baru" element={<RequireAccess perm="manasik.edit"><ManasikFormPage /></RequireAccess>} />
+          <Route path="/manasik/:id" element={<RequireAccess perm="manasik.view"><ManasikDetailPage /></RequireAccess>} />
+          <Route path="/manasik/:id/ubah" element={<RequireAccess perm="manasik.edit"><ManasikFormPage /></RequireAccess>} />
 
           {/* Jamaah & Booking (halaman bersama) */}
           <Route path="/akun" element={<RequireAccess perm="akun.view"><DaftarAkunPage showBrandColumn={showBrandColumn} /></RequireAccess>} />

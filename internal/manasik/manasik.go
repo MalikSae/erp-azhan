@@ -1,5 +1,6 @@
-// Package manasik: satu manasik per jadwal keberangkatan (judul, waktu, agenda, ustadz, lokasi) dan konfirmasi hadir
-// (RSVP) per jamaah dari portal pelanggan. Lihat migrasi 140.
+// Package manasik: manasik milik satu brand yang dikaitkan ke satu atau lebih paket (jadwal keberangkatan), konfirmasi
+// hadir (RSVP) per jamaah dari portal pelanggan, dan absensi hari-H yang mengisi penanda progres "sudah manasik".
+// Satu paket paling banyak satu manasik. Bayi tidak ikut manasik. Lihat migrasi 140.
 package manasik
 
 import (
@@ -16,8 +17,12 @@ import (
 
 var (
 	ErrTidakAda = errors.New("manasik tidak ditemukan")
-	// ErrJadwalTidakAda: jadwal tidak ada atau milik brand lain.
-	ErrJadwalTidakAda = errors.New("jadwal tidak ditemukan")
+	// ErrSudahDimulai: paket tidak bisa dilepas setelah manasik dimulai, supaya data absensi tetap utuh.
+	ErrSudahDimulai = errors.New("manasik sudah dimulai, paket tidak bisa dilepas lagi")
+	// ErrAdaAbsensi: manasik yang sudah punya jamaah tercatat hadir tidak bisa dihapus.
+	ErrAdaAbsensi = errors.New("manasik tidak bisa dihapus karena sudah ada jamaah yang tercatat hadir")
+	// ErrAbsensiBelumDibuka: absensi baru bisa diisi mulai hari manasik.
+	ErrAbsensiBelumDibuka = errors.New("absensi baru bisa diisi mulai hari manasik")
 )
 
 // ErrValidasi membawa pesan yang aman ditampilkan ke admin.
@@ -25,8 +30,15 @@ type ErrValidasi struct{ Pesan string }
 
 func (e *ErrValidasi) Error() string { return e.Pesan }
 
+func validasiGalat(format string, args ...any) error {
+	return &ErrValidasi{Pesan: fmt.Sprintf(format, args...)}
+}
+
 // ZonaWIB: tanggal dan jam manasik dibaca sebagai waktu Indonesia Barat.
 var ZonaWIB = time.FixedZone("WIB", 7*3600)
+
+// hariIni: tanggal hari ini (WIB) dalam format YYYY-MM-DD.
+func hariIni(now time.Time) string { return now.In(ZonaWIB).Format("2006-01-02") }
 
 const maksAgenda = 30
 
@@ -34,7 +46,7 @@ var polaJam = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 type Manasik struct {
 	ID         int64    `json:"id"`
-	ScheduleID int64    `json:"schedule_id"`
+	BrandID    int64    `json:"brand_id"`
 	Judul      string   `json:"judul"`
 	Tanggal    string   `json:"tanggal"`     // YYYY-MM-DD
 	JamMulai   string   `json:"jam_mulai"`   // HH:MM
@@ -128,7 +140,7 @@ func (in *Input) validasi() string {
 	return ""
 }
 
-// Mulai: waktu manasik dimulai (WIB). Konfirmasi hadir ditutup pada waktu ini.
+// Mulai: waktu manasik dimulai (WIB). Konfirmasi hadir ditutup dan paket terkunci pada waktu ini.
 func (m *Manasik) Mulai() time.Time {
 	t, err := time.ParseInLocation("2006-01-02 15:04", m.Tanggal+" "+m.JamMulai, ZonaWIB)
 	if err != nil {
@@ -137,20 +149,23 @@ func (m *Manasik) Mulai() time.Time {
 	return t
 }
 
+// AbsensiTerbuka: absensi bisa diisi mulai hari manasik (WIB) dan tetap terbuka sesudahnya untuk koreksi.
+func (m *Manasik) AbsensiTerbuka(now time.Time) bool { return hariIni(now) >= m.Tanggal }
+
 type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
-const kolomManasik = `m.id, m.schedule_id, m.judul, DATE_FORMAT(m.tanggal,'%Y-%m-%d'), TIME_FORMAT(m.jam_mulai,'%H:%i'),
+const kolomManasik = `m.id, m.brand_id, m.judul, DATE_FORMAT(m.tanggal,'%Y-%m-%d'), TIME_FORMAT(m.jam_mulai,'%H:%i'),
 	TIME_FORMAT(m.jam_selesai,'%H:%i'), COALESCE(m.agenda,''), m.ustadz, m.tempat, m.alamat, m.gmaps_url`
 
 func scanManasik(row interface{ Scan(...any) error }) (*Manasik, error) {
 	var m Manasik
 	var agenda string
 	var ustadz, gmaps sql.NullString
-	if err := row.Scan(&m.ID, &m.ScheduleID, &m.Judul, &m.Tanggal, &m.JamMulai, &m.JamSelesai, &agenda, &ustadz, &m.Tempat, &m.Alamat, &gmaps); err != nil {
+	if err := row.Scan(&m.ID, &m.BrandID, &m.Judul, &m.Tanggal, &m.JamMulai, &m.JamSelesai, &agenda, &ustadz, &m.Tempat, &m.Alamat, &gmaps); err != nil {
 		return nil, err
 	}
 	m.Agenda = []string{}
@@ -168,43 +183,6 @@ func scanManasik(row interface{ Scan(...any) error }) (*Manasik, error) {
 	return &m, nil
 }
 
-// cekJadwal memastikan jadwal ada dan (bila brandID terisi) milik brand itu.
-func cekJadwal(ctx context.Context, q querier, scheduleID int64, brandID *int64) error {
-	query, args := `SELECT 1 FROM schedules WHERE id = ?`, []any{scheduleID}
-	if brandID != nil {
-		query += ` AND brand_id = ?`
-		args = append(args, *brandID)
-	}
-	var x int
-	if err := q.QueryRowContext(ctx, query, args...).Scan(&x); errors.Is(err, sql.ErrNoRows) {
-		return ErrJadwalTidakAda
-	} else if err != nil {
-		return err
-	}
-	return nil
-}
-
-// Ambil memuat manasik sebuah jadwal; ErrTidakAda bila belum diisi.
-func Ambil(ctx context.Context, q querier, scheduleID int64) (*Manasik, error) {
-	m, err := scanManasik(q.QueryRowContext(ctx, `SELECT `+kolomManasik+` FROM manasik m WHERE m.schedule_id = ?`, scheduleID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrTidakAda
-	}
-	return m, err
-}
-
-// AmbilAdmin memuat manasik jadwal milik brand admin (nil = semua brand). Manasik nil bila belum diisi.
-func AmbilAdmin(ctx context.Context, q querier, scheduleID int64, brandID *int64) (*Manasik, error) {
-	if err := cekJadwal(ctx, q, scheduleID, brandID); err != nil {
-		return nil, err
-	}
-	m, err := Ambil(ctx, q, scheduleID)
-	if errors.Is(err, ErrTidakAda) {
-		return nil, nil
-	}
-	return m, err
-}
-
 func kosongJadiNull(s string) any {
 	if s == "" {
 		return nil
@@ -212,63 +190,25 @@ func kosongJadiNull(s string) any {
 	return s
 }
 
-// Simpan membuat atau memperbarui manasik jadwal (satu per jadwal).
-func Simpan(ctx context.Context, q querier, scheduleID int64, brandID *int64, adminID int64, in Input) (*Manasik, error) {
-	in.rapikan()
-	if msg := in.validasi(); msg != "" {
-		return nil, &ErrValidasi{Pesan: msg}
-	}
-	if err := cekJadwal(ctx, q, scheduleID, brandID); err != nil {
-		return nil, err
-	}
-	var admin any
+func adminAtauNull(adminID int64) any {
 	if adminID > 0 {
-		admin = adminID
-	}
-	_, err := q.ExecContext(ctx, `
-		INSERT INTO manasik (schedule_id, judul, tanggal, jam_mulai, jam_selesai, agenda, ustadz, tempat, alamat, gmaps_url, diubah_oleh)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE judul = VALUES(judul), tanggal = VALUES(tanggal), jam_mulai = VALUES(jam_mulai),
-			jam_selesai = VALUES(jam_selesai), agenda = VALUES(agenda), ustadz = VALUES(ustadz), tempat = VALUES(tempat),
-			alamat = VALUES(alamat), gmaps_url = VALUES(gmaps_url), diubah_oleh = VALUES(diubah_oleh)`,
-		scheduleID, in.Judul, in.Tanggal, in.JamMulai, in.JamSelesai, kosongJadiNull(strings.Join(in.Agenda, "\n")),
-		kosongJadiNull(in.Ustadz), in.Tempat, in.Alamat, kosongJadiNull(in.GmapsURL), admin)
-	if err != nil {
-		return nil, err
-	}
-	return Ambil(ctx, q, scheduleID)
-}
-
-// Hapus menghapus manasik jadwal beserta konfirmasi hadirnya.
-func Hapus(ctx context.Context, q querier, scheduleID int64, brandID *int64) error {
-	if err := cekJadwal(ctx, q, scheduleID, brandID); err != nil {
-		return err
-	}
-	res, err := q.ExecContext(ctx, `DELETE FROM manasik WHERE schedule_id = ?`, scheduleID)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrTidakAda
+		return adminID
 	}
 	return nil
 }
 
-// JamaahRSVP: satu jamaah aktif di jadwal beserta jawabannya (nil = belum menjawab).
-type JamaahRSVP struct {
-	JamaahID    int64  `json:"jamaah_id"`
-	Nama        string `json:"nama"`
-	BookingID   int64  `json:"booking_id,omitempty"`
-	BookingCode string `json:"booking_code,omitempty"`
-	Hadir       *bool  `json:"hadir"`
-}
-
-// Rekap: jumlah jawaban dan daftar jamaah aktif jadwal (untuk admin).
-type Rekap struct {
-	Hadir      int          `json:"hadir"`
-	TidakHadir int          `json:"tidak_hadir"`
-	Belum      int          `json:"belum"`
-	Jamaah     []JamaahRSVP `json:"jamaah"`
+// ambilAdmin memuat manasik dalam lingkup brand admin (nil = semua brand).
+func ambilAdmin(ctx context.Context, q querier, id int64, brandID *int64) (*Manasik, error) {
+	query, args := `SELECT `+kolomManasik+` FROM manasik m WHERE m.id = ?`, []any{id}
+	if brandID != nil {
+		query += ` AND m.brand_id = ?`
+		args = append(args, *brandID)
+	}
+	m, err := scanManasik(q.QueryRowContext(ctx, query, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTidakAda
+	}
+	return m, err
 }
 
 // bookingBerlaku: booking tidak draft, tidak batal, dan bukan booking "baru" yang hold seat-nya sudah lewat (kedaluwarsa
@@ -276,53 +216,483 @@ type Rekap struct {
 const bookingBerlaku = `b.status NOT IN ('draft','batal')
 	AND (b.status <> 'baru' OR (b.is_seat_blocked AND (b.seat_hold_expires_at IS NULL OR b.seat_hold_expires_at > NOW())))`
 
-// paxAktif: jamaah aktif dari booking yang masih berlaku.
-const paxAktif = `bp.pax_status = 'aktif' AND ` + bookingBerlaku
+// paxManasik: jamaah dewasa aktif dari booking yang masih berlaku. Bayi tidak ikut manasik.
+const paxManasik = `bp.pax_status = 'aktif' AND bp.pax_type <> 'infant' AND ` + bookingBerlaku
 
-// RekapJadwal menyusun rekap konfirmasi hadir seluruh jamaah aktif jadwal.
-func RekapJadwal(ctx context.Context, q querier, m *Manasik) (*Rekap, error) {
-	rows, err := q.QueryContext(ctx, `
-		SELECT j.id, j.nama_lengkap, b.id, b.id_booking, r.hadir
-		FROM booking_pax bp
-		JOIN bookings b ON b.id = bp.booking_id
-		JOIN jamaah j ON j.id = bp.jamaah_id
-		LEFT JOIN manasik_rsvp r ON r.manasik_id = ? AND r.jamaah_id = j.id
-		WHERE b.schedule_id = ? AND `+paxAktif+`
-		ORDER BY j.nama_lengkap, j.id`, m.ID, m.ScheduleID)
+// ---- Paket ----
+
+// Paket: paket (jadwal keberangkatan) yang ikut atau bisa ikut sebuah manasik.
+type Paket struct {
+	ScheduleID       int64  `json:"schedule_id"`
+	Nama             string `json:"nama"`
+	BrandID          int64  `json:"brand_id"`
+	BerangkatTanggal string `json:"berangkat_tanggal"`
+	JumlahJamaah     int    `json:"jumlah_jamaah"`
+}
+
+const kolomPaket = `s.id, s.jadwal_nama, s.brand_id, DATE_FORMAT(s.berangkat_tanggal,'%Y-%m-%d'),
+	(SELECT COUNT(*) FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id WHERE b.schedule_id = s.id AND ` + paxManasik + `)`
+
+func daftarPaket(ctx context.Context, q querier, query string, args ...any) ([]Paket, error) {
+	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	rek := &Rekap{Jamaah: []JamaahRSVP{}}
-	seen := map[int64]bool{}
+	out := []Paket{}
 	for rows.Next() {
-		var it JamaahRSVP
-		var hadir sql.NullBool
-		if err := rows.Scan(&it.JamaahID, &it.Nama, &it.BookingID, &it.BookingCode, &hadir); err != nil {
+		var p Paket
+		if err := rows.Scan(&p.ScheduleID, &p.Nama, &p.BrandID, &p.BerangkatTanggal, &p.JumlahJamaah); err != nil {
 			return nil, err
 		}
-		if seen[it.JamaahID] {
-			continue
-		}
-		seen[it.JamaahID] = true
-		switch {
-		case !hadir.Valid:
-			rek.Belum++
-		case hadir.Bool:
-			v := true
-			it.Hadir = &v
-			rek.Hadir++
-		default:
-			v := false
-			it.Hadir = &v
-			rek.TidakHadir++
-		}
-		rek.Jamaah = append(rek.Jamaah, it)
+		out = append(out, p)
 	}
-	return rek, rows.Err()
+	return out, rows.Err()
 }
 
-// bookingAkun: jadwal sebuah booking milik akun pelanggan. ErrTidakAda bila bukan miliknya atau tidak berlaku lagi.
+// PaketManasik: paket yang ikut manasik, urut tanggal berangkat.
+func PaketManasik(ctx context.Context, q querier, manasikID int64) ([]Paket, error) {
+	return daftarPaket(ctx, q, `SELECT `+kolomPaket+` FROM manasik_jadwal mj JOIN schedules s ON s.id = mj.schedule_id
+		WHERE mj.manasik_id = ? ORDER BY s.berangkat_tanggal, s.id`, manasikID)
+}
+
+// PaketTersedia: paket yang bisa dikaitkan ke manasik baru: belum berangkat, tidak diarsipkan, dan belum punya manasik.
+// brandID membatasi ke satu brand (lingkup admin brand atau filter holding); nil = semua brand.
+func PaketTersedia(ctx context.Context, q querier, brandID *int64, now time.Time) ([]Paket, error) {
+	query, args := `SELECT `+kolomPaket+` FROM schedules s
+		WHERE s.berangkat_tanggal > ? AND s.status <> 'archived'
+			AND NOT EXISTS (SELECT 1 FROM manasik_jadwal mj WHERE mj.schedule_id = s.id)`, []any{hariIni(now)}
+	if brandID != nil {
+		query += ` AND s.brand_id = ?`
+		args = append(args, *brandID)
+	}
+	return daftarPaket(ctx, q, query+` ORDER BY s.berangkat_tanggal, s.id`, args...)
+}
+
+// cekPaketBaru memastikan setiap paket ada, dalam lingkup brand, satu brand dengan brandManasik (0 = ambil dari paket
+// pertama), belum berangkat, belum punya manasik, dan berangkat setelah tanggal manasik. Mengembalikan brand paket.
+func cekPaketBaru(ctx context.Context, q querier, scheduleIDs []int64, scope *int64, brandManasik int64, tanggal string, now time.Time) (int64, error) {
+	if len(scheduleIDs) == 0 {
+		return 0, validasiGalat("Pilih minimal satu paket")
+	}
+	seen := map[int64]bool{}
+	for _, sid := range scheduleIDs {
+		if seen[sid] {
+			continue
+		}
+		seen[sid] = true
+		var nama, berangkat string
+		var brand int64
+		var sudahAda bool
+		err := q.QueryRowContext(ctx, `SELECT s.jadwal_nama, s.brand_id, DATE_FORMAT(s.berangkat_tanggal,'%Y-%m-%d'),
+				EXISTS (SELECT 1 FROM manasik_jadwal mj WHERE mj.schedule_id = s.id)
+			FROM schedules s WHERE s.id = ? FOR UPDATE`, sid).Scan(&nama, &brand, &berangkat, &sudahAda)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && scope != nil && brand != *scope) {
+			return 0, validasiGalat("Paket tidak ditemukan")
+		}
+		if err != nil {
+			return 0, err
+		}
+		switch {
+		case brandManasik == 0:
+			brandManasik = brand
+		case brand != brandManasik:
+			return 0, validasiGalat("Paket %s milik brand lain. Satu manasik hanya untuk paket satu brand", nama)
+		}
+		switch {
+		case sudahAda:
+			return 0, validasiGalat("Paket %s sudah punya manasik", nama)
+		case berangkat <= hariIni(now):
+			return 0, validasiGalat("Paket %s sudah berangkat", nama)
+		case berangkat <= tanggal:
+			return 0, validasiGalat("Tanggal manasik harus sebelum keberangkatan paket %s", nama)
+		}
+	}
+	return brandManasik, nil
+}
+
+// cekTanggalTerhadapPaket: tanggal manasik harus sebelum keberangkatan paling awal paket yang sudah terkait.
+func cekTanggalTerhadapPaket(ctx context.Context, q querier, manasikID int64, tanggal string) error {
+	var nama string
+	err := q.QueryRowContext(ctx, `SELECT s.jadwal_nama FROM manasik_jadwal mj JOIN schedules s ON s.id = mj.schedule_id
+		WHERE mj.manasik_id = ? AND s.berangkat_tanggal <= ? ORDER BY s.berangkat_tanggal LIMIT 1`, manasikID, tanggal).Scan(&nama)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return validasiGalat("Tanggal manasik harus sebelum keberangkatan paket %s", nama)
+}
+
+// ---- Buat, ubah, hapus ----
+
+// Buat membuat manasik dan mengaitkan paketnya. Jalankan dalam transaksi supaya kaitan paket semua atau tidak sama sekali.
+func Buat(ctx context.Context, q querier, scope *int64, adminID int64, in Input, scheduleIDs []int64, now time.Time) (int64, error) {
+	in.rapikan()
+	if msg := in.validasi(); msg != "" {
+		return 0, &ErrValidasi{Pesan: msg}
+	}
+	brand, err := cekPaketBaru(ctx, q, scheduleIDs, scope, 0, in.Tanggal, now)
+	if err != nil {
+		return 0, err
+	}
+	res, err := q.ExecContext(ctx, `
+		INSERT INTO manasik (brand_id, judul, tanggal, jam_mulai, jam_selesai, agenda, ustadz, tempat, alamat, gmaps_url, dibuat_oleh, diubah_oleh)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		brand, in.Judul, in.Tanggal, in.JamMulai, in.JamSelesai, kosongJadiNull(strings.Join(in.Agenda, "\n")),
+		kosongJadiNull(in.Ustadz), in.Tempat, in.Alamat, kosongJadiNull(in.GmapsURL), adminAtauNull(adminID), adminAtauNull(adminID))
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if err := kaitkan(ctx, q, id, scheduleIDs); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func kaitkan(ctx context.Context, q querier, manasikID int64, scheduleIDs []int64) error {
+	for _, sid := range scheduleIDs {
+		if _, err := q.ExecContext(ctx, `INSERT IGNORE INTO manasik_jadwal (schedule_id, manasik_id) VALUES (?, ?)`, sid, manasikID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Ubah memperbarui isi manasik. Jawaban kehadiran jamaah tetap disimpan.
+func Ubah(ctx context.Context, q querier, id int64, scope *int64, adminID int64, in Input) error {
+	in.rapikan()
+	if msg := in.validasi(); msg != "" {
+		return &ErrValidasi{Pesan: msg}
+	}
+	if _, err := ambilAdmin(ctx, q, id, scope); err != nil {
+		return err
+	}
+	if err := cekTanggalTerhadapPaket(ctx, q, id, in.Tanggal); err != nil {
+		return err
+	}
+	_, err := q.ExecContext(ctx, `
+		UPDATE manasik SET judul = ?, tanggal = ?, jam_mulai = ?, jam_selesai = ?, agenda = ?, ustadz = ?, tempat = ?,
+			alamat = ?, gmaps_url = ?, diubah_oleh = ?
+		WHERE id = ?`,
+		in.Judul, in.Tanggal, in.JamMulai, in.JamSelesai, kosongJadiNull(strings.Join(in.Agenda, "\n")),
+		kosongJadiNull(in.Ustadz), in.Tempat, in.Alamat, kosongJadiNull(in.GmapsURL), adminAtauNull(adminID), id)
+	return err
+}
+
+// TambahPaket mengaitkan paket lain (brand yang sama) ke manasik. Jalankan dalam transaksi.
+func TambahPaket(ctx context.Context, q querier, id int64, scope *int64, scheduleIDs []int64, now time.Time) error {
+	m, err := ambilAdmin(ctx, q, id, scope)
+	if err != nil {
+		return err
+	}
+	if _, err := cekPaketBaru(ctx, q, scheduleIDs, scope, m.BrandID, m.Tanggal, now); err != nil {
+		return err
+	}
+	return kaitkan(ctx, q, id, scheduleIDs)
+}
+
+// LepasPaket melepas paket dari manasik sebelum manasik dimulai; jawaban kehadiran jamaah paket itu ikut dihapus.
+// Manasik minimal punya satu paket. Jalankan dalam transaksi.
+func LepasPaket(ctx context.Context, q querier, id int64, scope *int64, scheduleID int64, now time.Time) error {
+	m, err := ambilAdmin(ctx, q, id, scope)
+	if err != nil {
+		return err
+	}
+	if !now.Before(m.Mulai()) {
+		return ErrSudahDimulai
+	}
+	var jumlah int
+	var terkait bool
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(schedule_id = ?), 0) > 0 FROM manasik_jadwal WHERE manasik_id = ?`,
+		scheduleID, id).Scan(&jumlah, &terkait); err != nil {
+		return err
+	}
+	if !terkait {
+		return validasiGalat("Paket tidak terkait dengan manasik ini")
+	}
+	if jumlah <= 1 {
+		return validasiGalat("Manasik minimal punya satu paket. Hapus manasik bila tidak dipakai lagi")
+	}
+	if _, err := q.ExecContext(ctx, `DELETE r FROM manasik_rsvp r JOIN bookings b ON b.id = r.booking_id
+		WHERE r.manasik_id = ? AND b.schedule_id = ?`, id, scheduleID); err != nil {
+		return err
+	}
+	_, err = q.ExecContext(ctx, `DELETE FROM manasik_jadwal WHERE manasik_id = ? AND schedule_id = ?`, id, scheduleID)
+	return err
+}
+
+// Hapus menghapus manasik beserta kaitan paket dan jawaban kehadirannya. Ditolak bila manasik sudah dimulai dan ada
+// jamaah paketnya yang tercatat hadir.
+func Hapus(ctx context.Context, q querier, id int64, scope *int64, now time.Time) error {
+	m, err := ambilAdmin(ctx, q, id, scope)
+	if err != nil {
+		return err
+	}
+	if m.AbsensiTerbuka(now) {
+		var ada bool
+		if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM manasik_jadwal mj
+				JOIN bookings b ON b.schedule_id = mj.schedule_id
+				JOIN booking_pax bp ON bp.booking_id = b.id
+			WHERE mj.manasik_id = ? AND `+paxManasik+` AND bp.progress_manasik)`, id).Scan(&ada); err != nil {
+			return err
+		}
+		if ada {
+			return ErrAdaAbsensi
+		}
+	}
+	_, err = q.ExecContext(ctx, `DELETE FROM manasik WHERE id = ?`, id)
+	return err
+}
+
+// ---- Daftar dan detail ----
+
+// Ringkas: satu baris di daftar manasik.
+type Ringkas struct {
+	ID           int64  `json:"id"`
+	BrandID      int64  `json:"brand_id"`
+	BrandNama    string `json:"brand_nama"`
+	Judul        string `json:"judul"`
+	Tanggal      string `json:"tanggal"`
+	JamMulai     string `json:"jam_mulai"`
+	JamSelesai   string `json:"jam_selesai"`
+	Tempat       string `json:"tempat"`
+	JumlahPaket  int    `json:"jumlah_paket"`
+	JumlahJamaah int    `json:"jumlah_jamaah"`
+	BerniatHadir int    `json:"berniat_hadir"`
+	Hadir        int    `json:"hadir"`
+}
+
+// Daftar memuat manasik dalam lingkup brand. selesai=false: hari ini dan sesudahnya (urut terdekat);
+// selesai=true: sebelum hari ini (urut terbaru).
+func Daftar(ctx context.Context, q querier, brandID *int64, selesai bool, now time.Time) ([]Ringkas, error) {
+	where, urut := `m.tanggal >= ?`, `m.tanggal, m.jam_mulai, m.id`
+	if selesai {
+		where, urut = `m.tanggal < ?`, `m.tanggal DESC, m.jam_mulai DESC, m.id DESC`
+	}
+	args := []any{hariIni(now)}
+	if brandID != nil {
+		where += ` AND m.brand_id = ?`
+		args = append(args, *brandID)
+	}
+	rows, err := q.QueryContext(ctx, `
+		SELECT m.id, m.brand_id, br.name, m.judul, DATE_FORMAT(m.tanggal,'%Y-%m-%d'), TIME_FORMAT(m.jam_mulai,'%H:%i'),
+			TIME_FORMAT(m.jam_selesai,'%H:%i'), m.tempat,
+			(SELECT COUNT(*) FROM manasik_jadwal mj WHERE mj.manasik_id = m.id),
+			COALESCE(px.jamaah, 0), COALESCE(px.berniat, 0), COALESCE(px.hadir, 0)
+		FROM manasik m
+		JOIN brands br ON br.id = m.brand_id
+		LEFT JOIN (
+			SELECT mj.manasik_id, COUNT(*) AS jamaah, SUM(COALESCE(r.hadir, FALSE)) AS berniat, SUM(bp.progress_manasik) AS hadir
+			FROM manasik_jadwal mj
+			JOIN bookings b ON b.schedule_id = mj.schedule_id
+			JOIN booking_pax bp ON bp.booking_id = b.id
+			LEFT JOIN manasik_rsvp r ON r.manasik_id = mj.manasik_id AND r.jamaah_id = bp.jamaah_id
+			WHERE `+paxManasik+`
+			GROUP BY mj.manasik_id
+		) px ON px.manasik_id = m.id
+		WHERE `+where+` ORDER BY `+urut, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Ringkas{}
+	for rows.Next() {
+		var r Ringkas
+		if err := rows.Scan(&r.ID, &r.BrandID, &r.BrandNama, &r.Judul, &r.Tanggal, &r.JamMulai, &r.JamSelesai, &r.Tempat,
+			&r.JumlahPaket, &r.JumlahJamaah, &r.BerniatHadir, &r.Hadir); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// JamaahManasik: satu jamaah dewasa paket manasik beserta jawaban di app dan catatan kehadirannya.
+type JamaahManasik struct {
+	PaxID       int64   `json:"pax_id"`
+	JamaahID    int64   `json:"jamaah_id"`
+	Nama        string  `json:"nama"`
+	ScheduleID  int64   `json:"schedule_id"`
+	BookingID   int64   `json:"booking_id"`
+	BookingCode string  `json:"booking_code"`
+	Jawaban     *bool   `json:"jawaban"` // nil = belum menjawab
+	Hadir       bool    `json:"hadir"`   // penanda progres "sudah manasik"
+	DicatatOleh *string `json:"dicatat_oleh"`
+	DicatatAt   *string `json:"dicatat_at"` // YYYY-MM-DD HH:MM
+}
+
+// Rekap: jumlah jawaban di app dan kehadiran nyata.
+type Rekap struct {
+	Jamaah       int `json:"jamaah"`
+	BerniatHadir int `json:"berniat_hadir"`
+	TidakHadir   int `json:"tidak_hadir"`
+	Belum        int `json:"belum"`
+	Hadir        int `json:"hadir"`
+}
+
+// Detail: semua data halaman detail manasik.
+type Detail struct {
+	Manasik        *Manasik        `json:"manasik"`
+	BrandNama      string          `json:"brand_nama"`
+	Paket          []Paket         `json:"paket"`
+	Rekap          Rekap           `json:"rekap"`
+	Jamaah         []JamaahManasik `json:"jamaah"`
+	SudahDimulai   bool            `json:"sudah_dimulai"`
+	AbsensiTerbuka bool            `json:"absensi_terbuka"`
+}
+
+// AmbilDetail memuat manasik, paket, rekap, dan daftar jamaahnya.
+func AmbilDetail(ctx context.Context, q querier, id int64, scope *int64, now time.Time) (*Detail, error) {
+	m, err := ambilAdmin(ctx, q, id, scope)
+	if err != nil {
+		return nil, err
+	}
+	d := &Detail{Manasik: m, SudahDimulai: !now.Before(m.Mulai()), AbsensiTerbuka: m.AbsensiTerbuka(now)}
+	if err := q.QueryRowContext(ctx, `SELECT name FROM brands WHERE id = ?`, m.BrandID).Scan(&d.BrandNama); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	if d.Paket, err = PaketManasik(ctx, q, id); err != nil {
+		return nil, err
+	}
+	rows, err := q.QueryContext(ctx, `
+		SELECT bp.id, j.id, j.nama_lengkap, b.schedule_id, b.id, b.id_booking, r.hadir, COALESCE(bp.progress_manasik, FALSE),
+			COALESCE(NULLIF(TRIM(au.display_name), ''), au.email), DATE_FORMAT(bp.progress_manasik_at, '%Y-%m-%d %H:%i')
+		FROM manasik_jadwal mj
+		JOIN schedules s ON s.id = mj.schedule_id
+		JOIN bookings b ON b.schedule_id = mj.schedule_id
+		JOIN booking_pax bp ON bp.booking_id = b.id
+		JOIN jamaah j ON j.id = bp.jamaah_id
+		LEFT JOIN manasik_rsvp r ON r.manasik_id = mj.manasik_id AND r.jamaah_id = bp.jamaah_id
+		LEFT JOIN admin_users au ON au.id = bp.progress_manasik_oleh
+		WHERE mj.manasik_id = ? AND `+paxManasik+`
+		ORDER BY s.berangkat_tanggal, s.id, j.nama_lengkap, bp.id`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	d.Jamaah = []JamaahManasik{}
+	for rows.Next() {
+		var it JamaahManasik
+		var jawaban sql.NullBool
+		var oleh, at sql.NullString
+		if err := rows.Scan(&it.PaxID, &it.JamaahID, &it.Nama, &it.ScheduleID, &it.BookingID, &it.BookingCode, &jawaban,
+			&it.Hadir, &oleh, &at); err != nil {
+			return nil, err
+		}
+		d.Rekap.Jamaah++
+		switch {
+		case !jawaban.Valid:
+			d.Rekap.Belum++
+		case jawaban.Bool:
+			d.Rekap.BerniatHadir++
+		default:
+			d.Rekap.TidakHadir++
+		}
+		if jawaban.Valid {
+			v := jawaban.Bool
+			it.Jawaban = &v
+		}
+		if it.Hadir {
+			d.Rekap.Hadir++
+		}
+		if oleh.Valid {
+			it.DicatatOleh = &oleh.String
+		}
+		if at.Valid {
+			it.DicatatAt = &at.String
+		}
+		d.Jamaah = append(d.Jamaah, it)
+	}
+	return d, rows.Err()
+}
+
+// CatatHadir mengisi atau mengosongkan penanda "sudah manasik" seorang jamaah paket manasik, mulai hari manasik.
+func CatatHadir(ctx context.Context, q querier, id int64, scope *int64, adminID, paxID int64, hadir bool, now time.Time) error {
+	m, err := ambilAdmin(ctx, q, id, scope)
+	if err != nil {
+		return err
+	}
+	if !m.AbsensiTerbuka(now) {
+		return ErrAbsensiBelumDibuka
+	}
+	res, err := q.ExecContext(ctx, `
+		UPDATE booking_pax bp
+		JOIN bookings b ON b.id = bp.booking_id
+		JOIN manasik_jadwal mj ON mj.schedule_id = b.schedule_id AND mj.manasik_id = ?
+		SET bp.progress_manasik = ?, bp.progress_manasik_oleh = ?, bp.progress_manasik_at = NOW()
+		WHERE bp.id = ? AND `+paxManasik, id, hadir, adminAtauNull(adminID), paxID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// Nilai sama juga menghasilkan 0 baris; bedakan dengan jamaah yang memang bukan peserta manasik ini.
+		var x int
+		err := q.QueryRowContext(ctx, `SELECT 1 FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
+			JOIN manasik_jadwal mj ON mj.schedule_id = b.schedule_id AND mj.manasik_id = ?
+			WHERE bp.id = ? AND `+paxManasik, id, paxID).Scan(&x)
+		if errors.Is(err, sql.ErrNoRows) {
+			return validasiGalat("Jamaah tidak terdaftar di manasik ini")
+		}
+		return err
+	}
+	return nil
+}
+
+// ManasikPaket: ringkasan manasik sebuah paket untuk halaman detail paket (nil = belum punya manasik).
+type ManasikPaket struct {
+	ID         int64  `json:"id"`
+	Judul      string `json:"judul"`
+	Tanggal    string `json:"tanggal"`
+	JamMulai   string `json:"jam_mulai"`
+	JamSelesai string `json:"jam_selesai"`
+}
+
+// UntukPaket memuat ringkasan manasik paket dalam lingkup brand admin.
+func UntukPaket(ctx context.Context, q querier, scheduleID int64, scope *int64) (*ManasikPaket, error) {
+	query, args := `SELECT m.id, m.judul, DATE_FORMAT(m.tanggal,'%Y-%m-%d'), TIME_FORMAT(m.jam_mulai,'%H:%i'),
+			TIME_FORMAT(m.jam_selesai,'%H:%i')
+		FROM manasik_jadwal mj JOIN manasik m ON m.id = mj.manasik_id WHERE mj.schedule_id = ?`, []any{scheduleID}
+	if scope != nil {
+		query += ` AND m.brand_id = ?`
+		args = append(args, *scope)
+	}
+	var p ManasikPaket
+	err := q.QueryRowContext(ctx, query, args...).Scan(&p.ID, &p.Judul, &p.Tanggal, &p.JamMulai, &p.JamSelesai)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// ---- Portal pelanggan ----
+
+// ambilUntukJadwal memuat manasik yang dikaitkan ke sebuah paket; ErrTidakAda bila belum ada.
+func ambilUntukJadwal(ctx context.Context, q querier, scheduleID int64) (*Manasik, error) {
+	m, err := scanManasik(q.QueryRowContext(ctx, `SELECT `+kolomManasik+` FROM manasik_jadwal mj JOIN manasik m ON m.id = mj.manasik_id
+		WHERE mj.schedule_id = ?`, scheduleID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTidakAda
+	}
+	return m, err
+}
+
+// JamaahRSVP: satu jamaah dewasa booking beserta jawabannya (nil = belum menjawab).
+type JamaahRSVP struct {
+	JamaahID int64  `json:"jamaah_id"`
+	Nama     string `json:"nama"`
+	Hadir    *bool  `json:"hadir"`
+}
+
+// bookingAkun: paket sebuah booking milik akun pelanggan. ErrTidakAda bila bukan miliknya atau tidak berlaku lagi.
 func bookingAkun(ctx context.Context, q querier, accountID, bookingID int64) (scheduleID int64, err error) {
 	err = q.QueryRowContext(ctx, `SELECT b.schedule_id FROM bookings b WHERE b.id = ? AND b.customer_account_id = ? AND `+bookingBerlaku,
 		bookingID, accountID).Scan(&scheduleID)
@@ -332,14 +702,14 @@ func bookingAkun(ctx context.Context, q querier, accountID, bookingID int64) (sc
 	return
 }
 
-// jamaahBooking: jamaah aktif sebuah booking beserta jawaban RSVP-nya (manasikID 0 = belum ada manasik).
+// jamaahBooking: jamaah dewasa aktif sebuah booking beserta jawaban RSVP-nya (manasikID 0 = belum ada manasik).
 func jamaahBooking(ctx context.Context, q querier, bookingID, manasikID int64) ([]JamaahRSVP, error) {
 	rows, err := q.QueryContext(ctx, `
 		SELECT j.id, j.nama_lengkap, r.hadir
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
 		LEFT JOIN manasik_rsvp r ON r.manasik_id = ? AND r.jamaah_id = j.id
-		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif'
+		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
 		ORDER BY bp.id`, manasikID, bookingID)
 	if err != nil {
 		return nil, err
@@ -369,7 +739,7 @@ type ManasikBooking struct {
 	BisaRSVP bool `json:"bisa_rsvp"`
 }
 
-// UntukBooking memuat manasik jadwal booking milik akun dan jawaban tiap jamaahnya.
+// UntukBooking memuat manasik paket booking milik akun dan jawaban tiap jamaah dewasanya.
 func UntukBooking(ctx context.Context, q querier, accountID, bookingID int64, now time.Time) (*ManasikBooking, error) {
 	scheduleID, err := bookingAkun(ctx, q, accountID, bookingID)
 	if err != nil {
@@ -377,7 +747,7 @@ func UntukBooking(ctx context.Context, q querier, accountID, bookingID int64, no
 	}
 	out := &ManasikBooking{}
 	var manasikID int64
-	m, err := Ambil(ctx, q, scheduleID)
+	m, err := ambilUntukJadwal(ctx, q, scheduleID)
 	switch {
 	case errors.Is(err, ErrTidakAda):
 	case err != nil:
@@ -395,19 +765,19 @@ func UntukBooking(ctx context.Context, q querier, accountID, bookingID int64, no
 var (
 	// ErrRSVPDitutup: manasik sudah dimulai.
 	ErrRSVPDitutup = errors.New("konfirmasi kehadiran sudah ditutup karena manasik sudah dimulai")
-	// ErrBelumAda: jadwal booking belum punya manasik.
+	// ErrBelumAda: paket booking belum punya manasik.
 	ErrBelumAda = errors.New("jadwal manasik belum diumumkan")
-	// ErrBukanJamaah: jamaah tidak aktif di booking ini.
+	// ErrBukanJamaah: jamaah tidak aktif di booking ini, atau bayi.
 	ErrBukanJamaah = errors.New("jamaah tidak terdaftar di booking ini")
 )
 
-// SimpanRSVP mencatat jawaban hadir atau tidak hadir satu jamaah booking milik akun.
+// SimpanRSVP mencatat jawaban hadir atau tidak hadir satu jamaah dewasa booking milik akun.
 func SimpanRSVP(ctx context.Context, q querier, accountID, bookingID, jamaahID int64, hadir bool, now time.Time) error {
 	scheduleID, err := bookingAkun(ctx, q, accountID, bookingID)
 	if err != nil {
 		return err
 	}
-	m, err := Ambil(ctx, q, scheduleID)
+	m, err := ambilUntukJadwal(ctx, q, scheduleID)
 	if errors.Is(err, ErrTidakAda) {
 		return ErrBelumAda
 	} else if err != nil {
@@ -417,7 +787,8 @@ func SimpanRSVP(ctx context.Context, q querier, accountID, bookingID, jamaahID i
 		return ErrRSVPDitutup
 	}
 	var x int
-	err = q.QueryRowContext(ctx, `SELECT 1 FROM booking_pax WHERE booking_id = ? AND jamaah_id = ? AND pax_status = 'aktif' LIMIT 1`, bookingID, jamaahID).Scan(&x)
+	err = q.QueryRowContext(ctx, `SELECT 1 FROM booking_pax WHERE booking_id = ? AND jamaah_id = ? AND pax_status = 'aktif'
+		AND pax_type <> 'infant' LIMIT 1`, bookingID, jamaahID).Scan(&x)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrBukanJamaah
 	} else if err != nil {

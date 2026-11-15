@@ -1,6 +1,7 @@
 package manasik
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -37,11 +38,12 @@ func tulisGalat(w http.ResponseWriter, err error) {
 	switch {
 	case errors.As(err, &val):
 		writeError(w, http.StatusBadRequest, val.Pesan)
-	case errors.Is(err, ErrJadwalTidakAda), errors.Is(err, ErrTidakAda):
+	case errors.Is(err, ErrTidakAda):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrBukanJamaah):
 		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrRSVPDitutup), errors.Is(err, ErrBelumAda):
+	case errors.Is(err, ErrRSVPDitutup), errors.Is(err, ErrBelumAda), errors.Is(err, ErrSudahDimulai),
+		errors.Is(err, ErrAdaAbsensi), errors.Is(err, ErrAbsensiBelumDibuka):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] manasik: %v", err)
@@ -58,40 +60,96 @@ func idParam(w http.ResponseWriter, r *http.Request, nama, label string) (int64,
 	return id, true
 }
 
-// adminView: manasik jadwal (nil bila belum diisi) dan rekap konfirmasi hadir.
-type adminView struct {
-	Manasik *Manasik `json:"manasik"`
-	Rekap   *Rekap   `json:"rekap"`
+// dalamTx menjalankan fn dalam satu transaksi; rollback bila fn gagal.
+func (h *Handler) dalamTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
-func (h *Handler) tampilAdmin(w http.ResponseWriter, r *http.Request, scheduleID int64) {
-	m, err := AmbilAdmin(r.Context(), h.db, scheduleID, identity.GetBrandID(r.Context()))
+// lingkupBrand: brand admin brand, atau filter ?brand_id untuk admin holding (nil = semua brand).
+func lingkupBrand(r *http.Request) *int64 {
+	if b := identity.GetBrandID(r.Context()); b != nil {
+		return b
+	}
+	if v, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64); err == nil && v > 0 {
+		return &v
+	}
+	return nil
+}
+
+func (h *Handler) tulisDetail(w http.ResponseWriter, r *http.Request, id int64, status int) {
+	d, err := AmbilDetail(r.Context(), h.db, id, identity.GetBrandID(r.Context()), h.now())
 	if err != nil {
 		tulisGalat(w, err)
 		return
 	}
-	out := adminView{Manasik: m}
-	if m != nil {
-		if out.Rekap, err = RekapJadwal(r.Context(), h.db, m); err != nil {
-			tulisGalat(w, err)
-			return
-		}
+	writeJSON(w, status, d)
+}
+
+// Daftar GET /api/admin/manasik?tab=akan_datang|selesai&brand_id=
+func (h *Handler) Daftar(w http.ResponseWriter, r *http.Request) {
+	out, err := Daftar(r.Context(), h.db, lingkupBrand(r), r.URL.Query().Get("tab") == "selesai", h.now())
+	if err != nil {
+		tulisGalat(w, err)
+		return
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
-// AmbilJadwal GET /api/admin/schedules/{id}/manasik
-func (h *Handler) AmbilJadwal(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id jadwal")
+// PaketTersedia GET /api/admin/manasik/paket-tersedia?brand_id=
+func (h *Handler) PaketTersedia(w http.ResponseWriter, r *http.Request) {
+	out, err := PaketTersedia(r.Context(), h.db, lingkupBrand(r), h.now())
+	if err != nil {
+		tulisGalat(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type buatRequest struct {
+	Input
+	ScheduleIDs []int64 `json:"schedule_ids"`
+}
+
+// Buat POST /api/admin/manasik: isi manasik + schedule_ids.
+func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
+	var req buatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Payload request tidak valid")
+		return
+	}
+	var id int64
+	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
+		var err error
+		id, err = Buat(r.Context(), tx, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), req.Input, req.ScheduleIDs, h.now())
+		return err
+	})
+	if err != nil {
+		tulisGalat(w, err)
+		return
+	}
+	h.tulisDetail(w, r, id, http.StatusCreated)
+}
+
+// Detail GET /api/admin/manasik/{id}
+func (h *Handler) Detail(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r, "id", "id manasik")
 	if !ok {
 		return
 	}
-	h.tampilAdmin(w, r, id)
+	h.tulisDetail(w, r, id, http.StatusOK)
 }
 
-// SimpanJadwal PUT /api/admin/schedules/{id}/manasik
-func (h *Handler) SimpanJadwal(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id jadwal")
+// Ubah PUT /api/admin/manasik/{id}
+func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r, "id", "id manasik")
 	if !ok {
 		return
 	}
@@ -100,24 +158,102 @@ func (h *Handler) SimpanJadwal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Payload request tidak valid")
 		return
 	}
-	if _, err := Simpan(r.Context(), h.db, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), in); err != nil {
+	if err := Ubah(r.Context(), h.db, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), in); err != nil {
 		tulisGalat(w, err)
 		return
 	}
-	h.tampilAdmin(w, r, id)
+	h.tulisDetail(w, r, id, http.StatusOK)
 }
 
-// HapusJadwal DELETE /api/admin/schedules/{id}/manasik
-func (h *Handler) HapusJadwal(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id jadwal")
+// Hapus DELETE /api/admin/manasik/{id}
+func (h *Handler) Hapus(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r, "id", "id manasik")
 	if !ok {
 		return
 	}
-	if err := Hapus(r.Context(), h.db, id, identity.GetBrandID(r.Context())); err != nil {
+	if err := Hapus(r.Context(), h.db, id, identity.GetBrandID(r.Context()), h.now()); err != nil {
 		tulisGalat(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// TambahPaket POST /api/admin/manasik/{id}/paket: {schedule_ids}
+func (h *Handler) TambahPaket(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r, "id", "id manasik")
+	if !ok {
+		return
+	}
+	var req struct {
+		ScheduleIDs []int64 `json:"schedule_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Payload request tidak valid")
+		return
+	}
+	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
+		return TambahPaket(r.Context(), tx, id, identity.GetBrandID(r.Context()), req.ScheduleIDs, h.now())
+	})
+	if err != nil {
+		tulisGalat(w, err)
+		return
+	}
+	h.tulisDetail(w, r, id, http.StatusOK)
+}
+
+// LepasPaket DELETE /api/admin/manasik/{id}/paket/{schedule_id}
+func (h *Handler) LepasPaket(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r, "id", "id manasik")
+	if !ok {
+		return
+	}
+	sid, ok := idParam(w, r, "schedule_id", "id paket")
+	if !ok {
+		return
+	}
+	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
+		return LepasPaket(r.Context(), tx, id, identity.GetBrandID(r.Context()), sid, h.now())
+	})
+	if err != nil {
+		tulisGalat(w, err)
+		return
+	}
+	h.tulisDetail(w, r, id, http.StatusOK)
+}
+
+// Absensi PUT /api/admin/manasik/{id}/absensi: {pax_id, hadir}
+func (h *Handler) Absensi(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r, "id", "id manasik")
+	if !ok {
+		return
+	}
+	var req struct {
+		PaxID int64 `json:"pax_id"`
+		Hadir *bool `json:"hadir"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PaxID <= 0 || req.Hadir == nil {
+		writeError(w, http.StatusBadRequest, "pax_id dan hadir wajib diisi")
+		return
+	}
+	if err := CatatHadir(r.Context(), h.db, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), req.PaxID, *req.Hadir, h.now()); err != nil {
+		tulisGalat(w, err)
+		return
+	}
+	h.tulisDetail(w, r, id, http.StatusOK)
+}
+
+// UntukPaket GET /api/admin/schedules/{id}/manasik: ringkasan manasik paket ({manasik: null} bila belum ada).
+func (h *Handler) UntukPaket(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(w, r, "id", "id paket")
+	if !ok {
+		return
+	}
+	m, err := UntukPaket(r.Context(), h.db, id, identity.GetBrandID(r.Context()))
+	if err != nil {
+		tulisGalat(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"manasik": m})
 }
 
 // Booking GET /api/account/bookings/{id}/manasik

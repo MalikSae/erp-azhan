@@ -459,9 +459,20 @@ func main() {
 		scheduleEdit.Delete("/schedules/{id}", scheduleHandler.DeleteSchedule)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/schedules/{id}/perlengkapan", perlengkapanHandler.GetScheduleSet)
 		scheduleEdit.Put("/schedules/{id}/perlengkapan", perlengkapanHandler.PutScheduleSet)
-		scheduleView.Get("/schedules/{id}/manasik", manasikHandler.AmbilJadwal)
-		scheduleEdit.Put("/schedules/{id}/manasik", manasikHandler.SimpanJadwal)
-		scheduleEdit.Delete("/schedules/{id}/manasik", manasikHandler.HapusJadwal)
+		scheduleView.Get("/schedules/{id}/manasik", manasikHandler.UntukPaket)
+
+		// Manasik: satu manasik untuk satu atau lebih paket, rekap kehadiran, dan absensi hari-H.
+		manasikView := r.With(identity.RequirePermission("manasik.view"))
+		manasikEdit := r.With(identity.RequirePermission("manasik.edit"))
+		manasikView.Get("/manasik", manasikHandler.Daftar)
+		manasikEdit.Get("/manasik/paket-tersedia", manasikHandler.PaketTersedia)
+		manasikEdit.Post("/manasik", manasikHandler.Buat)
+		manasikView.Get("/manasik/{id}", manasikHandler.Detail)
+		manasikEdit.Put("/manasik/{id}", manasikHandler.Ubah)
+		manasikEdit.Delete("/manasik/{id}", manasikHandler.Hapus)
+		manasikEdit.Post("/manasik/{id}/paket", manasikHandler.TambahPaket)
+		manasikEdit.Delete("/manasik/{id}/paket/{schedule_id}", manasikHandler.LepasPaket)
+		manasikEdit.Put("/manasik/{id}/absensi", manasikHandler.Absensi)
 
 		// Jamaah
 		jamaahView := r.With(identity.RequirePermission("jamaah.view"))

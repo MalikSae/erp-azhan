@@ -2216,7 +2216,8 @@ func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandI
 }
 
 // UpdatePaxProgress melakukan update terhadap kolom progress individual pax (visa, siskopatuh, manasik, vaksin_meningitis).
-func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, paxID int64, brandID *int64, updates map[string]bool) (*Booking, error) {
+// adminID dicatat sebagai pengubah penanda "sudah manasik" (jejak yang sama dengan absensi di menu Manasik).
+func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, paxID int64, brandID *int64, adminID int64, updates map[string]bool) (*Booking, error) {
 	if len(updates) == 0 {
 		return r.GetByID(ctx, bookingID, brandID)
 	}
@@ -2257,6 +2258,14 @@ func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, pax
 		}
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", colName))
 		args = append(args, val)
+		if key == "manasik" {
+			var oleh any
+			if adminID > 0 {
+				oleh = adminID
+			}
+			setClauses = append(setClauses, "progress_manasik_oleh = ?", "progress_manasik_at = NOW()")
+			args = append(args, oleh)
+		}
 	}
 
 	if len(setClauses) > 0 {

@@ -22,6 +22,7 @@ import {
   Wallet,
   Megaphone,
   Sparkles,
+  BookOpen,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { listPerubahanJamaah, EVENT_PERUBAHAN_JAMAAH, listPencairanAdmin, EVENT_PENCAIRAN_KOMISI } from 'shared';
@@ -124,6 +125,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'Paket',
       items: [
         { name: 'Paket', path: '/schedules', icon: Package, perm: 'schedule.view' },
+        { name: 'Manasik', path: '/manasik', icon: BookOpen, perm: 'manasik.view' },
         { name: 'Kategori', path: '/categories', icon: FolderTree, perm: 'masterdata.view' },
         { name: 'Hotel', path: '/hotels', icon: Hotel, perm: 'masterdata.view' },
         { name: 'Maskapai & Bandara', path: '/airlines', icon: Plane, perm: 'masterdata.view' },
