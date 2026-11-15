@@ -234,6 +234,10 @@ type DashboardAgen struct {
 	KomisiTerbaru  []KomisiItem  `json:"komisi_terbaru"`
 	// BatasSeat: batas hold seat agen yang berlaku dan seat yang sedang ditahan ("Seat ditahan: X dari Y").
 	BatasSeat *BatasSeatAgen `json:"batas_seat"`
+	// JumlahJamaah: jamaah per booking minimal DP dari jamaah terikat (= isi halaman Data Jamaah di app).
+	JumlahJamaah int `json:"jumlah_jamaah"`
+	// KlikReferralBulanIni: klik link referral bulan berjalan (WIB).
+	KlikReferralBulanIni int `json:"klik_referral_bulan_ini"`
 }
 
 func requireAgenAktif(ctx context.Context, q querier, akunID int64) (*string, error) {
@@ -274,6 +278,15 @@ func getDashboardAgen(ctx context.Context, q querier, akunID int64) (*DashboardA
 		return nil, err
 	}
 	if d.BatasSeat, err = getBatasSeatAgen(ctx, q, akunID, nil, false); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	jamaah, err := listDataJamaah(ctx, q, akunID, now)
+	if err != nil {
+		return nil, err
+	}
+	d.JumlahJamaah = len(jamaah)
+	if d.KlikReferralBulanIni, err = klikBulanIni(ctx, q, akunID, now); err != nil {
 		return nil, err
 	}
 	return &d, nil

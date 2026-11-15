@@ -16,7 +16,9 @@ type UplineView struct {
 	NamaLengkap string `json:"nama_lengkap"`
 	WhatsApp    string `json:"whatsapp"` // angka saja berawalan 62, siap dipakai di wa.me
 	AdaFoto     bool   `json:"ada_foto"`
-	fotoURL     string
+	// Domisili: kota upline (boleh kosong).
+	Domisili *string `json:"domisili"`
+	fotoURL  string
 }
 
 // cariUpline mengembalikan upline aktif akun, atau nil bila tidak ada.
@@ -25,10 +27,10 @@ func cariUpline(ctx context.Context, q rowQuerier, akunID int64) (*UplineView, e
 	var hp string
 	var foto sql.NullString
 	err := q.QueryRowContext(ctx, `
-		SELECT up.nama_lengkap, up.no_hp, up.foto_url
+		SELECT up.nama_lengkap, up.no_hp, up.foto_url, NULLIF(TRIM(up.domisili), '')
 		FROM customer_accounts a
 		JOIN customer_accounts up ON up.id = a.direkrut_oleh_akun_id AND up.brand_id = a.brand_id
-		WHERE a.id = ? AND up.status_agen = 'aktif'`, akunID).Scan(&u.NamaLengkap, &hp, &foto)
+		WHERE a.id = ? AND up.status_agen = 'aktif'`, akunID).Scan(&u.NamaLengkap, &hp, &foto, &u.Domisili)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

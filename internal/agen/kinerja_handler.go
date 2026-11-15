@@ -1,11 +1,16 @@
 package agen
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
+	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"erp-azhan/api/internal/identity"
 )
@@ -81,6 +86,69 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
+}
+
+// MutasiPortal GET /api/portal/agen/mutasi: komisi, koreksi, dan pencairan terbaru untuk app.
+func (h *Handler) MutasiPortal(w http.ResponseWriter, r *http.Request) {
+	items, err := h.repo.ListMutasiAgen(r.Context(), identity.GetCustomerAccountID(r.Context()))
+	if err != nil {
+		handleKinerjaError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+// DataJamaahPortal GET /api/portal/agen/data-jamaah: jamaah per booking minimal DP dari jamaah terikat.
+func (h *Handler) DataJamaahPortal(w http.ResponseWriter, r *http.Request) {
+	items, err := h.repo.ListDataJamaahAgen(r.Context(), identity.GetCustomerAccountID(r.Context()), time.Now())
+	if err != nil {
+		handleKinerjaError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+// AgenBinaanPortal GET /api/portal/agen/binaan: agen yang upline-nya agen ini.
+func (h *Handler) AgenBinaanPortal(w http.ResponseWriter, r *http.Request) {
+	items, err := h.repo.ListAgenBinaan(r.Context(), identity.GetCustomerAccountID(r.Context()), time.Now())
+	if err != nil {
+		handleKinerjaError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+// KlikReferral POST /api/public/referral/klik: {brand_id, kode_referral, pengunjung}. Selalu 204; kode yang tidak
+// dikenal diabaikan supaya endpoint tidak bisa dipakai menebak kode.
+func (h *Handler) KlikReferral(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		BrandID      int64  `json:"brand_id"`
+		KodeReferral string `json:"kode_referral"`
+		Pengunjung   string `json:"pengunjung"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		return
+	}
+	if len(req.Pengunjung) > 100 {
+		req.Pengunjung = req.Pengunjung[:100]
+	}
+	hash := HashPengunjung(req.Pengunjung, clientIP(r), r.UserAgent())
+	if err := h.repo.CatatKlikReferral(r.Context(), req.BrandID, req.KodeReferral, hash, time.Now()); err != nil {
+		log.Printf("[ERROR] klik referral: %v", err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// clientIP: alamat pengunjung dari X-Forwarded-For (proxy situs) atau RemoteAddr.
+func clientIP(r *http.Request) string {
+	if xff := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0]); xff != "" {
+		return xff
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 // RiwayatKomisiPortal GET /api/portal/agen/komisi (A6)
