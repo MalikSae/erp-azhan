@@ -22,7 +22,7 @@ import EmptyState from 'shared/ui/EmptyState';
 import BenefitIcon from 'shared/ui/BenefitIcon';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import SeatManagement from '../components/SeatManagement';
-import ManasikSection from '../components/ManasikSection';
+import ManasikPaketRingkas from '../components/ManasikPaketRingkas';
 import { AuthContext } from '../context/AuthContext';
 import { getSchedule } from '../api/schedules';
 import { getItinerary } from '../api/itineraries';
@@ -612,7 +612,7 @@ const ScheduleDetailPage = () => {
           </Section>
 
           <Section title="Manasik">
-            <ManasikSection scheduleId={schedule.id} canEdit={canEdit} />
+            <ManasikPaketRingkas scheduleId={schedule.id} bolehLihat={hasPermission('manasik.view')} />
           </Section>
         </Surface>
 
