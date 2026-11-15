@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
-	"erp-azhan/api/internal/shared"
 	"erp-azhan/api/internal/payment"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -813,7 +813,7 @@ func (h *Handler) DistribusiPerlengkapan(w http.ResponseWriter, r *http.Request)
 
 	brandID := identity.GetBrandID(r.Context())
 
-	b, err := h.repo.MarkPerlengkapanDiberikan(r.Context(), id, paxID, brandID)
+	b, err := h.repo.MarkPerlengkapanDiberikan(r.Context(), id, paxID, brandID, identity.GetAdminUserID(r.Context()))
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -881,6 +881,8 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "template set perlengkapan belum diatur untuk brand ini")
 	case errors.Is(err, ErrPerlengkapanSudahDiberikan):
 		writeError(w, http.StatusBadRequest, "perlengkapan untuk booking ini sudah pernah diberikan")
+	case errors.Is(err, ErrPerlengkapanSudahDiterima):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrPerlengkapanBelumDiberikan):
 		writeError(w, http.StatusBadRequest, "perlengkapan belum pernah diberikan untuk booking ini")
 	case errors.Is(err, ErrKodeBrandNotSet):

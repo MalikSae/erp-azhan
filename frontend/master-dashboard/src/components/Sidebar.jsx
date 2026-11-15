@@ -13,7 +13,7 @@ import {
   CreditCard,
   Boxes,
   Building2,
-  History,
+  History, PackageCheck,
   UserCog,
   ChevronDown,
   Network,
@@ -136,6 +136,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'Inventory',
       items: [
         { name: 'Perlengkapan', path: '/inventory/perlengkapan', icon: Boxes, perm: 'perlengkapan.view' },
+        { name: 'Pengajuan Perlengkapan', path: '/inventory/pengajuan', icon: PackageCheck, perm: 'perlengkapan.view' },
         { name: 'Riwayat Stok', path: '/inventory/riwayat-stok', icon: History, perm: 'perlengkapan.view' },
       ],
     },

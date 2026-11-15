@@ -306,6 +306,9 @@ func main() {
 		r.Get("/bookings/{id}/surat", customerOrders.SuratDaftar)
 		r.Get("/bookings/{id}/surat/{jenis}", customerOrders.SuratUnduh)
 		r.Put("/bookings/{id}/jamaah/{jamaah_id}", customerOrders.SimpanDataJamaah)
+		r.Get("/bookings/{id}/perlengkapan", customerOrders.Perlengkapan)
+		r.Post("/bookings/{id}/perlengkapan/ajukan", customerOrders.AjukanPerlengkapan)
+		r.Post("/bookings/{id}/perlengkapan/terima", customerOrders.TerimaPerlengkapan)
 		r.Get("/bookings/{id}/manasik", manasikHandler.Booking)
 		r.Put("/bookings/{id}/manasik/rsvp", manasikHandler.RSVP)
 		r.Get("/bookings/{id}/payments", customerOrders.ListPayments)
@@ -512,6 +515,7 @@ func main() {
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-stok", perlengkapanHandler.ListStok)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Put("/perlengkapan-stok/{item_id}", perlengkapanHandler.UpdateStok)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-mutasi", perlengkapanHandler.ListMutasi)
+		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-pengajuan", perlengkapanHandler.ListPengajuan)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Post("/perlengkapan-mutasi/pembelian", perlengkapanHandler.Pembelian)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Post("/perlengkapan-mutasi/koreksi", perlengkapanHandler.Koreksi)
 
