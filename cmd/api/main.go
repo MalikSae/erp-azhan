@@ -20,19 +20,19 @@ import (
 
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/agen"
-	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/airline"
-	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/airport"
+	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/bankaccount"
+	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
-	"erp-azhan/api/internal/surat"
 	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/crmdeal"
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/destination"
 	"erp-azhan/api/internal/dokumen"
+	"erp-azhan/api/internal/haramain"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/itinerary"
@@ -47,6 +47,7 @@ import (
 	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/selfbooking"
 	"erp-azhan/api/internal/shared"
+	"erp-azhan/api/internal/surat"
 	"erp-azhan/api/internal/topbar"
 )
 
@@ -198,6 +199,7 @@ func main() {
 	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
 	jamaahAkunHandler := customer.NewJamaahAkun(db, customerRepo, mailer.NewFromEnv())
 	pengumumanHandler := pengumuman.NewHandler(db)
+	haramainHandler := haramain.NewHandler(db)
 	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
@@ -226,6 +228,9 @@ func main() {
 	publicV1.Get("/api/public/v1/sitemap-feed", scheduleHandler.SitemapFeedV1)
 	// Rentang komisi agen dari jadwal tayang untuk landing /jadi-agen (spek keagenan K23).
 	publicV1.Get("/api/public/v1/agen/ujroh", agenHandler.UjrohPublik)
+	// Jelajah Haramain (web dan app). Detail tanpa cache publik supaya ulasan baru langsung terlihat.
+	publicV1.Get("/api/public/v1/haramain", haramainHandler.DaftarPublik)
+	r.With(requireDB(db)).Get("/api/public/v1/haramain/{id}", haramainHandler.DetailPublik)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: categories & brand & bank accounts
@@ -283,6 +288,10 @@ func main() {
 		r.Get("/foto", customerHandler.Foto)
 		r.Put("/foto", customerHandler.UpdateFoto)
 		r.Get("/upline", customerHandler.Upline)
+		r.Get("/haramain/{id}/ulasan", haramainHandler.UlasanSayaAkun)
+		r.Put("/haramain/{id}/ulasan", haramainHandler.SimpanUlasanAkun)
+		r.Delete("/haramain/{id}/ulasan", haramainHandler.HapusUlasanAkun)
+		r.Post("/haramain/ulasan/{id}/laporkan", haramainHandler.LaporkanAkun)
 		r.Get("/upline/foto", customerHandler.UplineFoto)
 		r.Post("/password", customerHandler.ChangePassword)
 		r.Post("/logout", customerHandler.Logout)
@@ -534,6 +543,21 @@ func main() {
 		})
 
 		// Pengumuman untuk pelanggan (tampil di dashboard akun web).
+		r.Route("/haramain", func(r chi.Router) {
+			r.Use(identity.RequirePermission("haramain.manage"))
+			r.Get("/", haramainHandler.DaftarAdmin)
+			r.Post("/", haramainHandler.BuatAdmin)
+			r.Put("/urutan", haramainHandler.UrutkanAdmin)
+			r.Get("/{id}", haramainHandler.DetailAdmin)
+			r.Put("/{id}", haramainHandler.UbahAdmin)
+			r.Delete("/{id}", haramainHandler.HapusAdmin)
+		})
+		r.Route("/haramain-ulasan", func(r chi.Router) {
+			r.Use(identity.RequirePermission("haramain.manage"))
+			r.Get("/", haramainHandler.UlasanAdminList)
+			r.Put("/{id}/tampil", haramainHandler.AturTampilAdmin)
+			r.Post("/{id}/abaikan", haramainHandler.AbaikanAdmin)
+		})
 		r.Route("/pengumuman", func(r chi.Router) {
 			r.Use(identity.RequirePermission("pengumuman.manage"))
 			r.Get("/", pengumumanHandler.DaftarAdmin)

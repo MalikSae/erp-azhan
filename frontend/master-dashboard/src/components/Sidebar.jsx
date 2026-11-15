@@ -22,6 +22,7 @@ import {
   Wallet,
   Megaphone,
   Sparkles,
+  Landmark,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { listPerubahanJamaah, EVENT_PERUBAHAN_JAMAAH, listPencairanAdmin, EVENT_PENCAIRAN_KOMISI } from 'shared';
@@ -144,6 +145,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       name: 'Komunikasi',
       items: [
         { name: 'Pengumuman', path: '/pengumuman', icon: Megaphone, perm: 'pengumuman.manage' },
+        { name: 'Jelajah Haramain', path: '/haramain', icon: Landmark, perm: 'haramain.manage' },
       ],
     },
     {

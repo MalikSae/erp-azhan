@@ -13,6 +13,8 @@ import HalamanAgenPage from './pages/HalamanAgenPage';
 import KelolaKomisiPage from './pages/KelolaKomisiPage';
 import KelolaJamaahPage from './pages/KelolaJamaahPage';
 import PengumumanPage from './pages/PengumumanPage';
+import HaramainPage from './pages/HaramainPage';
+import HaramainFormPage from './pages/HaramainFormPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
 import HotelsPage from './pages/HotelsPage';
 import AirlinesPage from './pages/AirlinesPage';
@@ -94,6 +96,9 @@ function AppRoutes() {
           {/* Agen & komisi */}
           <Route path="/komisi" element={<RequireAccess perm="agen.payout.approve"><KelolaKomisiPage tab="pencairan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/pengumuman" element={<RequireAccess perm="pengumuman.manage"><PengumumanPage /></RequireAccess>} />
+          <Route path="/haramain" element={<RequireAccess perm="haramain.manage"><HaramainPage /></RequireAccess>} />
+          <Route path="/haramain/baru" element={<RequireAccess perm="haramain.manage"><HaramainFormPage /></RequireAccess>} />
+          <Route path="/haramain/:id/ubah" element={<RequireAccess perm="haramain.manage"><HaramainFormPage /></RequireAccess>} />
           <Route path="/jamaah/perubahan" element={<RequireAccess perm="jamaah.perubahan.approve"><KelolaJamaahPage tab="persetujuan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/pengajuan" element={<RequireAccess perm="agen.approve"><KelolaAgenPage tab="pengajuan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen" element={<RequireAccess perm="agen.view"><KelolaAgenPage tab="semua" showBrandColumn={showBrandColumn} /></RequireAccess>} />
