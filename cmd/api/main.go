@@ -41,6 +41,7 @@ import (
 	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
+	"erp-azhan/api/internal/manasik"
 	"erp-azhan/api/internal/pengumuman"
 	"erp-azhan/api/internal/perlengkapan"
 	"erp-azhan/api/internal/rbac"
@@ -198,6 +199,7 @@ func main() {
 	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
 	jamaahAkunHandler := customer.NewJamaahAkun(db, customerRepo, mailer.NewFromEnv())
 	pengumumanHandler := pengumuman.NewHandler(db)
+	manasikHandler := manasik.NewHandler(db)
 	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
@@ -304,6 +306,8 @@ func main() {
 		r.Get("/bookings/{id}/surat", customerOrders.SuratDaftar)
 		r.Get("/bookings/{id}/surat/{jenis}", customerOrders.SuratUnduh)
 		r.Put("/bookings/{id}/jamaah/{jamaah_id}", customerOrders.SimpanDataJamaah)
+		r.Get("/bookings/{id}/manasik", manasikHandler.Booking)
+		r.Put("/bookings/{id}/manasik/rsvp", manasikHandler.RSVP)
 		r.Get("/bookings/{id}/payments", customerOrders.ListPayments)
 		r.Post("/bookings/{id}/payments", customerOrders.CreatePayment)
 		r.Post("/media/upload", mediaHandler.UploadPortalMedia)
@@ -452,6 +456,9 @@ func main() {
 		scheduleEdit.Delete("/schedules/{id}", scheduleHandler.DeleteSchedule)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/schedules/{id}/perlengkapan", perlengkapanHandler.GetScheduleSet)
 		scheduleEdit.Put("/schedules/{id}/perlengkapan", perlengkapanHandler.PutScheduleSet)
+		scheduleView.Get("/schedules/{id}/manasik", manasikHandler.AmbilJadwal)
+		scheduleEdit.Put("/schedules/{id}/manasik", manasikHandler.SimpanJadwal)
+		scheduleEdit.Delete("/schedules/{id}/manasik", manasikHandler.HapusJadwal)
 
 		// Jamaah
 		jamaahView := r.With(identity.RequirePermission("jamaah.view"))

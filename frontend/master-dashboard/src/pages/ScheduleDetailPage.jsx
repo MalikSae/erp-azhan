@@ -22,6 +22,7 @@ import EmptyState from 'shared/ui/EmptyState';
 import BenefitIcon from 'shared/ui/BenefitIcon';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import SeatManagement from '../components/SeatManagement';
+import ManasikSection from '../components/ManasikSection';
 import { AuthContext } from '../context/AuthContext';
 import { getSchedule } from '../api/schedules';
 import { getItinerary } from '../api/itineraries';
@@ -608,6 +609,10 @@ const ScheduleDetailPage = () => {
               <FacilityList title="Termasuk" items={schedule.include_items} icon={Check} iconClass="text-neutral-700" />
               <FacilityList title="Tidak Termasuk" items={schedule.exclude_items} icon={X} iconClass="text-neutral-400" />
             </div>
+          </Section>
+
+          <Section title="Manasik">
+            <ManasikSection scheduleId={schedule.id} canEdit={canEdit} />
           </Section>
         </Surface>
 

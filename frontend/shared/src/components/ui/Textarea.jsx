@@ -1,12 +1,12 @@
 import React from 'react';
 import FormField from './FormField';
 
-const Textarea = ({ label, value, onChange, error, required, placeholder, className = '', name, id, maxLength, rows = 3 }) => {
+const Textarea = ({ label, value, onChange, error, required, placeholder, className = '', name, id, maxLength, rows = 3, helpText }) => {
   const textareaBaseClasses = 'w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none font-body transition-all';
   const errorClasses = error ? 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20' : '';
 
   return (
-    <FormField label={label} error={error} required={required} className={className} htmlFor={id || name}>
+    <FormField label={label} error={error} helpText={helpText} helpId={`${id || name}-help`} required={required} className={className} htmlFor={id || name}>
       <textarea
         id={id || name}
         maxLength={maxLength}
@@ -16,6 +16,7 @@ const Textarea = ({ label, value, onChange, error, required, placeholder, classN
         required={required}
         placeholder={placeholder}
         rows={rows}
+        aria-describedby={helpText ? `${id || name}-help` : undefined}
         className={`${textareaBaseClasses} ${errorClasses}`}
       />
     </FormField>
