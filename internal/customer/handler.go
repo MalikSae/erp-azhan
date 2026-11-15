@@ -48,6 +48,7 @@ type Handler struct {
 	profile     *shared.WindowLimiter
 	pwFail      *shared.WindowLimiter
 	dummyHash   []byte
+	google      VerifikatorGoogle
 }
 
 func NewHandler(repo *Repository, m mailer.Sender) *Handler {
@@ -64,6 +65,7 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 		profile:     shared.NewWindowLimiter(profileUpdateLimit, time.Hour),
 		pwFail:      shared.NewWindowLimiter(passwordFailLimit, 15*time.Minute),
 		dummyHash:   dummy,
+		google:      NewVerifikatorGoogle(),
 	}
 }
 

@@ -27,27 +27,29 @@ var (
 )
 
 const (
-	SessionTTL        = 30 * 24 * time.Hour
-	ResetTokenTTL     = time.Hour
-	PurposeResetPass  = "reset_password"
+	SessionTTL       = 30 * 24 * time.Hour
+	ResetTokenTTL    = time.Hour
+	PurposeResetPass = "reset_password"
 )
 
 type Account struct {
-	ID              int64      `json:"id"`
-	BrandID         int64      `json:"brand_id"`
-	NamaLengkap     string     `json:"nama_lengkap"`
-	Email           string     `json:"email"`
-	NoHP            string     `json:"no_hp"`
-	JamaahID        *int64     `json:"-"`
+	ID          int64  `json:"id"`
+	BrandID     int64  `json:"brand_id"`
+	NamaLengkap string `json:"nama_lengkap"`
+	Email       string `json:"email"`
+	NoHP        string `json:"no_hp"`
+	JamaahID    *int64 `json:"-"`
 	// Status keagenan akun (spek 6.3) dan kode referral bila sudah pernah disetujui.
 	StatusAgen   string  `json:"status_agen"`
 	KodeReferral *string `json:"kode_referral"`
 	// FotoURL: foto profil akun (privat, disajikan lewat GET /api/account/foto).
-	FotoURL      *string `json:"foto_url"`
+	FotoURL *string `json:"foto_url"`
 	// Domisili (kota atau kabupaten) dan tanggal lahir (YYYY-MM-DD): opsional, diisi pemilik akun di Profil.
 	Domisili     *string `json:"domisili"`
 	TanggalLahir *string `json:"tanggal_lahir"`
-	passwordHash string
+	// PunyaPassword: false untuk akun yang dibuat lewat Google dan belum membuat sandi.
+	PunyaPassword bool `json:"punya_password"`
+	passwordHash  string
 }
 
 // Biodata adalah isian opsional saat daftar. String kosong disimpan sebagai NULL.
@@ -77,7 +79,7 @@ func newRawToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-const accountCols = `id, brand_id, nama_lengkap, email, no_hp, jamaah_id, password_hash, status_agen, kode_referral, foto_url, domisili, DATE_FORMAT(tanggal_lahir, '%Y-%m-%d')`
+const accountCols = `id, brand_id, nama_lengkap, email, no_hp, jamaah_id, COALESCE(password_hash, ''), status_agen, kode_referral, foto_url, domisili, DATE_FORMAT(tanggal_lahir, '%Y-%m-%d')`
 
 func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 	var a Account
@@ -89,6 +91,7 @@ func scanAccount(row interface{ Scan(...any) error }) (*Account, error) {
 		}
 		return nil, err
 	}
+	a.PunyaPassword = a.passwordHash != ""
 	if jamaah.Valid {
 		a.JamaahID = &jamaah.Int64
 	}
@@ -193,7 +196,7 @@ func (r *Repository) AccountBySession(ctx context.Context, raw string) (*Account
 		return nil, ErrSessionInvalid
 	}
 	a, err := scanAccount(r.db.QueryRowContext(ctx, `
-		SELECT a.id, a.brand_id, a.nama_lengkap, a.email, a.no_hp, a.jamaah_id, a.password_hash, a.status_agen, a.kode_referral, a.foto_url, a.domisili, DATE_FORMAT(a.tanggal_lahir, '%Y-%m-%d')
+		SELECT a.id, a.brand_id, a.nama_lengkap, a.email, a.no_hp, a.jamaah_id, COALESCE(a.password_hash, ''), a.status_agen, a.kode_referral, a.foto_url, a.domisili, DATE_FORMAT(a.tanggal_lahir, '%Y-%m-%d')
 		FROM customer_sessions s JOIN customer_accounts a ON a.id = s.account_id
 		WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at > ?`, hashToken(raw), time.Now()))
 	if errors.Is(err, ErrNotFound) {
