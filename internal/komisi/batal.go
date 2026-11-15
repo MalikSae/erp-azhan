@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	"erp-azhan/api/internal/notifikasi"
 )
 
 // Komisi mengikuti lunas terakhir (spek keagenan K25, merevisi K20). Booking yang turun dari 'lunas' ke 'dp'
@@ -27,7 +29,7 @@ const (
 	SebabVoid          = "void_pembayaran"
 	SebabDiskonDihapus = "diskon_dihapus"
 	SebabGantiKamar    = "ganti_kamar"
-	SebabGantiKaitan   = "ganti_kaitan" // bonus pembinaan tanpa penerima sah setelah kaitan jamaah diganti
+	SebabGantiKaitan   = "ganti_kaitan"       // bonus pembinaan tanpa penerima sah setelah kaitan jamaah diganti
 	SebabAturanBaru    = "penyesuaian_aturan" // migrasi 126
 )
 
@@ -57,6 +59,7 @@ func BatalkanKomisiBookingTx(ctx context.Context, tx *sql.Tx, bookingID int64) (
 	if err := kunciPenerimaKomisiBookingTx(ctx, tx, bookingID); err != nil {
 		return 0, err
 	}
+	notifikasi.KomisiBatal(ctx, tx, bookingID)
 	res, err := tx.ExecContext(ctx, `
 		UPDATE transaksi_komisi SET dibatalkan_at = NOW(), sebab_batal = ?
 		WHERE booking_id = ? AND dibatalkan_at IS NULL`, sebabBatal(ctx), bookingID)
