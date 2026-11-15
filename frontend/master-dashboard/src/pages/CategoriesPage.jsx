@@ -21,6 +21,9 @@ import { StatusChip } from '../components/penggunaUi';
 import { isBadgeHex, badgeTextColor } from '../lib/badgeColors';
 import BadgeColorField from '../components/BadgeColorField';
 
+// Slug kategori low cost; sama dengan category.SlugLowCost di ERP.
+const SLUG_LOW_COST = 'hemat';
+
 const initialForm = {
   name: '',
   slug: '',
@@ -47,6 +50,7 @@ const CategoriesPage = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const kunciLowCost = editingCategory?.slug === SLUG_LOW_COST;
   const [formData, setFormData] = useState(initialForm);
   const [formErrors, setFormErrors] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -304,9 +308,11 @@ const CategoriesPage = () => {
 
     if (key === 'aksi') {
       const used = (row.package_count || 0) > 0;
+      // Kategori low cost (slug hemat) dipakai app Hana: tidak bisa dihapus, hanya diganti nama.
+      const lowCost = row.slug === SLUG_LOW_COST;
       const menuItems = [
         { label: 'Edit', icon: Pencil, tooltip: 'Edit Kategori', onClick: () => handleOpenModal(row) },
-        {
+        ...(lowCost ? [] : [{
           label: 'Hapus',
           icon: Trash2,
           danger: true,
@@ -314,7 +320,7 @@ const CategoriesPage = () => {
           disabled: used,
           disabledTooltip: `Tidak bisa dihapus, dipakai ${row.package_count} paket`,
           onClick: () => setDeleteConfirmId(row.id),
-        },
+        }]),
       ];
       return <ActionMenu items={menuItems} align="right" />;
     }
@@ -374,6 +380,7 @@ const CategoriesPage = () => {
             value={formData.slug}
             onChange={handleChange}
             placeholder="otomatis jika kosong"
+            disabled={kunciLowCost}
           />
 
           <div>
@@ -384,6 +391,7 @@ const CategoriesPage = () => {
               value={formData.seo_tier}
               onChange={handleChange}
               placeholder={null}
+              disabled={kunciLowCost}
             >
               <option value="">Belum dipetakan</option>
               <option value="hemat">Hemat</option>
@@ -479,6 +487,7 @@ const CategoriesPage = () => {
               name="is_active"
               checked={formData.is_active}
               onChange={handleChange}
+              disabled={kunciLowCost}
             />
           </div>
 

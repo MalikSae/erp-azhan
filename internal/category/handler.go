@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
-	"erp-azhan/api/internal/identity"
 )
 
 type Handler struct {
@@ -270,6 +270,21 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		req.Slug = slugify(req.Slug)
 	}
 
+	lama, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	if lama.Slug == SlugLowCost {
+		// Kategori low cost dikenali app dari slug-nya (strip promosi Beranda, filter tab Paket): slug dan tier
+		// SEO tetap, kategori tidak bisa dinonaktifkan. Nama, deskripsi, warna, dan brand boleh diubah.
+		if req.IsActive != nil && !*req.IsActive {
+			writeError(w, http.StatusConflict, "kategori low cost tidak bisa dinonaktifkan")
+			return
+		}
+		req.Slug, req.SEOTier = lama.Slug, lama.SEOTier
+	}
+
 	if exists, err := h.repo.CheckSlugExists(r.Context(), req.Slug, &id); err != nil {
 		handleRepoError(w, err)
 		return
@@ -334,6 +349,13 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.bolehUbah(r, id, nil); err != nil {
 		handleRepoError(w, err)
+		return
+	}
+	if lama, err := h.repo.GetByID(r.Context(), id); err != nil {
+		handleRepoError(w, err)
+		return
+	} else if lama.Slug == SlugLowCost {
+		writeError(w, http.StatusConflict, "kategori low cost tidak bisa dihapus")
 		return
 	}
 

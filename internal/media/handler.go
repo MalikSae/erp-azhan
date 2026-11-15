@@ -97,6 +97,7 @@ var adminUploadCategoryPerms = map[string][]string{
 	"airline-logos":   {"masterdata.edit"},
 	"perlengkapan":    {"masterdata.edit"},
 	"schedule-brosur": {"schedule.edit"},
+	"banner-promosi":  {"banner.manage"},
 }
 
 // protectedViewPerms: izin untuk GET /api/admin/media/{category}/{file} (berlaku juga untuk user
@@ -127,6 +128,7 @@ var publicCategories = map[string]struct{}{
 	"airline-logos":   {},
 	"bank-logos":      {},
 	"schedule-brosur": {},
+	"banner-promosi":  {},
 }
 
 var protectedCategories = map[string]struct{}{
