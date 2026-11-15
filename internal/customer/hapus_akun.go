@@ -55,7 +55,7 @@ func anonimkanAkun(ctx context.Context, tx *sql.Tx, akunID int64) error {
 			nama_lengkap = 'Akun dihapus', email = ?, email_normal = ?, no_hp = '', password_hash = '!',
 			foto_url = NULL, domisili = NULL, tanggal_lahir = NULL, jenis_kelamin = NULL, nik_agen = NULL,
 			kode_referral = NULL, rekening_bank_agen = NULL, rekening_nomor_agen = NULL, rekening_atas_nama_agen = NULL,
-			email_verified_at = NULL, dihapus_at = NOW()
+			email_verified_at = NULL, google_sub = NULL, dihapus_at = NOW()
 		WHERE id = ?`, email, email, akunID); err != nil {
 		return fmt.Errorf("customer: anonimkan akun: %w", err)
 	}
@@ -86,6 +86,30 @@ func (h *Handler) CekHapusAkun(w http.ResponseWriter, r *http.Request) {
 
 type hapusAkunRequest struct {
 	PasswordSaatIni string `json:"password_saat_ini"`
+	// IDToken: konfirmasi untuk akun tanpa sandi (dibuat lewat Google), berupa ID token akun Google yang tertaut.
+	IDToken string `json:"id_token"`
+}
+
+// cekKonfirmasiHapus: sandi saat ini, atau ID token Google milik akun Google yang tertaut ke akun ini.
+func (h *Handler) cekKonfirmasiHapus(w http.ResponseWriter, r *http.Request, acc *Account, req hapusAkunRequest) bool {
+	if req.IDToken == "" {
+		return h.cekPasswordSaatIni(w, acc, req.PasswordSaatIni)
+	}
+	p, ok := h.verifikasiGoogle(w, r, req.IDToken)
+	if !ok {
+		return false
+	}
+	var sub string
+	if err := h.repo.db.QueryRowContext(r.Context(), `SELECT COALESCE(google_sub, '') FROM customer_accounts WHERE id = ?`, acc.ID).Scan(&sub); err != nil {
+		log.Printf("[ERROR] customer hapus akun google: %v", err)
+		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		return false
+	}
+	if sub == "" || sub != p.Sub {
+		writeError(w, http.StatusForbidden, "Akun Google tidak sesuai")
+		return false
+	}
+	return true
 }
 
 // HapusAkun POST /api/account/hapus: {password_saat_ini}. 204 bila berhasil; 409 dengan alasan bila masih ada urusan
@@ -96,7 +120,7 @@ func (h *Handler) HapusAkun(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if !h.cekPasswordSaatIni(w, acc, req.PasswordSaatIni) {
+	if !h.cekKonfirmasiHapus(w, r, acc, req) {
 		return
 	}
 	tx, err := h.repo.db.BeginTx(r.Context(), nil)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -167,4 +168,57 @@ func lengkapiDari(b []byte) bool {
 	var l googleLengkapi
 	_ = json.Unmarshal(b, &l)
 	return l.PerluLengkapi
+}
+
+// Akun tanpa sandi (dibuat lewat Google) menghapus diri dengan ID token akun Google yang tertaut.
+func TestHapusAkunDenganGoogle(t *testing.T) {
+	db := testdb.DB(t)
+	ctx := context.Background()
+	var brandID int64
+	if err := db.QueryRowContext(ctx, `SELECT id FROM brands ORDER BY id LIMIT 1`).Scan(&brandID); err != nil {
+		t.Fatal(err)
+	}
+	suffix := time.Now().UnixNano()
+	email := fmt.Sprintf("google-hapus-%d@example.com", suffix)
+	var akunID int64
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM customer_sessions WHERE account_id = ?`, akunID)
+		_, _ = db.Exec(`DELETE FROM customer_tokens WHERE account_id = ?`, akunID)
+		_, _ = db.Exec(`DELETE FROM customer_accounts WHERE id = ?`, akunID)
+	})
+	h := NewHandler(NewRepository(db), &captureMail{})
+	sub := fmt.Sprintf("sub-hapus-%d", suffix)
+	h.google = googlePalsu{&ProfilGoogle{Sub: sub, Email: email, Nama: "Hapus Google"}}
+	rec := post(h.DaftarGoogle, map[string]any{"brand_id": brandID, "id_token": "t", "no_hp": fmt.Sprintf("0816%08d", suffix%100000000)}, "")
+	var auth struct {
+		Account      Account `json:"account"`
+		SessionToken string  `json:"session_token"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &auth)
+	akunID = auth.Account.ID
+	if rec.Code != http.StatusCreated || akunID == 0 {
+		t.Fatalf("daftar google: %d %s", rec.Code, rec.Body)
+	}
+	hapus := func(w http.ResponseWriter, r *http.Request) { h.RequireCustomer(http.HandlerFunc(h.HapusAkun)).ServeHTTP(w, r) }
+
+	// Sandi kosong ditolak; akun Google lain ditolak.
+	if rec = post(hapus, map[string]any{"password_saat_ini": ""}, auth.SessionToken); rec.Code == http.StatusNoContent {
+		t.Fatalf("hapus tanpa konfirmasi: %d", rec.Code)
+	}
+	h.google = googlePalsu{&ProfilGoogle{Sub: sub + "-lain", Email: email, Nama: "X"}}
+	if rec = post(hapus, map[string]any{"id_token": "t"}, auth.SessionToken); rec.Code != http.StatusForbidden {
+		t.Fatalf("akun google lain: %d %s", rec.Code, rec.Body)
+	}
+	h.google = googlePalsu{&ProfilGoogle{Sub: sub, Email: email, Nama: "Hapus Google"}}
+	if rec = post(hapus, map[string]any{"id_token": "t"}, auth.SessionToken); rec.Code != http.StatusNoContent {
+		t.Fatalf("hapus dengan google: %d %s", rec.Code, rec.Body)
+	}
+	var tertaut sql.NullString
+	if err := db.QueryRowContext(ctx, `SELECT google_sub FROM customer_accounts WHERE id = ?`, akunID).Scan(&tertaut); err != nil || tertaut.Valid {
+		t.Fatalf("tautan google setelah hapus: %v %v", tertaut, err)
+	}
+	// Masuk lagi dengan Google: akun lama tidak dipakai, diminta lengkapi data.
+	if rec = post(h.LoginGoogle, map[string]any{"brand_id": brandID, "id_token": "t"}, ""); !lengkapiDari(rec.Body.Bytes()) {
+		t.Fatalf("login setelah hapus: %d %s", rec.Code, rec.Body)
+	}
 }
