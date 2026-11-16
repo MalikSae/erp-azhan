@@ -259,32 +259,36 @@ type execer interface {
 
 // catatKlikReferral mencatat satu klik link referral agen aktif di brand itu. Klik kedua dari pengunjung yang sama di
 // hari yang sama diabaikan. Kode yang tidak dikenal juga diabaikan tanpa galat, supaya endpoint publik tidak bisa
-// dipakai menebak kode referral.
+// dipakai menebak kode referral. baru = true hanya bila satu baris klik ditambahkan.
 func catatKlikReferral(ctx context.Context, db interface {
 	querier
 	execer
-}, brandID int64, kode, pengunjungHash string, now time.Time) error {
+}, brandID int64, kode, pengunjungHash string, now time.Time) (baru bool, err error) {
 	kode = strings.ToUpper(strings.TrimSpace(kode))
 	if brandID <= 0 || kode == "" || len(kode) > 20 {
-		return nil
+		return false, nil
 	}
 	var akunID int64
-	err := db.QueryRowContext(ctx, `SELECT id FROM customer_accounts WHERE brand_id = ? AND kode_referral = ? AND status_agen = 'aktif'`,
+	err = db.QueryRowContext(ctx, `SELECT id FROM customer_accounts WHERE brand_id = ? AND kode_referral = ? AND status_agen = 'aktif'`,
 		brandID, kode).Scan(&akunID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil
+		return false, nil
 	}
 	if err != nil {
-		return fmt.Errorf("agen: cari kode referral: %w", err)
+		return false, fmt.Errorf("agen: cari kode referral: %w", err)
 	}
-	_, err = db.ExecContext(ctx, `INSERT IGNORE INTO referral_klik (akun_id, tanggal, pengunjung) VALUES (?, ?, ?)`,
+	res, err := db.ExecContext(ctx, `INSERT IGNORE INTO referral_klik (akun_id, tanggal, pengunjung) VALUES (?, ?, ?)`,
 		akunID, now.In(zonaWIB).Format("2006-01-02"), pengunjungHash)
 	if err != nil {
-		return fmt.Errorf("agen: catat klik referral: %w", err)
+		return false, fmt.Errorf("agen: catat klik referral: %w", err)
 	}
-	return nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("agen: catat klik referral, jumlah baris: %w", err)
+	}
+	return n == 1, nil
 }
 
-func (r *Repository) CatatKlikReferral(ctx context.Context, brandID int64, kode, pengunjungHash string, now time.Time) error {
+func (r *Repository) CatatKlikReferral(ctx context.Context, brandID int64, kode, pengunjungHash string, now time.Time) (bool, error) {
 	return catatKlikReferral(ctx, r.db, brandID, kode, pengunjungHash, now)
 }

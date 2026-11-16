@@ -130,19 +130,27 @@ func TestPortalAppAgen(t *testing.T) {
 		t.Fatal(err)
 	}
 	p1, p2 := HashPengunjung("pengunjung-1", "", ""), HashPengunjung("pengunjung-2", "", "")
-	for _, p := range []string{p1, p1, p2} {
-		if err := catatKlikReferral(ctx, tx, brand, kode, p, now); err != nil {
-			t.Fatal(err)
+	// baru: hanya klik yang menambah baris (dipakai handler untuk mengembalikan jatah limiter).
+	for i, c := range []struct {
+		kode string
+		p    string
+		hari time.Time
+		baru bool
+	}{
+		{kode, p1, now, true},
+		{kode, p1, now, false}, // pengunjung sama, hari sama
+		{kode, p2, now, true},
+		{"TIDAKADA", p1, now, false},
+		{kode, p1, now.AddDate(0, 0, 1), true},
+		{kode, p1, now.AddDate(0, -1, 0), true}, // bulan lalu: tercatat, tidak dihitung di bawah
+	} {
+		baru, err := catatKlikReferral(ctx, tx, brand, c.kode, c.p, c.hari)
+		if err != nil {
+			t.Fatalf("klik %d: %v", i, err)
 		}
-	}
-	if err := catatKlikReferral(ctx, tx, brand, "TIDAKADA", p1, now); err != nil {
-		t.Errorf("kode tak dikenal: %v", err)
-	}
-	if err := catatKlikReferral(ctx, tx, brand, kode, p1, now.AddDate(0, 0, 1)); err != nil {
-		t.Fatal(err)
-	}
-	if err := catatKlikReferral(ctx, tx, brand, kode, p1, now.AddDate(0, -1, 0)); err != nil { // bulan lalu tidak dihitung
-		t.Fatal(err)
+		if baru != c.baru {
+			t.Errorf("klik %d: baru = %v, mau %v", i, baru, c.baru)
+		}
 	}
 	if n, err := klikBulanIni(ctx, tx, agen, now.AddDate(0, 0, 1)); err != nil || n != 3 {
 		t.Errorf("klik bulan ini = %d, mau 3 (err %v)", n, err)

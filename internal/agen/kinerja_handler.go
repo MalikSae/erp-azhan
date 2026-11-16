@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 // errFilterKomisi: parameter angka pada filter komisi bukan bilangan bulat tak negatif.
@@ -118,6 +118,52 @@ func (h *Handler) AgenBinaanPortal(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// Batas klik referral per IP pengunjung. Penanda pengunjung dikirim situs dan bisa diisi bebas oleh pemanggil
+// langsung, jadi tanpa batas ini satu IP bisa menambah klik tanpa akhir dengan penanda acak. Klik di atas batas
+// tetap dijawab 204 tetapi tidak dicatat. Jatah hanya terpakai oleh klik yang benar-benar tercatat: buka ulang oleh
+// pengunjung yang sama, kode tak dikenal, atau klik yang ditolak tidak menghabiskan jatah orang lain di balik satu
+// NAT (kantor, operator seluler).
+const (
+	klikPerIPPerJam        = 60 // semua kode
+	klikPerIPPerKodeSehari = 20 // satu kode
+)
+
+// pengunjungValid: penanda acak dari situs (UUID dari azhan-booking), 16-64 huruf, angka, atau tanda hubung.
+func pengunjungValid(s string) bool {
+	if len(s) < 16 || len(s) > 64 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func kunciKlikKode(ip string, brandID int64, kode string) string {
+	return ip + "|" + strconv.FormatInt(brandID, 10) + "|" + kode
+}
+
+// ambilJatahKlik mengambil satu jatah per jam untuk IP ini dan satu jatah harian untuk kode itu. Gagal di jatah
+// kode mengembalikan jatah per jam, jadi klik yang ditolak tidak mengurangi jatah apa pun.
+func (h *Handler) ambilJatahKlik(ip string, brandID int64, kode string) bool {
+	if !h.klikIP.Take(ip) {
+		return false
+	}
+	if !h.klikIPKode.Take(kunciKlikKode(ip, brandID, kode)) {
+		h.klikIP.Refund(ip)
+		return false
+	}
+	return true
+}
+
+// kembalikanJatahKlik dipanggil bila klik tidak menambah baris (pengunjung sama hari ini, kode tak dikenal, galat).
+func (h *Handler) kembalikanJatahKlik(ip string, brandID int64, kode string) {
+	h.klikIP.Refund(ip)
+	h.klikIPKode.Refund(kunciKlikKode(ip, brandID, kode))
+}
+
 // KlikReferral POST /api/public/referral/klik: {brand_id, kode_referral, pengunjung}. Selalu 204; kode yang tidak
 // dikenal diabaikan supaya endpoint tidak bisa dipakai menebak kode.
 func (h *Handler) KlikReferral(w http.ResponseWriter, r *http.Request) {
@@ -130,25 +176,27 @@ func (h *Handler) KlikReferral(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "payload tidak valid")
 		return
 	}
-	if len(req.Pengunjung) > 100 {
-		req.Pengunjung = req.Pengunjung[:100]
+	// IP dari shared.ClientIP: header proxy hanya dipercaya dari proxy tepercaya (TRUSTED_PROXIES), jadi pemanggil
+	// langsung tidak bisa memalsukan IP lewat X-Forwarded-For.
+	ip := shared.ClientIP(r)
+	kode := strings.ToUpper(strings.TrimSpace(req.KodeReferral))
+	if !h.ambilJatahKlik(ip, req.BrandID, kode) {
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
-	hash := HashPengunjung(req.Pengunjung, clientIP(r), r.UserAgent())
-	if err := h.repo.CatatKlikReferral(r.Context(), req.BrandID, req.KodeReferral, hash, time.Now()); err != nil {
+	pengunjung := strings.TrimSpace(req.Pengunjung)
+	if !pengunjungValid(pengunjung) {
+		pengunjung = "" // penanda tidak sah: pakai IP dan user agent
+	}
+	hash := HashPengunjung(pengunjung, ip, r.UserAgent())
+	baru, err := h.repo.CatatKlikReferral(r.Context(), req.BrandID, kode, hash, time.Now())
+	if err != nil {
 		log.Printf("[ERROR] klik referral: %v", err)
 	}
+	if !baru {
+		h.kembalikanJatahKlik(ip, req.BrandID, kode)
+	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// clientIP: alamat pengunjung dari X-Forwarded-For (proxy situs) atau RemoteAddr.
-func clientIP(r *http.Request) string {
-	if xff := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0]); xff != "" {
-		return xff
-	}
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
-	}
-	return r.RemoteAddr
 }
 
 // RiwayatKomisiPortal GET /api/portal/agen/komisi (A6)
