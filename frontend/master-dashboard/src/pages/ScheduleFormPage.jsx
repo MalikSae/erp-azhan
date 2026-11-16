@@ -364,7 +364,7 @@ const ScheduleFormPage = () => {
         } else if (isEditMode) {
           setLoadFailed(true);
         } else {
-          setFormError("Gagal memuat data awal (hotel/maskapai/itinerary). Pastikan server backend menyala.");
+          setFormError("Data hotel, maskapai, dan itinerary gagal dimuat. Muat ulang halaman.");
         }
       } finally {
         setIsLoadingInitial(false);
@@ -579,7 +579,7 @@ const ScheduleFormPage = () => {
         brosur_thumb_url: response.thumb_url || ''
       }));
     } catch (err) {
-      setFormError(err.response?.data?.error || 'Gagal mengupload gambar utama.');
+      setFormError(err.response?.data?.error || 'Gambar gagal diunggah.');
     } finally {
       setIsUploadingBrosur(false);
       e.target.value = ''; // Reset input
@@ -693,7 +693,7 @@ const ScheduleFormPage = () => {
     const opts = destinationOptions
       .filter((d) => d.is_active || String(d.id) === String(formData.destination_id))
       .map((d) => ({ value: d.id, label: d.is_active ? d.name : `${d.name} (nonaktif)` }));
-    return [{ value: '', label: '-- Tanpa destinasi --' }, ...opts];
+    return [{ value: '', label: 'Tanpa destinasi' }, ...opts];
   }, [destinationOptions, formData.destination_id]);
 
   const airportDropdownOptions = useMemo(() => {
@@ -726,16 +726,16 @@ const ScheduleFormPage = () => {
       const errors = {};
       if (minimalDP !== null && (minimalDP < 0 || minimalDP > Math.min(hargaQuad, hargaTriple, hargaDouble))) errors.minimal_dp = 'DP harus antara 0 dan harga kamar termurah.';
 if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal = 'Tanggal pulang harus setelah tanggal berangkat.';
-      if (formData.program_slug === 'plus' && !formData.destination_id) errors.destination_id = 'Program Plus wajib memilih Destinasi.';
-      if (hargaInfant === null) errors.harga_infant = 'Harga bayi wajib diisi.';
-      if (butuhAlasanTanggal && !(formData.alasan_ubah_tanggal || '').trim()) errors.alasan_ubah_tanggal = 'Alasan ubah tanggal berangkat wajib diisi.';
-      if (hargaTriple < hargaQuad) errors.harga_triple = 'Harga Triple tidak boleh lebih murah dari harga Quad.';
-      if (hargaDouble < hargaTriple) errors.harga_double = 'Harga Double tidak boleh lebih murah dari harga Triple.';
+      if (formData.program_slug === 'plus' && !formData.destination_id) errors.destination_id = 'Pilih destinasi untuk program Plus.';
+      if (hargaInfant === null) errors.harga_infant = 'Isi harga infant.';
+      if (butuhAlasanTanggal && !(formData.alasan_ubah_tanggal || '').trim()) errors.alasan_ubah_tanggal = 'Isi alasan ubah tanggal.';
+      if (hargaTriple < hargaQuad) errors.harga_triple = 'Harga Triple tidak boleh di bawah harga Quad.';
+      if (hargaDouble < hargaTriple) errors.harga_double = 'Harga Double tidak boleh di bawah harga Triple.';
       if (formData.status === 'published' && formData.benefits.length !== JUMLAH_BENEFIT_PAKET) {
-        errors.benefit_ids = `Paket yang dijual wajib punya ${JUMLAH_BENEFIT_PAKET} highlight benefit.`;
+        errors.benefit_ids = `Pilih ${JUMLAH_BENEFIT_PAKET} highlight benefit untuk paket published.`;
       }
       if (Object.keys(errors).length) {
-        setFieldErrors(errors); setFormError('Periksa kembali isian paket berikut.'); return;
+        setFieldErrors(errors); setFormError('Periksa isian berikut.'); return;
       }
 
       const validBerangkat = (formData.transit_items_berangkat || [])
@@ -846,7 +846,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
       submittedRef.current = true;
       const namaPaket = (formData.jadwal_nama || '').trim();
       navigate('/schedules', {
-        state: { successMessage: `Paket "${namaPaket}" berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
+        state: { successMessage: `Paket "${namaPaket}" ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
       });
     } catch (err) {
       const message = err.response?.data?.error || `Gagal ${isEditMode ? 'mengupdate' : 'menyimpan'} paket.`;
@@ -889,15 +889,9 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
   if (loadFailed) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Edit Paket Umroh" onBack={() => navigate('/schedules')} />
-        <Alert variant="error">
-          Data paket gagal dimuat, jadi form tidak ditampilkan agar isian kosong tidak menimpa paket. Periksa koneksi
-          atau server, lalu muat ulang.
-        </Alert>
-        <div className="flex gap-3">
-          <Button variant="primary" onClick={() => window.location.reload()}>Muat Ulang</Button>
-          <Button variant="ghost" onClick={() => navigate('/schedules')}>Kembali ke Data Paket</Button>
-        </div>
+        <PageHeader title="Edit Paket" onBack={() => navigate('/schedules')} />
+        <Alert variant="error">Data paket gagal dimuat. Muat ulang halaman.</Alert>
+        <Button variant="primary" onClick={() => window.location.reload()}>Muat ulang</Button>
       </div>
     );
   }
@@ -905,9 +899,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
   if (notFound) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Paket Tidak Ditemukan" />
-        <Alert variant="error">Paket dengan ID {id} tidak ditemukan.</Alert>
-        <Button variant="ghost" onClick={() => navigate('/schedules')}>Kembali ke Data Paket</Button>
+        <PageHeader title="Paket Tidak Ditemukan" onBack={() => navigate('/schedules')} />
+        <Alert variant="error">Paket tidak ada atau sudah dihapus.</Alert>
       </div>
     );
   }
@@ -915,7 +908,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isEditMode ? 'Edit Paket Umroh' : (copyFromId ? 'Duplikat Paket' : 'Tambah Paket Baru')}
+        title={isEditMode ? 'Edit Paket' : (copyFromId ? 'Duplikat Paket' : 'Tambah Paket')}
         onBack={() => navigate('/schedules')}
       />
 
@@ -958,7 +951,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 {/* Nama paket + total kuota dalam satu baris */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
                   <Input
-                    label="Nama Paket"
+                    label="Nama paket"
                     className="!mb-0"
                     type="text"
                     name="jadwal_nama"
@@ -966,11 +959,11 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     value={formData.jadwal_nama}
                     onChange={handleChange}
                     required
-                    placeholder="mis. Umroh Reguler 9 Hari"
+                    placeholder="Umroh Reguler 9 Hari"
                   />
                   <div>
                     <Input
-                      label="Total Kuota"
+                      label="Kuota seat"
                       className="!mb-0"
                       type="number"
                       name="seat_total"
@@ -979,7 +972,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       onChange={handleChange}
                       required
                       min="1"
-                      placeholder="mis. 45"
+                      placeholder="45"
                     />
                     {isEditMode && (
                       <p className="mt-1.5 text-xs text-neutral-500 font-body">
@@ -991,11 +984,11 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
               </div>
             </FormSection>
 
-            <FormSection id="sec-harga" title="Harga per Orang (Rp)">
+            <FormSection id="sec-harga" title="Harga per Pax">
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Input
-                    label="Kamar isi 4 (Quad)"
+                    label="Quad"
                     className="!mb-0"
                     type="text"
                     name="harga_quad"
@@ -1003,10 +996,10 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     value={formatCurrency(formData.harga_quad)}
                     onChange={handleCurrencyChange}
                     required
-                    placeholder="mis. 25.000.000"
+                    placeholder="25.000.000"
                   />
                   <Input
-                    label="Kamar isi 3 (Triple)"
+                    label="Triple"
                     className="!mb-0"
                     type="text"
                     name="harga_triple"
@@ -1014,10 +1007,10 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     value={formatCurrency(formData.harga_triple)}
                     onChange={handleCurrencyChange}
                     required
-                    placeholder="mis. 26.000.000"
+                    placeholder="26.000.000"
                   />
                   <Input
-                    label="Kamar isi 2 (Double)"
+                    label="Double"
                     className="!mb-0"
                     type="text"
                     name="harga_double"
@@ -1025,10 +1018,10 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     value={formatCurrency(formData.harga_double)}
                     onChange={handleCurrencyChange}
                     required
-                    placeholder="mis. 28.000.000"
+                    placeholder="28.000.000"
                   />
                   <Input
-                    label="Bayi (Infant)"
+                    label="Infant"
                     className="!mb-0"
                     type="text"
                     name="harga_infant"
@@ -1036,16 +1029,13 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     value={formatCurrency(formData.harga_infant)}
                     onChange={handleCurrencyChange}
                     required
-                    placeholder="mis. 5.000.000"
+                    placeholder="5.000.000"
                   />
                 </div>
-                <p className="text-xs text-neutral-500 font-body">
-                  Harga per orang. Dewasa mengikuti isi kamar; bayi memakai harga sendiri.
-                </p>
 
                 <div className="border-t border-neutral-200 pt-4 mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Input
-                    label="Minimal DP (Rp/pax)"
+                    label="Minimal DP"
                     className="!mb-0"
                     type="text"
                     name="minimal_dp"
@@ -1054,7 +1044,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     onChange={handleCurrencyChange}
                     placeholder={bawaanBrand ? `Ikut brand: ${formatCurrency(bawaanBrand.minimal_dp) || '0'}` : 'Ikut brand'}
                     inputMode="numeric"
-                    helpText="Kosong = ikut DP brand. Isi 0 untuk tanpa DP. Tidak boleh melebihi harga kamar termurah."
+                    helpText="Isi 0 untuk tanpa DP."
                   />
                 </div>
 
@@ -1062,7 +1052,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 <div className="border-t border-neutral-200 pt-4 mt-4 space-y-2">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Input
-                      label="Komisi Langsung Agen (Rp/pax)"
+                      label="Komisi agen"
                       className="!mb-0"
                       type="text"
                       name="nominal_komisi_langsung"
@@ -1073,7 +1063,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       inputMode="numeric"
                     />
                     <Input
-                      label="Bonus Pembinaan Upline (Rp/pax)"
+                      label="Bonus pembinaan upline"
                       className="!mb-0"
                       type="text"
                       name="nominal_bonus_pembinaan"
@@ -1084,10 +1074,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       inputMode="numeric"
                     />
                   </div>
-                  <p className="text-xs text-neutral-500 font-body">
-                    Kosong = ikut komisi bawaan brand. Isi 0 bila paket ini sengaja tanpa komisi. Perubahan hanya berlaku
-                    untuk booking baru; booking yang sudah ada memakai nominal saat booking dibuat.
-                  </p>
+                  <p className="text-xs text-neutral-500 font-body">Isi 0 untuk tanpa komisi.</p>
                 </div>
               </div>
             </FormSection>
@@ -1104,11 +1091,11 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     onChange={(e) => handleMaskapaiChange(e.target.value)}
                     onSelect={(opt) => handleMaskapaiChange(opt ? opt.value : '')}
                     required
-                    placeholder="Ketik / cari maskapai..."
+                    placeholder="Cari maskapai"
                     options={airlineOptions.map(a => ({ value: a.id, label: a.code ? `${a.name} (${a.code})` : a.name }))}
                   />
                   <CustomDropdown
-                    label="Jenis Penerbangan"
+                    label="Jenis penerbangan"
                     className="!mb-0"
                     value={formData.is_direct_flight ? 'direct' : 'transit'}
                     onChange={(val) => handleChange({ target: { name: 'is_direct_flight', type: 'checkbox', checked: val === 'direct' } })}
@@ -1125,23 +1112,22 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 {/* Bagian 2: Penerbangan Berangkat */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-neutral-600 text-sm font-semibold font-heading">
-                    <span>Penerbangan Berangkat</span>
+                    <span>Berangkat</span>
                   </div>
 
                   {butuhAlasanTanggal && (
                     <div className="space-y-3">
                       <Alert variant="warning">
-                        Paket ini punya {formData.booking_aktif} booking aktif. Tanggal berangkat berubah dari{' '}
-                        {formData.berangkat_tanggal_awal} menjadi {formData.berangkat_tanggal || '(kosong)'}. Jamaah tidak
-                        diberi tahu otomatis; kabari mereka sendiri. Alasan perubahan wajib diisi dan tersimpan di riwayat.
+                        {formData.booking_aktif} booking aktif. Tanggal berangkat berubah dari{' '}
+                        {formData.berangkat_tanggal_awal} ke {formData.berangkat_tanggal || '(kosong)'}. Kabari jamaah.
                       </Alert>
                       <Textarea
-                        label="Alasan Ubah Tanggal Berangkat"
+                        label="Alasan ubah tanggal"
                         name="alasan_ubah_tanggal"
                         value={formData.alasan_ubah_tanggal || ''}
                         onChange={handleChange}
                         error={fieldErrors.alasan_ubah_tanggal}
-                        placeholder="mis. Maskapai memundurkan jadwal penerbangan"
+                        placeholder="Maskapai memundurkan jadwal"
                         rows={2}
                         maxLength={500}
                         required
@@ -1152,16 +1138,15 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
 
                   {formData.komisi_aktif > 0 && formData.berangkat_tanggal_awal && formData.berangkat_tanggal !== formData.berangkat_tanggal_awal && (
                     <Alert variant="warning">
-                      Jadwal ini punya {formData.komisi_aktif} komisi agen yang tercatat. Komisi tersedia 3 hari setelah tanggal
-                      berangkat, jadi mengubah tanggal ikut menggeser kapan komisi itu bisa dicairkan. Bila tanggal diundur dan
-                      komisinya sudah dicairkan, saldo agen menjadi minus sampai tertutup komisi berikutnya.
+                      {formData.komisi_aktif} komisi agen ikut bergeser tanggal cairnya. Komisi yang sudah dicairkan bisa
+                      membuat saldo agen minus.
                     </Alert>
                   )}
 
                   {/* Baris 1: Waktu & Kode Penerbangan */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Input
-                      label="Tanggal Berangkat"
+                      label="Tanggal berangkat"
                       className="!mb-0"
                       type="date"
                       name="berangkat_tanggal"
@@ -1171,22 +1156,22 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       required
                     />
                     <Input
-                      label="Jam Berangkat"
+                      label="Jam berangkat"
                       className="!mb-0"
                       type="text"
                       name="berangkat_jam"
                     error={fieldErrors.berangkat_jam}
                       value={formData.berangkat_jam}
                       onChange={handleTimeChange}
-                      placeholder="mis. 09:00"
+                      placeholder="09:00"
                     />
                     {!berangkatIsCustom && currentAirlineCode ? (
                       <div>
                         <label className="mb-1.5 block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">
-                          Kode Penerbangan
+                          Kode penerbangan
                         </label>
                         <div className="flex">
-                          <span className="inline-flex h-9 items-center px-3 rounded-l-lg border border-r-0 border-neutral-200 bg-neutral-50 text-neutral-700 font-mono font-semibold text-sm select-none">
+                          <span className="inline-flex h-9 items-center px-3 rounded-l-lg border border-r-0 border-neutral-300 bg-neutral-50 text-neutral-700 font-mono font-semibold text-sm select-none">
                             {currentAirlineCode}
                           </span>
                           <input
@@ -1194,22 +1179,22 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             name="berangkat_flight_no"
                             value={berangkatFlightNo}
                             onChange={handleBerangkatFlightNoChange}
-                            placeholder="mis. 822"
+                            placeholder="822"
                             maxLength={5}
                             inputMode="numeric"
-                            className="h-9 flex-1 min-w-0 block w-full px-3.5 rounded-none rounded-r-lg border border-neutral-200 focus:outline-none focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
+                            className="h-9 flex-1 min-w-0 block w-full px-3 rounded-none rounded-r-lg border border-neutral-300 focus:outline-none focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
                           />
                         </div>
                       </div>
                     ) : (
                       <Input
-                        label="Kode Penerbangan"
+                        label="Kode penerbangan"
                         className="!mb-0"
                         name="berangkat_kode_penerbangan"
                     error={fieldErrors.berangkat_kode_penerbangan}
                         value={formData.berangkat_kode_penerbangan}
                         onChange={handleChange}
-                        placeholder="mis. SV 822"
+                        placeholder="SV 822"
                       />
                     )}
                   </div>
@@ -1217,23 +1202,23 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   {/* Baris 2: Bandara Asal & Tujuan */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <AutocompleteInput
-                      label="Bandara Asal"
+                      label="Bandara asal"
                       className="!mb-0"
                       name="berangkat_bandara_asal"
                       value={formData.berangkat_bandara_asal}
                       onChange={(e) => setFormData(prev => ({ ...prev, berangkat_bandara_asal: e.target.value }))}
                       onSelect={(opt) => setFormData(prev => ({ ...prev, berangkat_bandara_asal: opt?.value || '' }))}
-                      placeholder="Ketik kode / kota (mis. CGK / Jakarta)"
+                      placeholder="Cari bandara"
                       options={airportDropdownOptions}
                     />
                     <AutocompleteInput
-                      label="Bandara Tujuan Akhir"
+                      label="Bandara tujuan akhir"
                       className="!mb-0"
                       name="berangkat_bandara_tujuan"
                       value={formData.berangkat_bandara_tujuan}
                       onChange={(e) => setFormData(prev => ({ ...prev, berangkat_bandara_tujuan: e.target.value }))}
                       onSelect={(opt) => setFormData(prev => ({ ...prev, berangkat_bandara_tujuan: opt?.value || '' }))}
-                      placeholder="Ketik kode / kota (mis. JED / Jeddah)"
+                      placeholder="Cari bandara"
                       options={airportDropdownOptions}
                     />
                   </div>
@@ -1243,7 +1228,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     <div className="pt-2 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-neutral-700 font-heading flex items-center gap-1.5">
-                          <span>Transit Keberangkatan</span>
+                          <span>Transit</span>
                         </span>
                       </div>
 
@@ -1253,24 +1238,24 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <div className="sm:col-span-2">
                                 <AutocompleteInput
-                                  label={`Bandara Transit ${formData.transit_items_berangkat.length > 1 ? `#${idx + 1}` : ''}`}
+                                  label={`Bandara transit ${formData.transit_items_berangkat.length > 1 ? `#${idx + 1}` : ''}`}
                                   className="!mb-0"
                                   name={`transit_berangkat_${idx}`}
                                   value={item.bandara}
                                   onChange={(e) => handleTransitBerangkatChange(idx, 'bandara', e.target.value)}
                                   onSelect={(opt) => handleTransitBerangkatChange(idx, 'bandara', opt?.value || '')}
-                                  placeholder="Ketik kode / kota (mis. KUL / DOH)"
+                                  placeholder="Cari bandara"
                                   options={airportDropdownOptions}
                                 />
                               </div>
                               <div>
                                 <Input
-                                  label="Durasi Transit (jam)"
+                                  label="Durasi (jam)"
                                   className="!mb-0"
                                   value={item.durasi}
                                   onChange={(e) => handleTransitBerangkatChange(idx, 'durasi', e.target.value.replace(/\D/g, '').slice(0, 3))}
                                   inputMode="numeric"
-                                  placeholder="mis. 2"
+                                  placeholder="2"
                                 />
                               </div>
                             </div>
@@ -1278,7 +1263,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             {(formData.transit_items_berangkat || []).length > 1 && (
                               <Button variant="danger-outline" className="shrink-0"
                                 onClick={() => handleRemoveTransitBerangkat(idx)}
-                                title="Hapus titik transit"
+                                title="Hapus"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1295,7 +1280,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                           </svg>
-                          <span>Tambah Transit</span>
+                          <span>Tambah transit</span>
                         </Button>
                       </div>
                     </div>
@@ -1308,13 +1293,13 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 {/* Bagian 3: Penerbangan Pulang */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-neutral-600 text-sm font-semibold font-heading">
-                    <span>Penerbangan Pulang</span>
+                    <span>Pulang</span>
                   </div>
 
                   {/* Baris 1: Waktu & Kode Penerbangan */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Input
-                      label="Tanggal Pulang"
+                      label="Tanggal pulang"
                       className="!mb-0"
                       type="date"
                       name="pulang_tanggal"
@@ -1324,22 +1309,22 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       required
                     />
                     <Input
-                      label="Jam Pulang"
+                      label="Jam pulang"
                       className="!mb-0"
                       type="text"
                       name="pulang_jam"
                     error={fieldErrors.pulang_jam}
                       value={formData.pulang_jam}
                       onChange={handleTimeChange}
-                      placeholder="mis. 15:30"
+                      placeholder="15:30"
                     />
                     {!pulangIsCustom && currentAirlineCode ? (
                       <div>
                         <label className="mb-1.5 block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">
-                          Kode Penerbangan
+                          Kode penerbangan
                         </label>
                         <div className="flex">
-                          <span className="inline-flex h-9 items-center px-3 rounded-l-lg border border-r-0 border-neutral-200 bg-neutral-50 text-neutral-700 font-mono font-semibold text-sm select-none">
+                          <span className="inline-flex h-9 items-center px-3 rounded-l-lg border border-r-0 border-neutral-300 bg-neutral-50 text-neutral-700 font-mono font-semibold text-sm select-none">
                             {currentAirlineCode}
                           </span>
                           <input
@@ -1347,22 +1332,22 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             name="pulang_flight_no"
                             value={pulangFlightNo}
                             onChange={handlePulangFlightNoChange}
-                            placeholder="mis. 823"
+                            placeholder="823"
                             maxLength={5}
                             inputMode="numeric"
-                            className="h-9 flex-1 min-w-0 block w-full px-3.5 rounded-none rounded-r-lg border border-neutral-200 focus:outline-none focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
+                            className="h-9 flex-1 min-w-0 block w-full px-3 rounded-none rounded-r-lg border border-neutral-300 focus:outline-none focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
                           />
                         </div>
                       </div>
                     ) : (
                       <Input
-                        label="Kode Penerbangan"
+                        label="Kode penerbangan"
                         className="!mb-0"
                         name="pulang_kode_penerbangan"
                     error={fieldErrors.pulang_kode_penerbangan}
                         value={formData.pulang_kode_penerbangan}
                         onChange={handleChange}
-                        placeholder="mis. SV 823"
+                        placeholder="SV 823"
                       />
                     )}
                   </div>
@@ -1370,23 +1355,23 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   {/* Baris 2: Bandara Asal & Tujuan */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <AutocompleteInput
-                      label="Bandara Asal"
+                      label="Bandara asal"
                       className="!mb-0"
                       name="pulang_bandara_asal"
                       value={formData.pulang_bandara_asal}
                       onChange={(e) => setFormData(prev => ({ ...prev, pulang_bandara_asal: e.target.value }))}
                       onSelect={(opt) => setFormData(prev => ({ ...prev, pulang_bandara_asal: opt?.value || '' }))}
-                      placeholder="Ketik kode / kota (mis. MED / Madinah)"
+                      placeholder="Cari bandara"
                       options={airportDropdownOptions}
                     />
                     <AutocompleteInput
-                      label="Bandara Tujuan Akhir"
+                      label="Bandara tujuan akhir"
                       className="!mb-0"
                       name="pulang_bandara_tujuan"
                       value={formData.pulang_bandara_tujuan}
                       onChange={(e) => setFormData(prev => ({ ...prev, pulang_bandara_tujuan: e.target.value }))}
                       onSelect={(opt) => setFormData(prev => ({ ...prev, pulang_bandara_tujuan: opt?.value || '' }))}
-                      placeholder="Ketik kode / kota (mis. CGK / Jakarta)"
+                      placeholder="Cari bandara"
                       options={airportDropdownOptions}
                     />
                   </div>
@@ -1396,7 +1381,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     <div className="pt-2 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-neutral-700 font-heading flex items-center gap-1.5">
-                          <span>Transit Kepulangan</span>
+                          <span>Transit</span>
                         </span>
                       </div>
 
@@ -1406,24 +1391,24 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <div className="sm:col-span-2">
                                 <AutocompleteInput
-                                  label={`Bandara Transit ${formData.transit_items_pulang.length > 1 ? `#${idx + 1}` : ''}`}
+                                  label={`Bandara transit ${formData.transit_items_pulang.length > 1 ? `#${idx + 1}` : ''}`}
                                   className="!mb-0"
                                   name={`transit_pulang_${idx}`}
                                   value={item.bandara}
                                   onChange={(e) => handleTransitPulangChange(idx, 'bandara', e.target.value)}
                                   onSelect={(opt) => handleTransitPulangChange(idx, 'bandara', opt?.value || '')}
-                                  placeholder="Ketik kode / kota (mis. DOH / DXB)"
+                                  placeholder="Cari bandara"
                                   options={airportDropdownOptions}
                                 />
                               </div>
                               <div>
                                 <Input
-                                  label="Durasi Transit (jam)"
+                                  label="Durasi (jam)"
                                   className="!mb-0"
                                   value={item.durasi}
                                   onChange={(e) => handleTransitPulangChange(idx, 'durasi', e.target.value.replace(/\D/g, '').slice(0, 3))}
                                   inputMode="numeric"
-                                  placeholder="mis. 3"
+                                  placeholder="3"
                                 />
                               </div>
                             </div>
@@ -1431,7 +1416,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                             {(formData.transit_items_pulang || []).length > 1 && (
                               <Button variant="danger-outline" className="shrink-0"
                                 onClick={() => handleRemoveTransitPulang(idx)}
-                                title="Hapus titik transit"
+                                title="Hapus"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1448,7 +1433,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                           </svg>
-                          <span>Tambah Transit</span>
+                          <span>Tambah transit</span>
                         </Button>
                       </div>
                     </div>
@@ -1471,7 +1456,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       onChange={(e) => handleChange({ target: { name: 'hotel_mekkah_id', value: e.target.value } })}
                       onSelect={(opt) => handleChange({ target: { name: 'hotel_mekkah_id', value: opt ? opt.value : '' } })}
                       required
-                      placeholder="Ketik / cari hotel di Mekkah..."
+                      placeholder="Cari hotel"
                       options={mekkahHotels.map(h => ({ value: h.id, label: h.star_rating ? `${h.name} (${'★'.repeat(h.star_rating)})` : h.name }))}
                     />
                   </div>
@@ -1486,7 +1471,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       onChange={(e) => handleChange({ target: { name: 'hotel_madinah_id', value: e.target.value } })}
                       onSelect={(opt) => handleChange({ target: { name: 'hotel_madinah_id', value: opt ? opt.value : '' } })}
                       required
-                      placeholder="Ketik / cari hotel di Madinah..."
+                      placeholder="Cari hotel"
                       options={madinahHotels.map(h => ({ value: h.id, label: h.star_rating ? `${h.name} (${'★'.repeat(h.star_rating)})` : h.name }))}
                     />
                   </div>
@@ -1494,25 +1479,25 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
 
                 {/* Hotel Transit (opsional): satu baris per hotel, tambah lewat tombol */}
                 <div className="space-y-3">
-                  <span className="block text-xs font-semibold text-neutral-700 font-heading">Hotel Transit (Opsional)</span>
+                  <span className="block text-xs font-semibold text-neutral-700 font-heading">Hotel transit</span>
 
                   {formData.transit_hotel_ids.map((thId, idx) => (
                     <div key={`th-${thId}`} className="flex items-end gap-3">
                       <div className="min-w-0 flex-1">
                         <AutocompleteInput
-                          label={(formData.transit_hotel_ids.length + extraTransitHotelSlots) > 1 ? `Hotel Transit #${idx + 1}` : undefined}
+                          label={(formData.transit_hotel_ids.length + extraTransitHotelSlots) > 1 ? `Hotel transit #${idx + 1}` : undefined}
                           className="!mb-0"
                           name={`transit_hotel_${idx}`}
                           value={thId}
                           onChange={(e) => handleReplaceTransitHotel(thId, e.target.value)}
                           onSelect={(opt) => handleReplaceTransitHotel(thId, opt ? opt.value : '')}
-                          placeholder="Ketik / cari hotel..."
+                          placeholder="Cari hotel"
                           options={transitHotelOptionsFor(thId)}
                         />
                       </div>
                       <Button variant="danger-outline" className="shrink-0"
                         onClick={() => handleRemoveTransitHotel(thId)}
-                        title="Hapus hotel transit"
+                        title="Hapus"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1525,19 +1510,19 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     <div key={`slot-${i}`} className="flex items-end gap-3">
                       <div className="min-w-0 flex-1">
                         <AutocompleteInput
-                          label={(formData.transit_hotel_ids.length + extraTransitHotelSlots) > 1 ? `Hotel Transit #${formData.transit_hotel_ids.length + i + 1}` : undefined}
+                          label={(formData.transit_hotel_ids.length + extraTransitHotelSlots) > 1 ? `Hotel transit #${formData.transit_hotel_ids.length + i + 1}` : undefined}
                           className="!mb-0"
                           name={`transit_hotel_new_${i}`}
                           value=""
                           onChange={(e) => { if (e.target.value) handleFillTransitHotelSlot(e.target.value); }}
                           onSelect={(opt) => { if (opt) handleFillTransitHotelSlot(opt.value); }}
-                          placeholder="Ketik / cari hotel..."
+                          placeholder="Cari hotel"
                           options={transitHotelOptionsFor(null)}
                         />
                       </div>
                       <Button variant="danger-outline" className="shrink-0"
                         onClick={() => setExtraTransitHotelSlots(count => Math.max(0, count - 1))}
-                        title="Batalkan baris ini"
+                        title="Hapus"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1552,7 +1537,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                     </svg>
-                    <span>Tambah Hotel Transit</span>
+                    <span>Tambah hotel transit</span>
                   </Button>
                 </div>
               </div>
@@ -1572,7 +1557,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 {/* Include */}
                 <div>
                   <Textarea
-                    label="Fasilitas Termasuk (Include)"
+                    label="Termasuk"
                     value={includeItemsText}
                     onChange={(e) => setIncludeItemsText(e.target.value)}
                     placeholder="Tiket Pesawat PP&#10;Visa Umroh Resmi&#10;Hotel Mekkah & Madinah&#10;Makan 3x Sehari&#10;Muthawwif"
@@ -1584,7 +1569,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 {/* Exclude */}
                 <div>
                   <Textarea
-                    label="Tidak Termasuk (Exclude)"
+                    label="Tidak termasuk"
                     value={excludeItemsText}
                     onChange={(e) => setExcludeItemsText(e.target.value)}
                     placeholder="Paspor&#10;Vaksin Meningitis&#10;Pengeluaran Pribadi / Laundry&#10;Kelebihan Bagasi"
@@ -1621,7 +1606,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 ) : (
                   <div>
                     <p className="mb-1 text-xs font-body text-neutral-400">{perlInheritedLabel || 'Set bawaan'}</p>
-                    <PerlengkapanSetList items={perlInherited} emptyText="Belum ada set bawaan. Atur di menu Kategori atau pilih set khusus." />
+                    <PerlengkapanSetList items={perlInherited} emptyText="Belum ada set bawaan." />
                   </div>
                 )}
               </div>
@@ -1632,14 +1617,13 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 {/* Itinerary Dropdown */}
                 <div className="w-full">
                   <CustomDropdown
-                    label="Master Itinerary"
                     className="!mb-0"
                     value={formData.itinerary_id}
                     onChange={(val) => handleChange({ target: { name: 'itinerary_id', value: val } })}
-                    placeholder="-- Pilih Itinerary --"
+                    placeholder="Pilih itinerary"
                     options={itineraryOptions
                       .filter(it => !formData.category_id || !it.category_id || String(it.category_id) === String(formData.category_id) || String(it.id) === String(formData.itinerary_id))
-                      .map(it => ({ value: it.id, label: `${it.title} (${it.day_count || it.duration_days || '-'} Hari)` }))}
+                      .map(it => ({ value: it.id, label: `${it.title} (${it.day_count || it.duration_days || '-'} hari)` }))}
                   />
                 </div>
               </div>
@@ -1647,34 +1631,18 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
 
 
           <FormAside>
-              <SidebarSection title="Publikasi">
-                <div className="space-y-3">
-                  <CustomDropdown
-                    label="Status"
-                    className="!mb-0"
-                    value={formData.status}
-                    onChange={(val) => handleChange({ target: { name: 'status', value: val } })}
-                    options={[
-                      { value: 'draft', label: 'Draft' },
-                      { value: 'published', label: 'Published' },
-                      { value: 'archived', label: 'Archived' }
-                    ]}
-                  />
-                  <p className="text-xs text-neutral-500 font-body">
-                    Pastikan tanggal, hotel, maskapai, dan kuota sudah sesuai sebelum menyimpan.
-                  </p>
-                  <div className="pt-1">
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      isLoading={isSubmitting}
-                      disabled={isUploadingBrosur}
-                      className="w-full justify-center"
-                    >
-                      {isSubmitting ? 'Menyimpan...' : (isEditMode ? 'Perbarui Paket' : 'Simpan Paket')}
-                    </Button>
-                  </div>
-                </div>
+              <SidebarSection>
+                <CustomDropdown
+                  label="Status"
+                  className="!mb-0"
+                  value={formData.status}
+                  onChange={(val) => handleChange({ target: { name: 'status', value: val } })}
+                  options={[
+                    { value: 'draft', label: 'Draft' },
+                    { value: 'published', label: 'Published' },
+                    { value: 'archived', label: 'Archived' }
+                  ]}
+                />
               </SidebarSection>
 
               <SidebarSection title="Brand & Kategori">
@@ -1699,7 +1667,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                         }
                       }}
                       required
-                      placeholder="-- Pilih Brand --"
+                      placeholder="Pilih brand"
                       options={brandOptions.map(b => ({ value: b.id, label: b.name }))}
                     />
                   </div>
@@ -1718,7 +1686,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                           setFormData(prev => ({ ...prev, category_id: val, itinerary_id: '' }));
                         }
                       }}
-                      placeholder="-- Pilih Kategori --"
+                      placeholder="Pilih kategori"
                       options={filteredCategories.map(c => ({ value: c.id, label: c.is_active ? c.name : `${c.name} (nonaktif)` }))}
                     />
                   </div>
@@ -1729,14 +1697,14 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 <div className="space-y-4">
                   {formData.journey_type && formData.journey_type !== 'umroh' ? (
                     <div>
-                      <span className="block text-xs font-semibold text-neutral-700 font-body mb-1.5">Jenis Perjalanan</span>
+                      <span className="mb-1.5 block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">Jenis perjalanan</span>
                       <div className="h-9 flex items-center rounded-lg border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-500 font-body">
                         {({ haji: 'Haji', wisata_halal: 'Wisata Halal' })[formData.journey_type] || formData.journey_type}
                       </div>
                     </div>
                   ) : (
                     <CustomDropdown
-                      label="Jenis Perjalanan"
+                      label="Jenis perjalanan"
                       className="!mb-0"
                       value={formData.journey_type}
                       onChange={(val) => handleChange({ target: { name: 'journey_type', value: val } })}
@@ -1750,19 +1718,16 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     onChange={(val) => handleChange({ target: { name: 'program_slug', value: val } })}
                     options={programOptions}
                   />
-                  <div>
-                    <CustomDropdown
-                      label="Destinasi"
-                      className="!mb-0"
-                      value={formData.destination_id}
-                      error={fieldErrors.destination_id}
-                      required={formData.program_slug === 'plus'}
-                      onChange={(val) => handleChange({ target: { name: 'destination_id', value: val } })}
-                      placeholder="-- Tanpa destinasi --"
-                      options={destinationDropdownOptions}
-                    />
-                    <p className="mt-1.5 text-xs text-neutral-500 font-body">Dipakai untuk hub URL Umroh Plus di web publik.</p>
-                  </div>
+                  <CustomDropdown
+                    label="Destinasi"
+                    className="!mb-0"
+                    value={formData.destination_id}
+                    error={fieldErrors.destination_id}
+                    required={formData.program_slug === 'plus'}
+                    onChange={(val) => handleChange({ target: { name: 'destination_id', value: val } })}
+                    placeholder="Tanpa destinasi"
+                    options={destinationDropdownOptions}
+                  />
                 </div>
               </SidebarSection>
 
@@ -1778,7 +1743,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       />
                     </div>
                     <label className="flex items-center justify-center gap-2 px-4 py-2 w-full bg-white border border-neutral-300 rounded-lg text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer transition-colors text-center">
-                        <span>{isUploadingBrosur ? 'Mengupload...' : 'Ganti Gambar'}</span>
+                        <span>{isUploadingBrosur ? 'Mengunggah...' : 'Ganti gambar'}</span>
                       <input type="file" className="hidden" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
                     </label>
                   </div>
@@ -1787,7 +1752,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     <div className="space-y-2 text-center">
                       <div className="text-xs text-neutral-600">
                         <label htmlFor="brosur-upload" className="cursor-pointer font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">
-                          <span>{isUploadingBrosur ? 'Mengupload...' : 'Upload Gambar Utama'}</span>
+                          <span>{isUploadingBrosur ? 'Mengunggah...' : 'Unggah gambar'}</span>
                           <input id="brosur-upload" name="brosur-upload" type="file" className="sr-only" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
                         </label>
                         <p className="text-xs text-neutral-400 mt-0.5">JPG, PNG, WebP</p>
@@ -1796,6 +1761,18 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   </div>
                 )}
               </div>
+            </SidebarSection>
+
+            <SidebarSection>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={isSubmitting}
+                disabled={isUploadingBrosur}
+                className="w-full justify-center"
+              >
+                {isSubmitting ? 'Menyimpan...' : 'Simpan'}
+              </Button>
             </SidebarSection>
             </FormAside>
         </FormLayout>
