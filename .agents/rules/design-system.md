@@ -65,7 +65,7 @@ Dua font, peran tetap. Dimuat dari Google Fonts di `master-dashboard/index.html`
 Aturan:
 - Hierarki dari **ukuran dan warna abu**, bukan dari tebal huruf. Weight maksimal `font-semibold` (600); **jangan** `font-bold`/`font-extrabold`.
 - Angka di tabel, nominal rupiah, dan stat tile memakai `tabular-nums`.
-- Header tabel dan label sentence case, bukan huruf kapital semua (`uppercase` dilarang kecuali kode hex/inisial avatar).
+- Teks antarmuka mengikuti `docs/ux-copy.md` (panduan UX copy). Ringkas: judul halaman/section dan menu Title Case; label field, placeholder, dan tombol sentence case; `uppercase` dilarang kecuali kode hex/inisial avatar.
 - Hanya skala Tailwind standar. Tidak ada `text-[13px]` atau ukuran arbitrary lain.
 
 | Elemen | Kelas |

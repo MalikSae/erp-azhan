@@ -11,10 +11,10 @@ export const EMPTY_KAITAN = { mode: '', agen: null };
 // Validasi sisi klien; mengembalikan pesan error atau null.
 export function validateKaitan(value) {
   if (!value || (value.mode !== 'agen' && value.mode !== 'tanpa_agen')) {
-    return 'Pilih kaitan agen: kaitkan ke agen atau tanpa agen';
+    return 'Pilih agen atau tanpa agen.';
   }
   if (value.mode === 'agen' && !value.agen?.id) {
-    return 'Pilih agen terlebih dahulu';
+    return 'Pilih agen.';
   }
   return null;
 }
@@ -29,7 +29,7 @@ const agenLabel = (a) => (a.kode_referral ? `${a.nama_lengkap} · ${a.kode_refer
 
 // excludeAgenId: sembunyikan satu agen dari hasil (mis. agen yang sedang terkait
 // di modal ganti upline/agen, karena memilihnya tidak mengubah apa pun).
-const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequired = false, error, hint, name = 'kaitan_agen', excludeAgenId, tanpaAgenLabel = 'Tanpa Agen', label = 'Kaitan Agen', pilihAgenLabel = 'Kaitkan ke Agen' }) => {
+const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequired = false, error, hint, name = 'kaitan_agen', excludeAgenId, tanpaAgenLabel = 'Tanpa agen', label = 'Agen', pilihAgenLabel = 'Pilih agen' }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -87,7 +87,7 @@ const KaitanAgenPicker = ({ value = EMPTY_KAITAN, onChange, brandId, brandRequir
       {hint && <p className="text-xs text-neutral-500 font-body">{hint}</p>}
 
       {value.mode === 'agen' && brandMissing && (
-        <p className="text-xs text-warning-700 font-body">Pilih biro travel / brand terlebih dahulu untuk mencari agen.</p>
+        <p className="text-xs text-warning-700 font-body">Pilih brand dulu.</p>
       )}
 
       {value.mode === 'agen' && value.agen && (
