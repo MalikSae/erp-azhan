@@ -65,7 +65,7 @@ Dua font, peran tetap. Dimuat dari Google Fonts di `master-dashboard/index.html`
 Aturan:
 - Hierarki dari **ukuran dan warna abu**, bukan dari tebal huruf. Weight maksimal `font-semibold` (600); **jangan** `font-bold`/`font-extrabold`.
 - Angka di tabel, nominal rupiah, dan stat tile memakai `tabular-nums`.
-- Header tabel dan label sentence case, bukan huruf kapital semua (`uppercase` dilarang kecuali kode hex/inisial avatar).
+- Teks antarmuka mengikuti `docs/ux-copy.md` (panduan UX copy). Ringkas: judul halaman/section dan menu Title Case; label field, placeholder, dan tombol sentence case; `uppercase` dilarang kecuali kode hex/inisial avatar.
 - Hanya skala Tailwind standar. Tidak ada `text-[13px]` atau ukuran arbitrary lain.
 
 | Elemen | Kelas |
@@ -108,10 +108,11 @@ Pakai breakpoint default Tailwind, TIDAK ada breakpoint custom:
 
 **Sidebar**: `hidden md:block` untuk versi fixed desktop + komponen drawer/hamburger terpisah yang HANYA render di mobile (`md:hidden`) — dua rendering berbeda, bukan 1 elemen yang di-resize CSS saja.
 
-**Layout form tambah/edit (STANDAR — acuan: Tambah/Edit Paket)**: semua form tambah/edit memakai `shared/ui/FormLayout` (`FormLayout`, `FormSection`, `SidebarSection`, `FormAside`), bukan `MetaBox`/grid manual.
+**Layout form tambah/edit (STANDAR — acuan: Tambah Jamaah, `shared/src/pages/JamaahFormPage.jsx`)**: semua form tambah/edit memakai `shared/ui/FormLayout` (`FormLayout`, `FormSection`, `SidebarSection`, `FormAside`), bukan `MetaBox`/grid manual.
 
 - **Kolom kiri**: SATU box putih (`rounded-xl border`), isinya `FormSection` yang dipisah garis tipis. Judul section di atas isi (`text-base font-bold`), tanpa header band, tanpa subtitle, tanpa ikon dekoratif, tanpa kotak bersarang di dalamnya.
-- **Kolom kanan (320 px, sticky)**: SATU box berisi `SidebarSection`. Bagian pertama selalu aksi simpan (tombol primer selebar penuh; TIDAK ada tombol "Batal" — kembali lewat panah di header). Sisanya data pendukung (status, brand/kategori, ringkasan, berkas).
+- **Kolom kanan (320 px, sticky)**: SATU box berisi `SidebarSection`. Data pendukung dulu (brand, agen, ringkasan, catatan), aksi simpan di bagian **terakhir**: satu tombol primer "Simpan" selebar penuh, tanpa judul section. TIDAK ada tombol "Batal" — kembali lewat panah di header.
+- **Copy form**: ikuti `docs/ux-copy.md`. Judul halaman/section Title Case, label sentence case, tanpa teks penjelas di bawah field atau section, placeholder berupa contoh isi (bukan ulangan label, tanpa "Contoh:"), satu judul per bagian (label field tidak mengulang judul section).
 - **Tab navigasi**: opsional; pakai prop `tabs` bila form punya ≥ 3 section. Tab mengikuti scroll (scroll-spy) dan klik meluncur ke section.
 - **Responsif**: di bawah `lg` sidebar turun di bawah kolom utama.
 - **Field**: komponen `Input`/`CustomDropdown`/`AutocompleteInput`; label di atas; tinggi seragam `h-9` (36px), sama dengan `Button` md dan `ActionMenu` supaya baris toolbar rata; teks field `text-sm`, border `neutral-300`; field wajib bertanda `*`; info baca-saja (mis. terisi/sisa) berupa teks keterangan kecil di bawah field, BUKAN field yang tampak bisa diisi. Lebar field mengikuti kolom grid 2 kolom (atau penuh untuk teks panjang); jangan ada field setengah-lebar sendirian dengan ruang kosong di sampingnya.

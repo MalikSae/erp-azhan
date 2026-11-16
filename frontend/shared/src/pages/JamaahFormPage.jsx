@@ -142,8 +142,8 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
 
     // Validasi Brand jika Super Admin di Office Dashboard
     if (showBrandColumn && !formData.brand_id) {
-      setBrandError("Pilih biro travel / brand terlebih dahulu");
-      setError("Silakan pilih biro travel / brand untuk jamaah ini.");
+      setBrandError("Pilih brand.");
+      setError("Pilih brand.");
       return;
     }
 
@@ -201,7 +201,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   if (loadFailed) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Edit Data Jamaah" onBack={handleBack} />
+        <PageHeader title="Edit Jamaah" onBack={handleBack} />
         <Alert variant="error">Gagal memuat data jamaah. Form tidak ditampilkan agar data yang tersimpan tidak tertimpa.</Alert>
         <Button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>Coba Lagi</Button>
       </div>
@@ -211,7 +211,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isEdit ? "Edit Data Jamaah" : "Tambah Data Jamaah"}
+        title={isEdit ? "Edit Jamaah" : "Tambah Jamaah"}
         onBack={handleBack}
       />
 
@@ -227,17 +227,17 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
             <FormSection id="sec-identitas" title="Identitas & Data Pribadi">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Baris 1: Nama Lengkap & Jenis Kelamin */}
-                <Input 
-                  label="Nama Lengkap (Sesuai KTP / Paspor)" 
-                  name="nama_lengkap" 
-                  value={formData.nama_lengkap} 
-                  onChange={handleChange} 
-                  required 
-                  placeholder="Contoh: Muhammad Abdullah" 
+                <Input
+                  label="Nama lengkap"
+                  name="nama_lengkap"
+                  value={formData.nama_lengkap}
+                  onChange={handleChange}
+                  required
+                  placeholder="Muhammad Abdullah"
                 />
 
                 <CustomDropdown
-                  label="Jenis Kelamin"
+                  label="Jenis kelamin"
                   name="jenis_kelamin"
                   value={formData.jenis_kelamin || ""}
                   onChange={(val) => {
@@ -253,33 +253,32 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
 
                 {/* Baris 2: NIK & Nama Ayah Kandung */}
                 <Input 
-                  label="NIK (Nomor Induk Kependudukan)" 
-                  name="nik" 
-                  value={formData.nik || ''} 
-                  onChange={handleChange} 
-                  placeholder="16 digit NIK KTP" 
-                  maxLength={16} 
+                  label="NIK"
+                  name="nik"
+                  value={formData.nik || ''}
+                  onChange={handleChange}
+                  placeholder="16 digit"
+                  maxLength={16}
                 />
-                <Input 
-                  label="Nama Ayah Kandung" 
-                  name="nama_ayah_kandung" 
-                  value={formData.nama_ayah_kandung} 
-                  onChange={handleChange} 
-                  placeholder="Nama ayah kandung" 
+                <Input
+                  label="Nama ayah kandung"
+                  name="nama_ayah_kandung"
+                  value={formData.nama_ayah_kandung}
+                  onChange={handleChange}
                 />
 
                 {/* Baris 3: Tempat & Tanggal Lahir */}
-                <AutocompleteInput 
-                  label="Tempat Lahir" 
-                  name="tempat_lahir" 
-                  value={formData.tempat_lahir || ''} 
-                  onChange={handleChange} 
+                <AutocompleteInput
+                  label="Tempat lahir"
+                  name="tempat_lahir"
+                  value={formData.tempat_lahir || ''}
+                  onChange={handleChange}
                   options={INDONESIAN_CITIES}
-                  placeholder="Ketik nama kota/kabupaten..."
+                  placeholder="Cari kota"
                 />
-                <Input 
-                  type="date" 
-                  label="Tanggal Lahir" 
+                <Input
+                  type="date"
+                  label="Tanggal lahir"
                   name="tanggal_lahir" 
                   value={formData.tanggal_lahir || ''} 
                   onChange={handleChange} 
@@ -291,30 +290,29 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                   name="pekerjaan" 
                   value={formData.pekerjaan || ''} 
                   onChange={handleChange} 
-                  placeholder="Contoh: Pegawai Swasta, Wiraswasta" 
+                  placeholder="Pegawai swasta"
                 />
-                <Input 
-                  label="Pendidikan Terakhir" 
-                  name="pendidikan_terakhir" 
-                  value={formData.pendidikan_terakhir || ''} 
-                  onChange={handleChange} 
-                  placeholder="Contoh: S1, SMA, S2" 
+                <Input
+                  label="Pendidikan terakhir"
+                  name="pendidikan_terakhir"
+                  value={formData.pendidikan_terakhir || ''}
+                  onChange={handleChange}
+                  placeholder="S1"
                 />
 
                 {/* Baris 5: Jaminan Kesehatan & No Asuransi */}
-                <Input 
-                  label="Penjamin Kesehatan (mis. BPJS)" 
-                  name="penjamin_kesehatan" 
-                  value={formData.penjamin_kesehatan || ''} 
-                  onChange={handleChange} 
-                  placeholder="Contoh: BPJS Kesehatan, Mandiri Inhealth" 
+                <Input
+                  label="Penjamin kesehatan"
+                  name="penjamin_kesehatan"
+                  value={formData.penjamin_kesehatan || ''}
+                  onChange={handleChange}
+                  placeholder="BPJS Kesehatan"
                 />
-                <Input 
-                  label="Nomor Asuransi / BPJS" 
-                  name="no_asuransi_bpjs" 
-                  value={formData.no_asuransi_bpjs || ''} 
-                  onChange={handleChange} 
-                  placeholder="Nomor kepesertaan asuransi" 
+                <Input
+                  label="Nomor asuransi"
+                  name="no_asuransi_bpjs"
+                  value={formData.no_asuransi_bpjs || ''}
+                  onChange={handleChange}
                 />
               </div>
             </FormSection>
@@ -322,31 +320,31 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
             {/* 2. DOKUMEN PASPOR */}
             <FormSection id="sec-paspor" title="Dokumen Paspor">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input 
-                  label="Nomor Paspor" 
-                  name="no_paspor" 
-                  value={formData.no_paspor || ''} 
-                  onChange={handleChange} 
-                  placeholder="Contoh: A1234567"
+                <Input
+                  label="Nomor paspor"
+                  name="no_paspor"
+                  value={formData.no_paspor || ''}
+                  onChange={handleChange}
+                  placeholder="A1234567"
                 />
-                <AutocompleteInput 
-                  label="Kota Penerbit Paspor" 
-                  name="tempat_paspor_keluar" 
-                  value={formData.tempat_paspor_keluar || ''} 
-                  onChange={handleChange} 
+                <AutocompleteInput
+                  label="Kota penerbit"
+                  name="tempat_paspor_keluar"
+                  value={formData.tempat_paspor_keluar || ''}
+                  onChange={handleChange}
                   options={INDONESIAN_CITIES}
-                  placeholder="Ketik kota imigrasi penerbit..."
+                  placeholder="Cari kota"
                 />
-                <Input 
-                  type="date" 
-                  label="Tanggal Dikeluarkan (Issued Date)" 
+                <Input
+                  type="date"
+                  label="Tanggal terbit"
                   name="tanggal_paspor_keluar" 
                   value={formData.tanggal_paspor_keluar || ''} 
                   onChange={handleChange} 
                 />
                 <Input 
                   type="date" 
-                  label="Paspor Berlaku Sampai (Expiry Date)" 
+                  label="Masa berlaku"
                   name="paspor_berlaku_sampai" 
                   value={formData.paspor_berlaku_sampai || ''} 
                   onChange={handleChange} 
@@ -357,12 +355,12 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
             {/* 3. KONTAK & ALAMAT DOMISILI */}
             <FormSection id="sec-kontak" title="Kontak & Alamat Domisili">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input 
-                  label="No HP / WhatsApp" 
-                  name="no_hp" 
-                  value={formData.no_hp || ''} 
-                  onChange={handleChange} 
-                  placeholder="Contoh: 081234567890" 
+                <Input
+                  label="No HP / WhatsApp"
+                  name="no_hp"
+                  value={formData.no_hp || ''}
+                  onChange={handleChange}
+                  placeholder="081234567890"
                 />
                 <Input 
                   type="email" 
@@ -374,22 +372,22 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
                 />
                 <div className="md:col-span-2">
                   <AutocompleteInput 
-                    label="Kota / Kabupaten Domisili" 
+                    label="Kota / kabupaten domisili"
                     name="kota" 
                     value={formData.kota || ''} 
                     onChange={handleChange} 
                     options={INDONESIAN_CITIES}
-                    placeholder="Ketik nama kota/kabupaten domisili..."
+                    placeholder="Cari kota"
                   />
                 </div>
                 <div className="md:col-span-2">
                   <Textarea 
-                    label="Alamat Lengkap" 
+                    label="Alamat lengkap"
                     name="alamat" 
                     value={formData.alamat || ''} 
                     onChange={handleChange} 
                     rows={3} 
-                    placeholder="Nama jalan, nomor rumah, RT/RW, kelurahan, kecamatan..." 
+                    placeholder="Jalan, RT/RW, kelurahan, kecamatan"
                   />
                 </div>
               </div>
@@ -398,120 +396,97 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
             {/* 4. KONTAK DARURAT */}
             <FormSection id="sec-darurat" title="Kontak Darurat">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input 
-                  label="Nama Kontak Darurat" 
-                  name="emergency_nama" 
-                  value={formData.emergency_nama || ''} 
-                  onChange={handleChange} 
-                  placeholder="Nama lengkap kerabat"
+                <Input
+                  label="Nama kontak darurat"
+                  name="emergency_nama"
+                  value={formData.emergency_nama || ''}
+                  onChange={handleChange}
                 />
-                <Input 
-                  label="Hubungan Kerabat" 
-                  name="emergency_hubungan" 
-                  value={formData.emergency_hubungan || ''} 
-                  onChange={handleChange} 
-                  placeholder="Contoh: Saudara Kandung, Anak"
+                <Input
+                  label="Hubungan kerabat"
+                  name="emergency_hubungan"
+                  value={formData.emergency_hubungan || ''}
+                  onChange={handleChange}
+                  placeholder="Saudara kandung"
                 />
-                <Input 
-                  label="No HP Kontak Darurat" 
-                  name="emergency_hp" 
-                  value={formData.emergency_hp || ''} 
-                  onChange={handleChange} 
-                  placeholder="Contoh: 081234567890"
+                <Input
+                  label="No HP kontak darurat"
+                  name="emergency_hp"
+                  value={formData.emergency_hp || ''}
+                  onChange={handleChange}
+                  placeholder="081234567890"
                 />
-                <Input 
-                  label="NIK Kontak Darurat" 
-                  name="emergency_nik" 
-                  value={formData.emergency_nik || ''} 
-                  onChange={handleChange} 
-                  placeholder="16 digit NIK"
+                <Input
+                  label="NIK kontak darurat"
+                  name="emergency_nik"
+                  value={formData.emergency_nik || ''}
+                  onChange={handleChange}
+                  placeholder="16 digit"
                   maxLength={16}
                 />
                 <div className="md:col-span-2">
-                  <Textarea 
-                    label="Alamat Kontak Darurat" 
-                    name="emergency_alamat" 
-                    value={formData.emergency_alamat || ''} 
-                    onChange={handleChange} 
-                    rows={2} 
-                    placeholder="Alamat domisili kerabat darurat..."
+                  <Textarea
+                    label="Alamat kontak darurat"
+                    name="emergency_alamat"
+                    value={formData.emergency_alamat || ''}
+                    onChange={handleChange}
+                    rows={2}
                   />
                 </div>
               </div>
             </FormSection>
 
           <FormAside>
-            <SidebarSection title="Simpan">
-              <div className="space-y-3">
-                <p className="text-xs text-neutral-500 font-body">
-                  Pastikan nama dan nomor dokumen identitas sesuai dengan KTP dan paspor fisik jamaah.
-                </p>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={submitting}
-                  className="w-full justify-center"
-                >
-                  {submitting ? "Menyimpan..." : (isEdit ? "Perbarui Data Jamaah" : "Simpan Data Jamaah")}
-                </Button>
-              </div>
-            </SidebarSection>
-
             {/* Panel Afiliasi Biro Travel (Hanya Super Admin di Office Dashboard) */}
             {showBrandColumn && (
               <SidebarSection title={<>Brand <span className="text-danger-500" aria-hidden="true">*</span></>}>
-                <div className="space-y-2">
-                  <CustomDropdown
-                    name="brand_id"
-                    className="!mb-0"
-                    options={brands.map(b => ({ value: b.id, label: b.name }))}
-                    value={formData.brand_id || ""}
-                    onChange={handleBrandChange}
-                    placeholder="Pilih Brand Travel..."
-                    required
-                    error={brandError}
-                    disabled={isEdit}
-                  />
-                  <p className="text-xs text-neutral-400 font-body">
-                    Data jamaah akan terdaftar dan dikelola di bawah unit biro travel yang dipilih.
-                  </p>
-                </div>
+                <CustomDropdown
+                  name="brand_id"
+                  className="!mb-0"
+                  options={brands.map(b => ({ value: b.id, label: b.name }))}
+                  value={formData.brand_id || ""}
+                  onChange={handleBrandChange}
+                  placeholder="Pilih brand"
+                  required
+                  error={brandError}
+                  disabled={isEdit}
+                />
               </SidebarSection>
             )}
 
             {/* Kaitan agen: wajib dipilih saat membuat jamaah. Sesudah itu hanya bisa diganti lewat override admin. */}
             {!isEdit && (
-              <SidebarSection title="Agen Pembawa Jamaah">
-                <div className="space-y-2">
-                  <KaitanAgenPicker
-                    value={kaitan}
-                    onChange={(v) => { setKaitan(v); setKaitanError(null); }}
-                    brandId={formData.brand_id || undefined}
-                    brandRequired={showBrandColumn}
-                    error={kaitanError}
-                  />
-                  <p className="text-xs text-neutral-400 font-body">
-                    Agen yang membawa jamaah ini menerima komisinya. Pilihan ini tidak bisa diubah dari form edit.
-                  </p>
-                </div>
+              <SidebarSection>
+                <KaitanAgenPicker
+                  value={kaitan}
+                  onChange={(v) => { setKaitan(v); setKaitanError(null); }}
+                  brandId={formData.brand_id || undefined}
+                  brandRequired={showBrandColumn}
+                  error={kaitanError}
+                />
               </SidebarSection>
             )}
 
             {/* Panel Catatan Khusus Internal */}
             <SidebarSection title="Catatan Internal">
-              <div>
-                <Textarea 
-                  name="catatan" 
-                  className="!mb-0"
-                  value={formData.catatan || ''} 
-                  onChange={handleChange} 
-                  rows={4} 
-                  placeholder="Catatan riwayat medis, penyakit kronis, kebutuhan kursi roda, atau permintaan khusus kamar..." 
-                />
-                <p className="text-xs text-neutral-400 font-body mt-1.5">
-                  Hanya dapat dilihat oleh petugas internal biro travel.
-                </p>
-              </div>
+              <Textarea
+                name="catatan"
+                className="!mb-0"
+                value={formData.catatan || ''}
+                onChange={handleChange}
+                rows={4}
+              />
+            </SidebarSection>
+
+            <SidebarSection>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={submitting}
+                className="w-full justify-center"
+              >
+                {submitting ? "Menyimpan..." : "Simpan"}
+              </Button>
             </SidebarSection>
 
           </FormAside>
