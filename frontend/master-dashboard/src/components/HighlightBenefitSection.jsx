@@ -75,7 +75,7 @@ export default function HighlightBenefitSection({ brandId, value = [], onChange,
   };
 
   if (!brandId) {
-    return <p className="text-sm font-body text-neutral-500">Pilih brand dulu untuk memilih highlight benefit.</p>;
+    return <p className="text-sm font-body text-neutral-500">Pilih brand dulu.</p>;
   }
 
   return (
