@@ -40,6 +40,7 @@ import { listAirports } from "../api/airports";
 import PageHeader from "../components/ui/PageHeader";
 import FormLayout, { FormSection, SidebarSection, FormAside } from "../components/ui/FormLayout";
 import CustomDropdown from "../components/ui/CustomDropdown";
+import Input from "../components/ui/Input";
 import AutocompleteInput from "../components/ui/AutocompleteInput";
 import FormField from "../components/ui/FormField";
 import Button from "../components/ui/Button";
@@ -573,6 +574,9 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
   // Validasi form kelengkapan untuk disable tombol submit
   const hasEmptyPaxJamaah = paxList.some((p) => !p.jamaah_id);
   const hasEmptyPaxRoom = paxList.some((p) => !p.is_infant && !p.room_type);
+  // Office Dashboard wajib pilih brand dulu sebelum bulan/paket bisa dipilih.
+  const brandMissing = showBrandColumn && !selectedBrandId;
+
   const isSubmitDisabled =
     submitting ||
     isOverQuota ||
@@ -676,7 +680,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
             if (ageInfo.isInfant) {
               setClientErrors((prevErr) => ({
                 ...prevErr,
-                [`pax_${p.id}_jamaah`]: "Pax #1 adalah Kontak Utama dan harus jamaah reguler (bukan infant). Daftarkan jamaah ini di baris Pax #2 atau lainnya."
+                [`pax_${p.id}_jamaah`]: "Jamaah #1 harus reguler. Pilih bayi ini di baris lain."
               }));
               return { ...p, jamaah_id: "", is_infant: false, room_type: "" };
             }
@@ -712,7 +716,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
           if (ageInfo?.isInfant) {
             setClientErrors((prev) => ({
               ...prev,
-              [`pax_${id}_jamaah`]: "Pax #1 adalah Kontak Utama dan harus jamaah reguler (bukan infant). Daftarkan jamaah ini di baris Pax #2 atau lainnya."
+              [`pax_${id}_jamaah`]: "Jamaah #1 harus reguler. Pilih bayi ini di baris lain."
             }));
             return; // Tolak pemilihan, dropdown tetap kosong
           }
@@ -772,7 +776,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
         mode: 'agen',
         agen: { id: pic.direkrut_oleh_akun_id, nama_lengkap: pic.direkrut_oleh_nama || `Agen #${pic.direkrut_oleh_akun_id}` },
       });
-      setQuickCreateKaitanHint(`Sama seperti PIC (${pic.nama_lengkap}). Ganti bila jamaah ini milik agen lain.`);
+      setQuickCreateKaitanHint(`Mengikuti PIC (${pic.nama_lengkap}).`);
     } else {
       setQuickCreateKaitan(EMPTY_KAITAN);
       setQuickCreateKaitanHint(null);
@@ -782,7 +786,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
   const handleQuickCreateSubmit = async () => {
     if (!quickCreateForm.nama_lengkap.trim()) {
-      setQuickCreateError('Nama lengkap wajib diisi');
+      setQuickCreateError('Isi nama lengkap.');
       return;
     }
     const kaitanErr = validateKaitan(quickCreateKaitan);
@@ -846,7 +850,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
   const handleInlineDobSave = async (paxId, jamaahId) => {
     const dob = inlineDobMap[jamaahId]?.value || '';
     if (!dob) {
-      setInlineDobMap(prev => ({ ...prev, [jamaahId]: { ...prev[jamaahId], error: 'Pilih tanggal lahir terlebih dahulu' } }));
+      setInlineDobMap(prev => ({ ...prev, [jamaahId]: { ...prev[jamaahId], error: 'Pilih tanggal lahir.' } }));
       return;
     }
     if (!jamaahMap[jamaahId]) return;
@@ -874,10 +878,10 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
     const errors = {};
     if (showBrandColumn && !selectedBrandId) {
-      errors.brand_id = "Pilih biro travel / brand terlebih dahulu";
+      errors.brand_id = "Pilih brand.";
     }
     if (!selectedScheduleId) {
-      errors.schedule_id = "Pilih paket / jadwal terlebih dahulu untuk menyimpan draft";
+      errors.schedule_id = "Pilih paket.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -899,7 +903,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       seenDraftIds.add(String(p.jamaah_id));
     }
     if (duplicateDraftName) {
-      setServerError(`Jamaah ${duplicateDraftName} didaftarkan lebih dari satu kali dalam booking ini`);
+      setServerError(`${duplicateDraftName} terdaftar lebih dari sekali di booking ini.`);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -920,12 +924,12 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
       if (isEditDraft) {
         await updateDraftBooking(id, draftPayload);
-        setDraftSuccess("Perubahan draft booking berhasil disimpan.");
+        setDraftSuccess("Draft disimpan.");
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
         const res = await createDraftBooking(draftPayload);
         navigate(`/bookings/${res.id}/edit`, {
-          state: { draftSuccess: "Draft booking berhasil disimpan. Anda berada dalam mode lanjutkan draft." }
+          state: { draftSuccess: "Draft disimpan." }
         });
       }
     } catch (err) {
@@ -959,39 +963,39 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
     const errors = {};
     if (showBrandColumn && !selectedBrandId) {
-      errors.brand_id = "Pilih biro travel / brand terlebih dahulu";
+      errors.brand_id = "Pilih brand.";
     }
 
     if (!selectedScheduleId) {
-      errors.schedule_id = "Pilih paket / jadwal terlebih dahulu";
+      errors.schedule_id = "Pilih paket.";
     }
 
     if (paxList.length === 0) {
-      errors.pax = "Minimal harus ada 1 pax dalam booking";
+      errors.pax = "Tambah minimal 1 jamaah.";
     }
 
-    paxList.forEach((p, idx) => {
+    paxList.forEach((p) => {
       if (!p.jamaah_id) {
-        errors[`pax_${p.id}_jamaah`] = `Pilih jamaah untuk Pax #${idx + 1}`;
+        errors[`pax_${p.id}_jamaah`] = "Pilih jamaah.";
       }
       if (!p.is_infant && !p.room_type) {
-        errors[`pax_${p.id}_room`] = `Pilih tipe kamar untuk Pax #${idx + 1}`;
+        errors[`pax_${p.id}_room`] = "Pilih tipe kamar.";
       }
     });
 
     if (regularPaxCount === 0) {
-      errors.pic_jamaah_id = "Minimal 1 pax reguler diperlukan sebagai kontak utama";
+      errors.pic_jamaah_id = "Tambah minimal 1 jamaah reguler sebagai PIC.";
     } else if (!picJamaahId) {
-      errors.pic_jamaah_id = "Pilih Kontak Utama (PIC) dari daftar jamaah reguler";
+      errors.pic_jamaah_id = "Pilih PIC.";
     } else {
       const isValidPic = paxList.some((p) => !p.is_infant && String(p.jamaah_id) === String(picJamaahId));
       if (!isValidPic) {
-        errors.pic_jamaah_id = "Kontak Utama (PIC) harus merupakan jamaah reguler (bukan infant)";
+        errors.pic_jamaah_id = "PIC harus jamaah reguler.";
       }
     }
 
     if (isOverQuota) {
-      errors.quota = `Jumlah pax reguler (${regularPaxCount}) melebihi sisa kuota seat (${seatSisa})`;
+      errors.quota = `Seat tidak cukup: butuh ${regularPaxCount}, sisa ${seatSisa}.`;
     }
 
     if (Object.keys(errors).length > 0) {
@@ -1013,7 +1017,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       seenSubmitIds.add(String(p.jamaah_id));
     }
     if (duplicateSubmitName) {
-      setServerError(`Jamaah ${duplicateSubmitName} didaftarkan lebih dari satu kali dalam booking ini`);
+      setServerError(`${duplicateSubmitName} terdaftar lebih dari sekali di booking ini.`);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -1059,7 +1063,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isEditDraft ? "Lanjutkan Draft Booking" : "Booking Baru"}
+        title={isEditDraft ? "Lanjutkan Draft Booking" : "Tambah Booking"}
         onBack={() => navigate("/bookings")}
       />
 
@@ -1108,126 +1112,60 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
         <FormLayout>
 
             {/* 1. PILIH BIRO TRAVEL & PAKET JADWAL */}
-            <FormSection id="sec-paket" title="Pilih Paket Umroh">
+            <FormSection id="sec-paket" title="Paket Umroh">
               <div className="space-y-4">
-                {/* Mode Office Dashboard: 1. Brand, 2. Filter Bulan, 3. Paket Jadwal */}
-                {showBrandColumn ? (
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-                    <div className="md:col-span-4">
-                      <CustomDropdown
-                        label="Biro Travel"
-                        value={selectedBrandId}
-                        onChange={handleBrandChange}
-                        placeholder="Pilih biro travel..."
-                        options={brands.map((b) => ({
-                          value: String(b.id),
-                          label: b.name
-                        }))}
-                        error={clientErrors.brand_id}
-                        required
-                      />
-                    </div>
-
-                    <div className="md:col-span-4">
-                      <CustomDropdown
-                        label="Bulan Berangkat"
-                        value={selectedMonth}
-                        onChange={handleMonthChange}
-                        placeholder={
-                          !selectedBrandId
-                            ? "Pilih travel dulu..."
-                            : availableMonths.length === 0
-                              ? "Tidak ada jadwal"
-                              : "Semua Bulan"
-                        }
-                        options={[
-                          ...(availableMonths.length > 0 ? [{ value: "", label: "Semua Bulan" }] : []),
-                          ...availableMonths
-                        ]}
-                        disabled={!selectedBrandId || availableMonths.length === 0}
-                      />
-                    </div>
-
-                    <div className="md:col-span-4">
-                      <CustomDropdown
-                        label="Paket Umroh"
-                        value={selectedScheduleId}
-                        onChange={handleScheduleChange}
-                        placeholder={
-                          !selectedBrandId 
-                            ? "Pilih travel dulu..." 
-                            : filteredScheduleList.length === 0
-                              ? "Tidak ada paket"
-                              : "Pilih paket umroh..."
-                        }
-                        options={filteredScheduleList.map((s) => {
-                          const dateFormatted = formatIndoDate(s.berangkat_tanggal);
-                          const datePrefix = s.berangkat_tanggal ? `${dateFormatted} • ` : "";
-                          const isFull = s.seat_sisa <= 0;
-                          const isLow = s.seat_sisa > 0 && s.seat_sisa <= 5;
-                          return {
-                            value: s.id,
-                            label: `${datePrefix}${s.jadwal_nama}`,
-                            badge: isFull ? 'Penuh' : `${s.seat_sisa} Seat`,
-                            badgeVariant: isFull ? 'danger' : isLow ? 'warning' : 'success'
-                          };
-                        })}
-                        disabled={!selectedBrandId || filteredScheduleList.length === 0}
-                        error={clientErrors.schedule_id}
-                        required
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  /* Mode Travel Dashboard: 1. Filter Bulan, 2. Paket Jadwal */
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-                    <div className="md:col-span-4">
-                      <CustomDropdown
-                        label="Bulan Berangkat"
-                        value={selectedMonth}
-                        onChange={handleMonthChange}
-                        placeholder={
-                          availableMonths.length === 0
+                {/* Brand ada di sidebar (Office Dashboard). Di sini: filter bulan + paket jadwal. */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                  <div className="md:col-span-4">
+                    <CustomDropdown
+                      label="Bulan berangkat"
+                      value={selectedMonth}
+                      onChange={handleMonthChange}
+                      placeholder={
+                        brandMissing
+                          ? "Pilih brand dulu"
+                          : availableMonths.length === 0
                             ? "Tidak ada jadwal"
-                            : "Semua Bulan"
-                        }
-                        options={[
-                          ...(availableMonths.length > 0 ? [{ value: "", label: "Semua Bulan" }] : []),
-                          ...availableMonths
-                        ]}
-                        disabled={availableMonths.length === 0}
-                      />
-                    </div>
-
-                    <div className="md:col-span-8">
-                      <CustomDropdown
-                        label="Paket Umroh"
-                        value={selectedScheduleId}
-                        onChange={handleScheduleChange}
-                        placeholder={
-                          filteredScheduleList.length === 0
-                            ? "Tidak ada paket di bulan ini"
-                            : "Pilih paket umroh..."
-                        }
-                        options={filteredScheduleList.map((s) => {
-                          const dateFormatted = formatIndoDate(s.berangkat_tanggal);
-                          const datePrefix = s.berangkat_tanggal ? `${dateFormatted} • ` : "";
-                          const isFull = s.seat_sisa <= 0;
-                          const isLow = s.seat_sisa > 0 && s.seat_sisa <= 5;
-                          return {
-                            value: s.id,
-                            label: `${datePrefix}${s.jadwal_nama}`,
-                            badge: isFull ? 'Penuh' : `${s.seat_sisa} Seat`,
-                            badgeVariant: isFull ? 'danger' : isLow ? 'warning' : 'success'
-                          };
-                        })}
-                        disabled={filteredScheduleList.length === 0}
-                        error={clientErrors.schedule_id}
-                        required
-                      />
-                    </div>
+                            : "Semua bulan"
+                      }
+                      options={[
+                        ...(availableMonths.length > 0 ? [{ value: "", label: "Semua bulan" }] : []),
+                        ...availableMonths
+                      ]}
+                      disabled={brandMissing || availableMonths.length === 0}
+                    />
                   </div>
-                )}
+
+                  <div className="md:col-span-8">
+                    <CustomDropdown
+                      label="Paket"
+                      value={selectedScheduleId}
+                      onChange={handleScheduleChange}
+                      placeholder={
+                        brandMissing
+                          ? "Pilih brand dulu"
+                          : filteredScheduleList.length === 0
+                            ? "Tidak ada paket"
+                            : "Pilih paket"
+                      }
+                      options={filteredScheduleList.map((s) => {
+                        const dateFormatted = formatIndoDate(s.berangkat_tanggal);
+                        const datePrefix = s.berangkat_tanggal ? `${dateFormatted} • ` : "";
+                        const isFull = s.seat_sisa <= 0;
+                        const isLow = s.seat_sisa > 0 && s.seat_sisa <= 5;
+                        return {
+                          value: s.id,
+                          label: `${datePrefix}${s.jadwal_nama}`,
+                          badge: isFull ? 'Penuh' : `${s.seat_sisa} seat`,
+                          badgeVariant: isFull ? 'danger' : isLow ? 'warning' : 'success'
+                        };
+                      })}
+                      disabled={brandMissing || filteredScheduleList.length === 0}
+                      error={clientErrors.schedule_id}
+                      required
+                    />
+                  </div>
+                </div>
 
                 {/* Preview Rincian Paket Terpilih */}
                 {selectedSchedule && (
@@ -1242,9 +1180,8 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                       <Button variant="secondary" size="sm"
                         onClick={() => setShowScheduleDetails((prev) => !prev)}
-                        title={showScheduleDetails ? "Tutup rincian paket" : "Buka rincian lengkap paket"}
                       >
-                        <span>{showScheduleDetails ? "Tutup Rincian" : "Lihat Rincian"}</span>
+                        <span>{showScheduleDetails ? "Tutup rincian" : "Lihat rincian"}</span>
                         <ChevronDown
                           size={14}
                           className={`transition-transform duration-200 ${showScheduleDetails ? "rotate-180 text-neutral-900" : "text-neutral-500"}`}
@@ -1255,7 +1192,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                     {/* Ringkasan: periode, penerbangan */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
                       <div>
-                        <span className="block text-xs text-neutral-400 mb-0.5">Periode Berangkat</span>
+                        <span className="block text-xs text-neutral-400 mb-0.5">Periode berangkat</span>
                         <div className="font-medium text-neutral-900">
                           {selectedSchedule.berangkat_tanggal ? (
                             selectedSchedule.pulang_tanggal ? (
@@ -1332,7 +1269,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                                 <div className="font-heading font-semibold text-neutral-900">{leg.route}</div>
                                 <div className="text-xs text-neutral-600 space-y-0.5">
                                   <div>Maskapai: <span className="font-medium text-neutral-800">{selectedSchedule.maskapai?.name || "-"}</span></div>
-                                  <div>Flight: <span className="font-medium text-neutral-800">{leg.flight || "-"}</span></div>
+                                  <div>No. penerbangan: <span className="font-medium text-neutral-800">{leg.flight || "-"}</span></div>
                                   <div>Waktu: <span className="font-medium text-neutral-800">{leg.time || "-"}</span></div>
                                   {!selectedSchedule.is_direct_flight && leg.transit && (
                                     <div>Transit: <span className="font-medium text-neutral-800">{leg.transit}</span></div>
@@ -1410,7 +1347,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                               {selectedSchedule.exclude_items && selectedSchedule.exclude_items.length > 0 && (
                                 <div className="space-y-2">
-                                  <span className="block text-xs text-neutral-400">Tidak Termasuk</span>
+                                  <span className="block text-xs text-neutral-400">Tidak termasuk</span>
                                   <ul className="space-y-1.5 text-xs text-neutral-600">
                                     {selectedSchedule.exclude_items.map((item, idx) => (
                                       <li key={idx} className="flex items-start gap-1.5">
@@ -1428,14 +1365,14 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                         {/* Brosur */}
                         {selectedSchedule.brosur_url && (
                           <div className="flex items-center justify-between border-t border-neutral-200 pt-5">
-                            <span className="text-sm font-medium text-neutral-900">Brosur Paket</span>
+                            <span className="text-sm font-medium text-neutral-900">Brosur</span>
                             <a
                               href={tautanAman(selectedSchedule.brosur_url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                             >
-                              <span>Lihat Brosur</span>
+                              <span>Lihat brosur</span>
                               <ExternalLink size={12} />
                             </a>
                           </div>
@@ -1448,23 +1385,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
             </FormSection>
 
             {/* 2. REPEATER DAFTAR JAMAAH / PAX */}
-            <FormSection
-              id="sec-jamaah"
-              title="Daftar Jamaah"
-              aside={
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleAddPax}
-                  disabled={!selectedScheduleId}
-                  className="flex items-center gap-1.5 text-xs"
-                >
-                  <Plus size={14} />
-                  <span>Tambah Jamaah</span>
-                </Button>
-              }
-            >
+            <FormSection id="sec-jamaah" title="Jamaah">
               <div className="space-y-4">
                 {paxList.map((pax, index) => {
                   const paxPrice = calculatePaxPrice(pax);
@@ -1516,8 +1437,8 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                                 ? "opacity-30 cursor-not-allowed pointer-events-none"
                                 : "cursor-pointer"
                             }`}
-                            title={paxList.length <= 1 ? "Reset jamaah ini" : "Hapus jamaah ini"}
-                            aria-label={`Hapus Pax #${index + 1}`}
+                            title={paxList.length <= 1 ? "Kosongkan" : "Hapus"}
+                            aria-label={`Hapus jamaah #${index + 1}`}
                           >
                             <Trash2 size={16} strokeWidth={1.75} />
                           </button>
@@ -1532,10 +1453,10 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                           <div className="flex items-end gap-2">
                             <div className="flex-1 min-w-0">
                               <AutocompleteInput
-                                label="Pilih Jamaah"
+                                label="Jamaah"
                                 value={pax.jamaah_id}
                                 onChange={(e) => handlePaxChange(pax.id, "jamaah_id", e.target.value)}
-                                placeholder={!selectedScheduleId ? "Pilih paket dulu..." : "Ketik nama / NIK..."}
+                                placeholder={!selectedScheduleId ? "Pilih paket dulu" : "Cari nama atau NIK"}
                                 options={getAvailableJamaahOptions(pax.id, index === 0)}
                                 disabled={!selectedScheduleId}
                                 error={jamaahError}
@@ -1549,7 +1470,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                               disabled={!selectedScheduleId}
                               onClick={() => handleOpenQuickCreate(pax.id)}
                               className="mb-4 w-9 h-9 shrink-0 inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                              title="Tambah jamaah baru langsung dari sini"
+                              title="Tambah jamaah baru"
                               aria-label="Tambah jamaah baru"
                             >
                               <UserPlus size={16} />
@@ -1559,14 +1480,14 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                           {isMissingNik && (
                             <div className="-mt-2 mb-0 flex flex-wrap items-center gap-2 text-xs text-warning-800 bg-warning-50 border border-warning-200/80 px-3 py-2 rounded-lg">
                               <AlertCircle size={12} className="shrink-0" />
-                              <span className="font-medium flex-1">NIK belum diisi. Booking tidak bisa diproses tanpa NIK.</span>
+                              <span className="font-medium flex-1">NIK belum diisi.</span>
                               <a
                                 href={`/jamaah/${pax.jamaah_id}/edit`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="font-semibold underline"
                               >
-                                Lengkapi data jamaah
+                                Lengkapi
                               </a>
                             </div>
                           )}
@@ -1577,7 +1498,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                               <div className="-mt-2 mb-0 space-y-1">
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-warning-800 bg-warning-50 border border-warning-200/80 px-3 py-2 rounded-lg">
                                   <AlertCircle size={12} className="shrink-0" />
-                                  <span className="font-medium flex-1">Tanggal lahir belum diisi</span>
+                                  <span className="font-medium flex-1">Tanggal lahir belum diisi.</span>
                                   <div className="flex items-center gap-1.5 w-full sm:w-auto">
                                     <input
                                       type="date"
@@ -1609,23 +1530,23 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                         <div className="sm:col-span-3">
                           {isInfant ? (
                             /* Kondisi B: Infant (< 2 tahun) -> Tanpa Kamar */
-                            <FormField label="Tipe Kamar">
+                            <FormField label="Tipe kamar">
                               <div className="h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 flex items-center text-sm text-neutral-400 font-body select-none">
-                                Tanpa Kamar
+                                Tanpa kamar
                               </div>
                             </FormField>
                           ) : (
                             /* Kondisi A (disabled) & Kondisi C (aktif normal) */
                             <CustomDropdown
-                              label="Tipe Kamar"
+                              label="Tipe kamar"
                               value={pax.room_type || ""}
                               onChange={(val) => handlePaxChange(pax.id, "room_type", val)}
                               placeholder={
                                 !selectedScheduleId
-                                  ? "Pilih paket dulu..."
+                                  ? "Pilih paket dulu"
                                   : isMissingDob
-                                  ? "Isi tgl lahir dulu..."
-                                  : "Pilih tipe kamar..."
+                                  ? "Isi tanggal lahir dulu"
+                                  : "Pilih"
                               }
                               options={[
                                 { value: "Quad", label: "Quad" },
@@ -1641,7 +1562,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
 
                         {/* 3. Harga Pax Subtotal (3 col) */}
                         <div className="sm:col-span-3">
-                          <FormField label={isInfant ? "Harga Infant" : "Harga / Pax"}>
+                          <FormField label={isInfant ? "Harga infant" : "Harga per pax"}>
                             <div className="h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 flex items-center text-sm font-semibold text-neutral-900 font-body select-none">
                               {paxPrice !== null ? formatRupiah(paxPrice) : "-"}
                             </div>
@@ -1652,174 +1573,161 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
                   );
                 })}
 
-                <div className="mt-4 flex justify-center">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleAddPax}
-                    disabled={!selectedScheduleId}
-                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs"
-                  >
-                    <Plus size={14} />
-                    <span>Tambah Jamaah</span>
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="dashed"
+                  onClick={handleAddPax}
+                  disabled={!selectedScheduleId}
+                  className="w-full justify-center"
+                >
+                  <Plus size={16} />
+                  <span>Tambah jamaah</span>
+                </Button>
               </div>
             </FormSection>
 
           <FormAside>
+            {/* Brand (Office Dashboard): menentukan daftar bulan dan paket. */}
+            {showBrandColumn && (
+              <SidebarSection title={<>Brand <span className="text-danger-500" aria-hidden="true">*</span></>}>
+                <CustomDropdown
+                  className="!mb-0"
+                  value={selectedBrandId}
+                  onChange={handleBrandChange}
+                  placeholder="Pilih brand"
+                  options={brands.map((b) => ({
+                    value: String(b.id),
+                    label: b.name
+                  }))}
+                  error={clientErrors.brand_id}
+                  required
+                />
+              </SidebarSection>
+            )}
 
-            {/* 1. Ringkasan & Total Harga */}
+            {/* PIC booking */}
+            <SidebarSection>
+              <CustomDropdown
+                className="!mb-0"
+                label="PIC"
+                value={picJamaahId}
+                onChange={(val) => {
+                  const actualVal = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
+                  setPicJamaahId(actualVal);
+                  setClientErrors((prev) => {
+                    const next = { ...prev };
+                    delete next.pic_jamaah_id;
+                    return next;
+                  });
+                }}
+                placeholder={picOptions.length === 0 ? "Pilih jamaah dulu" : "Pilih"}
+                options={picOptions}
+                disabled={picOptions.length === 0}
+                error={clientErrors.pic_jamaah_id}
+                required
+              />
+            </SidebarSection>
+
+            {/* Ringkasan biaya */}
             <SidebarSection title="Ringkasan Biaya">
-              <div className="space-y-4">
-                {selectedSchedule ? (
-                  <>
-                    {/* Status Kuota Seat */}
-                    <div
-                      className={`flex items-start gap-2.5 text-xs ${
-                        isOverQuota
-                          ? "p-3 rounded-lg border bg-danger-50 text-danger-800 border-danger-200"
-                          : "text-neutral-700"
-                      }`}
-                    >
-                      {isOverQuota ? (
-                        <AlertCircle className="w-4 h-4 text-danger-600 shrink-0 mt-0.5" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4 text-success-600 shrink-0 mt-0.5" />
-                      )}
-                      <div className="font-body">
-                        {isOverQuota ? (
-                          <div>
-                            <span className="font-semibold">Melebihi Kuota!</span>
-                            <p className="mt-0.5">
-                              Dibutuhkan <strong>{regularPaxCount} seat</strong>, sisa <strong>{seatSisa} seat</strong>.
-                            </p>
-                          </div>
-                        ) : (
-                          <div>
-                            <span className="font-semibold">Kuota Tersedia</span>
-                            <p className="mt-0.5 text-neutral-600">
-                              <strong>{regularPaxCount}</strong> dari <strong>{seatSisa}</strong> seat akan terpakai.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+              {selectedSchedule ? (
+                <div className="space-y-4">
+                  {/* Seat */}
+                  <div
+                    className={`flex items-center gap-2 text-xs font-body ${
+                      isOverQuota ? "text-danger-700" : "text-neutral-600"
+                    }`}
+                  >
+                    {isOverQuota ? (
+                      <AlertCircle className="w-4 h-4 text-danger-600 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-success-600 shrink-0" />
+                    )}
+                    <span>
+                      {isOverQuota
+                        ? `Seat tidak cukup: butuh ${regularPaxCount}, sisa ${seatSisa}.`
+                        : `${regularPaxCount} dari ${seatSisa} seat terpakai`}
+                    </span>
+                  </div>
 
-                    {/* Breakdown Rincian Pax */}
-                    <div className="space-y-2 border-t border-neutral-200 pt-4 text-xs text-neutral-600 font-body">
+                  {/* Rincian pax */}
+                  <div className="space-y-2 border-t border-neutral-200 pt-4 text-xs text-neutral-600 font-body">
+                    <div className="flex justify-between">
+                      <span>Reguler ({regularPaxCount}x)</span>
+                      <span className="font-medium text-neutral-900 tabular-nums">
+                        {formatRupiah(
+                          paxList
+                            .filter(p => !p.is_infant)
+                            .reduce((sum, p) => sum + (calculatePaxPrice(p) || 0), 0)
+                        )}
+                      </span>
+                    </div>
+                    {infantPaxCount > 0 && (
                       <div className="flex justify-between">
-                        <span>Jamaah Reguler ({regularPaxCount}x)</span>
-                        <span className="font-medium text-neutral-900">
+                        <span>Infant ({infantPaxCount}x)</span>
+                        <span className="font-medium text-neutral-900 tabular-nums">
                           {formatRupiah(
                             paxList
-                              .filter(p => !p.is_infant)
+                              .filter(p => p.is_infant)
                               .reduce((sum, p) => sum + (calculatePaxPrice(p) || 0), 0)
                           )}
                         </span>
                       </div>
-                      {infantPaxCount > 0 && (
-                        <div className="flex justify-between">
-                          <span>Infant ({infantPaxCount}x)</span>
-                          <span className="font-medium text-neutral-900">
-                            {formatRupiah(
-                              paxList
-                                .filter(p => p.is_infant)
-                                .reduce((sum, p) => sum + (calculatePaxPrice(p) || 0), 0)
-                            )}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Total Harga Highlight Card */}
-                    <div className="border-t border-neutral-200 pt-4">
-                      <span className="text-xs text-neutral-400 block">
-                        Total Biaya
-                      </span>
-                      <div className="mt-1 font-heading font-semibold text-xl md:text-2xl text-neutral-900">
-                        {formatRupiah(totalHarga)}
-                      </div>
-                      <p className="text-xs text-neutral-500 mt-1">
-                        {infantPaxCount > 0 
-                          ? `${paxList.length} Jamaah (${regularPaxCount} reguler, ${infantPaxCount} infant)` 
-                          : `${paxList.length} Jamaah reguler`
-                        }
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-neutral-500 text-xs font-body">
-                    Pilih travel dan paket umroh untuk melihat kalkulasi biaya.
+                    )}
                   </div>
-                )}
 
-                {/* Tombol Submit & Batal */}
-                <div className="space-y-2 border-t border-neutral-200 pt-4">
+                  {/* Total */}
+                  <div className="border-t border-neutral-200 pt-4">
+                    <span className="text-xs text-neutral-500 block font-body">Total</span>
+                    <div className="mt-1 font-heading font-semibold text-xl md:text-2xl text-neutral-900 tabular-nums">
+                      {formatRupiah(totalHarga)}
+                    </div>
+                    <p className="text-xs text-neutral-500 mt-1 font-body">
+                      {infantPaxCount > 0
+                        ? `${paxList.length} jamaah (${regularPaxCount} reguler, ${infantPaxCount} infant)`
+                        : `${paxList.length} jamaah`}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-neutral-500 font-body">Belum ada paket.</p>
+              )}
+            </SidebarSection>
+
+            {/* Aksi */}
+            <SidebarSection>
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleSaveDraft}
+                  disabled={draftSubmitting || submitting || deleteDraftSubmitting || !selectedScheduleId || brandMissing}
+                  className="w-full justify-center"
+                >
+                  {draftSubmitting ? "Menyimpan..." : "Simpan draft"}
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={isSubmitDisabled || submitting || draftSubmitting || deleteDraftSubmitting}
+                  className="w-full justify-center"
+                >
+                  {submitting ? "Memproses..." : (isEditDraft ? "Selesaikan booking" : "Buat booking")}
+                </Button>
+                {isEditDraft && (
                   <Button
                     type="button"
-                    variant="secondary"
-                    onClick={handleSaveDraft}
-                    disabled={draftSubmitting || submitting || deleteDraftSubmitting || !selectedScheduleId || (showBrandColumn && !selectedBrandId)}
-                    className="w-full justify-center"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeleteDraftModalOpen(true)}
+                    disabled={draftSubmitting || submitting || deleteDraftSubmitting}
+                    className="w-full justify-center text-danger-600 hover:text-danger-700"
                   >
-                    {draftSubmitting ? "Menyimpan Draft..." : "Simpan Draft"}
+                    Hapus draft
                   </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={isSubmitDisabled || submitting || draftSubmitting || deleteDraftSubmitting}
-                    className="w-full justify-center"
-                  >
-                    {submitting ? "Memproses..." : (isEditDraft ? "Selesaikan Booking" : "Buat Booking")}
-                  </Button>
-                  {isEditDraft && (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      onClick={() => setDeleteDraftModalOpen(true)}
-                      disabled={draftSubmitting || submitting || deleteDraftSubmitting}
-                      className="w-full justify-center"
-                    >
-                      Hapus Draft
-                    </Button>
-                  )}
-                </div>
+                )}
               </div>
             </SidebarSection>
-
-            {/* 2. Kontak Utama (PIC Booking) */}
-            <SidebarSection title="Kontak Utama (PIC)">
-              <div className="space-y-3">
-                <CustomDropdown
-                  label="Pilih PIC"
-                  value={picJamaahId}
-                  onChange={(val) => {
-                    const actualVal = (val && typeof val === 'object' && 'target' in val) ? val.target.value : val;
-                    setPicJamaahId(actualVal);
-                    setClientErrors((prev) => {
-                      const next = { ...prev };
-                      delete next.pic_jamaah_id;
-                      return next;
-                    });
-                  }}
-                  placeholder={
-                    picOptions.length === 0
-                      ? "Pilih jamaah di daftar pax dulu..."
-                      : "Pilih PIC..."
-                  }
-                  options={picOptions}
-                  disabled={picOptions.length === 0}
-                  error={clientErrors.pic_jamaah_id}
-                  required
-                />
-                <p className="text-xs text-neutral-500 font-body">
-                  Penanggung jawab invoice dan komunikasi rombongan.
-                </p>
-              </div>
-            </SidebarSection>
-
           </FormAside>
         </FormLayout>
       </form>
@@ -1828,7 +1736,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       <Modal
         isOpen={Boolean(cascadeDeleteTarget)}
         onClose={() => setCascadeDeleteTarget(null)}
-        title="Konfirmasi Hapus Pax"
+        title="Hapus Jamaah?"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button
@@ -1843,13 +1751,13 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
               variant="danger"
               onClick={handleConfirmCascadeDelete}
             >
-              Hapus Semua
+              Hapus
             </Button>
           </div>
         }
       >
         <p className="text-sm text-neutral-700 font-body">
-          Menghapus <strong>{cascadeDeleteTarget ? (jamaahMap[cascadeDeleteTarget.targetPax.jamaah_id]?.nama_lengkap || `Pax #${paxList.findIndex((p) => p.id === cascadeDeleteTarget.targetPax.id) + 1}`) : ''}</strong> akan menghapus juga <strong>{cascadeDeleteTarget?.infantCount} pax infant</strong> lain yang menyertainya, karena infant tidak bisa terdaftar sendiri tanpa pax reguler penyerta. Lanjutkan?
+          Hapus <strong>{cascadeDeleteTarget ? (jamaahMap[cascadeDeleteTarget.targetPax.jamaah_id]?.nama_lengkap || `Jamaah #${paxList.findIndex((p) => p.id === cascadeDeleteTarget.targetPax.id) + 1}`) : ''}</strong>? {cascadeDeleteTarget?.infantCount} infant yang menyertainya ikut terhapus.
         </p>
       </Modal>
 
@@ -1857,7 +1765,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       <Modal
         isOpen={deleteDraftModalOpen}
         onClose={() => !deleteDraftSubmitting && setDeleteDraftModalOpen(false)}
-        title="Konfirmasi Hapus Draft"
+        title="Hapus Draft?"
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button
@@ -1880,7 +1788,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
         }
       >
         <p className="text-sm text-neutral-700 font-body">
-          Hapus draft booking ini? Data pax yang sudah diisi akan ikut terhapus dan tidak bisa dikembalikan.
+          Jamaah yang sudah diisi ikut terhapus dan tidak bisa dikembalikan.
         </p>
       </Modal>
 
@@ -1888,7 +1796,7 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
       <Modal
         isOpen={quickCreateOpen}
         onClose={() => !quickCreateLoading && setQuickCreateOpen(false)}
-        title="Tambah Jamaah Baru"
+        title="Tambah Jamaah"
         size="md"
         footer={
           <div className="flex items-center justify-end gap-3">
@@ -1907,106 +1815,61 @@ export const BookingFormPage = ({ showBrandColumn = false }) => {
               disabled={quickCreateLoading || !quickCreateForm.nama_lengkap.trim()}
               className="inline-flex items-center gap-1.5"
             >
-              {quickCreateLoading ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <UserPlus size={14} />
-              )}
-              <span>{quickCreateLoading ? 'Menyimpan...' : 'Simpan Jamaah'}</span>
+              {quickCreateLoading ? 'Menyimpan...' : 'Simpan'}
             </Button>
           </div>
         }
       >
         <div className="space-y-4 font-body">
-          <p className="text-xs text-neutral-500">
-            Isi data minimal jamaah. Data lebih lengkap dapat dilengkapi nanti melalui menu Jamaah.
-          </p>
-          {quickCreateError && (
-            <div className="flex items-center gap-2 text-xs text-danger-700 bg-danger-50 border border-danger-200 rounded-lg px-3 py-2">
-              <AlertCircle size={14} className="shrink-0" />
-              <span>{quickCreateError}</span>
-            </div>
-          )}
-          <div className="space-y-3">
-            {/* Nama Lengkap */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-neutral-700">
-                Nama Lengkap <span className="text-danger-500 font-semibold">*</span>
-              </label>
-              <input
-                type="text"
-                value={quickCreateForm.nama_lengkap}
-                onChange={e => setQuickCreateForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
-                placeholder="cth: Ahmad Fauzi"
-                className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-                autoFocus
-              />
-            </div>
-            {/* Jenis Kelamin */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-neutral-700">Jenis Kelamin</label>
-              <div className="flex gap-4 items-center h-9 px-1">
-                <label className="flex items-center gap-2 text-sm text-neutral-900 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="quick_jenis_kelamin"
-                    value="L"
-                    checked={quickCreateForm.jenis_kelamin === "L"}
-                    onChange={(e) => setQuickCreateForm((prev) => ({ ...prev, jenis_kelamin: e.target.value }))}
-                    className="w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500"
-                  />
-                  Laki-laki
-                </label>
-                <label className="flex items-center gap-2 text-sm text-neutral-900 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="quick_jenis_kelamin"
-                    value="P"
-                    checked={quickCreateForm.jenis_kelamin === "P"}
-                    onChange={(e) => setQuickCreateForm((prev) => ({ ...prev, jenis_kelamin: e.target.value }))}
-                    className="w-4 h-4 text-primary-500 border-neutral-300 focus:ring-primary-500"
-                  />
-                  Perempuan
-                </label>
-              </div>
-            </div>
-            {/* NIK */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-neutral-700">NIK <span className="font-normal text-neutral-400">(wajib kecuali bayi)</span></label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={quickCreateForm.nik}
-                onChange={e => setQuickCreateForm(prev => ({ ...prev, nik: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
-                placeholder="16 digit NIK"
-                className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-              />
-            </div>
-            {/* Tanggal Lahir */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-neutral-700">
-                Tanggal Lahir
-                <span className="ml-1 text-neutral-400 text-xs font-normal">(wajib untuk deteksi usia/infant)</span>
-              </label>
-              <input
-                type="date"
-                value={quickCreateForm.tanggal_lahir}
-                onChange={e => setQuickCreateForm(prev => ({ ...prev, tanggal_lahir: e.target.value }))}
-                max={hariIniWIB()}
-                className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-              />
-            </div>
-            {/* No HP */}
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-neutral-700">No. HP / WhatsApp</label>
-              <input
-                type="tel"
-                value={quickCreateForm.no_hp}
-                onChange={e => setQuickCreateForm(prev => ({ ...prev, no_hp: e.target.value }))}
-                placeholder="cth: 08123456789"
-                className="h-9 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-              />
-            </div>
+          {quickCreateError && <Alert variant="error">{quickCreateError}</Alert>}
+          <div className="space-y-4">
+            <Input
+              className="!mb-0"
+              label="Nama lengkap"
+              value={quickCreateForm.nama_lengkap}
+              onChange={e => setQuickCreateForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
+              placeholder="Muhammad Abdullah"
+              required
+              autoFocus
+            />
+            <CustomDropdown
+              className="!mb-0"
+              label="Jenis kelamin"
+              value={quickCreateForm.jenis_kelamin || ""}
+              onChange={(val) => {
+                const actual = (val && typeof val === "object" && "target" in val) ? val.target.value : val;
+                setQuickCreateForm((prev) => ({ ...prev, jenis_kelamin: actual }));
+              }}
+              placeholder="Pilih jenis kelamin"
+              options={[
+                { value: "L", label: "Laki-laki" },
+                { value: "P", label: "Perempuan" },
+              ]}
+            />
+            <Input
+              className="!mb-0"
+              label="NIK"
+              inputMode="numeric"
+              value={quickCreateForm.nik}
+              onChange={e => setQuickCreateForm(prev => ({ ...prev, nik: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
+              placeholder="16 digit"
+            />
+            <Input
+              className="!mb-0"
+              type="date"
+              label="Tanggal lahir"
+              value={quickCreateForm.tanggal_lahir}
+              onChange={e => setQuickCreateForm(prev => ({ ...prev, tanggal_lahir: e.target.value }))}
+              max={hariIniWIB()}
+            />
+            <Input
+              className="!mb-0"
+              type="tel"
+              label="No HP / WhatsApp"
+              value={quickCreateForm.no_hp}
+              onChange={e => setQuickCreateForm(prev => ({ ...prev, no_hp: e.target.value }))}
+              placeholder="081234567890"
+            />
             {/* Kaitan Agen (Jalur 3) */}
             <KaitanAgenPicker
               name="quick_create_kaitan_agen"
