@@ -22,6 +22,7 @@ const (
 	JenisPembayaranDiterima  = "pembayaran_diterima"
 	JenisPembayaranDitolak   = "pembayaran_ditolak"
 	JenisBookingLunas        = "booking_lunas"
+	JenisBookingBatal        = "booking_batal"
 	JenisHoldSeat            = "hold_seat"
 	JenisPelunasan           = "pelunasan"
 	JenisDokumenDiverifikasi = "dokumen_diverifikasi"

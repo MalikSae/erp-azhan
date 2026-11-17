@@ -53,6 +53,17 @@ func Pembayaran(ctx context.Context, q Querier, bookingID int64, diterima bool, 
 	KirimAman(ctx, q, akun, n)
 }
 
+// BookingBatalJatuhTempo: booking dibatalkan otomatis karena lewat batas pelunasan.
+func BookingBatalJatuhTempo(ctx context.Context, q Querier, bookingID int64) {
+	akun, paket, _, err := infoBooking(ctx, q, bookingID)
+	if err != nil {
+		catat("booking batal", err)
+		return
+	}
+	KirimAman(ctx, q, akun, Notif{Jenis: JenisBookingBatal, Judul: "Booking dibatalkan", RefTipe: RefBooking, RefID: bookingID,
+		Isi: Gabung(paket, "Lewat batas pelunasan"), Kunci: "batal:" + strconv.FormatInt(bookingID, 10)})
+}
+
 func memegangKursi(status string) bool { return status == "dp" || status == "lunas" }
 
 // StatusBooking: dipanggil saat status booking berubah dari dari ke ke. Lunas memberi tahu pemilik

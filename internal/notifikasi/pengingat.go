@@ -64,25 +64,35 @@ func holdSeat(ctx context.Context, db Execer, now time.Time) error {
 	return err
 }
 
-// pelunasan: booking dp dengan sisa tagihan yang batas pelunasannya 7 hari lagi. Batas diambil dari
-// checkout booking; booking tanpa checkout memakai tanggal berangkat dikurangi batas pelunasan brand.
+// pelunasan: booking dp dengan sisa tagihan yang batas pelunasannya 7 hari atau 1 hari lagi. Booking yang tidak lunas
+// sampai batas itu dibatalkan otomatis, jadi pengingat terakhir datang sehari sebelumnya. Batas diambil dari checkout
+// booking; booking tanpa checkout memakai tanggal berangkat dikurangi batas pelunasan brand.
 func pelunasan(ctx context.Context, db Execer, hari string) error {
-	_, err := db.ExecContext(ctx, `INSERT IGNORE INTO notifikasi (akun_id, jenis, judul, isi, ref_tipe, ref_id, kunci)
-		SELECT x.akun, ?, 'Pelunasan H-7', LEFT(CONCAT('Sisa Rp', FORMAT(x.sisa, 0, 'id_ID'), ' · ', x.paket), 300), ?, x.id,
-		       CONCAT('pelunasan:', x.id, ':', x.batas)
-		FROM (
-			SELECT b.id, b.customer_account_id AS akun, s.jadwal_nama AS paket,
-			       COALESCE(DATE(c.due_at), DATE_SUB(s.berangkat_tanggal, INTERVAL br.batas_pelunasan_hari DAY)) AS batas,
-			       COALESCE(b.total_harga, 0) - COALESCE((SELECT SUM(p.jumlah) FROM payments p WHERE p.booking_id = b.id AND p.status = 'confirmed'), 0) AS sisa
-			FROM bookings b
-			JOIN schedules s ON s.id = b.schedule_id
-			JOIN brands br ON br.id = s.brand_id
-			LEFT JOIN booking_checkout c ON c.booking_id = b.id
-			WHERE b.status = 'dp' AND b.customer_account_id IS NOT NULL
-		) x
-		WHERE x.sisa > 0 AND x.batas = DATE_ADD(?, INTERVAL 7 DAY)`,
-		JenisPelunasan, RefBooking, hari)
-	return err
+	for _, h := range []struct {
+		hari  int
+		judul string
+		kunci string // H-7 memakai kunci lama, supaya pengingat yang sudah terkirim tidak terkirim dua kali
+	}{{7, "Pelunasan H-7", "pelunasan:"}, {1, "Pelunasan besok", "pelunasan-besok:"}} {
+		_, err := db.ExecContext(ctx, `INSERT IGNORE INTO notifikasi (akun_id, jenis, judul, isi, ref_tipe, ref_id, kunci)
+			SELECT x.akun, ?, ?, LEFT(CONCAT('Sisa Rp', FORMAT(x.sisa, 0, 'id_ID'), ' · ', x.paket), 300), ?, x.id,
+			       CONCAT(?, x.id, ':', x.batas)
+			FROM (
+				SELECT b.id, b.customer_account_id AS akun, s.jadwal_nama AS paket,
+				       COALESCE(DATE(c.due_at), DATE_SUB(s.berangkat_tanggal, INTERVAL br.batas_pelunasan_hari DAY)) AS batas,
+				       COALESCE(b.total_harga, 0) - COALESCE((SELECT SUM(p.jumlah) FROM payments p WHERE p.booking_id = b.id AND p.status = 'confirmed'), 0) AS sisa
+				FROM bookings b
+				JOIN schedules s ON s.id = b.schedule_id
+				JOIN brands br ON br.id = s.brand_id
+				LEFT JOIN booking_checkout c ON c.booking_id = b.id
+				WHERE b.status = 'dp' AND b.customer_account_id IS NOT NULL
+			) x
+			WHERE x.sisa > 0 AND x.batas = DATE_ADD(?, INTERVAL ? DAY)`,
+			JenisPelunasan, h.judul, RefBooking, h.kunci, hari, h.hari)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // berangkat: booking dp/lunas yang berangkat 7 hari lagi atau besok.
