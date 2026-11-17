@@ -103,7 +103,7 @@ func main() {
 	allowedOrigins := corsOrigins(shared.IsProduction(), os.Getenv("CORS_ALLOWED_ORIGINS"))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Brand-Id"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -245,6 +245,8 @@ func main() {
 		r.Post("/register-agen", customerHandler.RegisterAgen)
 		r.Post("/register-app", customerHandler.RegisterApp)
 		r.Post("/login", customerHandler.Login)
+		r.Post("/google", customerHandler.LoginGoogle)
+		r.Post("/google/daftar", customerHandler.DaftarGoogle)
 		r.Post("/forgot-password", customerHandler.ForgotPassword)
 		r.Post("/reset-password", customerHandler.ResetPassword)
 	})
@@ -292,6 +294,9 @@ func main() {
 		r.Get("/upline", customerHandler.Upline)
 		r.Get("/upline/foto", customerHandler.UplineFoto)
 		r.Post("/password", customerHandler.ChangePassword)
+		r.Post("/password/buat", customerHandler.BuatPassword)
+		r.Get("/hapus", customerHandler.CekHapusAkun)
+		r.Post("/hapus", customerHandler.HapusAkun)
 		r.Post("/logout", customerHandler.Logout)
 		r.Get("/bank-accounts", customerOrders.BankAccounts)
 		r.Get("/travelers", customerOrders.Travelers)
