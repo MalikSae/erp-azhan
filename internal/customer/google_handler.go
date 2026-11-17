@@ -166,6 +166,7 @@ type googleDaftarRequest struct {
 	Domisili     string `json:"domisili"`
 	TanggalLahir string `json:"tanggal_lahir"`
 	KodeReferral string `json:"kode_referral"`
+	KodeAgen     string `json:"kode_agen"`
 }
 
 // DaftarGoogle POST /api/public/auth/google/daftar: membuat akun dari akun Google (Lengkapi Data).
@@ -206,7 +207,17 @@ func (h *Handler) DaftarGoogle(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	acc, err := h.repo.CreateGoogle(r.Context(), req.BrandID, nama, p.Email, req.NoHP, p.Sub, req.KodeReferral, bio)
+	kodeAgen, ok, err := h.repo.KodeAgenDipakai(r.Context(), req.BrandID, req.KodeAgen, req.KodeReferral)
+	if err != nil {
+		log.Printf("[ERROR] customer kode agen: %v", err)
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Kode agen tidak ditemukan")
+		return
+	}
+	acc, err := h.repo.CreateGoogle(r.Context(), req.BrandID, nama, p.Email, req.NoHP, p.Sub, kodeAgen, bio)
 	if errors.Is(err, ErrEmailTaken) {
 		writeError(w, http.StatusConflict, "Email ini sudah terdaftar. Masuk dengan Google atau email dan kata sandi.")
 		return
