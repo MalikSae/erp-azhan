@@ -79,6 +79,14 @@ _Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti k
 
 **Keputusan admin**: satu aksi di kartu pengajuan (B1): setujui, bebaskan biaya, minta unggah ulang, tolak, atau setujui dengan bayar menyusul.
 
+## Tabungan Umroh
+
+**Target Tabungan**: catatan pribadi calon jamaah tentang berapa yang ingin dikumpulkan untuk umroh, berikut bulan berangkat dan DP minimal. Satu per akun. Tabel `tabungan_target`. Hana tidak menyimpan uang; ini hanya catatan.
+_Hindari_: saldo, rekening tabungan, tabungan di Hana, cicilan.
+
+**Catatan Tabungan**: satu baris angka yang diisi akun saat menyisihkan uang, dengan tanggal. Tabel `tabungan_catatan`. Mengganti target tidak menghapusnya; menghapus target menghapus semuanya.
+_Hindari_: setor, titip, deposit.
+
 ## Dinonaktifkan di tahap awal
 
 **Cashback** dan **komisi repeat order** (pemisahan 50/50). Booking ulang dihitung seperti booking biasa. Kodenya tetap ada, dimatikan lewat flag.
