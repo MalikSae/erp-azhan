@@ -4,7 +4,7 @@ Panduan dasar penulisan teks antarmuka untuk seluruh produk Azhan: dashboard ERP
 
 Istilah domain (akun, jamaah, agen, upline, seat, booking, lunas, dan seterusnya) **tidak** diatur ulang di sini. Sumbernya `GLOSSARY.md` di root repo ini. Panduan khusus per produk melengkapi dokumen ini, tidak menggantikannya:
 
-- `azhan-booking/docs/copy-guide.md` — istilah dan kata terlarang web publik, ditegakkan `src/lib/copy.test.js`.
+- `azhan-booking/docs/ux-copy.md` — turunan panduan ini untuk web publik (istilah, kata terlarang, meta/SEO), ditegakkan `src/lib/copy.test.js`.
 - `azhan-mobile/docs/ux-copy.md` — turunan panduan ini untuk aplikasi (panjang teks di ponsel, notifikasi, "Segera hadir"); istilah app juga di `azhan-mobile/DESIGN.md` bagian 7.
 
 Bila terjadi konflik, dokumen ini yang menang untuk prinsip dan pola; glosarium yang menang untuk arti istilah.

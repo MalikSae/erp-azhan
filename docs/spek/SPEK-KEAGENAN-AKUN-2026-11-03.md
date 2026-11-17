@@ -249,7 +249,7 @@ Tidak dibuat: `/akun/agen/daftar`. Tautan referral tetap `?ref=KODE` di halaman 
 
 ### 9.4 Tampilan
 
-Pola UI ikut `design-system.md` dan skrip `npm run check:design` di `azhan-booking`. Teks antarmuka mengikuti `docs/copy-guide.md` proyek itu.
+Pola UI ikut `design-system.md` dan skrip `npm run check:design` di `azhan-booking`. Teks antarmuka mengikuti `docs/ux-copy.md` proyek itu.
 
 ## 10. Perubahan backend (`erp-azhan`)
 
