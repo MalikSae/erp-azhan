@@ -52,7 +52,7 @@ const DestinationsPage = () => {
       const data = await listDestinations();
       setDestinations(data || []);
     } catch (error) {
-      setErrorMessage(error.response?.data?.error || 'Gagal memuat data destinasi.');
+      setErrorMessage(error.response?.data?.error || 'Data destinasi gagal dimuat. Coba lagi.');
     } finally {
       setIsLoading(false);
     }
@@ -139,7 +139,7 @@ const DestinationsPage = () => {
       setFormData(initialForm);
       fetchData();
     } catch (error) {
-      setFormErrors(error.response?.data?.error || 'Terjadi kesalahan saat menyimpan destinasi.');
+      setFormErrors(error.response?.data?.error || 'Data gagal disimpan. Coba lagi.');
     } finally {
       setIsSubmitting(false);
     }
@@ -153,7 +153,7 @@ const DestinationsPage = () => {
       setDeleteConfirmId(null);
       fetchData();
     } catch (error) {
-      setErrorMessage(error.response?.data?.error || 'Gagal menghapus destinasi.');
+      setErrorMessage(error.response?.data?.error || 'Destinasi gagal dihapus. Coba lagi.');
       setDeleteConfirmId(null);
     } finally {
       setIsDeleting(false);
@@ -288,11 +288,11 @@ const DestinationsPage = () => {
       <Modal
         isOpen={!!deleteConfirmId}
         onClose={() => setDeleteConfirmId(null)}
-        title="Konfirmasi Hapus Destinasi"
+        title="Hapus Destinasi"
       >
         <div className="space-y-4">
           <p className="text-sm text-neutral-600">
-            Apakah Anda yakin ingin menghapus destinasi ini? Destinasi tidak dapat dihapus jika masih digunakan oleh paket.
+            Hapus destinasi ini? Data tidak bisa dikembalikan.
           </p>
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
             <Button variant="secondary" onClick={() => setDeleteConfirmId(null)} disabled={isDeleting}>

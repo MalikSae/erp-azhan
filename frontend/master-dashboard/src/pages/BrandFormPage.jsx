@@ -147,7 +147,7 @@ const BrandFormPage = () => {
           if (err.response?.status === 404) {
             setNotFound(true);
           } else {
-            setFormErrors("Gagal mengambil data detail brand.");
+            setFormErrors("Data detail brand gagal dimuat. Coba lagi.");
           }
         } finally {
           setIsLoadingDetail(false);
@@ -185,7 +185,7 @@ const BrandFormPage = () => {
       setFormData(prev => ({ ...prev, logo_url: url }));
     } catch (err) {
       console.error(err);
-      setFormErrors('Gagal mengunggah logo brand.');
+      setFormErrors('Logo brand gagal diunggah. Coba lagi.');
     } finally {
       setIsUploadingLogo(false);
     }
@@ -204,7 +204,7 @@ const BrandFormPage = () => {
       setFormData(prev => ({ ...prev, icon_url: url }));
     } catch (err) {
       console.error(err);
-      setFormErrors('Gagal mengunggah ikon brand.');
+      setFormErrors('Ikon brand gagal diunggah. Coba lagi.');
     } finally {
       setIsUploadingIcon(false);
     }
@@ -223,7 +223,7 @@ const BrandFormPage = () => {
       setFormData(prev => ({ ...prev, og_image_url: url }));
     } catch (err) {
       console.error(err);
-      setFormErrors('Gagal mengunggah banner social share.');
+      setFormErrors('Banner social share gagal diunggah. Coba lagi.');
     } finally {
       setIsUploadingOgImage(false);
     }
@@ -243,7 +243,7 @@ const BrandFormPage = () => {
       setFormData(prev => ({ ...prev, gambar_rekrutmen_agen: url }));
     } catch (err) {
       console.error(err);
-      setFormErrors('Gagal mengunggah gambar rekrutmen agen.');
+      setFormErrors('Gambar rekrutmen agen gagal diunggah. Coba lagi.');
     } finally {
       setIsUploadingGambarAgen(false);
     }
@@ -333,13 +333,13 @@ const BrandFormPage = () => {
       }
 
       navigate('/brands', {
-        state: { successMessage: `Brand "${payload.name}" berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
+        state: { successMessage: isEditMode ? 'Perubahan disimpan.' : 'Brand ditambahkan.' },
       });
     } catch (err) {
       if (err.response?.data?.error) {
         setFormErrors(err.response.data.error);
       } else {
-        setFormErrors("Terjadi kesalahan saat menyimpan data brand. Silakan coba lagi.");
+        setFormErrors("Terjadi kesalahan saat menyimpan data brand. Coba lagi.");
       }
     } finally {
       setIsSubmitting(false);
@@ -414,7 +414,7 @@ const BrandFormPage = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="Contoh: Alsha Tours, Hana Travel"
+                  placeholder="Alsha Tours, Hana Travel"
                   required
                   className="!mb-0"
                 />
@@ -517,7 +517,7 @@ const BrandFormPage = () => {
                     name="whatsapp_number"
                     value={formData.whatsapp_number}
                     onChange={handleChange}
-                    placeholder="Contoh: 62812345678"
+                    placeholder="62812345678"
                     className="!mb-0"
                   />
 
@@ -538,7 +538,7 @@ const BrandFormPage = () => {
                     name="province"
                     value={formData.province}
                     onChange={(e) => handleProvinceChange(e.target.value)}
-                    placeholder="Ketik / cari provinsi..."
+                    placeholder="Cari provinsi"
                     options={provinceOptions}
                     className="!mb-0"
                   />
@@ -707,7 +707,7 @@ const BrandFormPage = () => {
                 name="ketentuan_pembatalan"
                 value={formData.ketentuan_pembatalan}
                 onChange={handleChange}
-                placeholder={'Contoh:\n- Pembatalan H-60 s.d. H-31: potongan 25% dari total biaya\n- Pembatalan H-30 s.d. H-15: potongan 50%\n- Pembatalan di bawah H-14: tidak ada pengembalian dana'}
+                placeholder={'- Pembatalan H-60 s.d. H-31: potongan 25% dari total biaya\n- Pembatalan H-30 s.d. H-15: potongan 50%\n- Pembatalan di bawah H-14: tidak ada pengembalian dana'}
                 rows={8}
                 className="!mb-0"
               />

@@ -85,7 +85,7 @@ const ItineraryFormPage = () => {
           if (error.response?.status === 404) {
             setNotFound(true);
           } else {
-            setFormErrors(error.response?.data?.error || "Gagal memuat detail itinerary.");
+            setFormErrors(error.response?.data?.error || "Detail itinerary gagal dimuat. Coba lagi.");
           }
         } finally {
           setIsLoadingDetail(false);
@@ -160,10 +160,10 @@ const ItineraryFormPage = () => {
         await createItinerary(payload);
       }
       navigate('/itineraries', {
-        state: { successMessage: `Itinerary "${payload.title}" berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
+        state: { successMessage: isEditMode ? 'Perubahan disimpan.' : 'Itinerary ditambahkan.' },
       });
     } catch (error) {
-      setFormErrors(error.response?.data?.error || "Terjadi kesalahan, coba lagi.");
+      setFormErrors(error.response?.data?.error || "Data gagal disimpan. Coba lagi.");
     } finally {
       setIsSubmitting(false);
     }
@@ -258,7 +258,7 @@ const ItineraryFormPage = () => {
                           />
                         </div>
                       ))}
-                      <AddButton onClick={() => handleAddActivity(dayIndex)}>Tambah Poin Kegiatan</AddButton>
+                      <AddButton onClick={() => handleAddActivity(dayIndex)}>Tambah kegiatan</AddButton>
                       <p className="text-xs text-neutral-500 font-body">
                         Satu poin per kotak. Tebalkan kata dengan **tanda bintang dua**.
                       </p>

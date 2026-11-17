@@ -92,7 +92,7 @@ const PenggunaFormPage = () => {
           setKeanggotaan((userData.keanggotaan || []).map(k => ({ org_unit_id: k.org_unit_id, posisi: k.posisi })));
         }
       } catch (error) {
-        if (active) setLoadError(errMsg(error, 'Gagal memuat data.'));
+        if (active) setLoadError(errMsg(error, 'Data gagal dimuat. Coba lagi.'));
       } finally {
         if (active) setIsLoading(false);
       }
@@ -210,8 +210,8 @@ const PenggunaFormPage = () => {
     setSubmitError(null);
     if (form.access === 'brand' && !form.brand_id) { setSubmitError('Pilih brand untuk akses Brand.'); return; }
     if (selectedRoles.length === 0) { setSubmitError('Pilih minimal satu role.'); return; }
-    if (!isEdit && form.password.trim().length < 8) { setSubmitError('Password minimal 8 karakter.'); return; }
-    if (!isEdit && passwordTerlaluPanjang(form.password.trim())) { setSubmitError('Password maksimal 72 byte (sekitar 72 huruf biasa).'); return; }
+    if (!isEdit && form.password.trim().length < 8) { setSubmitError('Kata sandi minimal 8 karakter.'); return; }
+    if (!isEdit && passwordTerlaluPanjang(form.password.trim())) { setSubmitError('Kata sandi terlalu panjang.'); return; }
 
     const payload = {
       display_name: form.display_name.trim(),
@@ -233,7 +233,7 @@ const PenggunaFormPage = () => {
         navigate('/users', { state: { successMessage: `Pengguna "${payload.display_name}" berhasil ditambahkan.` } });
       }
     } catch (error) {
-      setSubmitError(errMsg(error, 'Gagal menyimpan pengguna.'));
+      setSubmitError(errMsg(error, 'Pengguna gagal disimpan. Coba lagi.'));
       window.scrollTo?.({ top: 0, behavior: 'smooth' });
       document.querySelector('main')?.scrollTo?.({ top: 0, behavior: 'smooth' });
     } finally {
@@ -255,8 +255,8 @@ const PenggunaFormPage = () => {
         await deleteAdminUser(id);
         navigate('/users', { state: { successMessage: `Pengguna "${user.display_name}" dihapus permanen.` } });
       } else if (actionModal === 'password') {
-        if (newPassword.trim().length < 8) { setActionError('Password minimal 8 karakter.'); setIsActing(false); return; }
-        if (passwordTerlaluPanjang(newPassword.trim())) { setActionError('Password maksimal 72 byte (sekitar 72 huruf biasa).'); setIsActing(false); return; }
+        if (newPassword.trim().length < 8) { setActionError('Kata sandi minimal 8 karakter.'); setIsActing(false); return; }
+        if (passwordTerlaluPanjang(newPassword.trim())) { setActionError('Kata sandi terlalu panjang.'); setIsActing(false); return; }
         await resetAdminUserPassword(id, newPassword.trim());
         setActionModal(null);
         setNewPassword('');
@@ -452,7 +452,7 @@ const PenggunaFormPage = () => {
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-heading font-semibold text-neutral-900">Ganti password</p>
+                    <p className="text-sm font-heading font-semibold text-neutral-900">Ganti Kata Sandi</p>
                     <p className="text-xs font-body text-neutral-500">Sesi lama pengguna ini dicabut.</p>
                   </div>
                   <Button type="button" variant="secondary" size="sm" disabled={!user.is_active}
@@ -503,7 +503,7 @@ const PenggunaFormPage = () => {
       <Modal
         isOpen={!!actionModal}
         onClose={() => { if (!isActing) setActionModal(null); }}
-        title={actionModal === 'delete' ? 'Hapus Pengguna Permanen' : actionModal === 'password' ? 'Ganti Password' : (user?.is_active ? 'Nonaktifkan Pengguna' : 'Aktifkan Kembali')}
+        title={actionModal === 'delete' ? 'Hapus Pengguna Permanen' : actionModal === 'password' ? 'Ganti Kata Sandi' : (user?.is_active ? 'Nonaktifkan Pengguna' : 'Aktifkan Kembali')}
       >
         <div className="space-y-4">
           {actionError && <Alert variant="error">{actionError}</Alert>}
@@ -526,7 +526,7 @@ const PenggunaFormPage = () => {
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
             <Button type="button" variant="secondary" onClick={() => setActionModal(null)} disabled={isActing}>Batal</Button>
             <Button type="button" variant={actionModal === 'password' || (actionModal === 'status' && !user?.is_active) ? 'primary' : 'danger'} onClick={runAction} disabled={isActing}>
-              {isActing ? 'Memproses...' : actionModal === 'delete' ? 'Hapus Permanen' : actionModal === 'password' ? 'Simpan Password' : (user?.is_active ? 'Nonaktifkan' : 'Aktifkan')}
+              {isActing ? 'Memproses...' : actionModal === 'delete' ? 'Hapus Permanen' : actionModal === 'password' ? 'Simpan kata sandi' : (user?.is_active ? 'Nonaktifkan' : 'Aktifkan')}
             </Button>
           </div>
         </div>

@@ -176,7 +176,7 @@ const TopbarSearch = () => {
           onChange={(e) => { setKata(e.target.value); setTerbuka(true); }}
           onFocus={() => setTerbuka(true)}
           onKeyDown={onKeyDown}
-          placeholder="Cari paket, booking, jamaah..."
+          placeholder="Cari paket, booking, jamaah"
           aria-label="Cari paket, booking, jamaah"
           role="combobox"
           aria-expanded={panelTampil}

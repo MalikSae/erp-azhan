@@ -310,7 +310,7 @@ const ScheduleDetailPage = () => {
         if (error.response?.status === 404) {
           setErrorMessage("Paket tidak ditemukan.");
         } else {
-          setErrorMessage(error.response?.data?.error || "Gagal memuat detail paket.");
+          setErrorMessage(error.response?.data?.error || "Detail paket gagal dimuat. Coba lagi.");
         }
       } finally {
         setIsLoading(false);
@@ -454,7 +454,7 @@ const ScheduleDetailPage = () => {
       >
         <Button variant="secondary" onClick={handlePrintPackage}>
           <Printer size={16} strokeWidth={1.75} />
-          <span>Cetak / PDF</span>
+          <span>Cetak PDF</span>
         </Button>
       </PageHeader>
 
@@ -575,7 +575,7 @@ const ScheduleDetailPage = () => {
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V3h12v6M6 18H4a1 1 0 01-1-1v-6a2 2 0 012-2h14a2 2 0 012 2v6a1 1 0 01-1 1h-2M7 14h10v7H7z" />
                   </svg>
-                  <span>Cetak / PDF</span>
+                  <span>Cetak PDF</span>
                 </Button>
               </div>
             )}

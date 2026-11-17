@@ -72,7 +72,7 @@ const CategoriesPage = () => {
       setCategories(catData || []);
       setBrands(brandData || []);
     } catch (error) {
-      const msg = error.response?.data?.error || "Gagal memuat data kategori paket.";
+      const msg = error.response?.data?.error || "Data kategori paket gagal dimuat. Coba lagi.";
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -214,7 +214,7 @@ const CategoriesPage = () => {
       handleCloseModal();
       fetchData();
     } catch (error) {
-      const msg = error.response?.data?.error || "Terjadi kesalahan saat menyimpan kategori.";
+      const msg = error.response?.data?.error || "Data gagal disimpan. Coba lagi.";
       setFormErrors(msg);
     } finally {
       setIsSubmitting(false);
@@ -229,7 +229,7 @@ const CategoriesPage = () => {
       setDeleteConfirmId(null);
       fetchData();
     } catch (error) {
-      const msg = error.response?.data?.error || "Gagal menghapus kategori.";
+      const msg = error.response?.data?.error || "Kategori gagal dihapus. Coba lagi.";
       setErrorMessage(msg);
       setDeleteConfirmId(null);
     } finally {
@@ -506,11 +506,11 @@ const CategoriesPage = () => {
       <Modal
         isOpen={!!deleteConfirmId}
         onClose={() => setDeleteConfirmId(null)}
-        title="Konfirmasi Hapus Kategori"
+        title="Hapus Kategori"
       >
         <div className="space-y-4">
           <p className="text-sm text-neutral-600">
-            Apakah Anda yakin ingin menghapus kategori paket ini? Kategori tidak dapat dihapus jika masih digunakan oleh paket umroh yang sudah dibuat.
+            Hapus kategori paket ini? Data tidak bisa dikembalikan.
           </p>
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
             <Button

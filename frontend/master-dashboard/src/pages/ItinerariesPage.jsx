@@ -39,7 +39,7 @@ const ItinerariesPage = () => {
       const data = await listItineraries();
       setItineraries(data || []);
     } catch (error) {
-      const msg = error.response?.data?.error || "Gagal memuat data itinerary.";
+      const msg = error.response?.data?.error || "Data itinerary gagal dimuat. Coba lagi.";
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -76,7 +76,7 @@ const ItinerariesPage = () => {
       if (error.response?.status === 409) {
         setErrorMessage(error.response?.data?.error || "Tidak bisa dihapus, masih dipakai oleh entitas lain.");
       } else {
-        setErrorMessage("Terjadi kesalahan saat menghapus data.");
+        setErrorMessage("Data gagal dihapus. Coba lagi.");
       }
     }
   };
@@ -167,7 +167,7 @@ const ItinerariesPage = () => {
       <Modal
         isOpen={deleteConfirmId !== null}
         onClose={cancelDelete}
-        title="Hapus Itinerary?"
+        title="Hapus Itinerary"
         size="md"
         footer={
           <>
@@ -177,7 +177,7 @@ const ItinerariesPage = () => {
         }
       >
         <p className="text-neutral-600 font-body">
-          Yakin ingin menghapus "{itineraryToDelete?.title}"? Jika itinerary ini masih dipakai oleh paket manapun, penghapusan akan ditolak sistem.
+          Hapus "{itineraryToDelete?.title}"?
         </p>
       </Modal>
     </div>

@@ -24,7 +24,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
       setOverview(await getScheduleSeat(scheduleId));
       setLoadError(null);
     } catch (err) {
-      setLoadError(err.response?.data?.error || 'Gagal memuat data seat.');
+      setLoadError(err.response?.data?.error || 'Data seat gagal dimuat. Coba lagi.');
     }
   }, [scheduleId]);
 
@@ -65,7 +65,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
       setIsOpen(false);
       await load();
     } catch (err) {
-      setFormError(err.response?.data?.error || 'Gagal menyimpan penyesuaian.');
+      setFormError(err.response?.data?.error || 'Penyesuaian gagal disimpan. Coba lagi.');
     } finally {
       setIsSaving(false);
     }
@@ -122,7 +122,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
         </Alert>
       )}
 
-      {canEdit && <Button variant="secondary" size="sm" onClick={bukaForm}>Sesuaikan Sisa Seat</Button>}
+      {canEdit && <Button variant="secondary" size="sm" onClick={bukaForm}>Sesuaikan seat</Button>}
 
       {overview.adjustments.length > 0 && (
         <details className="text-xs text-neutral-600">

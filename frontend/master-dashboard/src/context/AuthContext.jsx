@@ -86,7 +86,7 @@ export const AuthProvider = ({ children }) => {
       if (error.response && error.response.data && error.response.data.error) {
         throw new Error(error.response.data.error);
       }
-      throw new Error('Gagal login. Coba lagi.');
+      throw new Error('Gagal masuk. Coba lagi.');
     }
   };
 

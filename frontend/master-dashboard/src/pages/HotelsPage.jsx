@@ -84,7 +84,7 @@ const HotelsPage = () => {
       setHotels(hotelsData || []);
       setCities(citiesData || []);
     } catch (error) {
-      const msg = error.response?.data?.error || "Gagal memuat data hotel.";
+      const msg = error.response?.data?.error || "Data hotel gagal dimuat. Coba lagi.";
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -162,7 +162,7 @@ const HotelsPage = () => {
       setFormData(prev => ({ ...prev, photo_url: url }));
     } catch (err) {
       console.error(err);
-      setFormErrors('Gagal upload foto, coba lagi');
+      setFormErrors('Foto gagal diunggah. Coba lagi.');
     } finally {
       setIsUploading(false);
     }
@@ -200,7 +200,7 @@ const HotelsPage = () => {
       handleCloseModal();
       fetchHotelsAndCities();
     } catch (error) {
-      const msg = error.response?.data?.error || "Terjadi kesalahan, coba lagi.";
+      const msg = error.response?.data?.error || "Data gagal disimpan. Coba lagi.";
       setFormErrors(msg);
     } finally {
       setIsSubmitting(false);
@@ -224,7 +224,7 @@ const HotelsPage = () => {
       setDeleteConfirmId(null);
       setErrorMessage(error.response?.data?.error || (error.response?.status === 409
         ? "Tidak bisa dihapus, masih dipakai oleh paket lain."
-        : "Terjadi kesalahan saat menghapus data."));
+        : "Data gagal dihapus. Coba lagi."));
     }
   };
 
@@ -396,7 +396,7 @@ const HotelsPage = () => {
             value={formData.name}
             onChange={handleChange}
             required
-            placeholder="Contoh: Hilton Makkah"
+            placeholder="Hilton Makkah"
           />
 
           {!isNewCity ? (
@@ -440,7 +440,7 @@ const HotelsPage = () => {
                 value={formData.city}
                 onChange={handleChange}
                 required
-                placeholder="Contoh: Dubai, Istanbul, Doha"
+                placeholder="Dubai, Istanbul, Doha"
                 className="!mb-0"
               />
             </div>
@@ -467,7 +467,7 @@ const HotelsPage = () => {
             name="distance_m"
             value={formData.distance_m}
             onChange={handleChange}
-            placeholder="Contoh: 200 (opsional)"
+            placeholder="200 (opsional)"
           />
 
           <FileInput
@@ -489,7 +489,7 @@ const HotelsPage = () => {
             name="video_url"
             value={formData.video_url}
             onChange={handleChange}
-            placeholder="Contoh: https://www.youtube.com/watch?v=... atau https://youtu.be/..."
+            placeholder="https://www.youtube.com/watch?v=... atau https://youtu.be/..."
           />
 
           {formErrors && (
@@ -511,7 +511,7 @@ const HotelsPage = () => {
       <Modal
         isOpen={deleteConfirmId !== null}
         onClose={cancelDelete}
-        title="Hapus Hotel?"
+        title="Hapus Hotel"
         size="sm"
         footer={
           <>
@@ -521,7 +521,7 @@ const HotelsPage = () => {
         }
       >
         <p className="text-neutral-600 font-body">
-          Yakin ingin menghapus {hotelToDelete?.name}? Tindakan ini tidak bisa dibatalkan.
+          Hapus {hotelToDelete?.name}? Data tidak bisa dikembalikan.
         </p>
       </Modal>
     </div>

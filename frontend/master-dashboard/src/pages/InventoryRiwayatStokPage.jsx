@@ -75,7 +75,7 @@ const InventoryRiwayatStokPage = () => {
       setRows(data || []);
       setHasMore((data || []).length === PAGE_SIZE);
     } catch (error) {
-      setErrorMessage(error.response?.data?.error || 'Gagal memuat riwayat stok.');
+      setErrorMessage(error.response?.data?.error || 'Riwayat stok gagal dimuat. Coba lagi.');
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +92,7 @@ const InventoryRiwayatStokPage = () => {
       setRows((prev) => [...prev, ...(data || [])]);
       setHasMore((data || []).length === PAGE_SIZE);
     } catch (error) {
-      setErrorMessage(error.response?.data?.error || 'Gagal memuat riwayat stok.');
+      setErrorMessage(error.response?.data?.error || 'Riwayat stok gagal dimuat. Coba lagi.');
     } finally {
       setIsLoadingMore(false);
     }
@@ -177,7 +177,7 @@ const InventoryRiwayatStokPage = () => {
           {hasMore && (
             <div className="flex justify-center">
               <Button variant="secondary" onClick={loadMore} isLoading={isLoadingMore}>
-                Muat riwayat lebih lama
+                Muat lagi
               </Button>
             </div>
           )}
