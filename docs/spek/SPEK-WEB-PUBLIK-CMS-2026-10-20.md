@@ -302,7 +302,7 @@ Per 22 Okt 2026. Yang disebut "ter-merge" sudah ada di cabang `main` masing-masi
 | §4.3 API publik v1 | `GET /api/public/v1/packages` (filter dan paginasi), `/packages/{id}` (`visible` / `gone` / 404 untuk draft), `/destinations`, `/sitemap-feed`; `GET /api/admin/me` untuk identitas dan izin (PR #7); `ketentuan_pembatalan` di profil publik brand (PR #8). | `internal/schedule/public_v1.go`, `internal/identity/`, `internal/brand/` |
 | Tier kategori | Kolom dan isian `seo_tier` ada di API dan form Kategori. **Belum diisi di data dev** (§12.4). | `internal/category/` |
 | Dashboard ERP | Halaman "Kelola Destinasi"; "Klasifikasi Web Publik" di form dan detail paket; isian "Tier SEO" di Kategori. | `frontend/master-dashboard/` |
-| Istilah | Seragam "booking" dan "seat" di email, galat API, dan dashboard (PR #9; panduan lengkap di `azhan-booking/docs/copy-guide.md`). | `internal/mailer/`, dashboard |
+| Istilah | Seragam "booking" dan "seat" di email, galat API, dan dashboard (PR #9; panduan lengkap di `azhan-booking/docs/ux-copy.md`). | `internal/mailer/`, dashboard |
 | Email booking | Email "Booking berhasil dibuat" dikirim setelah booking mandiri pelanggan baru dibuat (asinkron; kegagalan kirim hanya dicatat; tidak dikirim untuk retry idempoten maupun booking agen). Sebelumnya fungsi templatenya tidak dipanggil di mana pun. Belum ter-merge saat dokumen ini ditulis (cabang `fix/email-booking-dibuat`). | `internal/selfbooking/notify.go` |
 
 PR ERP ter-merge yang relevan: #7 (API v1 dan `/api/admin/me`), #8 (ketentuan pembatalan brand), #9 (istilah booking/seat), #10 (izin CMS Fase 2). Pratinjau URL read-only di form paket (opsional, §14.3) belum dibuat.
