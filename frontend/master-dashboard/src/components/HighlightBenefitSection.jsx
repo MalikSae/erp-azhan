@@ -80,11 +80,6 @@ export default function HighlightBenefitSection({ brandId, value = [], onChange,
 
   return (
     <div id="benefit_ids" tabIndex={-1} className="space-y-4 focus:outline-none">
-      <p className="text-sm font-body text-neutral-600">
-        Pilih {JUMLAH_BENEFIT_PAKET} benefit unggulan. Urutan di sini sama dengan urutan tampil di app dan web.
-        Paket yang dijual wajib punya {JUMLAH_BENEFIT_PAKET} benefit.
-      </p>
-
       {value.length > 0 && (
         <ol className="divide-y divide-neutral-200 rounded-xl border border-neutral-200">
           {value.map((b, i) => (
@@ -107,9 +102,11 @@ export default function HighlightBenefitSection({ brandId, value = [], onChange,
         </ol>
       )}
 
-      <p className={`text-xs font-body ${error ? 'text-danger-600' : 'text-neutral-500'}`} role={error ? 'alert' : undefined}>
-        {error || `${value.length} dari ${JUMLAH_BENEFIT_PAKET} benefit dipilih.`}
-      </p>
+      {error && (
+        <p className="text-xs font-body text-danger-600" role="alert">
+          {error}
+        </p>
+      )}
 
       {gagalMuat && (
         <div className="flex flex-wrap items-center gap-3">

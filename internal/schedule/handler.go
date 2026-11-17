@@ -1,10 +1,11 @@
 package schedule
 
 import (
-	"erp-azhan/api/internal/benefit"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"erp-azhan/api/internal/benefit"
+	"erp-azhan/api/internal/itinerary"
 	"errors"
 	"fmt"
 	"log"
@@ -159,6 +160,14 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	inp.BenefitIDs = &ids
+	lokasi := []int64{}
+	if req.LokasiIDs != nil {
+		lokasi = *req.LokasiIDs
+	}
+	if !h.lokasiSah(r.Context(), w, lokasi) {
+		return
+	}
+	inp.LokasiIDs = &lokasi
 	s, err := h.repo.Create(r.Context(), *inp)
 	if err != nil {
 		handleRepoError(w, err)
@@ -257,6 +266,13 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	if !benefitCukup(w, finalStatus, jumlahBenefit) {
 		return
+	}
+	// Lokasi Dikunjungi: replaced only when sent.
+	if req.LokasiIDs != nil {
+		if !h.lokasiSah(r.Context(), w, *req.LokasiIDs) {
+			return
+		}
+		inp.LokasiIDs = req.LokasiIDs
 	}
 	inp.AlasanUbahTanggal = strings.TrimSpace(req.AlasanUbahTanggal)
 	if err := validateMaxLen("alasan_ubah_tanggal", inp.AlasanUbahTanggal, maxAlasanTanggal); err != nil {
@@ -636,8 +652,20 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	}
 
 	// Gate 15: itinerary_id opsional, tapi kalau dikirim harus ada di DB
+	// Itinerary khusus (objek) menggantikan itinerary_id master dari body yang sama.
+	if req.ItineraryKhusus != nil {
+		req.ItineraryID = nil
+		if err := itinerary.ValidateDays(req.ItineraryKhusus.Days); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return nil, false
+		}
+	}
 	if req.ItineraryID != nil {
-		if exists, err := h.repo.ItineraryExists(ctx, *req.ItineraryID); err != nil {
+		var paketID int64
+		if existing != nil {
+			paketID = existing.ID
+		}
+		if exists, err := h.repo.ItineraryTersedia(ctx, *req.ItineraryID, paketID); err != nil {
 			log.Printf("[ERROR] schedule: %v", err)
 			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return nil, false
@@ -662,31 +690,16 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		}
 	}
 
-	// Gate 15.3: klasifikasi web publik (journey_type, program_slug, destination_id).
+	// Gate 15.3: klasifikasi web publik (journey_type).
 	// Paket baru tanpa journey_type memakai default umroh; saat edit, tanpa journey_type klasifikasi tidak diubah.
 	journey := req.JourneyType
 	if journey == "" && existing == nil {
 		journey = JourneyUmroh
 	}
-	klasifikasi, err := normalizeKlasifikasi(journey, req.ProgramSlug, req.DestinationID)
+	klasifikasi, err := normalizeKlasifikasi(journey)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return nil, false
-	}
-	// Destinasi nonaktif hanya ditolak untuk pilihan baru; paket yang sudah memakainya tetap bisa disimpan.
-	destinasiTetap := existing != nil && klasifikasi != nil && klasifikasi.DestinationID != nil &&
-		existing.DestinationID != nil && *existing.DestinationID == *klasifikasi.DestinationID
-	if klasifikasi != nil && klasifikasi.DestinationID != nil && !destinasiTetap {
-		aktif, err := h.repo.DestinationActive(ctx, *klasifikasi.DestinationID)
-		if err != nil {
-			log.Printf("[ERROR] schedule: cek destinasi: %v", err)
-			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
-			return nil, false
-		}
-		if !aktif {
-			writeError(w, http.StatusBadRequest, "Destinasi tidak valid atau destinasi tidak aktif.")
-			return nil, false
-		}
 	}
 
 	// Gate 16: include_items & exclude_items — tidak boleh berisi string kosong
@@ -812,6 +825,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		NominalKomisiLangsung:    req.NominalKomisiLangsung,
 		NominalBonusPembinaan:    req.NominalBonusPembinaan,
 		ItineraryID:              req.ItineraryID,
+		ItineraryKhusus:          req.ItineraryKhusus,
 		IncludeItems:             includeItems,
 		ExcludeItems:             excludeItems,
 		BrosurURL:                req.BrosurURL,
@@ -822,7 +836,10 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 func handleRepoError(w http.ResponseWriter, err error) {
+	var le LokasiError
 	switch {
+	case errors.As(err, &le):
+		writeError(w, http.StatusBadRequest, le.Error())
 	case errors.Is(err, ErrConflict):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):

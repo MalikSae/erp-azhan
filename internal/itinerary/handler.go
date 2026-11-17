@@ -179,35 +179,36 @@ func validateItineraryInput(w http.ResponseWriter, rawTitle string, days []DayRe
 		writeError(w, http.StatusBadRequest, "Title wajib diisi.")
 		return false
 	}
+	if err := ValidateDays(days); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+	return true
+}
 
-	// Gate 2: days boleh kosong/nil — tidak wajib ada
-	// Gate 3-5: validasi per-hari (hanya jika ada)
+// ValidateDays memeriksa hari-hari itinerary. Aturannya sama untuk master dan itinerary khusus paket.
+func ValidateDays(days []DayRequest) error {
+	// Days boleh kosong/nil; setiap hari yang ada divalidasi.
 	for i, d := range days {
 		n := i + 1 // posisi 1-based untuk pesan error
 
-		// Gate 3: judul atau rute/lokasi hari wajib (format baru memakai rute sebagai judul hari)
+		// Judul atau rute/lokasi hari wajib (format baru memakai rute sebagai judul hari)
 		if strings.TrimSpace(d.Title) == "" && strings.TrimSpace(d.Location) == "" {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("Rute/lokasi hari ke-%d wajib diisi.", n))
-			return false
+			return fmt.Errorf("rute/lokasi hari ke-%d wajib diisi", n)
 		}
-
-		// Gate 4: activities minimal 1 elemen
+		// Activities minimal 1 elemen
 		if len(d.Activities) == 0 {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("Aktivitas hari ke-%d minimal 1.", n))
-			return false
+			return fmt.Errorf("aktivitas hari ke-%d minimal 1", n)
 		}
-
-		// Gate 5: setiap activity harus punya text tidak kosong
+		// Setiap activity harus punya text tidak kosong
 		for _, act := range d.Activities {
 			if strings.TrimSpace(act.Text) == "" {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("Aktivitas hari ke-%d memiliki teks kosong.", n))
-				return false
+				return fmt.Errorf("aktivitas hari ke-%d memiliki teks kosong", n)
 			}
 		}
-		// Gate 6: location BOLEH kosong — tidak divalidasi
+		// Location BOLEH kosong
 	}
-
-	return true
+	return nil
 }
 
 // ─── Error handling ───────────────────────────────────────────────────────────

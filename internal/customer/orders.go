@@ -34,13 +34,26 @@ func NewOrders(db *sql.DB, b *booking.Repository, p *payment.Repository) *Orders
 }
 
 type orderSummary struct {
-	ID                 int64      `json:"id"`
-	BookingCode        string     `json:"booking_code"`
-	Status             string     `json:"status"`
-	Tab                string     `json:"tab"` // menunggu | sebagian | lunas | batal
-	ScheduleID         int64      `json:"schedule_id"`
-	JadwalNama         string     `json:"jadwal_nama"`
-	BerangkatTanggal   string     `json:"berangkat_tanggal"`
+	ID               int64  `json:"id"`
+	BookingCode      string `json:"booking_code"`
+	Status           string `json:"status"`
+	Tab              string `json:"tab"` // menunggu | sebagian | lunas | batal
+	ScheduleID       int64  `json:"schedule_id"`
+	JadwalNama       string `json:"jadwal_nama"`
+	BerangkatTanggal string `json:"berangkat_tanggal"`
+	PulangTanggal    string `json:"pulang_tanggal"`
+	// Rute: bandara asal dan tujuan penerbangan berangkat, misalnya "CGK → JED"; kosong bila jadwal belum mengisinya.
+	Rute string `json:"rute"`
+	// BatasPelunasan: tenggat lunas yang disimpan saat booking dibuat (berangkat dikurangi batas_pelunasan_hari brand, tidak
+	// lebih awal dari hari booking dibuat); booking tanpa checkout memakai hitungan yang sama. Lewat hari ini tanpa lunas,
+	// booking dibatalkan otomatis.
+	BatasPelunasan string `json:"batas_pelunasan"`
+	// JumlahJamaah: jamaah aktif termasuk bayi (bayi tidak memakai seat, jadi bisa lebih dari seat_count).
+	JumlahJamaah int `json:"jumlah_jamaah"`
+	// PemesanIkut: pemilik akun ikut berangkat; null pada booking lama yang belum mencatatnya. JamaahPertama: nama
+	// jamaah pertama (PIC), pembeda booking di daftar bila satu akun memesan untuk beberapa keluarga.
+	PemesanIkut        *bool      `json:"pemesan_ikut"`
+	JamaahPertama      string     `json:"jamaah_pertama"`
 	SeatCount          int        `json:"seat_count"`
 	TotalHarga         float64    `json:"total_harga"`
 	MinimalDP          float64    `json:"minimal_dp"`
@@ -59,13 +72,19 @@ type orderSummary struct {
 
 const orderSelect = `
 	SELECT b.id, b.id_booking, b.status, b.schedule_id, s.jadwal_nama, DATE_FORMAT(s.berangkat_tanggal,'%Y-%m-%d'),
+	       DATE_FORMAT(s.pulang_tanggal,'%Y-%m-%d'), COALESCE(s.berangkat_bandara_asal,''), COALESCE(s.berangkat_bandara_tujuan,''),
+	       COALESCE(DATE_FORMAT(c.due_at,'%Y-%m-%d'), DATE_FORMAT(DATE_SUB(s.berangkat_tanggal, INTERVAL COALESCE(br.batas_pelunasan_hari,0) DAY),'%Y-%m-%d')),
+	       (SELECT COUNT(*) FROM booking_pax bpx WHERE bpx.booking_id = b.id AND bpx.pax_status = 'aktif'),
 	       b.seat_count, COALESCE(b.total_harga,0), b.is_seat_blocked, b.seat_hold_expires_at,
 	       c.due_at, COALESCE(c.dp_per_pax,0), COALESCE(c.full_payment,FALSE), b.created_at,
 	       COALESCE(SUM(CASE WHEN p.status='confirmed' THEN p.jumlah END),0),
 	       COALESCE(SUM(CASE WHEN p.status='pending' THEN p.jumlah END),0),
-	       COUNT(p.id)
+	       COUNT(p.id),
+	       b.pemesan_ikut,
+	       COALESCE((SELECT j.nama_lengkap FROM jamaah j WHERE j.id = b.pic_jamaah_id), '')
 	FROM bookings b
 	JOIN schedules s ON s.id = b.schedule_id
+	LEFT JOIN brands br ON br.id = s.brand_id
 	LEFT JOIN booking_checkout c ON c.booking_id = b.id
 	LEFT JOIN payments p ON p.booking_id = b.id
 	WHERE b.customer_account_id = ? AND b.status <> 'draft'`
@@ -76,11 +95,19 @@ func scanOrder(row interface{ Scan(...any) error }) (*orderSummary, int, error) 
 	var hold, due sql.NullTime
 	var dpPerPax float64
 	var paymentCount int
+	var asal, tujuan string
+	var ikut sql.NullBool
 	if err := row.Scan(&o.ID, &o.BookingCode, &o.Status, &o.ScheduleID, &o.JadwalNama, &o.BerangkatTanggal,
+		&o.PulangTanggal, &asal, &tujuan, &o.BatasPelunasan, &o.JumlahJamaah,
 		&o.SeatCount, &o.TotalHarga, &blocked, &hold, &due, &dpPerPax, &o.FullPayment, &o.CreatedAt,
-		&o.Terbayar, &o.MenungguVerifikasi, &paymentCount); err != nil {
+		&o.Terbayar, &o.MenungguVerifikasi, &paymentCount, &ikut, &o.JamaahPertama); err != nil {
 		return nil, 0, err
 	}
+	if ikut.Valid {
+		v := ikut.Bool
+		o.PemesanIkut = &v
+	}
+	o.Rute = susunRute(asal, tujuan)
 	if hold.Valid {
 		t := hold.Time
 		o.SeatHoldExpiresAt = &t
@@ -113,6 +140,15 @@ func scanOrder(row interface{ Scan(...any) error }) (*orderSummary, int, error) 
 	o.CanPay = (o.Tab == "menunggu" || o.Tab == "sebagian") && o.Sisa > 0 && (holdActive || o.Status == "dp")
 	o.CanCancel = o.Status == "baru" && !o.Expired && paymentCount == 0
 	return &o, paymentCount, nil
+}
+
+// susunRute menggabungkan bandara asal dan tujuan; kosong bila salah satunya belum diisi.
+func susunRute(asal, tujuan string) string {
+	asal, tujuan = strings.TrimSpace(asal), strings.TrimSpace(tujuan)
+	if asal == "" || tujuan == "" {
+		return ""
+	}
+	return asal + " → " + tujuan
 }
 
 func minFloat(a, b float64) float64 {
@@ -155,11 +191,21 @@ func (o *Orders) List(w http.ResponseWriter, r *http.Request) {
 }
 
 type paxView struct {
+	JamaahID int64   `json:"jamaah_id"`
 	Nama     string  `json:"nama"`
 	PaxType  string  `json:"pax_type"`
 	RoomType *string `json:"room_type"`
 	Harga    float64 `json:"harga"`
 	Status   string  `json:"status"`
+	// PerlengkapanStatus: belum_diberikan | sudah_diberikan (diisi petugas saat perlengkapan diambil).
+	PerlengkapanStatus string `json:"perlengkapan_status"`
+}
+
+// kantorView: kantor brand untuk pengambilan perlengkapan (alamat, link Google Maps, jam kantor).
+type kantorView struct {
+	Alamat    *string `json:"alamat"`
+	GmapsURL  *string `json:"gmaps_url"`
+	JamKantor *string `json:"jam_kantor"`
 }
 
 // discountView: diskon atau cashback yang dipotong dari total booking (booking_discounts), ditampilkan di rincian booking.
@@ -235,12 +281,12 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pax := []paxView{}
-	rows, err := o.db.QueryContext(r.Context(), `SELECT j.nama_lengkap, bp.pax_type, bp.room_type, bp.harga_pax, bp.pax_status FROM booking_pax bp JOIN jamaah j ON j.id=bp.jamaah_id WHERE bp.booking_id=? ORDER BY bp.id`, id)
+	rows, err := o.db.QueryContext(r.Context(), `SELECT j.id, j.nama_lengkap, bp.pax_type, bp.room_type, bp.harga_pax, bp.pax_status, COALESCE(bp.perlengkapan_status,'belum_diberikan') FROM booking_pax bp JOIN jamaah j ON j.id=bp.jamaah_id WHERE bp.booking_id=? ORDER BY bp.id`, id)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var p paxView
-			if rows.Scan(&p.Nama, &p.PaxType, &p.RoomType, &p.Harga, &p.Status) == nil {
+			if rows.Scan(&p.JamaahID, &p.Nama, &p.PaxType, &p.RoomType, &p.Harga, &p.Status, &p.PerlengkapanStatus) == nil {
 				pax = append(pax, p)
 			}
 		}
@@ -267,7 +313,13 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Gagal mengambil rekening.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": order, "pax": pax, "discounts": discounts, "payments": payments, "bank_accounts": banks})
+	var kantor kantorView
+	if err := o.db.QueryRowContext(r.Context(), `SELECT NULLIF(TRIM(address),''), NULLIF(TRIM(gmaps_url),''), NULLIF(TRIM(jam_kantor),'') FROM brands WHERE id=?`, acc.BrandID).Scan(&kantor.Alamat, &kantor.GmapsURL, &kantor.JamKantor); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("[ERROR] account booking kantor: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data kantor.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"order": order, "pax": pax, "discounts": discounts, "payments": payments, "bank_accounts": banks, "kantor": kantor})
 }
 
 // Cancel POST /api/account/bookings/{id}/cancel: hanya sebelum ada pembayaran tercatat.
@@ -456,7 +508,7 @@ type travelerView struct {
 	NoHP         *string `json:"no_hp"`
 	TanggalLahir *string `json:"tanggal_lahir"`
 	// NIK tidak pernah dikirim utuh: hanya empat digit terakhir sebagai petunjuk.
-	NIKMasked    string  `json:"nik_masked"`
+	NIKMasked string `json:"nik_masked"`
 }
 
 // Travelers GET /api/account/travelers

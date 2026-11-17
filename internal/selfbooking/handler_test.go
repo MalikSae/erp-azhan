@@ -27,6 +27,7 @@ func newTestHandler(t *testing.T, siteverifyBody string, siteverifyStatus int) *
 		captcha:          &turnstileVerifier{devBypass: true},
 		invoiceMissIP:    newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
 		bookingByIP:      newWindowLimiter(bookingIPAttemptLimit, time.Hour),
+		bookingAttempt:   newWindowLimiter(bookingAccountAttemptLimit, time.Hour),
 		bookingByAccount: newWindowLimiter(bookingAccountSuccessLimit, 24*time.Hour),
 		bookingByAgen:    newWindowLimiter(agenBookingLimit, time.Hour),
 		identitasGagal:   newWindowLimiter(identitasGagalAccountLimit, identitasGagalAccountWindow),
@@ -166,16 +167,42 @@ func TestCreateBookingSkipsCaptchaWhenDevBypass(t *testing.T) {
 	}
 }
 
-func TestCreateBookingIPLimit(t *testing.T) {
+func TestCreateBookingBatasPercobaanPerAkun(t *testing.T) {
 	h := newTestHandler(t, "", 0)
-	for i := 1; i <= bookingIPAttemptLimit; i++ {
+	for i := 1; i <= bookingAccountAttemptLimit; i++ {
 		if rec := postBook(h, `bukan-json`, akunHandlerUji); rec.Code != http.StatusBadRequest {
 			t.Fatalf("percobaan #%d: got %d, want 400", i, rec.Code)
 		}
 	}
 	rec := postBook(h, `bukan-json`, akunHandlerUji)
 	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("percobaan #%d: got %d %s, want 429", bookingAccountAttemptLimit+1, rec.Code, rec.Body.String())
+	}
+	// Akun lain dari IP yang sama (mis. pengguna seluler di balik satu IP operator) tidak ikut terkunci.
+	lain := &customer.Account{ID: 78, BrandID: 2, NamaLengkap: "Uji Lain", Email: "lain@example.com", NoHP: "0812-3456-7891"}
+	if rec := postBook(h, `bukan-json`, lain); rec.Code != http.StatusBadRequest {
+		t.Fatalf("akun lain di IP sama: got %d %s, want 400", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateBookingIPLimit(t *testing.T) {
+	h := newTestHandler(t, "", 0)
+	// Banyak akun dari satu IP: berhenti di bookingIPAttemptLimit.
+	for i := 1; i <= bookingIPAttemptLimit; i++ {
+		akun := &customer.Account{ID: int64(1000 + i), BrandID: 2, NamaLengkap: "Uji", Email: "uji@example.com", NoHP: "0812-3456-7890"}
+		if rec := postBook(h, `bukan-json`, akun); rec.Code != http.StatusBadRequest {
+			t.Fatalf("percobaan #%d: got %d, want 400", i, rec.Code)
+		}
+	}
+	akun := &customer.Account{ID: 9999, BrandID: 2, NamaLengkap: "Uji", Email: "uji@example.com", NoHP: "0812-3456-7890"}
+	if rec := postBook(h, `bukan-json`, akun); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("percobaan #%d: got %d %s, want 429", bookingIPAttemptLimit+1, rec.Code, rec.Body.String())
+	}
+	// Ditolak di batas IP: jatah percobaan akun dikembalikan.
+	for i := 1; i <= bookingAccountAttemptLimit; i++ {
+		if !h.bookingAttempt.Take("9999") {
+			t.Fatalf("jatah akun tidak dikembalikan: Take #%d ditolak", i)
+		}
 	}
 }
 

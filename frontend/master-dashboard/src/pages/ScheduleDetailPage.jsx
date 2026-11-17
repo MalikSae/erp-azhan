@@ -22,6 +22,8 @@ import EmptyState from 'shared/ui/EmptyState';
 import BenefitIcon from 'shared/ui/BenefitIcon';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import SeatManagement from '../components/SeatManagement';
+import ManasikPaketRingkas from '../components/ManasikPaketRingkas';
+import { LokasiTerpilihList } from '../components/LokasiDikunjungiSection';
 import { AuthContext } from '../context/AuthContext';
 import { getSchedule } from '../api/schedules';
 import { getItinerary } from '../api/itineraries';
@@ -257,12 +259,6 @@ const FacilityList = ({ title, items, icon: Icon, iconClass }) => (
   </div>
 );
 
-
-const JOURNEY_LABELS = { umroh: 'Umroh', haji: 'Haji', wisata_halal: 'Wisata Halal' };
-const programLabel = (slug) => {
-  if (!slug) return 'Tanpa program';
-  return { plus: 'Plus', ramadhan: 'Ramadhan' }[slug] || slug;
-};
 
 const ScheduleDetailPage = () => {
   const { id } = useParams();
@@ -603,11 +599,23 @@ const ScheduleDetailPage = () => {
             )}
           </Section>
 
+          <Section title="Lokasi Dikunjungi">
+            {(schedule.lokasi || []).length > 0 ? (
+              <LokasiTerpilihList lokasi={schedule.lokasi} />
+            ) : (
+              <EmptyState variant="inline" message="Belum ada lokasi." />
+            )}
+          </Section>
+
           <Section title="Fasilitas Paket">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-body">
               <FacilityList title="Termasuk" items={schedule.include_items} icon={Check} iconClass="text-neutral-700" />
               <FacilityList title="Tidak Termasuk" items={schedule.exclude_items} icon={X} iconClass="text-neutral-400" />
             </div>
+          </Section>
+
+          <Section title="Manasik">
+            <ManasikPaketRingkas scheduleId={schedule.id} bolehLihat={hasPermission('manasik.view')} />
           </Section>
         </Surface>
 
@@ -630,21 +638,6 @@ const ScheduleDetailPage = () => {
                   ))}
                 </dl>
               </div>
-            </Section>
-
-            <Section title="Klasifikasi Web Publik">
-              <dl className="divide-y divide-neutral-100 text-xs font-body">
-                {[
-                  ['Jenis perjalanan', JOURNEY_LABELS[schedule.journey_type] || schedule.journey_type || '-'],
-                  ['Program', programLabel(schedule.program_slug)],
-                  ['Destinasi', schedule.destination?.name || '-'],
-                ].map(([label, value]) => (
-                  <div key={label} className="py-2.5 flex justify-between items-center first:pt-0 last:pb-0">
-                    <dt className="text-neutral-600">{label}</dt>
-                    <dd className="text-sm font-semibold font-heading text-neutral-900">{value}</dd>
-                  </div>
-                ))}
-              </dl>
             </Section>
 
             <Section title="Gambar Utama">

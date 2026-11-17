@@ -19,7 +19,10 @@ import (
 // Batas endpoint publik. Setiap booking menahan kursi 24 jam, jadi pembuatan
 // booking massal harus dibatasi.
 const (
-	bookingIPAttemptLimit      = 20 // percobaan POST /api/account/bookings per IP per jam
+	// Percobaan booking dihitung per akun: app memanggil ERP langsung dari HP, jadi banyak pengguna seluler bisa
+	// berbagi satu IP operator (CGNAT). Batas per IP tetap ada sebagai penahan banyak akun dari satu alamat.
+	bookingAccountAttemptLimit = 20  // percobaan POST booking per akun per jam
+	bookingIPAttemptLimit      = 120 // percobaan POST booking per IP per jam
 	bookingAccountSuccessLimit = 3  // booking berhasil per akun per 24 jam (ditegakkan juga di DB, lihat cekBatasAkun)
 	// Validasi NIK/nomor anggota yang gagal (data milik jamaah lain) per akun per jendela; menahan
 	// penebakan NIK/nomor lewat pesan galat.
@@ -41,6 +44,7 @@ type Handler struct {
 	captcha          *turnstileVerifier
 	invoiceMissIP    *windowLimiter
 	bookingByIP      *windowLimiter
+	bookingAttempt   *windowLimiter // percobaan booking per akun per jam
 	bookingByAccount *windowLimiter
 	bookingByAgen    *windowLimiter
 	identitasGagal   *windowLimiter
@@ -59,6 +63,7 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 		captcha:          newTurnstileVerifier(),
 		invoiceMissIP:    newWindowLimiter(invoiceMissIPLimit, 15*time.Minute),
 		bookingByIP:      newWindowLimiter(bookingIPAttemptLimit, time.Hour),
+		bookingAttempt:   newWindowLimiter(bookingAccountAttemptLimit, time.Hour),
 		bookingByAccount: newWindowLimiter(bookingAccountSuccessLimit, 24*time.Hour),
 		bookingByAgen:    newWindowLimiter(agenBookingLimit, time.Hour),
 		identitasGagal:   newWindowLimiter(identitasGagalAccountLimit, identitasGagalAccountWindow),
@@ -76,22 +81,29 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 
 // CreateBookingApp POST /api/account/bookings-app: booking dari app Hana/Alsha (keputusan 14 November 2026).
 // App native tidak bisa menjalankan captcha web, jadi endpoint ini tanpa captcha. Pengguna app selalu sudah
-// masuk, dan pembatas yang sama tetap berlaku: per IP, booking harian per akun, dan hold seat per akun.
+// masuk, dan pembatas yang sama tetap berlaku: percobaan per akun dan per IP, booking harian per akun, dan hold
+// seat per akun.
 func (h *Handler) CreateBookingApp(w http.ResponseWriter, r *http.Request) {
 	h.buatBooking(w, r, false)
 }
 
 func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptcha bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	clientIP := getClientIP(r)
-	if !h.bookingByIP.Take(clientIP) {
-		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
-		return
-	}
-
 	account := customer.FromContext(r.Context())
 	if account == nil {
 		writeError(w, http.StatusUnauthorized, "Sesi berakhir. Masuk kembali.")
+		return
+	}
+	// Batas percobaan per akun dulu, lalu per IP. Ditolak di batas IP: jatah akun dikembalikan.
+	clientIP := getClientIP(r)
+	percobaanKey := strconv.FormatInt(account.ID, 10)
+	if !h.bookingAttempt.Take(percobaanKey) {
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
+		return
+	}
+	if !h.bookingByIP.Take(clientIP) {
+		h.bookingAttempt.Refund(percobaanKey)
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
 		return
 	}
 	// Verifikasi email tidak diwajibkan untuk booking (keputusan 2026-10-28); email tetap dikirim dan statusnya tampil di akun.

@@ -11,14 +11,14 @@ func strp(s string) *string { return &s }
 
 func TestParseFilterV1(t *testing.T) {
 	f, err := parseFilterV1(url.Values{
-		"periode": {"2027-01"}, "destinasi": {"Dubai"}, "tier": {"Reguler"}, "program": {"plus"},
+		"periode": {"2027-01"}, "tier": {"Reguler"},
 		"durasi": {"9"}, "hotel_bintang": {"4"}, "harga_maks": {"35000000"}, "registrasi": {"almost_full"},
 		"updated_since": {"2026-10-01"}, "page": {"2"}, "per_page": {"20"},
 	})
 	if err != nil {
 		t.Fatalf("parseFilterV1: %v", err)
 	}
-	if f.Periode != "2027-01" || f.Destinasi != "dubai" || f.Tier != "reguler" || f.Program != "plus" ||
+	if f.Periode != "2027-01" || f.Tier != "reguler" ||
 		f.Durasi != 9 || f.HotelBintang != 4 || f.HargaMaks != 35000000 || f.Registrasi != RegAlmostFull ||
 		f.Page != 2 || f.PerPage != 20 || f.UpdatedSince.IsZero() {
 		t.Fatalf("filter tidak sesuai: %+v", f)
@@ -48,8 +48,7 @@ func samplePackage(id int64, berangkat, pulang string, sisa int) PackageV1 {
 		HotelMekkah: HotelRef{StarRating: 5}, UpdatedAt: time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC),
 	}
 	k := Klasifikasi{
-		JourneyType: JourneyUmroh, ProgramSlug: strp("plus"),
-		Destination: &DestinationRef{ID: 3, Name: "Maroko", Slug: "maroko"},
+		JourneyType: JourneyUmroh,
 		Tier:        &TierRef{SEO: strp("reguler"), CategoryID: 2, CategoryName: "Reguler", CategorySlug: "reguler"},
 	}
 	return newPackageV1(ps, k, "2026-11-19")
@@ -91,9 +90,6 @@ func TestFilterV1Match(t *testing.T) {
 		{"tanpa filter", filterV1{}, true},
 		{"periode sama", filterV1{Periode: "2026-12"}, true},
 		{"periode beda", filterV1{Periode: "2027-01"}, false},
-		{"destinasi sama", filterV1{Destinasi: "maroko"}, true},
-		{"destinasi beda", filterV1{Destinasi: "dubai"}, false},
-		{"program sama", filterV1{Program: "plus"}, true},
 		{"tier sama", filterV1{Tier: "reguler"}, true},
 		{"tier beda", filterV1{Tier: "premium"}, false},
 		{"durasi sama", filterV1{Durasi: 12}, true},
@@ -113,12 +109,11 @@ func TestFilterV1Match(t *testing.T) {
 		}
 	}
 
-	// Paket tanpa destinasi/tier tidak cocok dengan filter yang meminta keduanya.
+	// Paket tanpa tier tidak cocok dengan filter tier.
 	tanpa := p
-	tanpa.Destination = nil
 	tanpa.Tier = nil
-	if (filterV1{Destinasi: "maroko"}).match(tanpa) || (filterV1{Tier: "reguler"}).match(tanpa) {
-		t.Error("paket tanpa klasifikasi tidak boleh cocok dengan filter destinasi/tier")
+	if (filterV1{Tier: "reguler"}).match(tanpa) {
+		t.Error("paket tanpa tier tidak boleh cocok dengan filter tier")
 	}
 }
 
@@ -154,7 +149,7 @@ func TestPackageV1JSONShape(t *testing.T) {
 	}
 	for _, key := range []string{
 		"id", "brand_id", "jadwal_nama", "berangkat_tanggal", "seat_total", "seat_sisa", "harga_quad",
-		"journey_type", "program", "destination", "tier", "visibility", "duration_days", "price_from",
+		"journey_type", "tier", "visibility", "duration_days", "price_from",
 		"registration_status",
 	} {
 		if _, ok := m[key]; !ok {
@@ -164,9 +159,10 @@ func TestPackageV1JSONShape(t *testing.T) {
 	if m["registration_status"] != RegAlmostFull {
 		t.Errorf("registration_status = %v, want %s", m["registration_status"], RegAlmostFull)
 	}
-	dest, _ := m["destination"].(map[string]any)
-	if dest["slug"] != "maroko" {
-		t.Errorf("destination.slug = %v", dest["slug"])
+	for _, gone := range []string{"program", "destination"} {
+		if _, ok := m[gone]; ok {
+			t.Errorf("field %q sudah pindah ke CMS", gone)
+		}
 	}
 	tier, _ := m["tier"].(map[string]any)
 	if tier["seo"] != "reguler" {
@@ -192,35 +188,14 @@ func TestGonePackageJSON(t *testing.T) {
 
 func TestNormalizeKlasifikasi(t *testing.T) {
 	// Kosong = tidak diubah.
-	if k, err := normalizeKlasifikasi("", strp("plus"), nil); k != nil || err != nil {
+	if k, err := normalizeKlasifikasi(""); k != nil || err != nil {
 		t.Fatalf("journey kosong harus (nil, nil), dapat %+v %v", k, err)
 	}
-	// Program plus wajib destinasi.
-	if _, err := normalizeKlasifikasi("umroh", strp("Plus"), nil); err == nil {
-		t.Error("program plus tanpa destinasi harus ditolak")
-	}
-	dest := int64(3)
-	k, err := normalizeKlasifikasi(" Umroh ", strp(" Plus "), &dest)
-	if err != nil || k == nil || k.JourneyType != "umroh" || k.ProgramSlug == nil || *k.ProgramSlug != "plus" || k.DestinationID == nil {
+	k, err := normalizeKlasifikasi(" Umroh ")
+	if err != nil || k == nil || k.JourneyType != "umroh" {
 		t.Fatalf("normalisasi salah: %+v err=%v", k, err)
 	}
-	// Tanpa program dan destinasi diperbolehkan.
-	k, err = normalizeKlasifikasi("umroh", nil, nil)
-	if err != nil || k == nil || k.ProgramSlug != nil || k.DestinationID != nil {
-		t.Fatalf("umroh polos harus valid: %+v err=%v", k, err)
-	}
-	// Program kosong dianggap tidak ada; destinasi 0 dianggap tidak ada.
-	zero := int64(0)
-	k, err = normalizeKlasifikasi("haji", strp("  "), &zero)
-	if err != nil || k.ProgramSlug != nil || k.DestinationID != nil {
-		t.Fatalf("nilai kosong harus dianggap tidak ada: %+v err=%v", k, err)
-	}
-	for _, bad := range []struct {
-		j string
-		p *string
-	}{{"umrah", nil}, {"umroh", strp("Plus Dubai")}, {"umroh", strp("-plus")}} {
-		if _, err := normalizeKlasifikasi(bad.j, bad.p, &dest); err == nil {
-			t.Errorf("normalizeKlasifikasi(%q, %v) harus gagal", bad.j, bad.p)
-		}
+	if _, err := normalizeKlasifikasi("umrah"); err == nil {
+		t.Error("journey_type tidak dikenal harus gagal")
 	}
 }

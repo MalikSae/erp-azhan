@@ -97,6 +97,8 @@ var adminUploadCategoryPerms = map[string][]string{
 	"airline-logos":   {"masterdata.edit"},
 	"perlengkapan":    {"masterdata.edit"},
 	"schedule-brosur": {"schedule.edit"},
+	"banner-promosi":  {"banner.manage"},
+	"haramain":        {"haramain.manage"},
 }
 
 // protectedViewPerms: izin untuk GET /api/admin/media/{category}/{file} (berlaku juga untuk user
@@ -127,6 +129,9 @@ var publicCategories = map[string]struct{}{
 	"airline-logos":   {},
 	"bank-logos":      {},
 	"schedule-brosur": {},
+	"banner-promosi":  {},
+	"haramain":        {},
+	"ulasan-haramain": {},
 }
 
 var protectedCategories = map[string]struct{}{
@@ -261,6 +266,11 @@ func (h *Handler) UploadPortalMedia(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadBytes+multipartOverhead)
 	if err := r.ParseMultipartForm(MaxUploadBytes); err != nil {
 		writeError(w, http.StatusRequestEntityTooLarge, "Ukuran file terlalu besar (maksimal 10MB).")
+		return
+	}
+	// Foto ulasan Jelajah Haramain bersifat publik; selebihnya (dokumen, bukti bayar) terlindungi.
+	if r.FormValue("category") == "ulasan-haramain" {
+		h.processUpload(w, r, "ulasan-haramain", key)
 		return
 	}
 	h.processUpload(w, r, "dokumen-jamaah", key)

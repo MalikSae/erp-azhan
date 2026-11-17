@@ -12,6 +12,7 @@ import (
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/mailer"
+	"erp-azhan/api/internal/notifikasi"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -326,6 +327,7 @@ func (h *JamaahAkun) kabari(akunID, jamaahID int64, setuju bool, catatan string)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	notifikasi.PerubahanData(ctx, h.db, akunID, jamaahID, setuju)
 	var email, nama, namaJamaah string
 	var brandID int64
 	if err := h.db.QueryRowContext(ctx, `SELECT a.email, a.nama_lengkap, a.brand_id, j.nama_lengkap FROM customer_accounts a, jamaah j WHERE a.id=? AND j.id=?`,

@@ -22,23 +22,25 @@ const idBookingCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
 // Sentinel errors
 var (
-	ErrNotFound                        = errors.New("data tidak ditemukan")
-	ErrSeatHabis                       = errors.New("seat sudah habis, tidak bisa konfirmasi DP")
-	ErrInvalidStatus                   = errors.New("status tidak valid")
-	ErrSeatBelumDiblokir               = errors.New("seat booking ini belum di-hold")
-	ErrSeatSudahDiblokir               = errors.New("seat booking ini sudah di-hold oleh permintaan lain")
+	ErrNotFound          = errors.New("data tidak ditemukan")
+	ErrSeatHabis         = errors.New("seat sudah habis, tidak bisa konfirmasi DP")
+	ErrInvalidStatus     = errors.New("status tidak valid")
+	ErrSeatBelumDiblokir = errors.New("seat booking ini belum di-hold")
+	ErrSeatSudahDiblokir = errors.New("seat booking ini sudah di-hold oleh permintaan lain")
 	// ErrSeatTerkonfirmasi: seat booking yang sudah dibayar (dp/lunas) hanya lepas lewat pembatalan.
 	ErrSeatTerkonfirmasi               = errors.New("seat booking yang sudah dibayar tidak dapat dilepas. Batalkan booking atau jamaahnya bila seat memang harus dilepas")
 	ErrTemplatePerlengkapanBelumDiatur = errors.New("template set perlengkapan belum diatur untuk brand ini")
 	ErrPerlengkapanSudahDiberikan      = errors.New("perlengkapan untuk booking ini sudah pernah diberikan")
 	ErrPerlengkapanBelumDiberikan      = errors.New("perlengkapan belum pernah diberikan untuk booking ini")
-	ErrKodeBrandNotSet                 = errors.New("Kode brand belum diatur. Hubungi admin.")
-	ErrGenerateIDBookingFailed         = errors.New("gagal generate ID Booking unik, coba lagi")
-	ErrPaxAlreadyCancelled             = errors.New("pax sudah dalam status batal")
-	ErrCannotChangeInfantRoom          = errors.New("tidak bisa mengubah tipe kamar untuk infant")
-	ErrCannotChangeCancelledPaxRoom    = errors.New("tidak bisa mengubah tipe kamar untuk pax yang sudah batal")
-	ErrOnlyDraftCanBeDeleted           = errors.New("Hanya booking berstatus draft yang dapat dihapus. Booking yang sudah final harus dibatalkan, bukan dihapus.")
-	ErrBookingBatal                    = errors.New("booking sudah dibatalkan, data tagihan dan progress tidak dapat diubah")
+	// ErrPerlengkapanSudahDiterima: akun sudah mengonfirmasi penerimaan; penyerahan tidak bisa dibatalkan lagi.
+	ErrPerlengkapanSudahDiterima    = errors.New("jamaah sudah mengonfirmasi perlengkapan diterima, penyerahan tidak bisa dibatalkan")
+	ErrKodeBrandNotSet              = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
+	ErrGenerateIDBookingFailed      = errors.New("gagal generate ID Booking unik, coba lagi")
+	ErrPaxAlreadyCancelled          = errors.New("pax sudah dalam status batal")
+	ErrCannotChangeInfantRoom       = errors.New("tidak bisa mengubah tipe kamar untuk infant")
+	ErrCannotChangeCancelledPaxRoom = errors.New("tidak bisa mengubah tipe kamar untuk pax yang sudah batal")
+	ErrOnlyDraftCanBeDeleted        = errors.New("Hanya booking berstatus draft yang dapat dihapus. Booking yang sudah final harus dibatalkan, bukan dihapus.")
+	ErrBookingBatal                 = errors.New("booking sudah dibatalkan, data tagihan dan progress tidak dapat diubah")
 )
 
 // BusinessError adalah pelanggaran aturan bisnis yang pesannya aman ditampilkan
@@ -436,9 +438,13 @@ func (r *Repository) ListPaxByBookingID(ctx context.Context, bookingID int64) ([
 			bp.harga_pax, bp.counts_for_seat, bp.pax_status,
 			bp.progress_visa, bp.progress_siskopatuh, bp.progress_manasik, bp.progress_vaksin_meningitis,
 			bp.perlengkapan_status, DATE_FORMAT(bp.perlengkapan_tanggal, '%Y-%m-%d') AS perlengkapan_tanggal,
+			bp.perlengkapan_metode, DATE_FORMAT(bp.perlengkapan_diajukan_at, '%Y-%m-%d %H:%i'),
+			DATE_FORMAT(bp.perlengkapan_diserahkan_at, '%Y-%m-%d %H:%i'), bp.perlengkapan_diserahkan_nama,
+			DATE_FORMAT(bp.perlengkapan_diterima_at, '%Y-%m-%d %H:%i'), ca.nama_lengkap,
 			bp.created_at, bp.updated_at
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
+		LEFT JOIN customer_accounts ca ON ca.id = bp.perlengkapan_diterima_oleh
 		WHERE bp.booking_id = ?
 		ORDER BY bp.id ASC`
 
@@ -458,6 +464,9 @@ func (r *Repository) ListPaxByBookingID(ctx context.Context, bookingID int64) ([
 			&p.HargaPax, &p.CountsForSeat, &p.PaxStatus,
 			&p.ProgressVisa, &p.ProgressSiskopatuh, &p.ProgressManasik, &p.ProgressVaksinMeningitis,
 			&p.PerlengkapanStatus, &perlengkapanTanggal,
+			&p.PerlengkapanMetode, &p.PerlengkapanDiajukanAt,
+			&p.PerlengkapanDiserahkanAt, &p.PerlengkapanDiserahkanNama,
+			&p.PerlengkapanDiterimaAt, &p.PerlengkapanDiterimaOleh,
 			&p.CreatedAt, &p.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("booking.ListPax scan: %w", err)
@@ -1448,9 +1457,9 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 
 	// 3. Update status pax
 	if bookingStatus == "baru" || bookingStatus == "draft" {
-		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE id = ?`, paxID)
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE id = ?`, paxID)
 	} else {
-		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE id = ?`, paxID)
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE id = ?`, paxID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("booking.CancelPax update status: %w", err)
@@ -1498,9 +1507,9 @@ func (r *Repository) CancelPax(ctx context.Context, bookingID int64, paxID int64
 				return nil, err
 			}
 		}
-		qBatalSisa := `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE booking_id = ? AND pax_status = 'aktif'`
+		qBatalSisa := `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE booking_id = ? AND pax_status = 'aktif'`
 		if kembalikanStok {
-			qBatalSisa = `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL WHERE booking_id = ? AND pax_status = 'aktif'`
+			qBatalSisa = `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE booking_id = ? AND pax_status = 'aktif'`
 		}
 		if _, err := tx.ExecContext(ctx, qBatalSisa, bookingID); err != nil {
 			return nil, fmt.Errorf("booking.CancelPax batalkan pax tersisa: %w", err)
@@ -2207,7 +2216,8 @@ func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandI
 }
 
 // UpdatePaxProgress melakukan update terhadap kolom progress individual pax (visa, siskopatuh, manasik, vaksin_meningitis).
-func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, paxID int64, brandID *int64, updates map[string]bool) (*Booking, error) {
+// adminID dicatat sebagai pengubah penanda "sudah manasik" (jejak yang sama dengan absensi di menu Manasik).
+func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, paxID int64, brandID *int64, adminID int64, updates map[string]bool) (*Booking, error) {
 	if len(updates) == 0 {
 		return r.GetByID(ctx, bookingID, brandID)
 	}
@@ -2248,6 +2258,14 @@ func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, pax
 		}
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", colName))
 		args = append(args, val)
+		if key == "manasik" {
+			var oleh any
+			if adminID > 0 {
+				oleh = adminID
+			}
+			setClauses = append(setClauses, "progress_manasik_oleh = ?", "progress_manasik_at = NOW()")
+			args = append(args, oleh)
+		}
 	}
 
 	if len(setClauses) > 0 {
@@ -2388,7 +2406,8 @@ func tolakPerlengkapanUntukStatus(status string) string {
 }
 
 // MarkPerlengkapanDiberikan mendistribusikan perlengkapan sesuai template set brand untuk satu jamaah (pax).
-func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID int64, paxID int64, brandID *int64) (*Booking, error) {
+// adminID: petugas yang menyerahkan; id dan namanya dicatat untuk log yang dilihat jamaah (0 = tidak diketahui).
+func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID int64, paxID int64, brandID *int64, adminID int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan tx: %w", err)
@@ -2571,10 +2590,15 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 	qUpdatePax := `
 		UPDATE booking_pax
 		SET perlengkapan_status = 'sudah_diberikan',
-		    perlengkapan_tanggal = CURDATE()
+		    perlengkapan_tanggal = CURDATE(),
+		    perlengkapan_diserahkan_at = NOW(),
+		    perlengkapan_diserahkan_oleh = NULLIF(?, 0),
+		    perlengkapan_diserahkan_nama = (SELECT COALESCE(NULLIF(TRIM(display_name),''), email) FROM admin_users WHERE id = ?),
+		    perlengkapan_diterima_at = NULL,
+		    perlengkapan_diterima_oleh = NULL
 		WHERE id = ?
 	`
-	if _, err := tx.ExecContext(ctx, qUpdatePax, paxID); err != nil {
+	if _, err := tx.ExecContext(ctx, qUpdatePax, adminID, adminID, paxID); err != nil {
 		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan update pax: %w", err)
 	}
 
@@ -2616,7 +2640,8 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 
 	// 2. Cek status pax
 	var perlengkapanStatus string
-	err = tx.QueryRowContext(ctx, `SELECT perlengkapan_status FROM booking_pax WHERE id = ? AND booking_id = ? FOR UPDATE`, paxID, bookingID).Scan(&perlengkapanStatus)
+	var diterima sql.NullTime
+	err = tx.QueryRowContext(ctx, `SELECT perlengkapan_status, perlengkapan_diterima_at FROM booking_pax WHERE id = ? AND booking_id = ? FOR UPDATE`, paxID, bookingID).Scan(&perlengkapanStatus, &diterima)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -2626,6 +2651,9 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 
 	if perlengkapanStatus != "sudah_diberikan" {
 		return nil, ErrPerlengkapanBelumDiberikan
+	}
+	if diterima.Valid {
+		return nil, ErrPerlengkapanSudahDiterima
 	}
 
 	// 3. Ambil log barang yang sudah dikeluarkan
@@ -2669,7 +2697,10 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 	qUpdatePax := `
 		UPDATE booking_pax
 		SET perlengkapan_status = 'belum_diberikan',
-		    perlengkapan_tanggal = NULL
+		    perlengkapan_tanggal = NULL,
+		    perlengkapan_diserahkan_at = NULL,
+		    perlengkapan_diserahkan_oleh = NULL,
+		    perlengkapan_diserahkan_nama = NULL
 		WHERE id = ?
 	`
 	if _, err := tx.ExecContext(ctx, qUpdatePax, paxID); err != nil {

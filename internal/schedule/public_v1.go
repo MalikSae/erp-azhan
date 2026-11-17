@@ -30,6 +30,8 @@ type PackageV1 struct {
 	DurationDays       int     `json:"duration_days"`
 	PriceFrom          float64 `json:"price_from"`
 	RegistrationStatus string  `json:"registration_status"`
+	// Lokasi: active Lokasi Dikunjungi in admin order; [] when none.
+	Lokasi []LokasiPaket `json:"lokasi"`
 }
 
 // GonePackageV1 menggantikan detail paket yang tidak dijual lagi (diarsipkan, atau berangkat kurang dari
@@ -65,20 +67,10 @@ type SitemapEntryV1 struct {
 	Klasifikasi
 }
 
-// DestinationV1 adalah destinasi aktif beserta jumlah paket yang sedang dijual.
-type DestinationV1 struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Slug         string `json:"slug"`
-	PackageCount int    `json:"package_count"`
-}
-
 // filterV1 menampung filter daftar paket.
 type filterV1 struct {
 	Periode      string // YYYY-MM
-	Destinasi    string // slug destinasi
 	Tier         string // hemat|reguler|comfort|premium
-	Program      string // slug program
 	Durasi       int
 	HotelBintang int
 	HargaMaks    float64
@@ -109,8 +101,6 @@ func parseFilterV1(q map[string][]string) (filterV1, error) {
 		}
 		f.Periode = v
 	}
-	f.Destinasi = strings.ToLower(get("destinasi"))
-	f.Program = strings.ToLower(get("program"))
 	if v := strings.ToLower(get("tier")); v != "" {
 		if !tierValid[v] {
 			return f, fmt.Errorf("tier harus salah satu dari hemat, reguler, comfort, premium")
@@ -196,18 +186,13 @@ func newPackageV1(s *PublicSchedule, k Klasifikasi, batas string) PackageV1 {
 		DurationDays:       durationDays(s.BerangkatTanggal, s.PulangTanggal),
 		PriceFrom:          priceFrom(s),
 		RegistrationStatus: registrationStatus(s.SeatTotal, s.SeatSisa, s.BerangkatTanggal, batas),
+		Lokasi:             []LokasiPaket{},
 	}
 }
 
 // match menerapkan filter ke satu paket.
 func (f filterV1) match(p PackageV1) bool {
 	if f.Periode != "" && !strings.HasPrefix(p.BerangkatTanggal, f.Periode) {
-		return false
-	}
-	if f.Destinasi != "" && (p.Destination == nil || p.Destination.Slug != f.Destinasi) {
-		return false
-	}
-	if f.Program != "" && (p.ProgramSlug == nil || *p.ProgramSlug != f.Program) {
 		return false
 	}
 	if f.Tier != "" && (p.Tier == nil || p.Tier.SEO == nil || *p.Tier.SEO != f.Tier) {
@@ -273,6 +258,11 @@ func (h *Handler) visiblePackages(ctx context.Context, brandID int64) ([]Package
 	if err != nil {
 		return nil, err
 	}
+	// All pakets' locations in one query; a failure is an error, like the detail endpoint.
+	lokasi, err := h.repo.LokasiPublik(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	batas := batasPublikWIB()
 	out := make([]PackageV1, 0, len(items))
 	for _, it := range items {
@@ -280,14 +270,18 @@ func (h *Handler) visiblePackages(ctx context.Context, brandID int64) ([]Package
 		if !ok {
 			k = Klasifikasi{JourneyType: JourneyUmroh}
 		}
-		out = append(out, newPackageV1(it, k, batas))
+		p := newPackageV1(it, k, batas)
+		if l := lokasi[it.ID]; l != nil {
+			p.Lokasi = l
+		}
+		out = append(out, p)
 	}
 	return out, nil
 }
 
 // ListPackagesV1 godoc
 // GET /api/public/v1/packages?brand=ID
-// Filter: periode (YYYY-MM), destinasi (slug), tier, program, durasi, hotel_bintang, harga_maks, registrasi,
+// Filter: periode (YYYY-MM), tier, durasi, hotel_bintang, harga_maks, registrasi,
 // updated_since, page, per_page. Hanya paket published yang berangkat 30 hari atau lebih dari hari ini.
 func (h *Handler) ListPackagesV1(w http.ResponseWriter, r *http.Request) {
 	brandID, ok := brandParam(w, r)
@@ -354,7 +348,17 @@ func (h *Handler) GetPackageV1(w http.ResponseWriter, r *http.Request) {
 	case s.Status == StatusPublished && s.BerangkatTanggal < batas:
 		writeJSON(w, http.StatusOK, gonePackage(s, k, "closed"))
 	case s.Status == StatusPublished:
-		writeJSON(w, http.StatusOK, newPackageV1(s.ToPublic(), k, batas))
+		p := newPackageV1(s.ToPublic(), k, batas)
+		lokasi, err := h.repo.LokasiPublik(r.Context(), []int64{s.ID})
+		if err != nil {
+			log.Printf("[ERROR] schedule v1: lokasi: %v", err)
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+			return
+		}
+		if l := lokasi[s.ID]; l != nil {
+			p.Lokasi = l
+		}
+		writeJSON(w, http.StatusOK, p)
 	default:
 		writeError(w, http.StatusNotFound, "Jadwal tidak ditemukan atau belum dipublikasikan.")
 	}
@@ -370,23 +374,6 @@ func gonePackage(s *Schedule, k Klasifikasi, reason string) GonePackageV1 {
 		DepartureDate: s.BerangkatTanggal,
 		Klasifikasi:   k,
 	}
-}
-
-// ListDestinationsV1 godoc
-// GET /api/public/v1/destinations?brand=ID
-// Destinasi aktif yang punya paket dijual, beserta jumlah paketnya.
-func (h *Handler) ListDestinationsV1(w http.ResponseWriter, r *http.Request) {
-	brandID, ok := brandParam(w, r)
-	if !ok {
-		return
-	}
-	items, err := h.repo.ListPublicDestinations(r.Context(), brandID, batasPublikWIB())
-	if err != nil {
-		log.Printf("[ERROR] schedule v1: destinasi: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil data destinasi.")
-		return
-	}
-	writeJSON(w, http.StatusOK, items)
 }
 
 // SitemapFeedV1 godoc
@@ -413,30 +400,4 @@ func (h *Handler) SitemapFeedV1(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-// ListPublicDestinations menghitung paket yang sedang dijual per destinasi aktif.
-func (r *Repository) ListPublicDestinations(ctx context.Context, brandID int64, batas string) ([]DestinationV1, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT d.id, d.name, d.slug, COUNT(s.id)
-		FROM destinations d
-		JOIN schedules s ON s.destination_id = d.id
-			AND s.status = 'published' AND s.brand_id = ? AND s.berangkat_tanggal >= ?
-		WHERE d.is_active = TRUE
-		GROUP BY d.id, d.name, d.slug
-		ORDER BY d.name ASC`, brandID, batas)
-	if err != nil {
-		return nil, fmt.Errorf("schedule.ListPublicDestinations: %w", err)
-	}
-	defer rows.Close()
-
-	out := make([]DestinationV1, 0)
-	for rows.Next() {
-		var d DestinationV1
-		if err := rows.Scan(&d.ID, &d.Name, &d.Slug, &d.PackageCount); err != nil {
-			return nil, fmt.Errorf("schedule.ListPublicDestinations scan: %w", err)
-		}
-		out = append(out, d)
-	}
-	return out, rows.Err()
 }

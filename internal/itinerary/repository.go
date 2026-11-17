@@ -31,6 +31,7 @@ func (r *Repository) List(ctx context.Context) ([]ItineraryListItem, error) {
 		FROM itineraries i
 		LEFT JOIN package_categories c ON c.id = i.category_id
 		LEFT JOIN itinerary_days d ON d.itinerary_id = i.id
+		WHERE i.schedule_id IS NULL
 		GROUP BY i.id, i.title, i.category_id, c.name, i.created_at
 		ORDER BY i.created_at DESC`
 
@@ -168,8 +169,75 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 	if err := r.exists(ctx, id); err != nil {
 		return err
 	}
-	_, err := r.db.ExecContext(ctx, `DELETE FROM itineraries WHERE id=?`, id)
+	_, err := r.db.ExecContext(ctx, `DELETE FROM itineraries WHERE id=? AND schedule_id IS NULL`, id)
 	return err
+}
+
+// ─── Itinerary khusus (salinan pribadi milik satu paket) ──────────────────────
+
+// Execer dipenuhi *sql.DB dan *sql.Tx.
+type Execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// KhususID mengembalikan id itinerary pribadi milik paket, atau nil bila belum ada.
+func KhususID(ctx context.Context, q Execer, scheduleID int64) (*int64, error) {
+	var id int64
+	err := q.QueryRowContext(ctx, `SELECT id FROM itineraries WHERE schedule_id=?`, scheduleID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("itinerary.KhususID: %w", err)
+	}
+	return &id, nil
+}
+
+// SimpanKhusus membuat atau memperbarui itinerary pribadi paket (judul dan semua hari diganti)
+// di dalam transaksi pemanggil, lalu mengembalikan id-nya.
+func SimpanKhusus(ctx context.Context, tx *sql.Tx, scheduleID int64, title string, days []DayRequest) (int64, error) {
+	id, err := KhususID(ctx, tx, scheduleID)
+	if err != nil {
+		return 0, err
+	}
+	if id == nil {
+		res, err := tx.ExecContext(ctx, `INSERT INTO itineraries (title, schedule_id) VALUES (?, ?)`, title, scheduleID)
+		if err != nil {
+			return 0, fmt.Errorf("itinerary.SimpanKhusus insert: %w", err)
+		}
+		newID, err := res.LastInsertId()
+		if err != nil {
+			return 0, fmt.Errorf("itinerary.SimpanKhusus last insert id: %w", err)
+		}
+		id = &newID
+	} else {
+		if _, err := tx.ExecContext(ctx, `UPDATE itineraries SET title=? WHERE id=?`, title, *id); err != nil {
+			return 0, fmt.Errorf("itinerary.SimpanKhusus update: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM itinerary_days WHERE itinerary_id=?`, *id); err != nil {
+			return 0, fmt.Errorf("itinerary.SimpanKhusus hapus hari: %w", err)
+		}
+	}
+	if err := insertDays(ctx, tx, *id, days); err != nil {
+		return 0, err
+	}
+	return *id, nil
+}
+
+// HapusKhusus menghapus itinerary pribadi paket (hari ikut terhapus lewat CASCADE), kecuali yang id-nya
+// sama dengan keep. Dipanggil setelah schedules.itinerary_id tidak lagi menunjuk baris yang dihapus.
+func HapusKhusus(ctx context.Context, tx Execer, scheduleID int64, keep *int64) error {
+	var err error
+	if keep == nil {
+		_, err = tx.ExecContext(ctx, `DELETE FROM itineraries WHERE schedule_id=?`, scheduleID)
+	} else {
+		_, err = tx.ExecContext(ctx, `DELETE FROM itineraries WHERE schedule_id=? AND id<>?`, scheduleID, *keep)
+	}
+	if err != nil {
+		return fmt.Errorf("itinerary.HapusKhusus: %w", err)
+	}
+	return nil
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -177,7 +245,7 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 // exists mengecek apakah itinerary dengan id tersebut ada. Mengembalikan ErrNotFound jika tidak.
 func (r *Repository) exists(ctx context.Context, id int64) error {
 	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM itineraries WHERE id=?`, id).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM itineraries WHERE id=? AND schedule_id IS NULL`, id).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("itinerary.exists: %w", err)
 	}
