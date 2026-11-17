@@ -265,7 +265,7 @@ func catatKlikReferral(ctx context.Context, db interface {
 	execer
 }, brandID int64, kode, pengunjungHash string, now time.Time) (baru bool, err error) {
 	kode = strings.ToUpper(strings.TrimSpace(kode))
-	if brandID <= 0 || kode == "" || len(kode) > 20 {
+	if brandID <= 0 || !KodeAgenValid(kode) {
 		return false, nil
 	}
 	var akunID int64

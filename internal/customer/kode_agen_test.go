@@ -73,7 +73,7 @@ func (f *fixtureKodeAgen) agen(t *testing.T, brandID int64, k, kode, status stri
 }
 
 func (f *fixtureKodeAgen) kode(p string) string {
-	return strings.ToUpper(p + f.sfx[len(f.sfx)-8:])
+	return strings.ToUpper(p + f.sfx[len(f.sfx)-5:])
 }
 
 // upline membaca direkrut_oleh_akun_id akun; ada=false bila akun tidak dibuat.
@@ -135,7 +135,7 @@ func TestRegisterAppKodeAgenKetik(t *testing.T) {
 	})
 
 	t.Run("kode otomatis tidak valid diabaikan diam-diam", func(t *testing.T) {
-		rec := post(h.RegisterApp, f.body("otomatissalah", map[string]any{"kode_referral": "TIDAKADA999"}), "")
+		rec := post(h.RegisterApp, f.body("otomatissalah", map[string]any{"kode_referral": "TDKADA"}), "")
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
@@ -145,7 +145,7 @@ func TestRegisterAppKodeAgenKetik(t *testing.T) {
 	})
 
 	t.Run("kode ketik salah ditahan dan akun tidak dibuat", func(t *testing.T) {
-		kasus := map[string]string{"tidakada": "TIDAKADA999", "nonaktif": f.kode("O")}
+		kasus := map[string]string{"tidakada": "TDKADA", "nonaktif": f.kode("O")}
 		if lain != "" {
 			kasus["brandlain"] = lain
 		}
@@ -182,7 +182,7 @@ func TestRegisterWebDanAgenMengabaikanKodeAgen(t *testing.T) {
 		if got, _ := f.upline(t, "valid"+nama); got != b {
 			t.Fatalf("%s: upline = %d, want %d (kode_referral, bukan kode_agen)", nama, got, b)
 		}
-		rec = post(fn, f.body("salah"+nama, map[string]any{"kode_agen": "TIDAKADA999"}), "")
+		rec = post(fn, f.body("salah"+nama, map[string]any{"kode_agen": "TDKADA"}), "")
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("%s kode_agen salah: %d %s", nama, rec.Code, rec.Body)
 		}
@@ -223,14 +223,14 @@ func TestDaftarGoogleKodeAgenKetik(t *testing.T) {
 		t.Fatalf("otomatis: upline = %d, want %d", got, b)
 	}
 
-	if code, body := daftar("otomatissalah", map[string]any{"kode_referral": "TIDAKADA999"}); code != http.StatusCreated {
+	if code, body := daftar("otomatissalah", map[string]any{"kode_referral": "TDKADA"}); code != http.StatusCreated {
 		t.Fatalf("otomatis salah: %d %s", code, body)
 	}
 	if got, ada := f.upline(t, "otomatissalah"); !ada || got != 0 {
 		t.Fatalf("otomatis salah: upline = %d ada=%v", got, ada)
 	}
 
-	for nama, kode := range map[string]string{"tidakada": "TIDAKADA999", "nonaktif": f.kode("O")} {
+	for nama, kode := range map[string]string{"tidakada": "TDKADA", "nonaktif": f.kode("O")} {
 		code, body := daftar("salah"+nama, map[string]any{"kode_agen": kode, "kode_referral": f.kode("A")})
 		if code != http.StatusBadRequest || !strings.Contains(body, `"Kode agen tidak ditemukan"`) || !strings.Contains(body, `"code":"KODE_AGEN_TIDAK_ADA"`) {
 			t.Fatalf("%s: %d %s", nama, code, body)
@@ -289,7 +289,7 @@ func TestKodeAgenGagalDibatasiPerIP(t *testing.T) {
 		}
 	}
 	// Setelah batas, kode apa pun (termasuk yang valid) dijawab 429 dan akun tidak dibuat.
-	for _, kode := range []string{"TEBAKLAGI", f.kode("A")} {
+	for _, kode := range []string{"TEBAK7", f.kode("A")} {
 		rec := post(h.RegisterApp, f.body("lewat"+kode, map[string]any{"kode_agen": kode}), "")
 		if rec.Code != http.StatusTooManyRequests || strings.Contains(rec.Body.String(), "KODE_AGEN_TIDAK_ADA") {
 			t.Fatalf("%s: %d %s", kode, rec.Code, rec.Body)
@@ -304,7 +304,7 @@ func TestKodeAgenGagalDibatasiPerIP(t *testing.T) {
 	}
 	// Jalur Google memakai pembatas yang sama.
 	h.google = googlePalsu{&ProfilGoogle{Sub: "sub-g" + f.sfx, Email: f.email("g"), Nama: "Pengguna Google"}}
-	rec := post(h.DaftarGoogle, map[string]any{"brand_id": f.brandID, "id_token": "t", "no_hp": f.hp(), "kode_agen": "TEBAKGOOGLE"}, "")
+	rec := post(h.DaftarGoogle, map[string]any{"brand_id": f.brandID, "id_token": "t", "no_hp": f.hp(), "kode_agen": "TEBAK8"}, "")
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("google: %d %s", rec.Code, rec.Body)
 	}
