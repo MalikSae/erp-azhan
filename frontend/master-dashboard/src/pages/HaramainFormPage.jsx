@@ -15,6 +15,7 @@ import { KATEGORI_HARAMAIN, KOTA_HARAMAIN, mediaSrc } from './HaramainPage';
 import { createHaramain, getHaramain, updateHaramain } from '../api/haramain';
 import { uploadMedia } from '../api/media';
 import { kompresFoto } from '../utils/kompresFoto';
+import EditorTeks from '../components/EditorTeks';
 
 const KOSONG = {
   nama: '', nama_lengkap: '', kategori: 'masjid', kota: 'makkah', foto_url: '', galeri: [], ringkas: '', deskripsi: '',
@@ -121,7 +122,14 @@ const HaramainFormPage = () => {
               <CustomDropdown label="Kota" value={form.kota} onChange={ubah('kota')} options={KOTA_HARAMAIN} className="!mb-0" />
             </div>
             <Input label="Ringkasan" name="ringkas" required maxLength={100} value={form.ringkas} onChange={ubah('ringkas')} placeholder="Masjid Nabi" />
-            <Textarea label="Deskripsi" name="deskripsi" rows={6} maxLength={5000} value={form.deskripsi} onChange={ubah('deskripsi')} />
+            <EditorTeks
+              label="Deskripsi"
+              value={form.deskripsi}
+              onChange={(html) => setForm((f) => ({ ...f, deskripsi: html }))}
+              placeholder="Tulis tentang lokasi ini..."
+              helpText="Judul untuk tiap bagian, daftar untuk poin. Tampil rapi di app."
+              minTinggi="min-h-64"
+            />
           </div>
         </FormSection>
         <FormSection title="Foto">

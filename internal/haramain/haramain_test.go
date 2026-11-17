@@ -190,3 +190,38 @@ func TestTulisGalatDipakaiPaket(t *testing.T) {
 		t.Fatalf("jawaban %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestDeskripsiDirapikan(t *testing.T) {
+	baru := func(html string) Input {
+		in := inputSah()
+		in.Deskripsi = &html
+		return in
+	}
+	in := baru("<h2>Sejarah</h2><p onclick=\"x()\">Isi</p><script>alert(1)</script><ul><li><strong>Lokasi:</strong> utara</li></ul>")
+	if err := in.validasi(); err != nil {
+		t.Fatal(err)
+	}
+	if in.Deskripsi == nil {
+		t.Fatal("deskripsi hilang")
+	}
+	for _, buruk := range []string{"script", "onclick", "alert"} {
+		if strings.Contains(*in.Deskripsi, buruk) {
+			t.Errorf("%q lolos sanitasi: %s", buruk, *in.Deskripsi)
+		}
+	}
+	for _, baik := range []string{"<h2>Sejarah</h2>", "<strong>Lokasi:</strong>", "<li>"} {
+		if !strings.Contains(*in.Deskripsi, baik) {
+			t.Errorf("%q hilang: %s", baik, *in.Deskripsi)
+		}
+	}
+
+	kosong := baru("<p></p>")
+	if err := kosong.validasi(); err != nil || kosong.Deskripsi != nil {
+		t.Errorf("editor kosong harus NULL: %v %v", err, kosong.Deskripsi)
+	}
+
+	panjang := baru("<p>" + strings.Repeat("a", maksDeskripsi) + "</p>")
+	if err := panjang.validasi(); !galatValidasi(err) {
+		t.Errorf("deskripsi terlalu panjang harus ditolak: %v", err)
+	}
+}
