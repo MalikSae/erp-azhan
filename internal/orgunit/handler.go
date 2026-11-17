@@ -45,7 +45,7 @@ func (h *Handler) writeRepoError(w http.ResponseWriter, err error, action string
 		writeError(w, http.StatusConflict, rbac.ErrConcurrentMsg)
 	default:
 		log.Printf("[ERROR] orgunit.%s: %v", action, err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -63,7 +63,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	var msg string
@@ -89,12 +89,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "ID unit tidak valid")
+		writeError(w, http.StatusBadRequest, "ID unit tidak valid.")
 		return
 	}
 	var req UpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	var msg string
@@ -118,12 +118,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetStatus(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "ID unit tidak valid")
+		writeError(w, http.StatusBadRequest, "ID unit tidak valid.")
 		return
 	}
 	var req SetStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IsActive == nil {
-		writeError(w, http.StatusBadRequest, "is_active wajib diisi")
+		writeError(w, http.StatusBadRequest, "Status wajib diisi.")
 		return
 	}
 	if err := h.repo.SetStatus(r.Context(), id, *req.IsActive); err != nil {
@@ -143,7 +143,7 @@ func (h *Handler) SetStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "ID unit tidak valid")
+		writeError(w, http.StatusBadRequest, "ID unit tidak valid.")
 		return
 	}
 	if err := h.repo.Delete(r.Context(), id); err != nil {

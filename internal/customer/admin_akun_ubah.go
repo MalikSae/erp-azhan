@@ -258,19 +258,19 @@ func tulisGalatUbah(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrDilarang):
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "akun tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Akun tidak ditemukan.")
 	case errors.As(err, &bentrok):
 		writeJSON(w, http.StatusConflict, map[string]any{"error": bentrok.Error(), "akun_id": bentrok.AkunID, "nama": bentrok.Nama})
 	default:
 		log.Printf("[ERROR] ubah data akun: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan perubahan")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan perubahan.")
 	}
 }
 
 func idAkun(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id < 1 {
-		writeError(w, http.StatusBadRequest, "id akun tidak valid")
+		writeError(w, http.StatusBadRequest, "ID akun tidak valid.")
 		return 0, false
 	}
 	return id, true

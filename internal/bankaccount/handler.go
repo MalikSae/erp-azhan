@@ -34,7 +34,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.List(r.Context(), brandID, activeOnly)
 	if err != nil {
 		log.Printf("[ERROR] bankaccount.List: %v", err)
-		writeError(w, 500, "gagal mengambil rekening")
+		writeError(w, 500, "Gagal mengambil rekening.")
 		return
 	}
 	writeJSON(w, 200, items)
@@ -59,13 +59,13 @@ func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "parameter brand_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Parameter brand wajib diisi.")
 		return
 	}
 	items, err := h.repo.List(r.Context(), &id, true)
 	if err != nil {
 		log.Printf("[ERROR] bankaccount.List: %v", err)
-		writeError(w, 500, "gagal mengambil rekening")
+		writeError(w, 500, "Gagal mengambil rekening.")
 		return
 	}
 	out := make([]PublicBankAccount, 0, len(items))
@@ -87,11 +87,11 @@ func validate(req *UpsertRequest) bool {
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req UpsertRequest
 	if json.NewDecoder(r.Body).Decode(&req) != nil || !validate(&req) {
-		writeError(w, 400, "brand, bank, nomor rekening, dan atas nama wajib diisi")
+		writeError(w, 400, "Brand, bank, nomor rekening, dan atas nama wajib diisi.")
 		return
 	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil && req.BrandID != *scoped {
-		writeError(w, 403, "Anda hanya dapat mengelola rekening brand Anda sendiri")
+		writeError(w, 403, "Anda hanya dapat mengelola rekening brand Anda sendiri.")
 		return
 	}
 	item, err := h.repo.Create(r.Context(), req)
@@ -105,19 +105,19 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var req UpsertRequest
 	if id <= 0 || json.NewDecoder(r.Body).Decode(&req) != nil || !validate(&req) {
-		writeError(w, 400, "data rekening tidak valid")
+		writeError(w, 400, "Data rekening tidak valid.")
 		return
 	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
 		existing, getErr := h.repo.Get(r.Context(), id)
 		if getErr != nil || existing.BrandID != *scoped || req.BrandID != *scoped {
-			writeError(w, 404, "rekening tidak ditemukan")
+			writeError(w, 404, "Rekening tidak ditemukan.")
 			return
 		}
 	}
 	item, err := h.repo.Update(r.Context(), id, req)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, 404, "rekening tidak ditemukan")
+		writeError(w, 404, "Rekening tidak ditemukan.")
 		return
 	}
 	if err != nil {
@@ -129,25 +129,25 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, 400, "id rekening tidak valid")
+		writeError(w, 400, "ID rekening tidak valid.")
 		return
 	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
 		existing, getErr := h.repo.Get(r.Context(), id)
 		if getErr != nil || existing.BrandID != *scoped {
-			writeError(w, 404, "rekening tidak ditemukan")
+			writeError(w, 404, "Rekening tidak ditemukan.")
 			return
 		}
 	}
 	if err := h.repo.Delete(r.Context(), id); errors.Is(err, ErrNotFound) {
-		writeError(w, 404, "rekening tidak ditemukan")
+		writeError(w, 404, "Rekening tidak ditemukan.")
 		return
 	} else if errors.Is(err, ErrDipakai) {
 		writeError(w, 409, ErrDipakai.Error())
 		return
 	} else if err != nil {
 		log.Printf("[ERROR] bankaccount.Delete: %v", err)
-		writeError(w, 500, "gagal menghapus rekening")
+		writeError(w, 500, "Gagal menghapus rekening.")
 		return
 	}
 	writeJSON(w, 200, map[string]string{"message": "rekening dihapus"})
@@ -166,9 +166,9 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func tulisGalatSimpan(w http.ResponseWriter, aksi string, err error) {
 	var me *mysql.MySQLError
 	if errors.As(err, &me) && me.Number == 1062 {
-		writeError(w, 409, "nomor rekening sudah digunakan")
+		writeError(w, 409, "Nomor rekening sudah digunakan.")
 		return
 	}
 	log.Printf("[ERROR] bankaccount.%s: %v", aksi, err)
-	writeError(w, 500, "gagal menyimpan rekening")
+	writeError(w, 500, "Gagal menyimpan rekening.")
 }

@@ -73,7 +73,7 @@ func (h *Handler) UpdateFoto(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("[ERROR] customer simpan foto: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "foto diperbarui"})

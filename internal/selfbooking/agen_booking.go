@@ -130,7 +130,7 @@ func (h *Handler) CreateBookingAgen(w http.ResponseWriter, r *http.Request) {
 	agenID := identity.GetCustomerAccountID(r.Context())
 	limitKey := "agen:" + strconv.FormatInt(agenID, 10)
 	if !h.bookingByAgen.Take(limitKey) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak booking, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak booking, coba lagi dalam 1 jam.")
 		return
 	}
 	// Percobaan NIK yang gagal dibatasi per akun, sama seperti web publik (jangan jadi oracle data jamaah).
@@ -156,7 +156,7 @@ func (h *Handler) CreateBookingAgen(w http.ResponseWriter, r *http.Request) {
 
 	var req BookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := isiNIKSayaSendiri(r.Context(), h.repo.db, agenID, &req); err != nil {
@@ -250,9 +250,9 @@ func (h *Handler) writeAgenBookingError(w http.ResponseWriter, err error) {
 		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant), errors.Is(err, ErrInfantUnavailable), errors.Is(err, ErrInvalidDP):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Jadwal tidak ditemukan.")
 	default:
 		log.Printf("[ERROR] booking agen: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }

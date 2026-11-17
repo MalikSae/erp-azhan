@@ -84,11 +84,11 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, _, err := o.owned(r.Context(), acc.ID, id); errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	} else if err != nil {
 		log.Printf("[ERROR] account dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil dokumen")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil dokumen.")
 		return
 	}
 	rows, err := o.db.QueryContext(r.Context(), `
@@ -100,7 +100,7 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 		ORDER BY bp.id`, acc.ID, id)
 	if err != nil {
 		log.Printf("[ERROR] account dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil dokumen")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil dokumen.")
 		return
 	}
 	defer rows.Close()
@@ -115,7 +115,7 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 		var penuh bool
 		if err := rows.Scan(&jid, &nama, &tipe, &jenis, &status, &alasan, &penuh); err != nil {
 			log.Printf("[ERROR] account dokumen scan: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal mengambil dokumen")
+			writeError(w, http.StatusInternalServerError, "Gagal mengambil dokumen.")
 			return
 		}
 		if _, seen := pax[jid]; !seen {
@@ -134,7 +134,7 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := rows.Err(); err != nil {
 		log.Printf("[ERROR] account dokumen rows: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil dokumen")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil dokumen.")
 		return
 	}
 	out := make([]paxDokumen, 0, len(urut))
@@ -166,37 +166,37 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Jenis, req.FileURL = strings.TrimSpace(req.Jenis), strings.TrimSpace(req.FileURL)
 	if _, valid := labelDokumen[req.Jenis]; !valid || req.JamaahID <= 0 || req.FileURL == "" {
-		writeError(w, http.StatusBadRequest, "data dokumen tidak valid")
+		writeError(w, http.StatusBadRequest, "Data dokumen tidak valid.")
 		return
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		log.Printf("[ERROR] account kirim dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan dokumen")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
 		return
 	}
 	if order.Tab == "batal" {
-		writeError(w, http.StatusConflict, "booking ini sudah dibatalkan atau kedaluwarsa")
+		writeError(w, http.StatusConflict, "Booking ini sudah dibatalkan atau kedaluwarsa.")
 		return
 	}
 	var jamaahOK bool
 	if err := o.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM booking_pax WHERE booking_id=? AND jamaah_id=? AND pax_status='aktif')`, id, req.JamaahID).Scan(&jamaahOK); err != nil {
 		log.Printf("[ERROR] account kirim dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan dokumen")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
 		return
 	}
 	if !jamaahOK {
-		writeError(w, http.StatusNotFound, "jamaah tidak ditemukan di booking ini")
+		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan di booking ini.")
 		return
 	}
 	var status sql.NullString
 	if err := o.db.QueryRowContext(r.Context(), `SELECT status FROM dokumen_jamaah WHERE jamaah_id=? AND jenis=?`, req.JamaahID, req.Jenis).Scan(&status); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Printf("[ERROR] account kirim dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan dokumen")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
 		return
 	}
 	// Akses terbatas: berkas yang sudah ada, apa pun statusnya, tidak boleh ditimpa.
@@ -204,7 +204,7 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		penuh, err := aksesPenuhJamaah(r.Context(), o.db, acc.ID, req.JamaahID)
 		if err != nil {
 			log.Printf("[ERROR] account kirim dokumen akses: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal menyimpan dokumen")
+			writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
 			return
 		}
 		if !penuh {
@@ -213,7 +213,7 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if status.Valid && status.String == "approved" {
-		writeError(w, http.StatusConflict, "dokumen ini sudah disetujui. Hubungi kami bila perlu menggantinya.")
+		writeError(w, http.StatusConflict, "Dokumen ini sudah disetujui. Hubungi kami bila perlu menggantinya.")
 		return
 	}
 	if err := media.ValidateCustomerUpload(r.Context(), o.db, req.FileURL, acc.ID); err != nil {
@@ -223,13 +223,13 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("[ERROR] account kirim dokumen validasi berkas: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	d, err := o.dokumen.Upsert(r.Context(), req.JamaahID, &dokumen.CreateDokumenRequest{Jenis: req.Jenis, FileURL: req.FileURL})
 	if err != nil {
 		log.Printf("[ERROR] account kirim dokumen upsert: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan dokumen")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jenis": d.Jenis, "status": d.Status})

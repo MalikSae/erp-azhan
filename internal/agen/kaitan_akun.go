@@ -334,12 +334,12 @@ func (h *Handler) GantiAgenAkun(w http.ResponseWriter, r *http.Request) {
 	}
 	var req GantiAgenAkunRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	req.Alasan = strings.TrimSpace(req.Alasan)
 	if n := utf8.RuneCountInString(req.Alasan); n < 5 || n > 1000 {
-		writeError(w, http.StatusBadRequest, "alasan wajib diisi (5–1000 karakter)")
+		writeError(w, http.StatusBadRequest, "Alasan wajib diisi (5–1000 karakter).")
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())

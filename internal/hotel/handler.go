@@ -34,7 +34,7 @@ func (h *Handler) ListHotels(w http.ResponseWriter, r *http.Request) {
 	hotels, err := h.repo.List(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] hotel: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data hotel")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data hotel.")
 		return
 	}
 	writeJSON(w, http.StatusOK, hotels)
@@ -47,7 +47,7 @@ func (h *Handler) ListCities(w http.ResponseWriter, r *http.Request) {
 	cities, err := h.repo.ListCities(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] hotel: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar kota hotel")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil daftar kota hotel.")
 		return
 	}
 	writeJSON(w, http.StatusOK, cities)
@@ -61,7 +61,7 @@ func (h *Handler) ListCities(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateHotel(w http.ResponseWriter, r *http.Request) {
 	var req CreateHotelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -77,7 +77,7 @@ func (h *Handler) CreateHotel(w http.ResponseWriter, r *http.Request) {
 		req.VideoURL = nil
 	}
 	if (req.PhotoURL != nil && !shared.ValidMediaURL(*req.PhotoURL)) || (req.VideoURL != nil && !shared.ValidMediaURL(*req.VideoURL)) {
-		writeError(w, http.StatusBadRequest, "photo_url/video_url harus berkas unggahan atau URL http(s)")
+		writeError(w, http.StatusBadRequest, "Foto atau video harus berkas unggahan atau URL http(s).")
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *Handler) UpdateHotel(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateHotelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -118,7 +118,7 @@ func (h *Handler) UpdateHotel(w http.ResponseWriter, r *http.Request) {
 		req.VideoURL = nil
 	}
 	if (req.PhotoURL != nil && !shared.ValidMediaURL(*req.PhotoURL)) || (req.VideoURL != nil && !shared.ValidMediaURL(*req.VideoURL)) {
-		writeError(w, http.StatusBadRequest, "photo_url/video_url harus berkas unggahan atau URL http(s)")
+		writeError(w, http.StatusBadRequest, "Foto atau video harus berkas unggahan atau URL http(s).")
 		return
 	}
 
@@ -156,7 +156,7 @@ func (h *Handler) DeleteHotel(w http.ResponseWriter, r *http.Request) {
 func validateHotelInput(w http.ResponseWriter, rawName, rawCity string, starRating *int, distanceM *int) (string, string, *int, *int, bool) {
 	// Gate 1: name wajib
 	if strings.TrimSpace(rawName) == "" {
-		writeError(w, http.StatusBadRequest, "name wajib diisi")
+		writeError(w, http.StatusBadRequest, "Name wajib diisi.")
 		return "", "", nil, nil, false
 	}
 
@@ -165,20 +165,20 @@ func validateHotelInput(w http.ResponseWriter, rawName, rawCity string, starRati
 
 	// Gate 3: city wajib
 	if strings.TrimSpace(rawCity) == "" {
-		writeError(w, http.StatusBadRequest, "city wajib diisi")
+		writeError(w, http.StatusBadRequest, "City wajib diisi.")
 		return "", "", nil, nil, false
 	}
 	city := strings.TrimSpace(rawCity)
 
 	// Gate 4: star_rating range
 	if starRating != nil && (*starRating < 1 || *starRating > 5) {
-		writeError(w, http.StatusBadRequest, "star_rating harus antara 1-5")
+		writeError(w, http.StatusBadRequest, "Bintang hotel harus antara 1-5.")
 		return "", "", nil, nil, false
 	}
 
 	// Gate 5: distance_m tidak boleh negatif jika dikirim
 	if distanceM != nil && *distanceM < 0 {
-		writeError(w, http.StatusBadRequest, "distance_m tidak boleh negatif")
+		writeError(w, http.StatusBadRequest, "Jarak tidak boleh negatif.")
 		return "", "", nil, nil, false
 	}
 
@@ -191,19 +191,19 @@ func validateHotelInput(w http.ResponseWriter, rawName, rawCity string, starRati
 func handleHotelRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "data tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrDuplicate):
-		writeError(w, http.StatusConflict, "hotel dengan nama ini sudah ada di kota yang sama")
+		writeError(w, http.StatusConflict, "Hotel dengan nama ini sudah ada di kota yang sama.")
 	case errors.Is(err, ErrKotaDipakai):
 		writeError(w, http.StatusConflict, ErrKotaDipakai.Error())
 	default:
 		// Tangkap MySQL FK constraint violation (error 1451)
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh paket lain")
+			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh paket lain.")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -214,7 +214,7 @@ func parseID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(raw, 10, 64)
 	if err != nil || id == 0 {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true

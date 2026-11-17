@@ -198,17 +198,17 @@ func (o *Orders) DataJamaah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, _, err := o.owned(r.Context(), acc.ID, id); errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	} else if err != nil {
 		log.Printf("[ERROR] account data jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	rows, err := o.db.QueryContext(r.Context(), dataJamaahSelect+` ORDER BY bp.id`, acc.ID, id)
 	if err != nil {
 		log.Printf("[ERROR] account data jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	defer rows.Close()
@@ -217,14 +217,14 @@ func (o *Orders) DataJamaah(w http.ResponseWriter, r *http.Request) {
 		d, err := scanDataJamaah(rows)
 		if err != nil {
 			log.Printf("[ERROR] account data jamaah scan: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+			writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 			return
 		}
 		out = append(out, *d)
 	}
 	if err := rows.Err(); err != nil {
 		log.Printf("[ERROR] account data jamaah rows: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jamaah": out})
@@ -276,7 +276,7 @@ func (o *Orders) SimpanDataJamaah(w http.ResponseWriter, r *http.Request) {
 	}
 	jamaahID, err := strconv.ParseInt(chi.URLParam(r, "jamaah_id"), 10, 64)
 	if err != nil || jamaahID <= 0 {
-		writeError(w, http.StatusBadRequest, "id jamaah tidak valid")
+		writeError(w, http.StatusBadRequest, "ID jamaah tidak valid.")
 		return
 	}
 	var req simpanDataJamaahRequest
@@ -285,26 +285,26 @@ func (o *Orders) SimpanDataJamaah(w http.ResponseWriter, r *http.Request) {
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		log.Printf("[ERROR] account simpan data jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan data jamaah.")
 		return
 	}
 	if order.Tab == "batal" {
-		writeError(w, http.StatusConflict, "booking ini sudah dibatalkan atau kedaluwarsa")
+		writeError(w, http.StatusConflict, "Booking ini sudah dibatalkan atau kedaluwarsa.")
 		return
 	}
 	var punya bool
 	if err := o.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM booking_pax WHERE booking_id=? AND jamaah_id=? AND pax_status='aktif')`, id, jamaahID).Scan(&punya); err != nil {
 		log.Printf("[ERROR] account simpan data jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan data jamaah.")
 		return
 	}
 	if !punya {
-		writeError(w, http.StatusNotFound, "jamaah tidak ditemukan di booking ini")
+		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan di booking ini.")
 		return
 	}
 

@@ -32,7 +32,7 @@ var (
 	ErrTemplatePerlengkapanBelumDiatur = errors.New("template set perlengkapan belum diatur untuk brand ini")
 	ErrPerlengkapanSudahDiberikan      = errors.New("perlengkapan untuk booking ini sudah pernah diberikan")
 	ErrPerlengkapanBelumDiberikan      = errors.New("perlengkapan belum pernah diberikan untuk booking ini")
-	ErrKodeBrandNotSet                 = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
+	ErrKodeBrandNotSet                 = errors.New("Kode brand belum diatur. Hubungi admin.")
 	ErrGenerateIDBookingFailed         = errors.New("gagal generate ID Booking unik, coba lagi")
 	ErrPaxAlreadyCancelled             = errors.New("pax sudah dalam status batal")
 	ErrCannotChangeInfantRoom          = errors.New("tidak bisa mengubah tipe kamar untuk infant")

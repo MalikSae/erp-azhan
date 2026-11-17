@@ -331,7 +331,7 @@ func (h *AdminAkun) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar akun")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil daftar akun.")
 		return
 	}
 	writeJSON(w, http.StatusOK, hasil)
@@ -341,21 +341,21 @@ func (h *AdminAkun) List(w http.ResponseWriter, r *http.Request) {
 func (h *AdminAkun) Detail(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id < 1 {
-		writeError(w, http.StatusBadRequest, "id akun tidak valid")
+		writeError(w, http.StatusBadRequest, "ID akun tidak valid.")
 		return
 	}
 	brandID := adminBrandScope(r)
 	d, err := getAkunDetail(r.Context(), h.db, brandID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "akun tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Akun tidak ditemukan.")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil detail akun")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil detail akun.")
 		return
 	}
 	if d.Log, err = h.agen.ListAkunKaitanLog(r.Context(), brandID, id); err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil riwayat upline")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil riwayat upline.")
 		return
 	}
 	writeJSON(w, http.StatusOK, d)

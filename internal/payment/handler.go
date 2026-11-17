@@ -32,7 +32,7 @@ func (h *Handler) ListDailyBrandTransactions(w http.ResponseWriter, r *http.Requ
 	// Admin yang terikat brand hanya melihat transaksi brand-nya sendiri.
 	items, err := h.repo.ListDailyBrandTransactions(r.Context(), identity.GetBrandID(r.Context()))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data transaksi")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data transaksi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -53,17 +53,17 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 	// Verify booking exists and belongs to brand
 	exists, err := h.repo.BookingExistsForBrand(r.Context(), bookingID, brandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusNotFound, "booking_id tidak ditemukan atau bukan milik brand Anda")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan atau bukan milik brand Anda.")
 		return
 	}
 
 	items, err := h.repo.ListByBookingID(r.Context(), bookingID, brandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data payment")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data payment.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -76,13 +76,13 @@ func (h *Handler) ListAllPayments(w http.ResponseWriter, r *http.Request) {
 	switch status {
 	case "", StatusPending, StatusConfirmed, StatusRejected, StatusVoid:
 	default:
-		writeError(w, http.StatusBadRequest, "status tidak valid")
+		writeError(w, http.StatusBadRequest, "Status tidak valid.")
 		return
 	}
 	items, err := h.repo.ListAll(r.Context(), identity.GetBrandID(r.Context()), status)
 	if err != nil {
 		log.Printf("[ERROR] payment: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar pembayaran")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil daftar pembayaran.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -100,7 +100,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 
 	var req CreatePaymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -108,13 +108,13 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	req.Source = SourceAdmin
 
 	if req.Jumlah <= 0 {
-		writeError(w, http.StatusBadRequest, "jumlah pembayaran harus lebih dari 0")
+		writeError(w, http.StatusBadRequest, "Jumlah pembayaran harus lebih dari 0.")
 		return
 	}
 	// Pembayaran admin langsung terkonfirmasi; tanggal masa depan merusak laporan (JB-10).
 	// Aturan sama dengan konfirmasi transfer portal (JM-22).
 	if req.Tanggal != nil && strings.TrimSpace(*req.Tanggal) != "" && !shared.TanggalTidakDiMasaDepan(*req.Tanggal) {
-		writeError(w, http.StatusBadRequest, "tanggal pembayaran tidak valid atau berada di masa depan")
+		writeError(w, http.StatusBadRequest, "Tanggal pembayaran tidak valid atau berada di masa depan.")
 		return
 	}
 
@@ -127,19 +127,19 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	switch metode {
 	case metodeTransfer:
 		if req.BankAccountID == nil || *req.BankAccountID <= 0 {
-			writeError(w, http.StatusBadRequest, "rekening tujuan wajib dipilih untuk pembayaran transfer")
+			writeError(w, http.StatusBadRequest, "Rekening tujuan wajib dipilih untuk pembayaran transfer.")
 			return
 		}
 	case metodeTunai:
 		if req.ReceivedBy == nil || strings.TrimSpace(*req.ReceivedBy) == "" {
-			writeError(w, http.StatusBadRequest, "nama staff penerima wajib diisi untuk pembayaran tunai")
+			writeError(w, http.StatusBadRequest, "Nama staff penerima wajib diisi untuk pembayaran tunai.")
 			return
 		}
 		trimmed := strings.TrimSpace(*req.ReceivedBy)
 		req.ReceivedBy = &trimmed
 		req.BankAccountID = nil // tunai tidak melewati rekening
 	default:
-		writeError(w, http.StatusBadRequest, "metode pembayaran harus transfer atau cash")
+		writeError(w, http.StatusBadRequest, "Metode pembayaran harus transfer atau cash.")
 		return
 	}
 	if metode != metodeTunai {
@@ -162,7 +162,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			log.Printf("[ERROR] payment: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return
 		} else {
 			req.BuktiURL = &trimmed
@@ -179,11 +179,11 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	// Verify booking
 	exists, err := h.repo.BookingExistsForBrand(r.Context(), bookingID, brandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusNotFound, "booking_id tidak valid atau bukan milik brand Anda")
+		writeError(w, http.StatusNotFound, "Booking tidak valid atau bukan milik brand Anda.")
 		return
 	}
 
@@ -204,11 +204,11 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 	sisaTagihan := *totalHarga - totalPaid
 	if sisaTagihan <= 0 {
-		writeError(w, http.StatusBadRequest, "tagihan booking sudah lunas")
+		writeError(w, http.StatusBadRequest, "Tagihan booking sudah lunas.")
 		return
 	}
 	if req.Jumlah > sisaTagihan {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("jumlah pembayaran tidak boleh melebihi sisa tagihan (sisa: Rp %.0f)", sisaTagihan))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Jumlah pembayaran tidak boleh melebihi sisa tagihan (sisa: Rp %.0f).", sisaTagihan))
 		return
 	}
 
@@ -233,16 +233,16 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdatePaymentStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if req.Status != StatusConfirmed && req.Status != StatusRejected {
-		writeError(w, http.StatusBadRequest, "status harus confirmed atau rejected")
+		writeError(w, http.StatusBadRequest, "Status harus confirmed atau rejected.")
 		return
 	}
 	if req.Status == StatusRejected && (req.RejectionReason == nil || len(*req.RejectionReason) < 3) {
-		writeError(w, http.StatusBadRequest, "alasan penolakan wajib diisi")
+		writeError(w, http.StatusBadRequest, "Alasan penolakan wajib diisi.")
 		return
 	}
 
@@ -259,7 +259,7 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) {
 	// tidak ada perubahan.
 	if p.Status != "pending" {
 		if p.Status != req.Status {
-			writeError(w, http.StatusConflict, "pembayaran sudah berstatus "+p.Status+" dan tidak bisa diubah menjadi "+req.Status)
+			writeError(w, http.StatusConflict, "Pembayaran sudah berstatus "+p.Status+" dan tidak bisa diubah menjadi "+req.Status)
 			return
 		}
 		writeJSON(w, http.StatusOK, p)
@@ -299,7 +299,7 @@ func (h *Handler) VoidPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	var req VoidPaymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	alasan, msg := validasiAlasanVoid(req.Alasan)
@@ -354,9 +354,9 @@ func (h *Handler) DeletePayment(w http.ResponseWriter, r *http.Request) {
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "data tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrCannotDelete):
-		writeError(w, http.StatusConflict, "tidak bisa menghapus pembayaran yang sudah dikonfirmasi")
+		writeError(w, http.StatusConflict, "Tidak bisa menghapus pembayaran yang sudah dikonfirmasi.")
 	default:
 		// Pesan bisnis ditampilkan apa adanya, tanpa awalan teknis yang ditambahkan saat error dibungkus.
 		for _, bisnis := range []error{ErrSeatUnavailable, ErrOverpayment, ErrBookingClosed, ErrNotVoidable, ErrVoidBelowRefund} {
@@ -366,7 +366,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 			}
 		}
 		log.Printf("[ERROR] payment: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -376,7 +376,7 @@ func parseID(w http.ResponseWriter, r *http.Request, param string) (int64, bool)
 	raw := chi.URLParam(r, param)
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, param+" tidak valid")
+		writeError(w, http.StatusBadRequest, param+" Tidak valid.")
 		return 0, false
 	}
 	return id, true

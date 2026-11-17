@@ -43,7 +43,7 @@ func (h *Handler) ListBrands(w http.ResponseWriter, r *http.Request) {
 	brands, err := h.repo.List(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] brand: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data brands")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data brands.")
 		return
 	}
 	// Admin yang terikat satu brand hanya melihat brand-nya sendiri.
@@ -79,7 +79,7 @@ func (h *Handler) ListBrandOptions(w http.ResponseWriter, r *http.Request) {
 	brands, err := h.repo.List(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] brand: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data brands")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data brands.")
 		return
 	}
 	scoped := identity.GetBrandID(r.Context())
@@ -99,22 +99,22 @@ func (h *Handler) ListBrandOptions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetBrand(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return
 	}
 
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil && int64(id) != *scoped {
-		writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 		return
 	}
 
 	b, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+			writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data brand")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data brand.")
 		return
 	}
 
@@ -124,25 +124,25 @@ func (h *Handler) GetBrand(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	// Brand baru hanya dibuat pengguna Holding; izin brand.edit saja tidak cukup bagi pengguna ber-brand.
 	if identity.GetBrandID(r.Context()) != nil {
-		writeError(w, http.StatusForbidden, "hanya pengguna Holding yang dapat membuat brand")
+		writeError(w, http.StatusForbidden, "Hanya pengguna Holding yang dapat membuat brand.")
 		return
 	}
 	var req CreateBrandRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if req.MinimalDP < 0 {
-		writeError(w, http.StatusBadRequest, "minimal_dp tidak boleh negatif")
+		writeError(w, http.StatusBadRequest, "Minimal DP tidak boleh negatif.")
 		return
 	}
 	if req.CashbackAlumni < 0 {
-		writeError(w, http.StatusBadRequest, "cashback_alumni tidak boleh negatif")
+		writeError(w, http.StatusBadRequest, "Cashback alumni tidak boleh negatif.")
 		return
 	}
 	if req.UjrohClosing < 0 || req.UjrohPembinaan < 0 || req.UjrohRepeatBooking < 0 {
-		writeError(w, http.StatusBadRequest, "nominal ujroh tidak boleh negatif")
+		writeError(w, http.StatusBadRequest, "Nominal ujroh tidak boleh negatif.")
 		return
 	}
 	if !semuaRupiahBulat(req.MinimalDP, req.CashbackAlumni, req.UjrohClosing, req.UjrohPembinaan, req.UjrohRepeatBooking) {
@@ -157,12 +157,12 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 		req.BatasPelunasanHari = 30
 	}
 	if req.BatasPelunasanHari < 1 || req.BatasPelunasanHari > 365 {
-		writeError(w, http.StatusBadRequest, "batas_pelunasan_hari harus antara 1 dan 365")
+		writeError(w, http.StatusBadRequest, "Batas pelunasan harus antara 1 dan 365.")
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name wajib diisi")
+		writeError(w, http.StatusBadRequest, "Name wajib diisi.")
 		return
 	}
 
@@ -170,17 +170,17 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 		kb := strings.ToUpper(strings.TrimSpace(*req.KodeBrand))
 		if kb != "" {
 			if len(kb) != 2 {
-				writeError(w, http.StatusBadRequest, "kode_brand harus persis 2 karakter")
+				writeError(w, http.StatusBadRequest, "Kode brand harus persis 2 karakter.")
 				return
 			}
 			existing, err := h.repo.GetByKodeBrand(r.Context(), kb)
 			if err != nil {
 				log.Printf("[ERROR] brand: %v", err)
-				writeError(w, http.StatusInternalServerError, "gagal mengecek kode brand")
+				writeError(w, http.StatusInternalServerError, "Gagal mengecek kode brand.")
 				return
 			}
 			if existing != nil {
-				writeError(w, http.StatusConflict, "kode brand sudah digunakan oleh brand lain")
+				writeError(w, http.StatusConflict, "Kode brand sudah digunakan oleh brand lain.")
 				return
 			}
 			req.KodeBrand = &kb
@@ -191,7 +191,7 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 
 	if req.PrimaryColor != nil && *req.PrimaryColor != "" {
 		if !hexColorRegex.MatchString(*req.PrimaryColor) {
-			writeError(w, http.StatusBadRequest, "primary_color harus format hex, contoh #1B3A6B")
+			writeError(w, http.StatusBadRequest, "Warna utama harus berformat hex.")
 			return
 		}
 	}
@@ -200,17 +200,17 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 		domainVal := strings.TrimSpace(strings.ToLower(*req.Domain))
 		if domainVal != "" {
 			if !domainRegex.MatchString(domainVal) {
-				writeError(w, http.StatusBadRequest, "format domain tidak valid")
+				writeError(w, http.StatusBadRequest, "Format domain tidak valid.")
 				return
 			}
 			existing, err := h.repo.GetByDomain(r.Context(), domainVal)
 			if err != nil {
 				log.Printf("[ERROR] brand: %v", err)
-				writeError(w, http.StatusInternalServerError, "gagal mengecek domain")
+				writeError(w, http.StatusInternalServerError, "Gagal mengecek domain.")
 				return
 			}
 			if existing != nil {
-				writeError(w, http.StatusConflict, "domain sudah dipakai brand lain")
+				writeError(w, http.StatusConflict, "Domain sudah dipakai brand lain.")
 				return
 			}
 			req.Domain = &domainVal
@@ -228,7 +228,7 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	req.GmapsURL = sanitizeString(req.GmapsURL)
 	req.JamKantor = sanitizeString(req.JamKantor)
 	if req.JamKantor != nil && utf8.RuneCountInString(*req.JamKantor) > 100 {
-		writeError(w, http.StatusBadRequest, "jam kantor maksimal 100 karakter")
+		writeError(w, http.StatusBadRequest, "Jam kantor maksimal 100 karakter.")
 		return
 	}
 	req.Legalitas = sanitizeString(req.Legalitas)
@@ -256,7 +256,7 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	b, err := h.repo.Create(r.Context(), req)
 	if err != nil {
 		log.Printf("[ERROR] brand: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal membuat brand")
+		writeError(w, http.StatusInternalServerError, "Gagal membuat brand.")
 		return
 	}
 
@@ -266,23 +266,23 @@ func (h *Handler) CreateBrand(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return
 	}
 	// Pengguna ber-brand hanya boleh mengubah brand-nya sendiri, sama dengan aturan baca di GetBrand.
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil && int64(id) != *scoped {
-		writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 		return
 	}
 
 	badan, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maksBadanBrand))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	var req UpdateBrandRequest
 	if err := json.Unmarshal(badan, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	// Nominal yang tidak dikirim berarti tidak diubah (keputusan 11 November 2026). Dulu field yang
@@ -290,28 +290,28 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	lama, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+			writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 			return
 		}
 		log.Printf("[ERROR] brand.Update baca brand: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil brand")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil brand.")
 		return
 	}
 	if err := pertahankanNominalKosong(badan, &req, lama); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if req.MinimalDP < 0 {
-		writeError(w, http.StatusBadRequest, "minimal_dp tidak boleh negatif")
+		writeError(w, http.StatusBadRequest, "Minimal DP tidak boleh negatif.")
 		return
 	}
 	if req.CashbackAlumni < 0 {
-		writeError(w, http.StatusBadRequest, "cashback_alumni tidak boleh negatif")
+		writeError(w, http.StatusBadRequest, "Cashback alumni tidak boleh negatif.")
 		return
 	}
 	if req.UjrohClosing < 0 || req.UjrohPembinaan < 0 || req.UjrohRepeatBooking < 0 {
-		writeError(w, http.StatusBadRequest, "nominal ujroh tidak boleh negatif")
+		writeError(w, http.StatusBadRequest, "Nominal ujroh tidak boleh negatif.")
 		return
 	}
 	if !semuaRupiahBulat(req.MinimalDP, req.CashbackAlumni, req.UjrohClosing, req.UjrohPembinaan, req.UjrohRepeatBooking) {
@@ -326,12 +326,12 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 		req.BatasPelunasanHari = 30
 	}
 	if req.BatasPelunasanHari < 1 || req.BatasPelunasanHari > 365 {
-		writeError(w, http.StatusBadRequest, "batas_pelunasan_hari harus antara 1 dan 365")
+		writeError(w, http.StatusBadRequest, "Batas pelunasan harus antara 1 dan 365.")
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name wajib diisi")
+		writeError(w, http.StatusBadRequest, "Name wajib diisi.")
 		return
 	}
 
@@ -339,17 +339,17 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 		kb := strings.ToUpper(strings.TrimSpace(*req.KodeBrand))
 		if kb != "" {
 			if len(kb) != 2 {
-				writeError(w, http.StatusBadRequest, "kode_brand harus persis 2 karakter")
+				writeError(w, http.StatusBadRequest, "Kode brand harus persis 2 karakter.")
 				return
 			}
 			existing, err := h.repo.GetByKodeBrand(r.Context(), kb)
 			if err != nil {
 				log.Printf("[ERROR] brand: %v", err)
-				writeError(w, http.StatusInternalServerError, "gagal mengecek kode brand")
+				writeError(w, http.StatusInternalServerError, "Gagal mengecek kode brand.")
 				return
 			}
 			if existing != nil && existing.ID != id {
-				writeError(w, http.StatusConflict, "kode brand sudah digunakan oleh brand lain")
+				writeError(w, http.StatusConflict, "Kode brand sudah digunakan oleh brand lain.")
 				return
 			}
 			req.KodeBrand = &kb
@@ -360,7 +360,7 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 
 	if req.PrimaryColor != nil && *req.PrimaryColor != "" {
 		if !hexColorRegex.MatchString(*req.PrimaryColor) {
-			writeError(w, http.StatusBadRequest, "primary_color harus format hex, contoh #1B3A6B")
+			writeError(w, http.StatusBadRequest, "Warna utama harus berformat hex.")
 			return
 		}
 	}
@@ -369,17 +369,17 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 		domainVal := strings.TrimSpace(strings.ToLower(*req.Domain))
 		if domainVal != "" {
 			if !domainRegex.MatchString(domainVal) {
-				writeError(w, http.StatusBadRequest, "format domain tidak valid")
+				writeError(w, http.StatusBadRequest, "Format domain tidak valid.")
 				return
 			}
 			existing, err := h.repo.GetByDomain(r.Context(), domainVal)
 			if err != nil {
 				log.Printf("[ERROR] brand: %v", err)
-				writeError(w, http.StatusInternalServerError, "gagal mengecek domain")
+				writeError(w, http.StatusInternalServerError, "Gagal mengecek domain.")
 				return
 			}
 			if existing != nil && existing.ID != id {
-				writeError(w, http.StatusConflict, "domain sudah dipakai brand lain")
+				writeError(w, http.StatusConflict, "Domain sudah dipakai brand lain.")
 				return
 			}
 			req.Domain = &domainVal
@@ -397,7 +397,7 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	req.GmapsURL = sanitizeString(req.GmapsURL)
 	req.JamKantor = sanitizeString(req.JamKantor)
 	if req.JamKantor != nil && utf8.RuneCountInString(*req.JamKantor) > 100 {
-		writeError(w, http.StatusBadRequest, "jam kantor maksimal 100 karakter")
+		writeError(w, http.StatusBadRequest, "Jam kantor maksimal 100 karakter.")
 		return
 	}
 	req.Legalitas = sanitizeString(req.Legalitas)
@@ -425,20 +425,20 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 	validDP, dpErr := h.repo.ValidateMinimalDP(r.Context(), id, req.MinimalDP)
 	if dpErr != nil {
 		log.Printf("[ERROR] brand: %v", dpErr)
-		writeError(w, http.StatusInternalServerError, "gagal memeriksa DP paket")
+		writeError(w, http.StatusInternalServerError, "Gagal memeriksa DP paket.")
 		return
 	}
 	if !validDP {
-		writeError(w, http.StatusBadRequest, "DP brand melebihi harga paket yang mengikuti DP brand")
+		writeError(w, http.StatusBadRequest, "DP brand melebihi harga paket yang mengikuti DP brand.")
 		return
 	}
 	b, err := h.repo.Update(r.Context(), id, req, identity.GetAdminUserID(r.Context()))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+			writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "gagal mengupdate brand")
+		writeError(w, http.StatusInternalServerError, "Gagal mengupdate brand.")
 		return
 	}
 
@@ -448,25 +448,25 @@ func (h *Handler) UpdateBrand(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteBrand(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return
 	}
 	if identity.GetBrandID(r.Context()) != nil {
-		writeError(w, http.StatusForbidden, "hanya pengguna Holding yang dapat menghapus brand")
+		writeError(w, http.StatusForbidden, "Hanya pengguna Holding yang dapat menghapus brand.")
 		return
 	}
 
 	err = h.repo.Delete(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+			writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 			return
 		}
 		if errors.Is(err, ErrInUse) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "gagal menghapus brand")
+		writeError(w, http.StatusInternalServerError, "Gagal menghapus brand.")
 		return
 	}
 
@@ -476,18 +476,18 @@ func (h *Handler) DeleteBrand(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 	domain := r.URL.Query().Get("domain")
 	if strings.TrimSpace(domain) == "" {
-		writeError(w, http.StatusBadRequest, "parameter domain wajib diisi")
+		writeError(w, http.StatusBadRequest, "Parameter domain wajib diisi.")
 		return
 	}
 
 	b, err := h.repo.GetByDomain(r.Context(), domain)
 	if err != nil {
 		log.Printf("[ERROR] brand: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data brand")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data brand.")
 		return
 	}
 	if b == nil {
-		writeError(w, http.StatusNotFound, "brand tidak ditemukan untuk domain ini")
+		writeError(w, http.StatusNotFound, "Brand tidak ditemukan untuk domain ini.")
 		return
 	}
 
@@ -573,7 +573,7 @@ func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 		// Fallback untuk super admin atau testing: ambil brand pertama yang ada
 		brands, listErr := h.repo.List(r.Context())
 		if listErr != nil || len(brands) == 0 {
-			writeError(w, http.StatusNotFound, "belum ada data brand")
+			writeError(w, http.StatusNotFound, "Belum ada data brand.")
 			return
 		}
 		b = &brands[0]
@@ -581,10 +581,10 @@ func (h *Handler) GetMyBrand(w http.ResponseWriter, r *http.Request) {
 		b, err = h.repo.GetByID(r.Context(), uint64(*brandID))
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+				writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "gagal mengambil data brand")
+			writeError(w, http.StatusInternalServerError, "Gagal mengambil data brand.")
 			return
 		}
 	}
@@ -645,18 +645,18 @@ func semuaRupiahBulat(nilai ...float64) bool {
 // bisa dipakai untuk tautan wa.me.
 func normalizeAgenSettings(w http.ResponseWriter, biaya *float64, noWA **string) bool {
 	if *biaya < 0 {
-		writeError(w, http.StatusBadRequest, "biaya_pendaftaran_agen tidak boleh kurang dari 0")
+		writeError(w, http.StatusBadRequest, "Biaya pendaftaran agen tidak boleh kurang dari 0.")
 		return false
 	}
 	if !shared.RupiahBulat(*biaya) {
-		writeError(w, http.StatusBadRequest, "biaya_pendaftaran_agen harus bilangan bulat rupiah")
+		writeError(w, http.StatusBadRequest, "Biaya pendaftaran agen harus bilangan bulat rupiah.")
 		return false
 	}
 	*noWA = sanitizeString(*noWA)
 	if *noWA != nil {
 		canonical, _ := shared.PhoneVariants(**noWA)
 		if len(canonical) < 9 || len(canonical) > 15 {
-			writeError(w, http.StatusBadRequest, "no_wa_admin_travel tidak valid")
+			writeError(w, http.StatusBadRequest, "Nomor WhatsApp admin tidak valid.")
 			return false
 		}
 		*noWA = &canonical
@@ -685,7 +685,7 @@ func rapikanKontenAgen(w http.ResponseWriter, sk, gambar, benefit, mou **string)
 			continue
 		}
 		if len(bersih) > maksHTMLAgen {
-			writeError(w, http.StatusBadRequest, "syarat & ketentuan atau MoU agen terlalu panjang")
+			writeError(w, http.StatusBadRequest, "Syarat & ketentuan atau MoU agen terlalu panjang.")
 			return false
 		}
 		*p = &bersih
@@ -699,7 +699,7 @@ func rapikanKontenAgen(w http.ResponseWriter, sk, gambar, benefit, mou **string)
 		}
 		gabung := strings.Join(baris, "\n")
 		if utf8.RuneCountInString(gabung) > maksBenefitAgen {
-			writeError(w, http.StatusBadRequest, "benefit agen maksimal 3000 karakter")
+			writeError(w, http.StatusBadRequest, "Benefit agen maksimal 3000 karakter.")
 			return false
 		}
 		if gabung == "" {
@@ -712,7 +712,7 @@ func rapikanKontenAgen(w http.ResponseWriter, sk, gambar, benefit, mou **string)
 	if *gambar != nil {
 		g := **gambar
 		if len(g) > maksGambarAgenURL || !(strings.HasPrefix(g, "/uploads/") || strings.HasPrefix(g, "https://")) {
-			writeError(w, http.StatusBadRequest, "gambar rekrutmen agen harus diunggah lewat ERP")
+			writeError(w, http.StatusBadRequest, "Gambar rekrutmen agen harus diunggah lewat ERP.")
 			return false
 		}
 	}
