@@ -15,6 +15,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-sql-driver/mysql"
+
+	"erp-azhan/api/internal/shared"
 )
 
 var (
@@ -147,6 +149,16 @@ func (in *Input) validasi() error {
 	in.Ringkas = strings.TrimSpace(in.Ringkas)
 	in.FotoURL = strings.TrimSpace(in.FotoURL)
 	in.NamaLengkap, in.Deskripsi, in.Alamat, in.JamBuka, in.GmapsURL = opsional(in.NamaLengkap), opsional(in.Deskripsi), opsional(in.Alamat), opsional(in.JamBuka), opsional(in.GmapsURL)
+	// The description comes from the admin editor as limited HTML (judul, tebal, miring, daftar): keep only the safe
+	// tags, and store an empty editor as NULL.
+	if in.Deskripsi != nil {
+		bersih := shared.SanitasiHTML(*in.Deskripsi)
+		if shared.HTMLKosong(bersih) {
+			in.Deskripsi = nil
+		} else {
+			in.Deskripsi = &bersih
+		}
+	}
 	switch {
 	case in.Nama == "":
 		return galat("Nama wajib diisi")
@@ -164,8 +176,8 @@ func (in *Input) validasi() error {
 		return galat("Ringkasan wajib diisi")
 	case panjang(in.Ringkas) > 100:
 		return galat("Ringkasan maksimal 100 karakter")
-	case in.Deskripsi != nil && panjang(*in.Deskripsi) > 5000:
-		return galat("Deskripsi maksimal 5.000 karakter")
+	case in.Deskripsi != nil && panjang(*in.Deskripsi) > maksDeskripsi:
+		return galat("Deskripsi terlalu panjang")
 	case in.Alamat != nil && panjang(*in.Alamat) > 300:
 		return galat("Alamat maksimal 300 karakter")
 	case in.JamBuka != nil && panjang(*in.JamBuka) > 60:
@@ -186,6 +198,9 @@ func (in *Input) validasi() error {
 	}
 	return nil
 }
+
+// maksDeskripsi counts the stored HTML, tags included.
+const maksDeskripsi = 8000
 
 const kolomTempat = `t.id, t.nama, t.nama_lengkap, t.kategori, t.kota, t.foto_url, t.galeri, t.ringkas, t.deskripsi, t.alamat,
 	t.jam_buka, t.gmaps_url, t.populer, t.aktif, t.urutan,
