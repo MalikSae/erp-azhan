@@ -40,6 +40,7 @@ import (
 	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
+	"erp-azhan/api/internal/manasik"
 	"erp-azhan/api/internal/pengumuman"
 	"erp-azhan/api/internal/perlengkapan"
 	"erp-azhan/api/internal/rbac"
@@ -198,6 +199,7 @@ func main() {
 	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
 	jamaahAkunHandler := customer.NewJamaahAkun(db, customerRepo, mailer.NewFromEnv())
 	pengumumanHandler := pengumuman.NewHandler(db)
+	manasikHandler := manasik.NewHandler(db)
 	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
@@ -309,6 +311,11 @@ func main() {
 		r.Get("/bookings/{id}/surat", customerOrders.SuratDaftar)
 		r.Get("/bookings/{id}/surat/{jenis}", customerOrders.SuratUnduh)
 		r.Put("/bookings/{id}/jamaah/{jamaah_id}", customerOrders.SimpanDataJamaah)
+		r.Get("/bookings/{id}/perlengkapan", customerOrders.Perlengkapan)
+		r.Post("/bookings/{id}/perlengkapan/ajukan", customerOrders.AjukanPerlengkapan)
+		r.Post("/bookings/{id}/perlengkapan/terima", customerOrders.TerimaPerlengkapan)
+		r.Get("/bookings/{id}/manasik", manasikHandler.Booking)
+		r.Put("/bookings/{id}/manasik/rsvp", manasikHandler.RSVP)
 		r.Get("/bookings/{id}/payments", customerOrders.ListPayments)
 		r.Post("/bookings/{id}/payments", customerOrders.CreatePayment)
 		r.Post("/media/upload", mediaHandler.UploadPortalMedia)
@@ -457,6 +464,20 @@ func main() {
 		scheduleEdit.Delete("/schedules/{id}", scheduleHandler.DeleteSchedule)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/schedules/{id}/perlengkapan", perlengkapanHandler.GetScheduleSet)
 		scheduleEdit.Put("/schedules/{id}/perlengkapan", perlengkapanHandler.PutScheduleSet)
+		scheduleView.Get("/schedules/{id}/manasik", manasikHandler.UntukPaket)
+
+		// Manasik: satu manasik untuk satu atau lebih paket, rekap kehadiran, dan absensi hari-H.
+		manasikView := r.With(identity.RequirePermission("manasik.view"))
+		manasikEdit := r.With(identity.RequirePermission("manasik.edit"))
+		manasikView.Get("/manasik", manasikHandler.Daftar)
+		manasikEdit.Get("/manasik/paket-tersedia", manasikHandler.PaketTersedia)
+		manasikEdit.Post("/manasik", manasikHandler.Buat)
+		manasikView.Get("/manasik/{id}", manasikHandler.Detail)
+		manasikEdit.Put("/manasik/{id}", manasikHandler.Ubah)
+		manasikEdit.Delete("/manasik/{id}", manasikHandler.Hapus)
+		manasikEdit.Post("/manasik/{id}/paket", manasikHandler.TambahPaket)
+		manasikEdit.Delete("/manasik/{id}/paket/{schedule_id}", manasikHandler.LepasPaket)
+		manasikEdit.Put("/manasik/{id}/absensi", manasikHandler.Absensi)
 
 		// Jamaah
 		jamaahView := r.With(identity.RequirePermission("jamaah.view"))
@@ -510,6 +531,7 @@ func main() {
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-stok", perlengkapanHandler.ListStok)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Put("/perlengkapan-stok/{item_id}", perlengkapanHandler.UpdateStok)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-mutasi", perlengkapanHandler.ListMutasi)
+		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-pengajuan", perlengkapanHandler.ListPengajuan)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Post("/perlengkapan-mutasi/pembelian", perlengkapanHandler.Pembelian)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Post("/perlengkapan-mutasi/koreksi", perlengkapanHandler.Koreksi)
 
