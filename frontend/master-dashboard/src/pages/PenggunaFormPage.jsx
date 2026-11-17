@@ -227,10 +227,10 @@ const PenggunaFormPage = () => {
     try {
       if (isEdit) {
         await updateAdminUser(id, payload);
-        navigate('/users', { state: { successMessage: `Pengguna "${payload.display_name}" berhasil diperbarui.` } });
+        navigate('/users', { state: { successMessage: "Perubahan disimpan." } });
       } else {
         await createAdminUser({ ...payload, password: form.password.trim() });
-        navigate('/users', { state: { successMessage: `Pengguna "${payload.display_name}" berhasil ditambahkan.` } });
+        navigate('/users', { state: { successMessage: "Pengguna ditambahkan." } });
       }
     } catch (error) {
       setSubmitError(errMsg(error, 'Pengguna gagal disimpan. Coba lagi.'));
@@ -334,7 +334,7 @@ const PenggunaFormPage = () => {
               ) : null}
             </div>
             {!isEdit && (
-              <Input label="Password" type="password" required value={form.password}
+              <Input label="Kata sandi" type="password" required value={form.password}
                 onChange={(e) => setForm(p => ({ ...p, password: e.target.value }))} />
             )}
           </Panel>
@@ -508,7 +508,7 @@ const PenggunaFormPage = () => {
         <div className="space-y-4">
           {actionError && <Alert variant="error">{actionError}</Alert>}
           {actionModal === 'password' && (
-            <Input label="Password Baru" type="password" required value={newPassword}
+            <Input label="Kata sandi baru" type="password" required value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)} autoFocus />
           )}
           {actionModal === 'status' && (

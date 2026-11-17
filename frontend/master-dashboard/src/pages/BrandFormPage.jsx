@@ -339,7 +339,7 @@ const BrandFormPage = () => {
       if (err.response?.data?.error) {
         setFormErrors(err.response.data.error);
       } else {
-        setFormErrors("Terjadi kesalahan saat menyimpan data brand. Coba lagi.");
+        setFormErrors("Brand gagal disimpan. Coba lagi.");
       }
     } finally {
       setIsSubmitting(false);

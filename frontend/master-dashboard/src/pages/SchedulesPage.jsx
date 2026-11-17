@@ -490,7 +490,7 @@ const SchedulesPage = () => {
               type="text"
               value={inputConfirmCode}
               onChange={(e) => setInputConfirmCode(e.target.value)}
-              placeholder="Ketik kode di atas untuk konfirmasi"
+             
               className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-md focus:outline-none focus:ring-1 focus:ring-danger-500 focus:border-danger-500 font-mono tracking-wider text-neutral-900 bg-white"
               autoFocus
             />

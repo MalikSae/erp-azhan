@@ -395,7 +395,7 @@ const ScheduleDetailPage = () => {
     const hargaMulai = [schedule.harga_quad, schedule.harga_triple, schedule.harga_double]
       .map(Number).filter(v => v > 0).sort((a, b) => a - b)[0];
     const catatanHarga = [
-      Number(schedule.minimal_dp) > 0 ? `Uang muka minimal ${formatRupiah(schedule.minimal_dp)}` : '',
+      Number(schedule.minimal_dp) > 0 ? `DP minimal ${formatRupiah(schedule.minimal_dp)}` : '',
     ].filter(Boolean).join(' · ');
 
     printPackage({

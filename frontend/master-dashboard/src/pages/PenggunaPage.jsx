@@ -268,9 +268,9 @@ const PenggunaPage = () => {
       >
         <form onSubmit={handleReset} className="space-y-1">
           {resetError && <Alert variant="error" className="mb-4">{resetError}</Alert>}
-          <Input label="Password Baru" type="password" required value={resetForm.password}
+          <Input label="Kata sandi baru" type="password" required value={resetForm.password}
             onChange={(e) => setResetForm(p => ({ ...p, password: e.target.value }))} autoFocus />
-          <Input label="Konfirmasi Password Baru" type="password" required value={resetForm.confirm}
+          <Input label="Konfirmasi kata sandi baru" type="password" required value={resetForm.confirm}
             onChange={(e) => setResetForm(p => ({ ...p, confirm: e.target.value }))} />
           <p className="text-xs font-body text-neutral-500 pb-2">Semua sesi pengguna ini akan dicabut; ia perlu login ulang dengan kata sandi baru.</p>
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
