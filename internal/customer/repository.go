@@ -63,6 +63,21 @@ type Repository struct{ db *sql.DB }
 
 func NewRepository(db *sql.DB) *Repository { return &Repository{db: db} }
 
+// KodeAgenDipakai memilih kode agen untuk akun baru di app. Kode ketik tidak kosong menang atas kode otomatis
+// dan harus milik agen aktif di brand ini (ok=false bila tidak); kosong = kode otomatis apa adanya, yang tidak
+// valid diabaikan diam-diam oleh Create.
+func (r *Repository) KodeAgenDipakai(ctx context.Context, brandID int64, ketik, otomatis string) (kode string, ok bool, err error) {
+	ketik = strings.TrimSpace(ketik)
+	if ketik == "" {
+		return otomatis, true, nil
+	}
+	id, err := agen.ResolveKodeReferral(ctx, r.db, brandID, ketik)
+	if err != nil {
+		return "", false, err
+	}
+	return ketik, id != 0, nil
+}
+
 // NormalizeEmail: huruf kecil dan tanpa spasi tepi. Dipakai untuk kunci unik per brand.
 func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 

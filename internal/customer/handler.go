@@ -183,6 +183,8 @@ type registerRequest struct {
 	// KodeReferral diisi route handler web publik dari cookie azhan_ref (klik terakhir, 90 hari), bukan dari input
 	// pengguna. Hanya dibaca di sini, saat akun dibuat: akun terikat ke agen pemilik kode (spek 4.1).
 	KodeReferral string `json:"kode_referral"`
+	// KodeAgen kode yang diketik jamaah di form daftar app. Hanya dibaca RegisterApp; menang atas KodeReferral.
+	KodeAgen string `json:"kode_agen"`
 	// Biodata opsional (dipakai form daftar app, keputusan 14 November 2026): jenis kelamin L/P, domisili,
 	// dan tanggal lahir YYYY-MM-DD. Kosong = tidak diisi.
 	JenisKelamin string `json:"jenis_kelamin"`
@@ -193,6 +195,8 @@ type registerRequest struct {
 // modeDaftar membedakan pendaftaran akun biasa dari pendaftaran lewat form agen (K2): form agen tanpa captcha.
 type modeDaftar struct {
 	captcha bool
+	// kodeAgenKetik: baca kode_agen dari body. Hanya true untuk RegisterApp.
+	kodeAgenKetik bool
 }
 
 // Register POST /api/public/auth/register
@@ -204,7 +208,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 // captcha web, jadi endpoint ini tanpa captcha dan hanya dibatasi pembatas per IP (keputusan 14 November 2026).
 // Verifikasi perangkat (Play Integrity / App Attest) direncanakan sebelum rilis di toko aplikasi.
 func (h *Handler) RegisterApp(w http.ResponseWriter, r *http.Request) {
-	h.daftar(w, r, modeDaftar{})
+	h.daftar(w, r, modeDaftar{kodeAgenKetik: true})
 }
 
 // RegisterAgen POST /api/public/auth/register-agen: akun untuk calon agen. Pembatas per IP tetap berlaku.
@@ -258,13 +262,27 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	kodeAgen := req.KodeReferral
+	if mode.kodeAgenKetik {
+		kode, ok, err := h.repo.KodeAgenDipakai(r.Context(), req.BrandID, req.KodeAgen, req.KodeReferral)
+		if err != nil {
+			log.Printf("[ERROR] customer kode agen: %v", err)
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+			return
+		}
+		if !ok {
+			writeError(w, http.StatusBadRequest, "Kode agen tidak ditemukan")
+			return
+		}
+		kodeAgen = kode
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
 		log.Printf("[ERROR] customer hash: %v", err)
 		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
-	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), req.KodeReferral, bio)
+	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), kodeAgen, bio)
 	if errors.Is(err, ErrEmailTaken) {
 		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
 		// Penebakan email tetap dibatasi captcha + registerIPLimit.
