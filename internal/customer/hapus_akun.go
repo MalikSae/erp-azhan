@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"erp-azhan/api/internal/tabungan"
 )
 
 // HapusAkunView: apakah akun boleh dihapus sendiri, dan alasannya bila tidak.
@@ -64,6 +66,10 @@ func anonimkanAkun(ctx context.Context, tx *sql.Tx, akunID int64) error {
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE customer_tokens SET used_at = NOW() WHERE account_id = ? AND used_at IS NULL`, akunID); err != nil {
 		return fmt.Errorf("customer: cabut token: %w", err)
+	}
+	// Tabungan Umroh dan token push adalah data pribadi akun; baris akun tidak dihapus sehingga ON DELETE CASCADE tidak jalan.
+	if err := tabungan.HapusDataAkun(ctx, tx, akunID); err != nil {
+		return err
 	}
 	return nil
 }

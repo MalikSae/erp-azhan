@@ -41,6 +41,7 @@ import (
 	"erp-azhan/api/internal/manasik"
 	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/notifikasi"
+	"erp-azhan/api/internal/tabungan"
 	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
 	"erp-azhan/api/internal/pengumuman"
@@ -208,6 +209,7 @@ func main() {
 	manasikHandler := manasik.NewHandler(db)
 	bannerHandler := banner.NewHandler(db)
 	notifikasiHandler := notifikasi.NewHandler(db)
+	tabunganHandler := tabungan.NewHandler(db)
 	haramainHandler := haramain.NewHandler(db)
 	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
@@ -325,6 +327,13 @@ func main() {
 		r.Post("/notifikasi/baca-semua", notifikasiHandler.BacaSemua)
 		r.Post("/notifikasi/{id}/baca", notifikasiHandler.Baca)
 		r.Get("/notifikasi/pengumuman/{id}", notifikasiHandler.Pengumuman)
+		r.Get("/tabungan", tabunganHandler.Ambil)
+		r.Put("/tabungan/target", tabunganHandler.SimpanTarget)
+		r.Delete("/tabungan/target", tabunganHandler.HapusTarget)
+		r.Post("/tabungan/catatan", tabunganHandler.TambahCatatan)
+		r.Delete("/tabungan/catatan/{id}", tabunganHandler.HapusCatatan)
+		r.Put("/perangkat-push", tabunganHandler.SimpanPerangkat)
+		r.Delete("/perangkat-push", tabunganHandler.HapusPerangkat)
 		r.Get("/jamaah/{id}", jamaahAkunHandler.Detail)
 		r.Put("/jamaah/{id}", jamaahAkunHandler.Simpan)
 		r.Get("/bookings", customerOrders.List)
