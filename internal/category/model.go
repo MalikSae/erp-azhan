@@ -69,6 +69,10 @@ type CreateCategoryRequest struct {
 }
 
 // UpdateCategoryRequest payload untuk mengubah kategori.
+// SlugLowCost: kategori low cost. App Hana mengenali paket low cost dari slug ini (strip Beranda, filter tab
+// Paket), jadi kategori ini tidak bisa dihapus, dinonaktifkan, atau diganti slug-nya; namanya bebas diganti.
+const SlugLowCost = "hemat"
+
 type UpdateCategoryRequest struct {
 	Name        string  `json:"name"`
 	Slug        string  `json:"slug"`

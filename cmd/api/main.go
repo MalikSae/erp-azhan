@@ -24,6 +24,7 @@ import (
 	"erp-azhan/api/internal/airport"
 	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/bankaccount"
+	"erp-azhan/api/internal/banner"
 	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
@@ -200,6 +201,7 @@ func main() {
 	jamaahAkunHandler := customer.NewJamaahAkun(db, customerRepo, mailer.NewFromEnv())
 	pengumumanHandler := pengumuman.NewHandler(db)
 	manasikHandler := manasik.NewHandler(db)
+	bannerHandler := banner.NewHandler(db)
 	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
@@ -228,6 +230,9 @@ func main() {
 	publicV1.Get("/api/public/v1/sitemap-feed", scheduleHandler.SitemapFeedV1)
 	// Rentang komisi agen dari jadwal tayang untuk landing /jadi-agen (spek keagenan K23).
 	publicV1.Get("/api/public/v1/agen/ujroh", agenHandler.UjrohPublik)
+	// Banner Promosi Beranda app (maks 5 banner tayang).
+	publicV1.Get("/api/public/v1/promosi", bannerHandler.Promosi)
+	r.With(requireDB(db)).Post("/api/public/promosi/{id}/klik", bannerHandler.Klik)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: categories & brand & bank accounts
@@ -566,6 +571,14 @@ func main() {
 		})
 
 		// Pengumuman untuk pelanggan (tampil di dashboard akun web).
+		r.Route("/banner-promosi", func(r chi.Router) {
+			r.Use(identity.RequirePermission("banner.manage"))
+			r.Get("/", bannerHandler.Daftar)
+			r.Post("/", bannerHandler.Buat)
+			r.Put("/urutan", bannerHandler.Urutkan)
+			r.Put("/{id}", bannerHandler.Ubah)
+			r.Delete("/{id}", bannerHandler.Hapus)
+		})
 		r.Route("/pengumuman", func(r chi.Router) {
 			r.Use(identity.RequirePermission("pengumuman.manage"))
 			r.Get("/", pengumumanHandler.DaftarAdmin)
