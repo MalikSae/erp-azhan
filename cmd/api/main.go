@@ -184,6 +184,11 @@ func main() {
 	if db != nil {
 		go runSeatHoldExpiry(crmDealRepo)
 		go notifikasi.JalankanPengingat(context.Background(), db, time.Minute)
+		if v := strings.ToLower(strings.TrimSpace(os.Getenv("PELUNASAN_AUTO_BATAL"))); v == "false" || v == "0" || v == "off" {
+			log.Printf("[INFO] pembatalan otomatis lewat batas pelunasan DIMATIKAN (PELUNASAN_AUTO_BATAL=%s)", v)
+		} else {
+			go runPelunasanExpiry(bookingRepo, db)
+		}
 	}
 
 	dokumenRepo := dokumen.NewRepository(db)
@@ -722,6 +727,31 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// runPelunasanExpiry membatalkan booking dp yang melewati tenggat lunas dan memberi tahu pemiliknya. Hari tenggat masih
+// termasuk; pembayaran yang sudah masuk tidak disentuh (urusan keuangan ditangani manual). Dimatikan dengan
+// PELUNASAN_AUTO_BATAL=false.
+func runPelunasanExpiry(repo *booking.Repository, db *sql.DB) {
+	jalan := func() {
+		ids, err := repo.BatalkanLewatBatasPelunasan(context.Background(), time.Now())
+		if err != nil {
+			log.Printf("[WARN] Gagal membatalkan booking lewat batas pelunasan: %v", err)
+			return
+		}
+		for _, id := range ids {
+			notifikasi.BookingBatalJatuhTempo(context.Background(), db, id)
+		}
+		if len(ids) > 0 {
+			log.Printf("[INFO] Booking dibatalkan karena lewat batas pelunasan: %v", ids)
+		}
+	}
+	jalan()
+	ticker := time.NewTicker(15 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		jalan()
+	}
 }
 
 func runSeatHoldExpiry(repo *crmdeal.Repository) {

@@ -44,10 +44,16 @@ type orderSummary struct {
 	PulangTanggal    string `json:"pulang_tanggal"`
 	// Rute: bandara asal dan tujuan penerbangan berangkat, misalnya "CGK → JED"; kosong bila jadwal belum mengisinya.
 	Rute string `json:"rute"`
-	// BatasPelunasan: tanggal berangkat dikurangi batas_pelunasan_hari brand (sama dengan hitungan saat booking dibuat).
+	// BatasPelunasan: tenggat lunas yang disimpan saat booking dibuat (berangkat dikurangi batas_pelunasan_hari brand, tidak
+	// lebih awal dari hari booking dibuat); booking tanpa checkout memakai hitungan yang sama. Lewat hari ini tanpa lunas,
+	// booking dibatalkan otomatis.
 	BatasPelunasan string `json:"batas_pelunasan"`
 	// JumlahJamaah: jamaah aktif termasuk bayi (bayi tidak memakai seat, jadi bisa lebih dari seat_count).
-	JumlahJamaah       int        `json:"jumlah_jamaah"`
+	JumlahJamaah int `json:"jumlah_jamaah"`
+	// PemesanIkut: pemilik akun ikut berangkat; null pada booking lama yang belum mencatatnya. JamaahPertama: nama
+	// jamaah pertama (PIC), pembeda booking di daftar bila satu akun memesan untuk beberapa keluarga.
+	PemesanIkut        *bool      `json:"pemesan_ikut"`
+	JamaahPertama      string     `json:"jamaah_pertama"`
 	SeatCount          int        `json:"seat_count"`
 	TotalHarga         float64    `json:"total_harga"`
 	MinimalDP          float64    `json:"minimal_dp"`
@@ -67,13 +73,15 @@ type orderSummary struct {
 const orderSelect = `
 	SELECT b.id, b.id_booking, b.status, b.schedule_id, s.jadwal_nama, DATE_FORMAT(s.berangkat_tanggal,'%Y-%m-%d'),
 	       DATE_FORMAT(s.pulang_tanggal,'%Y-%m-%d'), COALESCE(s.berangkat_bandara_asal,''), COALESCE(s.berangkat_bandara_tujuan,''),
-	       DATE_FORMAT(DATE_SUB(s.berangkat_tanggal, INTERVAL COALESCE(br.batas_pelunasan_hari,0) DAY),'%Y-%m-%d'),
+	       COALESCE(DATE_FORMAT(c.due_at,'%Y-%m-%d'), DATE_FORMAT(DATE_SUB(s.berangkat_tanggal, INTERVAL COALESCE(br.batas_pelunasan_hari,0) DAY),'%Y-%m-%d')),
 	       (SELECT COUNT(*) FROM booking_pax bpx WHERE bpx.booking_id = b.id AND bpx.pax_status = 'aktif'),
 	       b.seat_count, COALESCE(b.total_harga,0), b.is_seat_blocked, b.seat_hold_expires_at,
 	       c.due_at, COALESCE(c.dp_per_pax,0), COALESCE(c.full_payment,FALSE), b.created_at,
 	       COALESCE(SUM(CASE WHEN p.status='confirmed' THEN p.jumlah END),0),
 	       COALESCE(SUM(CASE WHEN p.status='pending' THEN p.jumlah END),0),
-	       COUNT(p.id)
+	       COUNT(p.id),
+	       b.pemesan_ikut,
+	       COALESCE((SELECT j.nama_lengkap FROM jamaah j WHERE j.id = b.pic_jamaah_id), '')
 	FROM bookings b
 	JOIN schedules s ON s.id = b.schedule_id
 	LEFT JOIN brands br ON br.id = s.brand_id
@@ -88,11 +96,16 @@ func scanOrder(row interface{ Scan(...any) error }) (*orderSummary, int, error) 
 	var dpPerPax float64
 	var paymentCount int
 	var asal, tujuan string
+	var ikut sql.NullBool
 	if err := row.Scan(&o.ID, &o.BookingCode, &o.Status, &o.ScheduleID, &o.JadwalNama, &o.BerangkatTanggal,
 		&o.PulangTanggal, &asal, &tujuan, &o.BatasPelunasan, &o.JumlahJamaah,
 		&o.SeatCount, &o.TotalHarga, &blocked, &hold, &due, &dpPerPax, &o.FullPayment, &o.CreatedAt,
-		&o.Terbayar, &o.MenungguVerifikasi, &paymentCount); err != nil {
+		&o.Terbayar, &o.MenungguVerifikasi, &paymentCount, &ikut, &o.JamaahPertama); err != nil {
 		return nil, 0, err
+	}
+	if ikut.Valid {
+		v := ikut.Bool
+		o.PemesanIkut = &v
 	}
 	o.Rute = susunRute(asal, tujuan)
 	if hold.Valid {

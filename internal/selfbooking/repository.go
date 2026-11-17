@@ -426,11 +426,15 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		return nil, ErrInvalidDP
 	}
 	totalMinDP := dpPerReguler * float64(regulerPaxCount)
-	fullPayment := !depDate.After(now.AddDate(0, 0, pelunasanHari))
+	// Proses bayar: DP, lalu pembayaran bertahap dengan nominal bebas, lalu lunas paling lambat H-pelunasanHari (hari
+	// itu masih termasuk). Booking yang dibuat dekat tanggal berangkat tetap boleh memakai DP dan pembayaran bertahap;
+	// tenggatnya tidak pernah lebih awal dari hari ini, jadi booking mendesak punya sisa hari ini untuk melunasi.
+	// Lewat tenggat tanpa lunas, booking dibatalkan otomatis (booking.BatalkanLewatBatasPelunasan).
+	fullPayment := false
+	hariIni := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	dueAt := depDate.AddDate(0, 0, -pelunasanHari)
-	if fullPayment {
-		totalMinDP = totalHarga
-		dueAt = seatHoldExpiresAt
+	if dueAt.Before(hariIni) {
+		dueAt = hariIni
 	}
 	if req.ExpectedTotal != nil && (*req.ExpectedTotal != totalHarga || req.ExpectedDP == nil || *req.ExpectedDP != totalMinDP) {
 		return nil, ErrQuoteChanged
