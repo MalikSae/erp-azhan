@@ -19,7 +19,7 @@ import EditorTeks from '../components/EditorTeks';
 
 const KOSONG = {
   nama: '', nama_lengkap: '', kategori: 'masjid', kota: 'makkah', foto_url: '', galeri: [], ringkas: '', deskripsi: '',
-  alamat: '', jam_buka: '', gmaps_url: '', populer: false, aktif: true,
+  alamat: '', gmaps_url: '', populer: false, aktif: true,
 };
 const MAKS_GALERI = 10;
 const valueOf = (v) => (v?.target ? v.target.value : v);
@@ -41,7 +41,7 @@ const HaramainFormPage = () => {
     getHaramain(id)
       .then((t) => setForm({
         nama: t.nama, nama_lengkap: t.nama_lengkap || '', kategori: t.kategori, kota: t.kota, foto_url: t.foto_url, galeri: t.galeri || [],
-        ringkas: t.ringkas, deskripsi: t.deskripsi || '', alamat: t.alamat || '', jam_buka: t.jam_buka || '', gmaps_url: t.gmaps_url || '',
+        ringkas: t.ringkas, deskripsi: t.deskripsi || '', alamat: t.alamat || '', gmaps_url: t.gmaps_url || '',
         populer: t.populer, aktif: t.aktif,
       }))
       .catch((err) => setErrorMessage(err.response?.data?.error || 'Gagal memuat tempat.'))
@@ -174,10 +174,7 @@ const HaramainFormPage = () => {
         <FormSection title="Lokasi">
           <div className="space-y-4">
             <Textarea label="Alamat" name="alamat" rows={2} maxLength={300} value={form.alamat} onChange={ubah('alamat')} />
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <Input label="Jam buka" name="jam_buka" maxLength={60} value={form.jam_buka} onChange={ubah('jam_buka')} placeholder="Buka 24 jam" className="!mb-0" />
-              <Input label="Link Google Maps" name="gmaps_url" maxLength={500} value={form.gmaps_url} onChange={ubah('gmaps_url')} placeholder="https://maps.app.goo.gl/..." className="!mb-0" />
-            </div>
+            <Input label="Link Google Maps" name="gmaps_url" maxLength={500} value={form.gmaps_url} onChange={ubah('gmaps_url')} placeholder="https://maps.app.goo.gl/..." />
           </div>
         </FormSection>
         <FormAside>
