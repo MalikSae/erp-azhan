@@ -22,6 +22,7 @@ import {
 } from '../api/perlengkapan';
 import PerlengkapanSetEditor, { PerlengkapanSetList } from '../components/PerlengkapanSetEditor';
 import HighlightBenefitSection, { JUMLAH_BENEFIT_PAKET } from '../components/HighlightBenefitSection';
+import LokasiDikunjungiSection, { MAKS_LOKASI_PAKET } from '../components/LokasiDikunjungiSection';
 import { listHotels } from '../api/hotels';
 import { listAirlines } from '../api/airlines';
 import { listAirports } from '../api/airports';
@@ -45,6 +46,7 @@ const serverErrorField = (msg) => {
   if (m && SERVER_ERROR_FIELDS.has(m[1])) return m[1];
   if (/nama dan tanggal berangkat/.test(msg || '')) return 'jadwal_nama';
   if (/highlight benefit|^benefit(_ids)? /.test(msg || '')) return 'benefit_ids';
+  if (/(^|\s)lokasi\b/i.test(msg || '')) return 'lokasi_ids';
   return null;
 };
 
@@ -54,6 +56,7 @@ const SECTION_LINKS = [
   { id: 'sec-penerbangan', label: 'Penerbangan' },
   { id: 'sec-hotel', label: 'Hotel' },
   { id: 'sec-benefit', label: 'Benefit' },
+  { id: 'sec-lokasi', label: 'Lokasi' },
   { id: 'sec-fasilitas', label: 'Fasilitas' },
   { id: 'sec-perlengkapan', label: 'Perlengkapan' },
   { id: 'sec-itinerary', label: 'Itinerary' },
@@ -87,6 +90,8 @@ const ScheduleFormPage = () => {
   const [loadFailed, setLoadFailed] = useState(false);
   // Paket tersimpan tetapi set perlengkapan khususnya gagal disimpan (dua panggilan terpisah).
   const [peringatanSimpan, setPeringatanSimpan] = useState(location.state?.peringatanSimpan || null);
+  // Lokasi tersimpan lengkap (nama, foto, aktif) dari detail paket, termasuk tempat nonaktif.
+  const [lokasiTersimpan, setLokasiTersimpan] = useState([]);
 
   // Lookups
   const [hotelOptions, setHotelOptions] = useState([]);
@@ -155,7 +160,9 @@ const ScheduleFormPage = () => {
     program_slug: '',
     destination_id: '',
     // Highlight benefit terpilih, berurutan: [{ id, teks, ikon, is_active }].
-    benefits: []
+    benefits: [],
+    // Lokasi dikunjungi: id tempat Jelajah Haramain, berurutan.
+    lokasi_ids: []
   });
 
   useEffect(() => {
@@ -339,8 +346,10 @@ const ScheduleFormPage = () => {
             journey_type: scheduleData.journey_type || 'umroh',
             program_slug: scheduleData.program_slug || '',
             destination_id: scheduleData.destination_id || scheduleData.destination?.id || '',
-            benefits: (Array.isArray(scheduleData.benefits) ? scheduleData.benefits : []).map(b => ({ id: b.id, teks: b.teks, ikon: b.ikon, is_active: b.is_active !== false }))
+            benefits: (Array.isArray(scheduleData.benefits) ? scheduleData.benefits : []).map(b => ({ id: b.id, teks: b.teks, ikon: b.ikon, is_active: b.is_active !== false })),
+            lokasi_ids: (Array.isArray(scheduleData.lokasi_ids) ? scheduleData.lokasi_ids : []).map(Number)
           };
+          setLokasiTersimpan(Array.isArray(scheduleData.lokasi) ? scheduleData.lokasi : []);
 
           // Salinan: tanggal diisi ulang, seat terisi direset, dan selalu mulai sebagai draft.
           setFormData(isEditMode ? loadedForm : {
@@ -734,6 +743,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
       if (formData.status === 'published' && formData.benefits.length !== JUMLAH_BENEFIT_PAKET) {
         errors.benefit_ids = `Paket yang dijual wajib punya ${JUMLAH_BENEFIT_PAKET} highlight benefit.`;
       }
+      if (formData.lokasi_ids.length > MAKS_LOKASI_PAKET) errors.lokasi_ids = `Lokasi maksimal ${MAKS_LOKASI_PAKET}.`;
       if (Object.keys(errors).length) {
         setFieldErrors(errors); setFormError('Periksa kembali isian paket berikut.'); return;
       }
@@ -807,7 +817,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         exclude_items: excludeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
         brosur_url: formData.brosur_url || '',
         brosur_thumb_url: formData.brosur_thumb_url || '',
-        benefit_ids: formData.benefits.map(b => b.id)
+        benefit_ids: formData.benefits.map(b => b.id),
+        lokasi_ids: formData.lokasi_ids
       };
 
       let savedId = id;
@@ -1564,6 +1575,15 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 value={formData.benefits}
                 onChange={(daftar) => setFormData(prev => ({ ...prev, benefits: daftar }))}
                 error={fieldErrors.benefit_ids}
+              />
+            </FormSection>
+
+            <FormSection id="sec-lokasi" title="Lokasi Dikunjungi">
+              <LokasiDikunjungiSection
+                value={formData.lokasi_ids}
+                tersimpan={lokasiTersimpan}
+                onChange={(ids) => setFormData(prev => ({ ...prev, lokasi_ids: ids }))}
+                error={fieldErrors.lokasi_ids}
               />
             </FormSection>
 

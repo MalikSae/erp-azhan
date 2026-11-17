@@ -39,3 +39,9 @@ export async function deleteSchedule(id) {
   const response = await client.delete(`/api/admin/schedules/${id}`);
   return response.data;
 }
+
+// Pilihan "Lokasi Dikunjungi": tempat Jelajah Haramain yang aktif [{ id, nama, kota, foto_url }].
+export async function getScheduleLokasiOptions() {
+  const response = await client.get('/api/admin/schedules/lokasi-options');
+  return response.data;
+}

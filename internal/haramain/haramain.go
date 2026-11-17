@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 var (
@@ -20,6 +22,8 @@ var (
 	// ErrBelumBerangkat: hanya akun yang jamaahnya sudah berangkat yang boleh menulis ulasan.
 	ErrBelumBerangkat = errors.New("ulasan hanya untuk jamaah yang sudah berangkat")
 	ErrUlasanTidakAda = errors.New("ulasan tidak ditemukan")
+	// ErrDipakaiPaket: a tempat picked as Lokasi Dikunjungi by any paket cannot be deleted.
+	ErrDipakaiPaket = errors.New("Tempat dipakai paket.")
 )
 
 // ErrValidasi membawa pesan yang aman ditampilkan.
@@ -259,27 +263,51 @@ func Buat(ctx context.Context, q querier, adminID int64, in Input) (int64, error
 
 // Ubah memperbarui tempat.
 func Ubah(ctx context.Context, q querier, id, adminID int64, in Input) error {
-	if _, err := Ambil(ctx, q, id, false); err != nil {
+	lama, err := Ambil(ctx, q, id, false)
+	if err != nil {
 		return err
 	}
 	if err := in.validasi(); err != nil {
 		return err
 	}
-	_, err := q.ExecContext(ctx, `
+	_, err = q.ExecContext(ctx, `
 		UPDATE haramain_tempat SET nama = ?, nama_lengkap = ?, kategori = ?, kota = ?, foto_url = ?, galeri = ?, ringkas = ?,
 			deskripsi = ?, alamat = ?, jam_buka = ?, gmaps_url = ?, populer = ?, aktif = ?, diubah_oleh = ?
 		WHERE id = ?`,
 		in.Nama, in.NamaLengkap, in.Kategori, in.Kota, in.FotoURL, jsonDaftar(in.Galeri), in.Ringkas, in.Deskripsi, in.Alamat,
 		in.JamBuka, in.GmapsURL, in.Populer, in.Aktif, adminAtauNull(adminID), id)
-	return err
+	if err != nil {
+		return err
+	}
+	// Paket lokasi fields changed: bump linked pakets for the public updated_since filter.
+	if lama.Nama != in.Nama || lama.Kota != in.Kota || lama.FotoURL != in.FotoURL || lama.Aktif != in.Aktif {
+		if _, err := q.ExecContext(ctx, `
+			UPDATE schedules s JOIN schedule_lokasi sl ON sl.schedule_id = s.id
+			SET s.updated_at = NOW() WHERE sl.tempat_id = ?`, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// Hapus menghapus tempat beserta ulasannya.
+// Hapus menghapus tempat beserta ulasannya. Tempat yang dipakai paket ditolak (ErrDipakaiPaket).
 func Hapus(ctx context.Context, q querier, id int64) error {
 	if _, err := Ambil(ctx, q, id, false); err != nil {
 		return err
 	}
+	var dipakai bool
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM schedule_lokasi WHERE tempat_id = ?)`, id).Scan(&dipakai); err != nil {
+		return err
+	}
+	if dipakai {
+		return ErrDipakaiPaket
+	}
 	_, err := q.ExecContext(ctx, `DELETE FROM haramain_tempat WHERE id = ?`, id)
+	// FK RESTRICT (1451): a paket linked the tempat after the check above.
+	var me *mysql.MySQLError
+	if errors.As(err, &me) && me.Number == 1451 {
+		return ErrDipakaiPaket
+	}
 	return err
 }
 

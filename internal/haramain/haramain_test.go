@@ -3,6 +3,9 @@ package haramain
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -153,5 +156,37 @@ func TestTempatDanUlasan(t *testing.T) {
 	}
 	if err := Hapus(ctx, tx, idMati); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A tempat picked by any paket cannot be deleted; once unlinked it can.
+func TestHapusTempatDipakaiPaket(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	jadwal, _ := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-03-01"})
+	id, err := Buat(ctx, tx, 0, inputSah())
+	if err != nil {
+		t.Fatal(err)
+	}
+	testdb.Exec(t, tx, `INSERT INTO schedule_lokasi (schedule_id, tempat_id, urutan) VALUES (?, ?, 1)`, jadwal, id)
+
+	if err := Hapus(ctx, tx, id); !errors.Is(err, ErrDipakaiPaket) {
+		t.Fatalf("tempat dipakai paket harus ditolak: %v", err)
+	}
+	if _, err := Ambil(ctx, tx, id, false); err != nil {
+		t.Fatalf("tempat tidak boleh terhapus: %v", err)
+	}
+
+	testdb.Exec(t, tx, `DELETE FROM schedule_lokasi WHERE tempat_id = ?`, id)
+	if err := Hapus(ctx, tx, id); err != nil {
+		t.Fatalf("tempat tanpa paket harus bisa dihapus: %v", err)
+	}
+}
+
+func TestTulisGalatDipakaiPaket(t *testing.T) {
+	w := httptest.NewRecorder()
+	tulisGalat(w, ErrDipakaiPaket)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "Tempat dipakai paket.") {
+		t.Fatalf("jawaban %d %s", w.Code, w.Body.String())
 	}
 }

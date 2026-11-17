@@ -41,6 +41,8 @@ func tulisGalat(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrBelumBerangkat):
 		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, ErrDipakaiPaket):
+		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] haramain: %v", err)
 		writeError(w, http.StatusInternalServerError, "gagal memproses data")

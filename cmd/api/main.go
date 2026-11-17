@@ -452,6 +452,8 @@ func main() {
 		// chi mendahulukan segmen statis, jadi "benefit-options" tidak terbaca sebagai id.
 		scheduleView.Get("/schedules/benefit-options", benefitHandler.ListOpsi)
 		scheduleEdit.Post("/schedules/benefit-options", benefitHandler.CreateBenefit)
+		// Lokasi Dikunjungi: active Jelajah Haramain places; static segment, registered before /schedules/{id}.
+		scheduleView.Get("/schedules/lokasi-options", scheduleHandler.ListLokasiOptions)
 		scheduleView.Get("/schedules/{id}", scheduleHandler.GetScheduleAdmin)
 		scheduleView.Get("/schedules/{id}/seat", scheduleHandler.GetScheduleSeat)
 		scheduleEdit.Post("/schedules", scheduleHandler.CreateSchedule)
