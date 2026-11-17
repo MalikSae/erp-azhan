@@ -47,14 +47,14 @@ func tulisGalat(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] manasik: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memproses manasik")
+		writeError(w, http.StatusInternalServerError, "Gagal memproses manasik.")
 	}
 }
 
 func idParam(w http.ResponseWriter, r *http.Request, nama, label string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, nama), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, label+" tidak valid")
+		writeError(w, http.StatusBadRequest, label+" Tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -122,7 +122,7 @@ type buatRequest struct {
 func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 	var req buatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Payload request tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	var id int64
@@ -155,7 +155,7 @@ func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
 	}
 	var in Input
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "Payload request tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := Ubah(r.Context(), h.db, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), in); err != nil {
@@ -188,7 +188,7 @@ func (h *Handler) TambahPaket(w http.ResponseWriter, r *http.Request) {
 		ScheduleIDs []int64 `json:"schedule_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Payload request tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
@@ -232,7 +232,7 @@ func (h *Handler) Absensi(w http.ResponseWriter, r *http.Request) {
 		Hadir *bool `json:"hadir"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PaxID <= 0 || req.Hadir == nil {
-		writeError(w, http.StatusBadRequest, "pax_id dan hadir wajib diisi")
+		writeError(w, http.StatusBadRequest, "Pax dan hadir wajib diisi.")
 		return
 	}
 	if err := CatatHadir(r.Context(), h.db, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), req.PaxID, *req.Hadir, h.now()); err != nil {
@@ -265,7 +265,7 @@ func (h *Handler) Booking(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := UntukBooking(r.Context(), h.db, acc.ID, id, h.now())
 	if errors.Is(err, ErrTidakAda) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
@@ -289,13 +289,13 @@ func (h *Handler) RSVP(w http.ResponseWriter, r *http.Request) {
 	}
 	var req rsvpRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.JamaahID <= 0 || req.Hadir == nil {
-		writeError(w, http.StatusBadRequest, "jamaah_id dan hadir wajib diisi")
+		writeError(w, http.StatusBadRequest, "Jamaah dan hadir wajib diisi.")
 		return
 	}
 	now := h.now()
 	err := SimpanRSVP(r.Context(), h.db, acc.ID, id, req.JamaahID, *req.Hadir, now)
 	if errors.Is(err, ErrTidakAda) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {

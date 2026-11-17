@@ -46,7 +46,7 @@ const BrandSurat = ({ brandId }) => {
         setForm(isian);
         setAwal(isian);
       } catch (err) {
-        if (!batal) setGalat(err?.response?.data?.error || 'Gagal memuat pengaturan surat.');
+        if (!batal) setGalat(err?.response?.data?.error || 'Pengaturan surat gagal dimuat. Coba lagi.');
       } finally {
         if (!batal) setMemuat(false);
       }
@@ -71,7 +71,7 @@ const BrandSurat = ({ brandId }) => {
       const url = await uploadMedia(file, 'brand-logos');
       setForm((f) => ({ ...f, [kunci]: url }));
     } catch {
-      setGalat('Gagal mengunggah gambar.');
+      setGalat('Gambar gagal diunggah. Coba lagi.');
     } finally {
       setMengunggah('');
     }
@@ -94,7 +94,7 @@ const BrandSurat = ({ brandId }) => {
       setAwal(isian);
       setBerhasil(true);
     } catch (err) {
-      setGalat(err?.response?.data?.error || 'Gagal menyimpan pengaturan surat.');
+      setGalat(err?.response?.data?.error || 'Pengaturan surat gagal disimpan. Coba lagi.');
     } finally {
       setMenyimpan(false);
     }

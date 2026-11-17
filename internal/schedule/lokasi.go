@@ -260,7 +260,7 @@ func (h *Handler) lokasiSah(ctx context.Context, w http.ResponseWriter, ids []in
 		return false
 	}
 	log.Printf("[ERROR] schedule: validasi lokasi: %v", err)
-	writeError(w, http.StatusInternalServerError, "Gagal memeriksa lokasi")
+	writeError(w, http.StatusInternalServerError, "Gagal memeriksa lokasi.")
 	return false
 }
 
@@ -271,7 +271,7 @@ func (h *Handler) ListLokasiOptions(w http.ResponseWriter, r *http.Request) {
 	items, err := opsiLokasi(r.Context(), h.repo.db)
 	if err != nil {
 		log.Printf("[ERROR] schedule: opsi lokasi: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal memuat lokasi")
+		writeError(w, http.StatusInternalServerError, "Gagal memuat lokasi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)

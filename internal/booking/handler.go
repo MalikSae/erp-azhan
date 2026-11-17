@@ -61,7 +61,7 @@ func (h *Handler) ListBookings(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("jamaah_id"); raw != "" {
 		id, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || id <= 0 {
-			writeError(w, http.StatusBadRequest, "jamaah_id tidak valid")
+			writeError(w, http.StatusBadRequest, "Jamaah tidak valid.")
 			return
 		}
 		jamaahID = &id
@@ -73,7 +73,7 @@ func (h *Handler) ListBookings(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.List(r.Context(), brandID, jamaahID, status, ListOpts{Limit: limit, Offset: offset})
 	if err != nil {
 		log.Printf("[ERROR] booking list: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data booking")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data booking.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -104,7 +104,7 @@ func (h *Handler) GetBooking(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	var req CreateBookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -112,18 +112,18 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 
 	// Gate 1: schedule_id wajib
 	if req.ScheduleID == 0 {
-		writeError(w, http.StatusBadRequest, "schedule_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Paket wajib diisi.")
 		return
 	}
 
 	// Gate 2: schedule exist & brand cocok
 	exists, err := h.repo.ScheduleExistsForBrand(r.Context(), req.ScheduleID, brandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusBadRequest, "schedule_id tidak valid atau bukan milik brand paket ini")
+		writeError(w, http.StatusBadRequest, "Paket tidak valid atau bukan milik brand paket ini.")
 		return
 	}
 
@@ -144,7 +144,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		picID = req.Pax[0].JamaahID
 	}
 	if picID == 0 {
-		writeError(w, http.StatusBadRequest, "pic_jamaah_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "PIC jamaah wajib diisi.")
 		return
 	}
 	req.PicJamaahID = picID
@@ -152,49 +152,49 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 	// Gate 3: PIC jamaah exist & brand cocok
 	exists, err = h.repo.JamaahExistsForBrand(r.Context(), picID, scheduleBrandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusBadRequest, "pic_jamaah_id tidak valid atau bukan milik brand paket ini")
+		writeError(w, http.StatusBadRequest, "PIC jamaah tidak valid atau bukan milik brand paket ini.")
 		return
 	}
 
 	// Gate 4: minimal 1 pax dalam array
 	if len(req.Pax) == 0 {
-		writeError(w, http.StatusBadRequest, "pax minimal 1 orang")
+		writeError(w, http.StatusBadRequest, "Pax minimal 1 orang.")
 		return
 	}
 
 	// Gate 5: Validasi setiap item pax
 	for i, p := range req.Pax {
 		if p.JamaahID == 0 {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("jamaah_id pada pax urutan %d wajib diisi", i+1))
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Jamaah pada pax urutan %d wajib diisi.", i+1))
 			return
 		}
 		exists, err := h.repo.JamaahExistsForBrand(r.Context(), p.JamaahID, scheduleBrandID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return
 		}
 		if !exists {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("jamaah_id %d pada pax urutan %d tidak valid atau bukan milik brand paket ini", p.JamaahID, i+1))
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Jamaah %d pada pax urutan %d tidak valid atau bukan milik brand paket ini.", p.JamaahID, i+1))
 			return
 		}
 
 		if p.PaxType != "reguler" && p.PaxType != "infant" {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("pax_type pada pax urutan %d tidak valid, harus 'reguler' atau 'infant'", i+1))
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Jenis pax pada pax urutan %d tidak valid, harus 'reguler' atau 'infant'.", i+1))
 			return
 		}
 
 		if p.PaxType == "infant" {
 			if p.RoomType != nil && strings.TrimSpace(*p.RoomType) != "" {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("pax_type infant pada urutan %d tidak boleh memilih room_type (harus null)", i+1))
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Jenis pax infant pada urutan %d tidak boleh memilih tipe kamar (harus null).", i+1))
 				return
 			}
 		} else if p.PaxType == "reguler" {
 			if p.RoomType == nil || !validRoomTypes[*p.RoomType] {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("room_type untuk pax reguler pada urutan %d harus salah satu dari Quad, Triple, atau Double", i+1))
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Tipe kamar untuk pax reguler pada urutan %d harus salah satu dari Quad, Triple, atau Double.", i+1))
 				return
 			}
 		}
@@ -209,7 +209,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !picIsRegular {
-		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) harus ikut sebagai pax reguler dalam booking ini")
+		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) harus ikut sebagai pax reguler dalam booking ini.")
 		return
 	}
 
@@ -230,7 +230,7 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateDraftBooking(w http.ResponseWriter, r *http.Request) {
 	var req CreateDraftBookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -238,18 +238,18 @@ func (h *Handler) CreateDraftBooking(w http.ResponseWriter, r *http.Request) {
 
 	// Gate 1: schedule_id wajib
 	if req.ScheduleID == 0 {
-		writeError(w, http.StatusBadRequest, "schedule_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Paket wajib diisi.")
 		return
 	}
 
 	// Gate 2: schedule exist & brand cocok
 	exists, err := h.repo.ScheduleExistsForBrand(r.Context(), req.ScheduleID, brandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusBadRequest, "schedule_id tidak valid atau bukan milik brand paket ini")
+		writeError(w, http.StatusBadRequest, "Paket tidak valid atau bukan milik brand paket ini.")
 		return
 	}
 
@@ -264,17 +264,17 @@ func (h *Handler) CreateDraftBooking(w http.ResponseWriter, r *http.Request) {
 	if req.PicJamaahID != nil && *req.PicJamaahID > 0 {
 		exists, err := h.repo.JamaahExistsForBrand(r.Context(), *req.PicJamaahID, scheduleBrandID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return
 		}
 		if !exists {
-			writeError(w, http.StatusBadRequest, "pic_jamaah_id tidak valid atau bukan milik brand paket ini")
+			writeError(w, http.StatusBadRequest, "PIC jamaah tidak valid atau bukan milik brand paket ini.")
 			return
 		}
 	}
 
 	if msg, err := h.validateDraftPax(r.Context(), req.Pax, scheduleBrandID); err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	} else if msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
@@ -301,7 +301,7 @@ func (h *Handler) UpdateDraftBooking(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateDraftBookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -314,7 +314,7 @@ func (h *Handler) UpdateDraftBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing.Status != "draft" {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("hanya booking berstatus draft yang dapat diubah melalui endpoint ini (status saat ini: %s)", existing.Status))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Hanya booking berstatus draft yang dapat diubah melalui endpoint ini (status saat ini: %s).", existing.Status))
 		return
 	}
 
@@ -323,11 +323,11 @@ func (h *Handler) UpdateDraftBooking(w http.ResponseWriter, r *http.Request) {
 	} else {
 		exists, err := h.repo.ScheduleExistsForBrand(r.Context(), req.ScheduleID, brandID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return
 		}
 		if !exists {
-			writeError(w, http.StatusBadRequest, "schedule_id tidak valid atau bukan milik brand paket ini")
+			writeError(w, http.StatusBadRequest, "Paket tidak valid atau bukan milik brand paket ini.")
 			return
 		}
 	}
@@ -342,17 +342,17 @@ func (h *Handler) UpdateDraftBooking(w http.ResponseWriter, r *http.Request) {
 	if req.PicJamaahID != nil && *req.PicJamaahID > 0 {
 		exists, err := h.repo.JamaahExistsForBrand(r.Context(), *req.PicJamaahID, scheduleBrandID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return
 		}
 		if !exists {
-			writeError(w, http.StatusBadRequest, "pic_jamaah_id tidak valid atau bukan milik brand paket ini")
+			writeError(w, http.StatusBadRequest, "PIC jamaah tidak valid atau bukan milik brand paket ini.")
 			return
 		}
 	}
 
 	if msg, err := h.validateDraftPax(r.Context(), req.Pax, scheduleBrandID); err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	} else if msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
@@ -384,18 +384,18 @@ func (h *Handler) FinalizeBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if existing.Status != "draft" {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("booking bukan berstatus draft (status saat ini: %s)", existing.Status))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Booking bukan berstatus draft (status saat ini: %s).", existing.Status))
 		return
 	}
 
 	// Validasi kelengkapan data sebelum finalisasi
 	if existing.PicJamaahID == nil || *existing.PicJamaahID == 0 {
-		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) wajib dipilih sebelum finalisasi booking")
+		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) wajib dipilih sebelum finalisasi booking.")
 		return
 	}
 
 	if len(existing.Pax) == 0 {
-		writeError(w, http.StatusBadRequest, "Daftar pax kosong. Minimal 1 jamaah reguler wajib didaftarkan")
+		writeError(w, http.StatusBadRequest, "Daftar pax kosong. Minimal 1 jamaah reguler wajib didaftarkan.")
 		return
 	}
 
@@ -403,7 +403,7 @@ func (h *Handler) FinalizeBooking(w http.ResponseWriter, r *http.Request) {
 	var picIsRegular bool
 	for i, p := range existing.Pax {
 		if p.JamaahID == 0 {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax urutan %d belum memilih jamaah", i+1))
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax urutan %d belum memilih jamaah.", i+1))
 			return
 		}
 		if p.PaxType == "reguler" {
@@ -412,24 +412,24 @@ func (h *Handler) FinalizeBooking(w http.ResponseWriter, r *http.Request) {
 				picIsRegular = true
 			}
 			if p.RoomType == nil || !validRoomTypes[*p.RoomType] {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax %s (urutan %d) belum memilih tipe kamar (Quad, Triple, atau Double)", p.NamaJamaah, i+1))
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax %s (urutan %d) belum memilih tipe kamar (Quad, Triple, atau Double).", p.NamaJamaah, i+1))
 				return
 			}
 		} else if p.PaxType == "infant" {
 			if p.RoomType != nil && *p.RoomType != "" {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax infant %s tidak boleh memiliki tipe kamar", p.NamaJamaah))
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("Pax infant %s tidak boleh memiliki tipe kamar.", p.NamaJamaah))
 				return
 			}
 		}
 	}
 
 	if regularPaxCount == 0 {
-		writeError(w, http.StatusBadRequest, "Booking harus memiliki minimal 1 pax reguler (tidak boleh hanya infant)")
+		writeError(w, http.StatusBadRequest, "Booking harus memiliki minimal 1 pax reguler (tidak boleh hanya infant).")
 		return
 	}
 
 	if !picIsRegular {
-		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) harus merupakan jamaah reguler (bukan infant)")
+		writeError(w, http.StatusBadRequest, "Kontak Utama (PIC) harus merupakan jamaah reguler (bukan infant).")
 		return
 	}
 
@@ -481,12 +481,12 @@ func (h *Handler) UpdatePaxRoomType(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdatePaxRoomTypeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if !validRoomTypes[req.RoomType] {
-		writeError(w, http.StatusBadRequest, "room_type tidak valid, harus salah satu dari Quad, Triple, atau Double")
+		writeError(w, http.StatusBadRequest, "Tipe kamar tidak valid, harus salah satu dari Quad, Triple, atau Double.")
 		return
 	}
 
@@ -512,13 +512,13 @@ func (h *Handler) UpdateBookingStatus(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateBookingStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	// Validasi enum status
 	if !validStatuses[req.Status] {
-		writeError(w, http.StatusBadRequest, "status tidak valid, harus salah satu dari: baru, dp, lunas, batal")
+		writeError(w, http.StatusBadRequest, "Status tidak valid, harus salah satu dari: baru, dp, lunas, batal.")
 		return
 	}
 
@@ -581,13 +581,13 @@ func (h *Handler) BlockSeat(w http.ResponseWriter, r *http.Request) {
 	}
 	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	if _, err := uuid.Parse(idempotencyKey); err != nil {
-		writeError(w, http.StatusBadRequest, "Idempotency-Key UUID wajib diisi")
+		writeError(w, http.StatusBadRequest, "Idempotency-Key UUID wajib diisi.")
 		return
 	}
 	var req SeatBlockRequest
 	if r.Body != nil && r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-			writeError(w, http.StatusBadRequest, "request body tidak valid")
+			writeError(w, http.StatusBadRequest, "Data tidak valid.")
 			return
 		}
 	}
@@ -595,7 +595,7 @@ func (h *Handler) BlockSeat(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresAt != nil && strings.TrimSpace(*req.ExpiresAt) != "" {
 		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(*req.ExpiresAt))
 		if err != nil || !parsed.After(time.Now().Add(time.Minute)) {
-			writeError(w, http.StatusBadRequest, "expires_at harus RFC3339 dan berada di masa depan")
+			writeError(w, http.StatusBadRequest, "Batas waktu harus di masa depan.")
 			return
 		}
 		expiresAt = &parsed
@@ -624,29 +624,29 @@ func (h *Handler) AddBookingDiscount(w http.ResponseWriter, r *http.Request) {
 
 	var req AddBookingDiscountRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	req.Nama = strings.TrimSpace(req.Nama)
 	if req.Nama == "" {
-		writeError(w, http.StatusBadRequest, "nama diskon tidak boleh kosong")
+		writeError(w, http.StatusBadRequest, "Nama diskon tidak boleh kosong.")
 		return
 	}
 	if len([]rune(req.Nama)) > maksNamaDiskon {
-		writeError(w, http.StatusBadRequest, "nama diskon maksimal 255 karakter")
+		writeError(w, http.StatusBadRequest, "Nama diskon maksimal 255 karakter.")
 		return
 	}
 	if req.Nominal <= 0 {
-		writeError(w, http.StatusBadRequest, "nominal diskon harus lebih dari 0")
+		writeError(w, http.StatusBadRequest, "Nominal diskon harus lebih dari 0.")
 		return
 	}
 	if !shared.RupiahBulat(req.Nominal) {
-		writeError(w, http.StatusBadRequest, "nominal diskon harus bilangan bulat rupiah")
+		writeError(w, http.StatusBadRequest, "Nominal diskon harus bilangan bulat rupiah.")
 		return
 	}
 	if req.Nominal > maxNominal {
-		writeError(w, http.StatusBadRequest, "nominal diskon terlalu besar")
+		writeError(w, http.StatusBadRequest, "Nominal diskon terlalu besar.")
 		return
 	}
 
@@ -683,7 +683,7 @@ func (h *Handler) RemoveBookingDiscount(w http.ResponseWriter, r *http.Request) 
 	discountIDStr := chi.URLParam(r, "discountID")
 	discountID, err := strconv.ParseInt(discountIDStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "discountID tidak valid")
+		writeError(w, http.StatusBadRequest, "DiscountID tidak valid.")
 		return
 	}
 
@@ -723,21 +723,21 @@ func (h *Handler) UpdateBookingProgress(w http.ResponseWriter, r *http.Request) 
 
 	var body map[string]bool
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid, format: {\"key\": bool}")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	for key := range body {
 		if key == "paspor" {
-			writeError(w, http.StatusBadRequest, "status paspor tidak bisa diubah manual, status otomatis tercentang jika dokumen paspor sudah diunggah")
+			writeError(w, http.StatusBadRequest, "Status paspor tidak bisa diubah manual, status otomatis tercentang jika dokumen paspor sudah diunggah.")
 			return
 		}
 		if _, ok := AllowedPaxProgressFields[key]; ok {
-			writeError(w, http.StatusBadRequest, "Gunakan endpoint progress per-pax untuk item ini")
+			writeError(w, http.StatusBadRequest, "Gunakan endpoint progress per-pax untuk item ini.")
 			return
 		}
 		if _, ok := AllowedHeaderProgressFields[key]; !ok {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("field progress '%s' tidak valid", key))
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Field progress '%s' tidak valid.", key))
 			return
 		}
 	}
@@ -762,7 +762,7 @@ func (h *Handler) UpdatePaxProgress(w http.ResponseWriter, r *http.Request) {
 	paxIDStr := chi.URLParam(r, "pax_id")
 	paxID, err := strconv.ParseInt(paxIDStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "pax_id tidak valid")
+		writeError(w, http.StatusBadRequest, "Pax tidak valid.")
 		return
 	}
 
@@ -770,17 +770,17 @@ func (h *Handler) UpdatePaxProgress(w http.ResponseWriter, r *http.Request) {
 
 	var body map[string]bool
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid, format: {\"key\": bool}")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	for key := range body {
 		if key == "paspor" {
-			writeError(w, http.StatusBadRequest, "status paspor tidak bisa diubah manual, status otomatis tercentang jika dokumen paspor sudah diunggah")
+			writeError(w, http.StatusBadRequest, "Status paspor tidak bisa diubah manual, status otomatis tercentang jika dokumen paspor sudah diunggah.")
 			return
 		}
 		if _, ok := AllowedPaxProgressFields[key]; !ok {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("field progress pax '%s' tidak valid", key))
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Field progress pax '%s' tidak valid.", key))
 			return
 		}
 	}
@@ -858,33 +858,33 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.Is(err, payment.ErrSeatUnavailable), errors.Is(err, payment.ErrOverpayment):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "data tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrSeatHabis):
-		writeError(w, http.StatusConflict, "seat sudah habis, tidak bisa konfirmasi DP")
+		writeError(w, http.StatusConflict, "Seat sudah habis, tidak bisa konfirmasi DP.")
 	case errors.As(err, &errSeatNotEnough):
 		writeError(w, http.StatusBadRequest, errSeatNotEnough.Message)
 	case errors.Is(err, ErrPaxAlreadyCancelled):
-		writeError(w, http.StatusBadRequest, "pax sudah dalam status batal")
+		writeError(w, http.StatusBadRequest, "Pax sudah dalam status batal.")
 	case errors.Is(err, ErrCannotChangeInfantRoom):
-		writeError(w, http.StatusBadRequest, "tidak bisa mengubah tipe kamar untuk infant")
+		writeError(w, http.StatusBadRequest, "Tidak bisa mengubah tipe kamar untuk infant.")
 	case errors.Is(err, ErrCannotChangeCancelledPaxRoom):
-		writeError(w, http.StatusBadRequest, "tidak bisa mengubah tipe kamar untuk pax yang sudah batal")
+		writeError(w, http.StatusBadRequest, "Tidak bisa mengubah tipe kamar untuk pax yang sudah batal.")
 	case errors.Is(err, ErrInvalidStatus):
-		writeError(w, http.StatusBadRequest, "status tidak valid")
+		writeError(w, http.StatusBadRequest, "Status tidak valid.")
 	case errors.Is(err, ErrSeatBelumDiblokir):
-		writeError(w, http.StatusConflict, "seat booking ini sudah dilepas")
+		writeError(w, http.StatusConflict, "Seat booking ini sudah dilepas.")
 	case errors.Is(err, ErrSeatTerkonfirmasi):
 		writeError(w, http.StatusConflict, ErrSeatTerkonfirmasi.Error())
 	case errors.Is(err, ErrSeatSudahDiblokir):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrTemplatePerlengkapanBelumDiatur):
-		writeError(w, http.StatusBadRequest, "template set perlengkapan belum diatur untuk brand ini")
+		writeError(w, http.StatusBadRequest, "Template set perlengkapan belum diatur untuk brand ini.")
 	case errors.Is(err, ErrPerlengkapanSudahDiberikan):
-		writeError(w, http.StatusBadRequest, "perlengkapan untuk booking ini sudah pernah diberikan")
+		writeError(w, http.StatusBadRequest, "Perlengkapan untuk booking ini sudah pernah diberikan.")
 	case errors.Is(err, ErrPerlengkapanSudahDiterima):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrPerlengkapanBelumDiberikan):
-		writeError(w, http.StatusBadRequest, "perlengkapan belum pernah diberikan untuk booking ini")
+		writeError(w, http.StatusBadRequest, "Perlengkapan belum pernah diberikan untuk booking ini.")
 	case errors.Is(err, ErrKodeBrandNotSet):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrGenerateIDBookingFailed):
@@ -895,7 +895,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, errStok.Message)
 	default:
 		log.Printf("[ERROR] booking: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -905,7 +905,7 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -915,7 +915,7 @@ func parsePaxID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "pax_id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "pax_id tidak valid")
+		writeError(w, http.StatusBadRequest, "Pax tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -954,7 +954,7 @@ func (h *Handler) ListDailyBrandPax(w http.ResponseWriter, r *http.Request) {
 	// Admin yang terikat brand hanya melihat pendaftaran brand-nya sendiri.
 	items, err := h.repo.ListDailyBrandPax(r.Context(), identity.GetBrandID(r.Context()))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data pendaftaran pax")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data pendaftaran pax.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)

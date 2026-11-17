@@ -91,25 +91,25 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	account := customer.FromContext(r.Context())
 	if account == nil {
-		writeError(w, http.StatusUnauthorized, "sesi berakhir, silakan masuk kembali")
+		writeError(w, http.StatusUnauthorized, "Sesi berakhir. Masuk kembali.")
 		return
 	}
 	// Batas percobaan per akun dulu, lalu per IP. Ditolak di batas IP: jatah akun dikembalikan.
 	clientIP := getClientIP(r)
 	percobaanKey := strconv.FormatInt(account.ID, 10)
 	if !h.bookingAttempt.Take(percobaanKey) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan booking, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
 		return
 	}
 	if !h.bookingByIP.Take(clientIP) {
 		h.bookingAttempt.Refund(percobaanKey)
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan booking, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
 		return
 	}
 	// Verifikasi email tidak diwajibkan untuk booking (keputusan 2026-10-28); email tetap dikirim dan statusnya tampil di akun.
 	var req BookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	// Brand dan identitas pemesan berasal dari akun, bukan dari payload.
@@ -131,13 +131,13 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 
 	// Gate 2: Brand ID
 	if req.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 
 	// Gate 3: Schedule ID
 	if req.ScheduleID <= 0 {
-		writeError(w, http.StatusBadRequest, "schedule_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Paket wajib diisi.")
 		return
 	}
 
@@ -148,13 +148,13 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 	req.PIC.RoomType = strings.TrimSpace(req.PIC.RoomType)
 
 	if req.PIC.NamaLengkap == "" || (req.PIC.NoHP == "" && !req.PemesanTidakIkut) || req.PIC.JenisKelamin == "" || req.PIC.RoomType == "" {
-		writeError(w, http.StatusBadRequest, "data jamaah utama tidak lengkap")
+		writeError(w, http.StatusBadRequest, "Data jamaah utama tidak lengkap.")
 		return
 	}
 
 	// Gate 5: Room Type
 	if req.PIC.RoomType != "Quad" && req.PIC.RoomType != "Triple" && req.PIC.RoomType != "Double" {
-		writeError(w, http.StatusBadRequest, "tipe kamar PIC tidak valid")
+		writeError(w, http.StatusBadRequest, "Tipe kamar PIC tidak valid.")
 		return
 	}
 
@@ -165,30 +165,30 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 		req.Anggota[i].PaxType = strings.TrimSpace(a.PaxType)
 
 		if req.Anggota[i].NamaLengkap == "" || req.Anggota[i].JenisKelamin == "" || req.Anggota[i].PaxType == "" {
-			writeError(w, http.StatusBadRequest, "data anggota tidak lengkap")
+			writeError(w, http.StatusBadRequest, "Data anggota tidak lengkap.")
 			return
 		}
 
 		if req.Anggota[i].PaxType == "reguler" {
 			if a.RoomType == nil || (*a.RoomType != "Quad" && *a.RoomType != "Triple" && *a.RoomType != "Double") {
-				writeError(w, http.StatusBadRequest, "tipe kamar reguler tidak valid")
+				writeError(w, http.StatusBadRequest, "Tipe kamar reguler tidak valid.")
 				return
 			}
 		} else if req.Anggota[i].PaxType == "infant" {
 			if a.TanggalLahir == nil || *a.TanggalLahir == "" {
-				writeError(w, http.StatusBadRequest, "tanggal lahir wajib untuk infant")
+				writeError(w, http.StatusBadRequest, "Tanggal lahir wajib untuk infant.")
 				return
 			}
 			// Umur divalidasi repository menggunakan identitas yang tersimpan.
 		} else {
-			writeError(w, http.StatusBadRequest, "pax_type anggota tidak valid")
+			writeError(w, http.StatusBadRequest, "Jenis pax anggota tidak valid.")
 			return
 		}
 	}
 
 	// Gate 7: Total Pax <= 9
 	if 1+len(req.Anggota) > 9 {
-		writeError(w, http.StatusBadRequest, "maksimal jamaah dalam satu booking adalah 9")
+		writeError(w, http.StatusBadRequest, "Maksimal jamaah dalam satu booking adalah 9.")
 		return
 	}
 
@@ -254,11 +254,11 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 			return
 		}
 		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusNotFound, "jadwal atau brand tidak ditemukan")
+			writeError(w, http.StatusNotFound, "Jadwal atau brand tidak ditemukan.")
 			return
 		}
 		log.Printf("[ERROR] ProcessBooking: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !resp.Replayed {
@@ -276,17 +276,17 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 func (h *Handler) lolosCaptcha(w http.ResponseWriter, ctx context.Context, token, clientIP string) bool {
 	token = strings.TrimSpace(token)
 	if h.captcha.required() && token == "" {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal. Coba lagi.")
 		return false
 	}
 	valid, err := h.captcha.verify(ctx, token, clientIP)
 	if err != nil {
 		log.Printf("[ERROR] selfbooking captcha: %v", err)
-		writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, silakan coba lagi")
+		writeError(w, http.StatusServiceUnavailable, "Verifikasi keamanan sedang tidak tersedia. Coba lagi.")
 		return false
 	}
 	if !valid {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal, silakan coba lagi")
+		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal. Coba lagi.")
 		return false
 	}
 	return true

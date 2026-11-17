@@ -94,7 +94,7 @@ const AirlinesPage = () => {
       const data = await listAirlines();
       setAirlines(data || []);
     } catch (error) {
-      const msg = error.response?.data?.error || "Gagal memuat data maskapai.";
+      const msg = error.response?.data?.error || "Data maskapai gagal dimuat. Coba lagi.";
       setAirlineErrorMessage(msg);
     } finally {
       setIsAirlinesLoading(false);
@@ -108,7 +108,7 @@ const AirlinesPage = () => {
       const data = await listAirports();
       setAirports(data || []);
     } catch (error) {
-      const msg = error.response?.data?.error || "Gagal memuat data bandara.";
+      const msg = error.response?.data?.error || "Data bandara gagal dimuat. Coba lagi.";
       setAirportErrorMessage(msg);
     } finally {
       setIsAirportsLoading(false);
@@ -162,7 +162,7 @@ const AirlinesPage = () => {
       setAirlineFormData(prev => ({ ...prev, logo_url: url }));
     } catch (err) {
       console.error(err);
-      setAirlineFormErrors('Gagal upload logo, coba lagi');
+      setAirlineFormErrors('Logo gagal diunggah. Coba lagi.');
     } finally {
       setIsUploadingLogo(false);
     }
@@ -189,7 +189,7 @@ const AirlinesPage = () => {
       handleCloseAirlineModal();
       fetchAirlines();
     } catch (error) {
-      const msg = error.response?.data?.error || "Terjadi kesalahan, coba lagi.";
+      const msg = error.response?.data?.error || "Data gagal disimpan. Coba lagi.";
       setAirlineFormErrors(msg);
     } finally {
       setIsSubmittingAirline(false);
@@ -206,7 +206,7 @@ const AirlinesPage = () => {
       if (error.response?.status === 409) {
         setAirlineErrorMessage(error.response?.data?.error || "Tidak bisa dihapus, masih dipakai oleh paket lain.");
       } else {
-        setAirlineErrorMessage("Terjadi kesalahan saat menghapus data.");
+        setAirlineErrorMessage("Data gagal dihapus. Coba lagi.");
       }
     }
   };
@@ -259,7 +259,7 @@ const AirlinesPage = () => {
       handleCloseAirportModal();
       fetchAirports();
     } catch (error) {
-      const msg = error.response?.data?.error || "Terjadi kesalahan, coba lagi.";
+      const msg = error.response?.data?.error || "Data gagal disimpan. Coba lagi.";
       setAirportFormErrors(msg);
     } finally {
       setIsSubmittingAirport(false);
@@ -276,7 +276,7 @@ const AirlinesPage = () => {
       if (error.response?.status === 409) {
         setAirportErrorMessage(error.response?.data?.error || "Tidak bisa dihapus, masih dipakai oleh data lain.");
       } else {
-        setAirportErrorMessage("Terjadi kesalahan saat menghapus bandara.");
+        setAirportErrorMessage("Data gagal dihapus. Coba lagi.");
       }
     }
   };
@@ -425,7 +425,7 @@ const AirlinesPage = () => {
             value={airlineFormData.name}
             onChange={(e) => setAirlineFormData(prev => ({ ...prev, name: e.target.value }))}
             required
-            placeholder="Contoh: Saudia Airlines"
+            placeholder="Saudia Airlines"
             className="!mb-0"
           />
 
@@ -438,7 +438,7 @@ const AirlinesPage = () => {
               setAirlineFormData(prev => ({ ...prev, code: val }));
             }}
             maxLength={2}
-            placeholder="Contoh: SV"
+            placeholder="SV"
             className="!mb-0"
           />
 
@@ -486,7 +486,7 @@ const AirlinesPage = () => {
             value={airportFormData.name}
             onChange={(e) => setAirportFormData(prev => ({ ...prev, name: e.target.value }))}
             required
-            placeholder="Contoh: Soekarno-Hatta International Airport"
+            placeholder="Soekarno-Hatta International Airport"
             className="!mb-0"
           />
 
@@ -501,7 +501,7 @@ const AirlinesPage = () => {
               }}
               required
               maxLength={4}
-              placeholder="Contoh: CGK"
+              placeholder="CGK"
               className="!mb-0"
             />
 
@@ -511,7 +511,7 @@ const AirlinesPage = () => {
               value={airportFormData.city}
               onChange={(e) => setAirportFormData(prev => ({ ...prev, city: e.target.value }))}
               required
-              placeholder="Contoh: Jakarta"
+              placeholder="Jakarta"
               className="!mb-0"
             />
           </div>
@@ -535,7 +535,7 @@ const AirlinesPage = () => {
       <Modal
         isOpen={deleteConfirmAirlineId !== null}
         onClose={() => setDeleteConfirmAirlineId(null)}
-        title="Hapus Maskapai?"
+        title="Hapus Maskapai"
         size="sm"
         footer={
           <>
@@ -545,7 +545,7 @@ const AirlinesPage = () => {
         }
       >
         <p className="text-neutral-600 font-body">
-          Yakin ingin menghapus {airlineToDelete?.name}? Tindakan ini tidak bisa dibatalkan.
+          Hapus {airlineToDelete?.name}? Data tidak bisa dikembalikan.
         </p>
       </Modal>
 
@@ -553,7 +553,7 @@ const AirlinesPage = () => {
       <Modal
         isOpen={deleteConfirmAirportId !== null}
         onClose={() => setDeleteConfirmAirportId(null)}
-        title="Hapus Bandara?"
+        title="Hapus Bandara"
         size="sm"
         footer={
           <>
@@ -563,7 +563,7 @@ const AirlinesPage = () => {
         }
       >
         <p className="text-neutral-600 font-body">
-          Yakin ingin menghapus bandara <strong>{airportToDelete?.name} ({airportToDelete?.code})</strong>? Tindakan ini tidak bisa dibatalkan.
+          Hapus bandara <strong>{airportToDelete?.name} ({airportToDelete?.code})</strong>? Data tidak bisa dikembalikan.
         </p>
       </Modal>
     </div>

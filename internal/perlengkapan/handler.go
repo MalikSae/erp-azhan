@@ -35,7 +35,7 @@ func (h *Handler) sendError(w http.ResponseWriter, status int, message string) {
 func (h *Handler) ListItems(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.ListItems(r.Context())
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat item perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memuat item perlengkapan.")
 		return
 	}
 	h.sendJSON(w, http.StatusOK, items)
@@ -57,13 +57,13 @@ func cleanPhotoURL(v *string) *string {
 func (h *Handler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	var req CreateItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	nama := strings.TrimSpace(req.Nama)
 	if nama == "" {
-		h.sendError(w, http.StatusBadRequest, "Nama item perlengkapan wajib diisi")
+		h.sendError(w, http.StatusBadRequest, "Nama item perlengkapan wajib diisi.")
 		return
 	}
 
@@ -75,10 +75,10 @@ func (h *Handler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	item, err := h.repo.CreateItem(r.Context(), nama, cleanPhotoURL(req.PhotoURL), qtyPerSet)
 	if err != nil {
 		if errors.Is(err, ErrDuplicate) {
-			h.sendError(w, http.StatusConflict, "Nama item perlengkapan sudah terdaftar")
+			h.sendError(w, http.StatusConflict, "Nama item perlengkapan sudah terdaftar.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal menambahkan item perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal menambahkan item perlengkapan.")
 		return
 	}
 
@@ -90,19 +90,19 @@ func (h *Handler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "ID item tidak valid")
+		h.sendError(w, http.StatusBadRequest, "ID item tidak valid.")
 		return
 	}
 
 	var req UpdateItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	nama := strings.TrimSpace(req.Nama)
 	if nama == "" {
-		h.sendError(w, http.StatusBadRequest, "Nama item perlengkapan wajib diisi")
+		h.sendError(w, http.StatusBadRequest, "Nama item perlengkapan wajib diisi.")
 		return
 	}
 
@@ -119,14 +119,14 @@ func (h *Handler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	item, err := h.repo.UpdateItem(r.Context(), id, nama, cleanPhotoURL(req.PhotoURL), qtyPerSet)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan")
+			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan.")
 			return
 		}
 		if errors.Is(err, ErrDuplicate) {
-			h.sendError(w, http.StatusConflict, "Nama item perlengkapan sudah terdaftar")
+			h.sendError(w, http.StatusConflict, "Nama item perlengkapan sudah terdaftar.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal mengubah item perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal mengubah item perlengkapan.")
 		return
 	}
 
@@ -138,20 +138,20 @@ func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "ID item tidak valid")
+		h.sendError(w, http.StatusBadRequest, "ID item tidak valid.")
 		return
 	}
 
 	if err := h.repo.DeleteItem(r.Context(), id); err != nil {
 		if errors.Is(err, ErrNotFound) {
-			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan")
+			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan.")
 			return
 		}
 		if errors.Is(err, ErrInUse) {
-			h.sendError(w, http.StatusConflict, "tidak bisa dihapus, item masih dipakai di template set atau masih memiliki stok")
+			h.sendError(w, http.StatusConflict, "Tidak bisa dihapus, item masih dipakai di template set atau masih memiliki stok.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal menghapus item perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal menghapus item perlengkapan.")
 		return
 	}
 
@@ -168,7 +168,7 @@ func (h *Handler) ListStok(w http.ResponseWriter, r *http.Request) {
 	if brandIDStr == "" {
 		items, err := h.repo.ListStokAll(r.Context())
 		if err != nil {
-			h.sendError(w, http.StatusInternalServerError, "Gagal memuat stok perlengkapan seluruh brand")
+			h.sendError(w, http.StatusInternalServerError, "Gagal memuat stok perlengkapan seluruh brand.")
 			return
 		}
 		if scoped != nil {
@@ -186,17 +186,17 @@ func (h *Handler) ListStok(w http.ResponseWriter, r *http.Request) {
 
 	brandID, err := strconv.ParseUint(brandIDStr, 10, 64)
 	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "brand_id tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Brand tidak valid.")
 		return
 	}
 	if scoped != nil && brandID != uint64(*scoped) {
-		h.sendError(w, http.StatusForbidden, "Anda hanya dapat melihat stok brand Anda sendiri")
+		h.sendError(w, http.StatusForbidden, "Anda hanya dapat melihat stok brand Anda sendiri.")
 		return
 	}
 
 	items, err := h.repo.ListStokByBrand(r.Context(), brandID)
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat stok perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memuat stok perlengkapan.")
 		return
 	}
 
@@ -208,45 +208,45 @@ func (h *Handler) UpdateStok(w http.ResponseWriter, r *http.Request) {
 	itemIDStr := chi.URLParam(r, "item_id")
 	itemID, err := strconv.ParseUint(itemIDStr, 10, 64)
 	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "item_id tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Item tidak valid.")
 		return
 	}
 
 	brandIDStr := r.URL.Query().Get("brand_id")
 	if brandIDStr == "" {
-		h.sendError(w, http.StatusBadRequest, "Parameter brand_id wajib diisi")
+		h.sendError(w, http.StatusBadRequest, "Parameter brand wajib diisi.")
 		return
 	}
 
 	brandID, err := strconv.ParseUint(brandIDStr, 10, 64)
 	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "brand_id tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Brand tidak valid.")
 		return
 	}
 
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil && brandID != uint64(*scoped) {
-		h.sendError(w, http.StatusForbidden, "Anda hanya dapat mengubah stok brand Anda sendiri")
+		h.sendError(w, http.StatusForbidden, "Anda hanya dapat mengubah stok brand Anda sendiri.")
 		return
 	}
 
 	var req UpdateStokRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if req.StokTersedia == nil || *req.StokTersedia < 0 {
-		h.sendError(w, http.StatusBadRequest, "stok_tersedia wajib bernilai 0 atau lebih")
+		h.sendError(w, http.StatusBadRequest, "Stok wajib bernilai 0 atau lebih.")
 		return
 	}
 
 	item, err := h.repo.UpdateStok(r.Context(), brandID, itemID, *req.StokTersedia, adminID(r))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan")
+			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal memperbarui stok perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memperbarui stok perlengkapan.")
 		return
 	}
 
@@ -259,7 +259,7 @@ func (h *Handler) UpdateStok(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetSetTemplate(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.GetSetTemplate(r.Context())
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat template set perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memuat template set perlengkapan.")
 		return
 	}
 	h.sendJSON(w, http.StatusOK, items)
@@ -269,7 +269,7 @@ func (h *Handler) GetSetTemplate(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateSetTemplate(w http.ResponseWriter, r *http.Request) {
 	var inputs []SetTemplateItemInput
 	if err := json.NewDecoder(r.Body).Decode(&inputs); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid (harus array)")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -279,7 +279,7 @@ func (h *Handler) UpdateSetTemplate(w http.ResponseWriter, r *http.Request) {
 			h.sendError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal memperbarui template set perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memperbarui template set perlengkapan.")
 		return
 	}
 

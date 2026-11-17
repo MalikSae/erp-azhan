@@ -41,14 +41,14 @@ func tulisGalat(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	default:
 		log.Printf("[ERROR] banner: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memproses banner")
+		writeError(w, http.StatusInternalServerError, "Gagal memproses banner.")
 	}
 }
 
 func idParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -74,7 +74,7 @@ type daftarView struct {
 func (h *Handler) Daftar(w http.ResponseWriter, r *http.Request) {
 	brand := brandAdmin(r, 0)
 	if brand <= 0 {
-		writeError(w, http.StatusBadRequest, "pilih brand")
+		writeError(w, http.StatusBadRequest, "Pilih brand.")
 		return
 	}
 	items, err := Daftar(r.Context(), h.db, brand, h.now())
@@ -89,12 +89,12 @@ func (h *Handler) Daftar(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 	var in Input
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	in.BrandID = brandAdmin(r, in.BrandID)
 	if in.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "pilih brand")
+		writeError(w, http.StatusBadRequest, "Pilih brand.")
 		return
 	}
 	id, err := Buat(r.Context(), h.db, h.dirUnggah, identity.GetAdminUserID(r.Context()), in)
@@ -119,7 +119,7 @@ func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
 	}
 	var in Input
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	scope := identity.GetBrandID(r.Context())
@@ -156,12 +156,12 @@ func (h *Handler) Urutkan(w http.ResponseWriter, r *http.Request) {
 		IDs     []int64 `json:"ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	brand := brandAdmin(r, req.BrandID)
 	if brand <= 0 {
-		writeError(w, http.StatusBadRequest, "pilih brand")
+		writeError(w, http.StatusBadRequest, "Pilih brand.")
 		return
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
@@ -185,7 +185,7 @@ func (h *Handler) Urutkan(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Promosi(w http.ResponseWriter, r *http.Request) {
 	brand, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64)
 	if err != nil || brand <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 	p, err := AmbilPromosi(r.Context(), h.db, brand, h.now())

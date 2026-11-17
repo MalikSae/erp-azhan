@@ -270,7 +270,7 @@ func trimPtr(s *string) *string {
 // brandDiizinkan: admin terikat brand hanya boleh mengubah stok brand-nya sendiri.
 func (h *Handler) brandDiizinkan(w http.ResponseWriter, r *http.Request, brandID uint64) bool {
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil && uint64(*scoped) != brandID {
-		h.sendError(w, http.StatusForbidden, "Anda hanya dapat mengelola stok brand Anda sendiri")
+		h.sendError(w, http.StatusForbidden, "Anda hanya dapat mengelola stok brand Anda sendiri.")
 		return false
 	}
 	return true
@@ -279,11 +279,11 @@ func (h *Handler) brandDiizinkan(w http.ResponseWriter, r *http.Request, brandID
 func (h *Handler) mutasiError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		h.sendError(w, http.StatusNotFound, "Item atau brand tidak ditemukan")
+		h.sendError(w, http.StatusNotFound, "Item atau brand tidak ditemukan.")
 	case errors.Is(err, ErrStokKurang):
 		h.sendError(w, http.StatusBadRequest, err.Error())
 	default:
-		h.sendError(w, http.StatusInternalServerError, "Gagal mencatat pergerakan stok")
+		h.sendError(w, http.StatusInternalServerError, "Gagal mencatat pergerakan stok.")
 	}
 }
 
@@ -299,11 +299,11 @@ func adminID(r *http.Request) *int64 {
 func (h *Handler) Pembelian(w http.ResponseWriter, r *http.Request) {
 	var req pembelianRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ItemID == 0 || req.BrandID == 0 || req.Qty < 1 {
-		h.sendError(w, http.StatusBadRequest, "Item, brand, dan jumlah (minimal 1) wajib diisi")
+		h.sendError(w, http.StatusBadRequest, "Item, brand, dan jumlah (minimal 1) wajib diisi.")
 		return
 	}
 	if req.HargaSatuan != nil && *req.HargaSatuan < 0 {
-		h.sendError(w, http.StatusBadRequest, "Harga satuan tidak boleh negatif")
+		h.sendError(w, http.StatusBadRequest, "Harga satuan tidak boleh negatif.")
 		return
 	}
 	if !h.brandDiizinkan(w, r, req.BrandID) {
@@ -321,11 +321,11 @@ func (h *Handler) Pembelian(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Koreksi(w http.ResponseWriter, r *http.Request) {
 	var req koreksiRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ItemID == 0 || req.BrandID == 0 || req.StokBaru == nil || *req.StokBaru < 0 {
-		h.sendError(w, http.StatusBadRequest, "Item, brand, dan stok baru (0 atau lebih) wajib diisi")
+		h.sendError(w, http.StatusBadRequest, "Item, brand, dan stok baru (0 atau lebih) wajib diisi.")
 		return
 	}
 	if trimPtr(req.Catatan) == nil {
-		h.sendError(w, http.StatusBadRequest, "Alasan koreksi stok wajib diisi")
+		h.sendError(w, http.StatusBadRequest, "Alasan koreksi stok wajib diisi.")
 		return
 	}
 	if !h.brandDiizinkan(w, r, req.BrandID) {
@@ -359,7 +359,7 @@ func (h *Handler) ListMutasi(w http.ResponseWriter, r *http.Request) {
 	beforeID, _ := strconv.ParseUint(q.Get("before_id"), 10, 64)
 	rows, err := h.repo.ListMutasi(r.Context(), itemID, brandID, q.Get("jenis"), beforeID, limit)
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat riwayat stok")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memuat riwayat stok.")
 		return
 	}
 	h.sendJSON(w, http.StatusOK, rows)

@@ -49,7 +49,7 @@ func (h *Handler) Upline(w http.ResponseWriter, r *http.Request) {
 	acc := FromContext(r.Context())
 	u, err := cariUpline(r.Context(), h.repo.db, acc.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"upline": u})

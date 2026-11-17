@@ -15,7 +15,7 @@ import (
 var (
 	ErrNotFound         = errors.New("data tidak ditemukan")
 	ErrAmbiguousJamaah  = errors.New("lebih dari satu jamaah memiliki nomor telepon tersebut")
-	ErrBrandCodeMissing = errors.New("kode_brand belum diatur")
+	ErrBrandCodeMissing = errors.New("Kode brand belum diatur. Hubungi admin.")
 )
 
 const codeCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"

@@ -24,7 +24,7 @@ func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	roles, err := h.repo.ListRoles(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] rbac.ListRoles: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memuat role")
+		writeError(w, http.StatusInternalServerError, "Gagal memuat role.")
 		return
 	}
 	writeJSON(w, http.StatusOK, roles)
@@ -35,7 +35,7 @@ func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 	perms, err := h.repo.ListPermissions(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] rbac.ListPermissions: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memuat permission")
+		writeError(w, http.StatusInternalServerError, "Gagal memuat permission.")
 		return
 	}
 	writeJSON(w, http.StatusOK, perms)
@@ -45,7 +45,7 @@ func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetUserRoles(w http.ResponseWriter, r *http.Request) {
 	userID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || userID <= 0 {
-		writeError(w, http.StatusBadRequest, "id user tidak valid")
+		writeError(w, http.StatusBadRequest, "ID user tidak valid.")
 		return
 	}
 	roles, err := h.repo.GetUserRoles(r.Context(), userID)
@@ -55,7 +55,7 @@ func (h *Handler) GetUserRoles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("[ERROR] rbac.GetUserRoles: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memuat role user")
+		writeError(w, http.StatusInternalServerError, "Gagal memuat role user.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"roles": roles})
@@ -67,13 +67,13 @@ func (h *Handler) GetUserRoles(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 	userID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || userID <= 0 {
-		writeError(w, http.StatusBadRequest, "id user tidak valid")
+		writeError(w, http.StatusBadRequest, "ID user tidak valid.")
 		return
 	}
 
 	var req SetUserRolesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	slugs := NormalizeSlugs(req.Roles)
@@ -92,7 +92,7 @@ func (h *Handler) SetUserRoles(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, ErrConcurrentMsg)
 		default:
 			log.Printf("[ERROR] rbac.SetUserRoles: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal mengubah role pengguna")
+			writeError(w, http.StatusInternalServerError, "Gagal mengubah role pengguna.")
 		}
 		return
 	}

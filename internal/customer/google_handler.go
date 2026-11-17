@@ -83,19 +83,19 @@ type googleLengkapi struct {
 
 func (h *Handler) verifikasiGoogle(w http.ResponseWriter, r *http.Request, idToken string) (*ProfilGoogle, bool) {
 	if strings.TrimSpace(idToken) == "" {
-		writeError(w, http.StatusBadRequest, "id_token wajib diisi")
+		writeError(w, http.StatusBadRequest, "Id_token wajib diisi.")
 		return nil, false
 	}
 	p, err := h.google.Verifikasi(r.Context(), strings.TrimSpace(idToken))
 	if errors.Is(err, ErrGoogleTidakDikonfigurasi) {
-		writeError(w, http.StatusServiceUnavailable, "Masuk dengan Google belum tersedia")
+		writeError(w, http.StatusServiceUnavailable, "Masuk dengan Google belum tersedia.")
 		return nil, false
 	}
 	if err != nil {
 		if !errors.Is(err, ErrTokenGoogle) {
 			log.Printf("[ERROR] customer google verifikasi: %v", err)
 		}
-		writeError(w, http.StatusUnauthorized, "Masuk dengan Google gagal, coba lagi")
+		writeError(w, http.StatusUnauthorized, "Masuk dengan Google gagal, coba lagi.")
 		return nil, false
 	}
 	return p, true
@@ -105,7 +105,7 @@ func (h *Handler) sesiBaru(w http.ResponseWriter, r *http.Request, acc *Account,
 	token, err := h.repo.CreateSession(r.Context(), acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] customer session: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	h.repo.TouchLogin(r.Context(), acc.ID)
@@ -122,11 +122,11 @@ func (h *Handler) LoginGoogle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.loginIP.Take(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan masuk, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan masuk, coba lagi dalam 15 menit.")
 		return
 	}
 	if req.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 	p, ok := h.verifikasiGoogle(w, r, req.IDToken)
@@ -140,7 +140,7 @@ func (h *Handler) LoginGoogle(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			err = h.repo.TautkanGoogle(r.Context(), acc.ID, p.Sub)
 			if errors.Is(err, ErrGoogleLain) {
-				writeError(w, http.StatusConflict, "Email ini sudah tertaut ke akun Google lain. Masuk dengan email dan password.")
+				writeError(w, http.StatusConflict, "Email ini sudah tertaut ke akun Google lain. Masuk dengan email dan kata sandi.")
 				return
 			}
 		}
@@ -151,7 +151,7 @@ func (h *Handler) LoginGoogle(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer google login: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	h.sesiBaru(w, r, acc, http.StatusOK)
@@ -177,11 +177,11 @@ func (h *Handler) DaftarGoogle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.regIP.Take(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak pendaftaran, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak pendaftaran, coba lagi dalam 1 jam.")
 		return
 	}
 	if req.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 	p, ok := h.verifikasiGoogle(w, r, req.IDToken)
@@ -208,7 +208,7 @@ func (h *Handler) DaftarGoogle(w http.ResponseWriter, r *http.Request) {
 	}
 	acc, err := h.repo.CreateGoogle(r.Context(), req.BrandID, nama, p.Email, req.NoHP, p.Sub, req.KodeReferral, bio)
 	if errors.Is(err, ErrEmailTaken) {
-		writeError(w, http.StatusConflict, "Email ini sudah terdaftar. Masuk dengan Google atau email dan password.")
+		writeError(w, http.StatusConflict, "Email ini sudah terdaftar. Masuk dengan Google atau email dan kata sandi.")
 		return
 	}
 	if errors.Is(err, ErrPhoneTaken) {
@@ -217,7 +217,7 @@ func (h *Handler) DaftarGoogle(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer google create: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	h.sesiBaru(w, r, acc, http.StatusCreated)
@@ -235,7 +235,7 @@ func (h *Handler) BuatPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if acc.PunyaPassword {
-		writeError(w, http.StatusConflict, "Akun sudah punya password")
+		writeError(w, http.StatusConflict, "Akun sudah punya kata sandi.")
 		return
 	}
 	if ok, msg := ValidPassword(req.PasswordBaru); !ok {
@@ -245,17 +245,17 @@ func (h *Handler) BuatPassword(w http.ResponseWriter, r *http.Request) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.PasswordBaru), bcryptCost)
 	if err != nil {
 		log.Printf("[ERROR] customer hash: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	dibuat, err := h.repo.BuatPassword(r.Context(), acc.ID, string(hash))
 	if err != nil {
 		log.Printf("[ERROR] customer buat password: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !dibuat {
-		writeError(w, http.StatusConflict, "Akun sudah punya password")
+		writeError(w, http.StatusConflict, "Akun sudah punya kata sandi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

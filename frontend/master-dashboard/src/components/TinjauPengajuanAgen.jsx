@@ -117,7 +117,7 @@ export default function TinjauPengajuanAgen({ akunId, onBerubah, onAda }) {
     }
   };
 
-  if (gagalMuat) return <Alert variant="error" message="Pengajuan agen gagal dimuat. Silakan coba kembali." />;
+  if (gagalMuat) return <Alert variant="error" message="Pengajuan agen gagal dimuat. Coba lagi." />;
   if (!row) return null;
 
   const p = row.pembayaran;

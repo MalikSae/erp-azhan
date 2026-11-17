@@ -74,7 +74,7 @@ func (h *Handler) CekHapusAkun(w http.ResponseWriter, r *http.Request) {
 	alasan, err := alasanTolakHapus(r.Context(), h.repo.db, acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	v := HapusAkunView{Bisa: alasan == ""}
@@ -102,11 +102,11 @@ func (h *Handler) cekKonfirmasiHapus(w http.ResponseWriter, r *http.Request, acc
 	var sub string
 	if err := h.repo.db.QueryRowContext(r.Context(), `SELECT COALESCE(google_sub, '') FROM customer_accounts WHERE id = ?`, acc.ID).Scan(&sub); err != nil {
 		log.Printf("[ERROR] customer hapus akun google: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return false
 	}
 	if sub == "" || sub != p.Sub {
-		writeError(w, http.StatusForbidden, "Akun Google tidak sesuai")
+		writeError(w, http.StatusForbidden, "Akun Google tidak sesuai.")
 		return false
 	}
 	return true
@@ -126,7 +126,7 @@ func (h *Handler) HapusAkun(w http.ResponseWriter, r *http.Request) {
 	tx, err := h.repo.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		log.Printf("[ERROR] customer hapus akun: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	defer func() { _ = tx.Rollback() }()
@@ -134,7 +134,7 @@ func (h *Handler) HapusAkun(w http.ResponseWriter, r *http.Request) {
 	var x int64
 	if err := tx.QueryRowContext(r.Context(), `SELECT id FROM customer_accounts WHERE id = ? FOR UPDATE`, acc.ID).Scan(&x); err != nil {
 		log.Printf("[ERROR] customer hapus akun kunci: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	alasan, err := alasanTolakHapus(r.Context(), tx, acc.ID)
@@ -150,7 +150,7 @@ func (h *Handler) HapusAkun(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer hapus akun: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

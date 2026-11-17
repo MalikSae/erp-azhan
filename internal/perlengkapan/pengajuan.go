@@ -84,7 +84,7 @@ func (h *Handler) ListPengajuan(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.ListPengajuan(r.Context(), brandID, scheduleID)
 	if err != nil {
 		log.Printf("[ERROR] perlengkapan pengajuan: %v", err)
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat pengajuan perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memuat pengajuan perlengkapan.")
 		return
 	}
 	h.sendJSON(w, http.StatusOK, items)

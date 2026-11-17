@@ -149,20 +149,20 @@ func (h *Handler) CreateRefund(w http.ResponseWriter, r *http.Request) {
 	}
 	var req CreateRefundRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if req.Jumlah <= 0 || !shared.RupiahBulat(req.Jumlah) {
-		writeError(w, http.StatusBadRequest, "jumlah harus bilangan bulat lebih dari 0")
+		writeError(w, http.StatusBadRequest, "Jumlah harus bilangan bulat lebih dari 0.")
 		return
 	}
 	if req.Jumlah > maxNominal {
-		writeError(w, http.StatusBadRequest, "jumlah terlalu besar")
+		writeError(w, http.StatusBadRequest, "Jumlah terlalu besar.")
 		return
 	}
 	req.Tanggal = strings.TrimSpace(req.Tanggal)
 	if !shared.TanggalTidakDiMasaDepan(req.Tanggal) {
-		writeError(w, http.StatusBadRequest, "tanggal pengembalian tidak valid atau berada di masa depan")
+		writeError(w, http.StatusBadRequest, "Tanggal pengembalian tidak valid atau berada di masa depan.")
 		return
 	}
 	req.Metode = trimOptional(req.Metode, 50)

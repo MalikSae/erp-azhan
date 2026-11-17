@@ -89,7 +89,7 @@ const ItineraryFormPage = () => {
         state: { successMessage: `Itinerary "${payload.title}" berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
       });
     } catch (error) {
-      setFormErrors(error.response?.data?.error || "Terjadi kesalahan, coba lagi.");
+      setFormErrors(error.response?.data?.error || "Data gagal disimpan. Coba lagi.");
     } finally {
       setIsSubmitting(false);
     }

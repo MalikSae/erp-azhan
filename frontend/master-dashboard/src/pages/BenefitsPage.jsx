@@ -44,7 +44,7 @@ export default function BenefitsPage() {
       const data = await listBenefits(isHolding ? Number(brandId) : undefined);
       if (nomor === nomorMuat.current) setItems(data);
     } catch (err) {
-      if (nomor === nomorMuat.current) setError(err.response?.data?.error || 'Benefit gagal dimuat. Silakan coba kembali.');
+      if (nomor === nomorMuat.current) setError(err.response?.data?.error || 'Benefit gagal dimuat. Coba lagi.');
     } finally {
       if (nomor === nomorMuat.current) setLoading(false);
     }

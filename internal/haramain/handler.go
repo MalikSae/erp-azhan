@@ -45,14 +45,14 @@ func tulisGalat(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] haramain: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memproses data")
+		writeError(w, http.StatusInternalServerError, "Gagal memproses data.")
 	}
 }
 
 func idParam(w http.ResponseWriter, r *http.Request, nama string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, nama), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -130,7 +130,7 @@ func (h *Handler) SimpanUlasanAkun(w http.ResponseWriter, r *http.Request) {
 	}
 	var in InputUlasan
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := SimpanUlasan(r.Context(), h.db, id, acc.ID, in, h.now()); err != nil {
@@ -197,7 +197,7 @@ func (h *Handler) DetailAdmin(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) bacaInput(w http.ResponseWriter, r *http.Request) (Input, bool) {
 	var in Input
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return in, false
 	}
 	return in, true
@@ -258,7 +258,7 @@ func (h *Handler) UrutkanAdmin(w http.ResponseWriter, r *http.Request) {
 		IDs []int64 `json:"ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
@@ -298,7 +298,7 @@ func (h *Handler) AturTampilAdmin(w http.ResponseWriter, r *http.Request) {
 		Disembunyikan bool `json:"disembunyikan"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := AturTampil(r.Context(), h.db, id, identity.GetAdminUserID(r.Context()), req.Disembunyikan); err != nil {

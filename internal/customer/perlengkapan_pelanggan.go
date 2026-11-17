@@ -145,12 +145,12 @@ func (o *Orders) pesananMilik(w http.ResponseWriter, r *http.Request) (*Account,
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return nil, nil, false
 	}
 	if err != nil {
 		log.Printf("[ERROR] account perlengkapan booking: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil booking")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil booking.")
 		return nil, nil, false
 	}
 	return acc, order, true
@@ -160,7 +160,7 @@ func (o *Orders) tulisPerlengkapan(w http.ResponseWriter, r *http.Request, acc *
 	view, err := o.perlengkapanBooking(r.Context(), acc, order)
 	if err != nil {
 		log.Printf("[ERROR] account perlengkapan: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil perlengkapan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil perlengkapan.")
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -189,15 +189,15 @@ func (o *Orders) AjukanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 	}
 	var req ajukanPerlengkapanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.JamaahIDs) == 0 || len(req.JamaahIDs) > 50 {
-		writeError(w, http.StatusBadRequest, "pilih minimal satu jamaah")
+		writeError(w, http.StatusBadRequest, "Pilih minimal satu jamaah.")
 		return
 	}
 	if strings.TrimSpace(req.Metode) != metodeAmbilKantor {
-		writeError(w, http.StatusBadRequest, "metode pengambilan tidak tersedia")
+		writeError(w, http.StatusBadRequest, "Metode pengambilan tidak tersedia.")
 		return
 	}
 	if !bisaAjukanPerlengkapan(order) {
-		writeError(w, http.StatusConflict, "perlengkapan bisa diajukan setelah DP terverifikasi")
+		writeError(w, http.StatusConflict, "Perlengkapan bisa diajukan setelah DP terverifikasi.")
 		return
 	}
 	err := dalamTx(r.Context(), o.db, func(tx *sql.Tx) error {
@@ -212,7 +212,7 @@ func (o *Orders) AjukanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		log.Printf("[ERROR] account ajukan perlengkapan: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengajukan perlengkapan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengajukan perlengkapan.")
 		return
 	}
 	o.tulisPerlengkapan(w, r, acc, order)
@@ -271,7 +271,7 @@ func (o *Orders) TerimaPerlengkapan(w http.ResponseWriter, r *http.Request) {
 	}
 	var req terimaPerlengkapanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.JamaahID <= 0 {
-		writeError(w, http.StatusBadRequest, "jamaah_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Jamaah wajib diisi.")
 		return
 	}
 	err := dalamTx(r.Context(), o.db, func(tx *sql.Tx) error {
@@ -286,7 +286,7 @@ func (o *Orders) TerimaPerlengkapan(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		log.Printf("[ERROR] account terima perlengkapan: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengonfirmasi penerimaan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengonfirmasi penerimaan.")
 		return
 	}
 	o.tulisPerlengkapan(w, r, acc, order)

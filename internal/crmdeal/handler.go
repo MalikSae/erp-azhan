@@ -24,7 +24,7 @@ func NewHandler(repo *Repository) *Handler {
 func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	if _, err := uuid.Parse(idempotencyKey); err != nil {
-		writeError(w, http.StatusBadRequest, "Idempotency-Key UUID wajib diisi")
+		writeError(w, http.StatusBadRequest, "Idempotency-Key UUID wajib diisi.")
 		return
 	}
 
@@ -32,7 +32,7 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -44,11 +44,11 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 		finalBrandID = *req.BrandID
 	}
 	if finalBrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib untuk Super Admin")
+		writeError(w, http.StatusBadRequest, "Brand wajib dipilih.")
 		return
 	}
 	if _, err := uuid.Parse(req.CRMLeadID); err != nil {
-		writeError(w, http.StatusBadRequest, "crm_lead_id tidak valid")
+		writeError(w, http.StatusBadRequest, "Lead tidak valid.")
 		return
 	}
 	if req.Pax == 0 {
@@ -59,33 +59,33 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.ScheduleID <= 0 || req.Pax < 1 {
-		writeError(w, http.StatusBadRequest, "schedule_id dan pax wajib valid")
+		writeError(w, http.StatusBadRequest, "Paket dan pax wajib valid.")
 		return
 	}
 	if req.RoomType != "Quad" && req.RoomType != "Triple" && req.RoomType != "Double" {
-		writeError(w, http.StatusBadRequest, "room_type harus Quad, Triple, atau Double")
+		writeError(w, http.StatusBadRequest, "Tipe kamar harus Quad, Triple, atau Double.")
 		return
 	}
 	if req.Jamaah.ID == nil && (strings.TrimSpace(req.Jamaah.NamaLengkap) == "" || strings.TrimSpace(req.Jamaah.NoHP) == "") {
-		writeError(w, http.StatusBadRequest, "nama_lengkap dan no_hp jamaah wajib diisi")
+		writeError(w, http.StatusBadRequest, "Nama lengkap dan nomor HP jamaah wajib diisi.")
 		return
 	}
 	if req.CommitmentType == "book_seat" {
 		if req.SeatHoldExpiresAt == nil {
-			writeError(w, http.StatusBadRequest, "seat_hold_expires_at wajib diisi")
+			writeError(w, http.StatusBadRequest, "Batas hold seat wajib diisi.")
 			return
 		}
 		expiresAt, err := time.Parse(time.RFC3339, *req.SeatHoldExpiresAt)
 		if err != nil || !expiresAt.After(time.Now().Add(time.Minute)) {
-			writeError(w, http.StatusBadRequest, "seat_hold_expires_at harus RFC3339 dan berada di masa depan")
+			writeError(w, http.StatusBadRequest, "Batas hold seat harus di masa depan.")
 			return
 		}
 	} else if req.CommitmentType != "dp" && req.CommitmentType != "lunas" {
-		writeError(w, http.StatusBadRequest, "commitment_type tidak valid")
+		writeError(w, http.StatusBadRequest, "Jenis komitmen tidak valid.")
 		return
 	}
 	if req.CommitmentType != "book_seat" && req.PaymentAmount == nil {
-		writeError(w, http.StatusBadRequest, "payment_amount wajib diisi")
+		writeError(w, http.StatusBadRequest, "Nominal pembayaran wajib diisi.")
 		return
 	}
 	// Bukti bayar harus unggahan admin resmi milik brand pemanggil, sama seperti alur pembayaran biasa.
@@ -100,7 +100,7 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			log.Printf("[ERROR] crmdeal validasi bukti: %v", err)
-			writeError(w, http.StatusInternalServerError, "proses Deal gagal")
+			writeError(w, http.StatusInternalServerError, "Proses Deal gagal.")
 			return
 		} else {
 			req.PaymentProofURL = &u
@@ -119,7 +119,7 @@ func (h *Handler) ProcessDeal(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrBrandCodeMissing), errors.Is(err, ErrInvalidPayment):
 			writeError(w, http.StatusUnprocessableEntity, err.Error())
 		default:
-			writeError(w, http.StatusInternalServerError, "proses Deal gagal")
+			writeError(w, http.StatusInternalServerError, "Proses Deal gagal.")
 		}
 		return
 	}

@@ -50,14 +50,14 @@ func (h *Handler) RequireCustomer(next http.Handler) http.Handler {
 		raw := bearer(r)
 		acc, err := h.repo.AccountBySession(r.Context(), raw)
 		if errors.Is(err, ErrSessionInvalid) {
-			writeError(w, http.StatusUnauthorized, "sesi berakhir, silakan masuk kembali")
+			writeError(w, http.StatusUnauthorized, "Sesi berakhir. Masuk kembali.")
 			return
 		}
 		if err != nil {
 			// Gangguan database bukan sesi berakhir: app menghapus token tersimpan bila menerima 401,
 			// jadi galat sementara dijawab 500 supaya pengguna tidak ikut keluar.
 			log.Printf("[ERROR] customer sesi: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return
 		}
 		ctx := context.WithValue(r.Context(), accountKey, acc)
