@@ -207,14 +207,8 @@ func (h *Handler) DaftarGoogle(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	kodeAgen, ok, err := h.repo.KodeAgenDipakai(r.Context(), req.BrandID, req.KodeAgen, req.KodeReferral)
-	if err != nil {
-		log.Printf("[ERROR] customer kode agen: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
-		return
-	}
+	kodeAgen, ok := h.pilihKodeAgen(w, r, ip, req.BrandID, req.KodeAgen, req.KodeReferral)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "Kode agen tidak ditemukan")
 		return
 	}
 	acc, err := h.repo.CreateGoogle(r.Context(), req.BrandID, nama, p.Email, req.NoHP, p.Sub, kodeAgen, bio)

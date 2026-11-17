@@ -33,22 +33,28 @@ const (
 	// ketat: per email (lintas IP) dan per IP (lintas email), selain per IP+email di atas.
 	forgotEmailLimit = 3  // per jam per brand+email
 	forgotIPLimit    = 20 // per jam per IP
+	// Kode agen ketik yang tidak valid per IP: mencegah penebakan kode agen lewat pendaftaran app.
+	kodeAgenGagalLimit = 10 // per jam per IP
 )
 
+// KodeGalatKodeAgenTidakAda: kode mesin stabil untuk 400 kode agen ketik yang tidak valid.
+const KodeGalatKodeAgenTidakAda = "KODE_AGEN_TIDAK_ADA"
+
 type Handler struct {
-	repo        *Repository
-	mail        mailer.Sender
-	captcha     *shared.Turnstile
-	regIP       *shared.WindowLimiter
-	loginKey    *shared.WindowLimiter
-	loginIP     *shared.WindowLimiter
-	forgot      *shared.WindowLimiter
-	forgotEmail *shared.WindowLimiter
-	forgotIP    *shared.WindowLimiter
-	profile     *shared.WindowLimiter
-	pwFail      *shared.WindowLimiter
-	dummyHash   []byte
-	google      VerifikatorGoogle
+	repo          *Repository
+	mail          mailer.Sender
+	captcha       *shared.Turnstile
+	regIP         *shared.WindowLimiter
+	kodeAgenGagal *shared.WindowLimiter
+	loginKey      *shared.WindowLimiter
+	loginIP       *shared.WindowLimiter
+	forgot        *shared.WindowLimiter
+	forgotEmail   *shared.WindowLimiter
+	forgotIP      *shared.WindowLimiter
+	profile       *shared.WindowLimiter
+	pwFail        *shared.WindowLimiter
+	dummyHash     []byte
+	google        VerifikatorGoogle
 }
 
 func NewHandler(repo *Repository, m mailer.Sender) *Handler {
@@ -56,16 +62,17 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 	dummy, _ := bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), bcryptCost)
 	return &Handler{
 		repo: repo, mail: m, captcha: shared.NewTurnstile(),
-		regIP:       shared.NewWindowLimiter(registerIPLimit, time.Hour),
-		loginKey:    shared.NewWindowLimiter(loginKeyLimit, 15*time.Minute),
-		loginIP:     shared.NewWindowLimiter(loginIPLimit, 15*time.Minute),
-		forgot:      shared.NewWindowLimiter(forgotKeyLimit, time.Hour),
-		forgotEmail: shared.NewWindowLimiter(forgotEmailLimit, time.Hour),
-		forgotIP:    shared.NewWindowLimiter(forgotIPLimit, time.Hour),
-		profile:     shared.NewWindowLimiter(profileUpdateLimit, time.Hour),
-		pwFail:      shared.NewWindowLimiter(passwordFailLimit, 15*time.Minute),
-		dummyHash:   dummy,
-		google:      NewVerifikatorGoogle(),
+		regIP:         shared.NewWindowLimiter(registerIPLimit, time.Hour),
+		kodeAgenGagal: shared.NewWindowLimiter(kodeAgenGagalLimit, time.Hour),
+		loginKey:      shared.NewWindowLimiter(loginKeyLimit, 15*time.Minute),
+		loginIP:       shared.NewWindowLimiter(loginIPLimit, 15*time.Minute),
+		forgot:        shared.NewWindowLimiter(forgotKeyLimit, time.Hour),
+		forgotEmail:   shared.NewWindowLimiter(forgotEmailLimit, time.Hour),
+		forgotIP:      shared.NewWindowLimiter(forgotIPLimit, time.Hour),
+		profile:       shared.NewWindowLimiter(profileUpdateLimit, time.Hour),
+		pwFail:        shared.NewWindowLimiter(passwordFailLimit, 15*time.Minute),
+		dummyHash:     dummy,
+		google:        NewVerifikatorGoogle(),
 	}
 }
 
@@ -78,6 +85,38 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func writeErrorCode(w http.ResponseWriter, status int, msg, code string) {
+	writeJSON(w, status, map[string]string{"error": msg, "code": code})
+}
+
+// pilihKodeAgen memilih kode agen untuk akun baru di app (dipakai register-app dan google/daftar).
+// Kode ketik kosong tidak dihitung. Kode ketik dihitung per IP sampai terbukti valid; di atas batas dijawab 429.
+// Mengembalikan ok=false bila jawaban galat sudah ditulis.
+func (h *Handler) pilihKodeAgen(w http.ResponseWriter, r *http.Request, ip string, brandID int64, ketik, otomatis string) (string, bool) {
+	hitung := strings.TrimSpace(ketik) != ""
+	if hitung && !h.kodeAgenGagal.Take(ip) {
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan, coba lagi dalam 1 jam.")
+		return "", false
+	}
+	kode, ok, err := h.repo.KodeAgenDipakai(r.Context(), brandID, ketik, otomatis)
+	if err != nil {
+		if hitung {
+			h.kodeAgenGagal.Refund(ip)
+		}
+		log.Printf("[ERROR] customer kode agen: %v", err)
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		return "", false
+	}
+	if !ok {
+		writeErrorCode(w, http.StatusBadRequest, "Kode agen tidak ditemukan", KodeGalatKodeAgenTidakAda)
+		return "", false
+	}
+	if hitung {
+		h.kodeAgenGagal.Refund(ip)
+	}
+	return kode, true
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
@@ -264,14 +303,8 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 	}
 	kodeAgen := req.KodeReferral
 	if mode.kodeAgenKetik {
-		kode, ok, err := h.repo.KodeAgenDipakai(r.Context(), req.BrandID, req.KodeAgen, req.KodeReferral)
-		if err != nil {
-			log.Printf("[ERROR] customer kode agen: %v", err)
-			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
-			return
-		}
+		kode, ok := h.pilihKodeAgen(w, r, ip, req.BrandID, req.KodeAgen, req.KodeReferral)
 		if !ok {
-			writeError(w, http.StatusBadRequest, "Kode agen tidak ditemukan")
 			return
 		}
 		kodeAgen = kode
