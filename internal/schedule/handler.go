@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"erp-azhan/api/internal/benefit"
+	"erp-azhan/api/internal/itinerary"
 	"errors"
 	"fmt"
 	"log"
@@ -651,8 +652,20 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	}
 
 	// Gate 15: itinerary_id opsional, tapi kalau dikirim harus ada di DB
+	// Itinerary khusus (objek) menggantikan itinerary_id master dari body yang sama.
+	if req.ItineraryKhusus != nil {
+		req.ItineraryID = nil
+		if err := itinerary.ValidateDays(req.ItineraryKhusus.Days); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return nil, false
+		}
+	}
 	if req.ItineraryID != nil {
-		if exists, err := h.repo.ItineraryExists(ctx, *req.ItineraryID); err != nil {
+		var paketID int64
+		if existing != nil {
+			paketID = existing.ID
+		}
+		if exists, err := h.repo.ItineraryTersedia(ctx, *req.ItineraryID, paketID); err != nil {
 			log.Printf("[ERROR] schedule: %v", err)
 			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
 			return nil, false
@@ -677,31 +690,16 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		}
 	}
 
-	// Gate 15.3: klasifikasi web publik (journey_type, program_slug, destination_id).
+	// Gate 15.3: klasifikasi web publik (journey_type).
 	// Paket baru tanpa journey_type memakai default umroh; saat edit, tanpa journey_type klasifikasi tidak diubah.
 	journey := req.JourneyType
 	if journey == "" && existing == nil {
 		journey = JourneyUmroh
 	}
-	klasifikasi, err := normalizeKlasifikasi(journey, req.ProgramSlug, req.DestinationID)
+	klasifikasi, err := normalizeKlasifikasi(journey)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return nil, false
-	}
-	// Destinasi nonaktif hanya ditolak untuk pilihan baru; paket yang sudah memakainya tetap bisa disimpan.
-	destinasiTetap := existing != nil && klasifikasi != nil && klasifikasi.DestinationID != nil &&
-		existing.DestinationID != nil && *existing.DestinationID == *klasifikasi.DestinationID
-	if klasifikasi != nil && klasifikasi.DestinationID != nil && !destinasiTetap {
-		aktif, err := h.repo.DestinationActive(ctx, *klasifikasi.DestinationID)
-		if err != nil {
-			log.Printf("[ERROR] schedule: cek destinasi: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
-			return nil, false
-		}
-		if !aktif {
-			writeError(w, http.StatusBadRequest, "destination_id tidak valid atau destinasi tidak aktif")
-			return nil, false
-		}
 	}
 
 	// Gate 16: include_items & exclude_items — tidak boleh berisi string kosong
@@ -827,6 +825,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		NominalKomisiLangsung:    req.NominalKomisiLangsung,
 		NominalBonusPembinaan:    req.NominalBonusPembinaan,
 		ItineraryID:              req.ItineraryID,
+		ItineraryKhusus:          req.ItineraryKhusus,
 		IncludeItems:             includeItems,
 		ExcludeItems:             excludeItems,
 		BrosurURL:                req.BrosurURL,

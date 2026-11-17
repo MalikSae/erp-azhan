@@ -25,8 +25,8 @@ type Itinerary struct {
 	ID         int64          `json:"id"`
 	Title      string         `json:"title"`
 	CategoryID *int64         `json:"category_id"`
-	Days      []ItineraryDay `json:"days"`
-	CreatedAt time.Time      `json:"created_at"`
+	Days       []ItineraryDay `json:"days"`
+	CreatedAt  time.Time      `json:"created_at"`
 }
 
 // ItineraryListItem dipakai di ListItineraries — tanpa Days, hanya DayCount dari COUNT(*).
@@ -35,8 +35,8 @@ type ItineraryListItem struct {
 	Title        string    `json:"title"`
 	CategoryID   *int64    `json:"category_id"`
 	CategoryName string    `json:"category_name"`
-	DayCount  int       `json:"day_count"`
-	CreatedAt time.Time `json:"created_at"`
+	DayCount     int       `json:"day_count"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // ─── Request structs ──────────────────────────────────────────────────────────
@@ -47,6 +47,13 @@ type DayRequest struct {
 	Title      string     `json:"title"`
 	Location   string     `json:"location"`
 	Activities []Activity `json:"activities"`
+}
+
+// KhususRequest adalah itinerary khusus milik satu paket (dikirim bersama form paket).
+// Title boleh kosong; pemanggil mengisinya dengan nama paket.
+type KhususRequest struct {
+	Title string       `json:"title"`
+	Days  []DayRequest `json:"days"`
 }
 
 // CreateItineraryRequest adalah payload untuk POST /api/admin/itineraries.

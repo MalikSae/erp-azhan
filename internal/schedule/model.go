@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/benefit"
+	"erp-azhan/api/internal/itinerary"
 )
 
 // CategoryRef menyimpan data relasi kategori paket.
@@ -44,25 +45,24 @@ type TransitHotel struct {
 
 // Schedule merepresentasikan baris lengkap tabel schedules di database.
 type Schedule struct {
-	EffectiveMinimalDP float64         `json:"effective_minimal_dp"`
-	ID                 int64           `json:"id"`
-	BrandID            int64           `json:"brand_id"`
-	CategoryID         *int64          `json:"category_id"`
-	Category           *CategoryRef    `json:"category"`
-	JourneyType        string          `json:"journey_type"`
-	ProgramSlug        *string         `json:"program_slug"`
-	DestinationID      *int64          `json:"destination_id"`
-	Destination        *DestinationRef `json:"destination"`
-	JadwalNama         string          `json:"jadwal_nama"`
-	Status             string          `json:"status"` // draft, published, archived
-	Views              int             `json:"views"`
-	IsDirectFlight     bool            `json:"is_direct_flight"`
-	SeatTotal          int             `json:"seat_total"`
-	SeatSisa           int             `json:"seat_sisa"`
-	BookingCount       int             `json:"booking_count"`
+	EffectiveMinimalDP float64      `json:"effective_minimal_dp"`
+	ID                 int64        `json:"id"`
+	BrandID            int64        `json:"brand_id"`
+	CategoryID         *int64       `json:"category_id"`
+	Category           *CategoryRef `json:"category"`
+	JourneyType        string       `json:"journey_type"`
+	JadwalNama         string       `json:"jadwal_nama"`
+	Status             string       `json:"status"` // draft, published, archived
+	Views              int          `json:"views"`
+	IsDirectFlight     bool         `json:"is_direct_flight"`
+	SeatTotal          int          `json:"seat_total"`
+	SeatSisa           int          `json:"seat_sisa"`
+	BookingCount       int          `json:"booking_count"`
 	// KomisiAktif: jumlah baris komisi aktif dari booking jadwal ini. Hanya diisi pada detail jadwal, untuk
 	// peringatan saat tanggal berangkat diubah (ketersediaan komisi mengikuti tanggal berangkat).
 	KomisiAktif int `json:"komisi_aktif"`
+	// ItineraryKhusus: itinerary paket ini salinan pribadi (bukan master). Hanya diisi pada detail admin.
+	ItineraryKhusus bool `json:"itinerary_khusus"`
 	// BookingAktif: jumlah booking aktif (baru/dp/lunas) jadwal ini. Hanya diisi pada detail jadwal; form
 	// memakainya untuk meminta alasan saat tanggal berangkat diubah.
 	BookingAktif             int            `json:"booking_aktif"`
@@ -260,10 +260,12 @@ type ScheduleInput struct {
 	NominalKomisiLangsung *float64
 	NominalBonusPembinaan *float64
 	ItineraryID           *int64
-	IncludeItems          []string
-	ExcludeItems          []string
-	BrosurURL             string
-	BrosurThumbURL        string
+	// ItineraryKhusus: nil = tidak diubah; isi = simpan salinan pribadi paket dan tunjuk ke sana.
+	ItineraryKhusus *itinerary.KhususRequest
+	IncludeItems    []string
+	ExcludeItems    []string
+	BrosurURL       string
+	BrosurThumbURL  string
 }
 
 // ─── Request structs ──────────────────────────────────────────────────────────
@@ -275,9 +277,7 @@ type CreateScheduleRequest struct {
 	ExpectedSeatTotal        *int    `json:"expected_seat_total"`
 	BrandID                  *int64  `json:"brand_id"` // Opsional bagi admin biasa, Wajib bagi Super Admin
 	CategoryID               *int64  `json:"category_id"`
-	JourneyType              string  `json:"journey_type"`   // kosong = klasifikasi tidak diubah (paket baru: umroh)
-	ProgramSlug              *string `json:"program_slug"`   // hanya dipakai bila journey_type dikirim
-	DestinationID            *int64  `json:"destination_id"` // hanya dipakai bila journey_type dikirim
+	JourneyType              string  `json:"journey_type"` // kosong = klasifikasi tidak diubah (paket baru: umroh)
 	JadwalNama               string  `json:"jadwal_nama"`
 	Status                   string  `json:"status"`
 	IsDirectFlight           bool    `json:"is_direct_flight"`
@@ -310,10 +310,12 @@ type CreateScheduleRequest struct {
 	NominalKomisiLangsung *float64 `json:"nominal_komisi_langsung"`
 	NominalBonusPembinaan *float64 `json:"nominal_bonus_pembinaan"`
 	ItineraryID           *int64   `json:"itinerary_id"`
-	IncludeItems          []string `json:"include_items"`
-	ExcludeItems          []string `json:"exclude_items"`
-	BrosurURL             string   `json:"brosur_url"`
-	BrosurThumbURL        string   `json:"brosur_thumb_url"`
+	// ItineraryKhusus: absent or null = unchanged; object = private itinerary copy of this paket.
+	ItineraryKhusus *itinerary.KhususRequest `json:"itinerary_khusus"`
+	IncludeItems    []string                 `json:"include_items"`
+	ExcludeItems    []string                 `json:"exclude_items"`
+	BrosurURL       string                   `json:"brosur_url"`
+	BrosurThumbURL  string                   `json:"brosur_thumb_url"`
 }
 
 // UpdateScheduleRequest memiliki struktur yang sama persis dengan Create.

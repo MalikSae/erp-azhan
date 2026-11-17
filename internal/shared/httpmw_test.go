@@ -63,7 +63,7 @@ func TestPublicCacheHanyaUntuk200(t *testing.T) {
 	// Tanpa WriteHeader eksplisit (Write langsung) tetap 200 dan ter-cache.
 	h := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("[]")) }))
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/public/v1/destinations?brand=1", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/public/v1/packages?brand=1", nil))
 	if rec.Header().Get("Cache-Control") != "public, max-age=60" {
 		t.Fatalf("Write tanpa WriteHeader: %q", rec.Header().Get("Cache-Control"))
 	}

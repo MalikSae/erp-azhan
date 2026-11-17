@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"erp-azhan/api/internal/benefit"
+	"erp-azhan/api/internal/itinerary"
 	"erp-azhan/api/internal/shared"
 	"errors"
 	"fmt"
@@ -380,6 +381,12 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 		}
 	}
 
+	if inp.ItineraryKhusus != nil {
+		if err := simpanItineraryKhusus(ctx, tx, id, inp.ItineraryKhusus, inp.JadwalNama); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := setKlasifikasiTx(ctx, tx, id, inp.Klasifikasi); err != nil {
 		return nil, err
 	}
@@ -410,6 +417,15 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 
 	if err := prepareScheduleUpdate(ctx, tx, id, &inp, brandID, finalBrandID); err != nil {
 		return nil, err
+	}
+
+	// Tanpa itinerary_id dan tanpa itinerary_khusus: itinerary pribadi paket dipertahankan.
+	khususLama, err := itinerary.KhususID(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if inp.ItineraryKhusus == nil && inp.ItineraryID == nil && khususLama != nil {
+		inp.ItineraryID = khususLama
 	}
 
 	includeJSON, _ := json.Marshal(inp.IncludeItems)
@@ -457,6 +473,17 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 	// nil: clients that do not send lokasi_ids keep the stored locations.
 	if inp.LokasiIDs != nil {
 		if err := ubahLokasi(ctx, tx, id, *inp.LokasiIDs); err != nil {
+			return nil, err
+		}
+	}
+
+	if inp.ItineraryKhusus != nil {
+		if err := simpanItineraryKhusus(ctx, tx, id, inp.ItineraryKhusus, inp.JadwalNama); err != nil {
+			return nil, err
+		}
+	} else if khususLama != nil {
+		// Paket sekarang menunjuk master (atau tetap ke salinannya): salinan lain dibuang.
+		if err := itinerary.HapusKhusus(ctx, tx, id, inp.ItineraryID); err != nil {
 			return nil, err
 		}
 	}
@@ -627,8 +654,36 @@ func (r *Repository) Delete(ctx context.Context, id int64, brandID *int64) error
 	if pesan := tolakHapusPaket(status, pernahTayang); pesan != "" {
 		return fmt.Errorf("%w: %s", ErrConflict, pesan)
 	}
-	_, err := r.db.ExecContext(ctx, `DELETE FROM schedules WHERE id=?`, id)
-	return err
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("schedule.Delete tx: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM schedules WHERE id=?`, id); err != nil {
+		return err
+	}
+	// Itinerary pribadi paket ikut dihapus (hari ikut lewat CASCADE); FK menunjuk baris ini sudah hilang.
+	if err := itinerary.HapusKhusus(ctx, tx, id, nil); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// simpanItineraryKhusus menyimpan itinerary pribadi paket dan mengarahkan schedules.itinerary_id ke sana.
+// Judul kosong memakai nama paket.
+func simpanItineraryKhusus(ctx context.Context, tx *sql.Tx, scheduleID int64, k *itinerary.KhususRequest, namaPaket string) error {
+	title := strings.TrimSpace(k.Title)
+	if title == "" {
+		title = strings.TrimSpace(namaPaket)
+	}
+	id, err := itinerary.SimpanKhusus(ctx, tx, scheduleID, title, k.Days)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET itinerary_id=? WHERE id=?`, id, scheduleID); err != nil {
+		return fmt.Errorf("schedule.simpanItineraryKhusus tunjuk: %w", err)
+	}
+	return nil
 }
 
 // ─── Existence checks (dipakai handler untuk validasi FK) ─────────────────────
@@ -649,8 +704,13 @@ func (r *Repository) HotelExists(ctx context.Context, id int64) (bool, error) {
 
 // ItineraryExists memeriksa apakah itinerary dengan id tersebut ada.
 func (r *Repository) ItineraryExists(ctx context.Context, id int64) (bool, error) {
+	return r.ItineraryTersedia(ctx, id, 0)
+}
+
+// ItineraryTersedia: id itu master, atau salinan pribadi milik paket scheduleID (0 = paket baru).
+func (r *Repository) ItineraryTersedia(ctx context.Context, id, scheduleID int64) (bool, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM itineraries WHERE id=?`, id).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM itineraries WHERE id=? AND (schedule_id IS NULL OR schedule_id=?)`, id, scheduleID).Scan(&count)
 	return count > 0, err
 }
 
@@ -728,6 +788,12 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 		return nil, fmt.Errorf("schedule.GetByID lokasi: %w", err)
 	}
 	s.LokasiIDs = idLokasi(s.Lokasi)
+
+	if s.ItineraryID != nil {
+		if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM itineraries WHERE id=? AND schedule_id=?)`, *s.ItineraryID, s.ID).Scan(&s.ItineraryKhusus); err != nil {
+			return nil, fmt.Errorf("schedule.GetByID itinerary khusus: %w", err)
+		}
+	}
 
 	var bCount int
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id = ?`, s.ID).Scan(&bCount); err != nil {
