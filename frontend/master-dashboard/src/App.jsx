@@ -30,7 +30,6 @@ import ManasikFormPage from './pages/ManasikFormPage';
 import ManasikDetailPage from './pages/ManasikDetailPage';
 import ScheduleFormPage from './pages/ScheduleFormPage';
 import CategoriesPage from './pages/CategoriesPage';
-import DestinationsPage from './pages/DestinationsPage';
 import InventoryPerlengkapanPage from './pages/InventoryPerlengkapanPage';
 import PengajuanPerlengkapanPage from './pages/PengajuanPerlengkapanPage';
 import InventoryRiwayatStokPage from './pages/InventoryRiwayatStokPage';
@@ -70,7 +69,6 @@ function AppRoutes() {
           <Route path="/hotels" element={<RequireAccess perm="masterdata.view"><HotelsPage /></RequireAccess>} />
           <Route path="/airlines" element={<RequireAccess perm="masterdata.view"><AirlinesPage /></RequireAccess>} />
           <Route path="/categories" element={<RequireAccess perm="masterdata.view"><CategoriesPage /></RequireAccess>} />
-          <Route path="/destinations" element={<RequireAccess perm="masterdata.view"><DestinationsPage /></RequireAccess>} />
           <Route path="/benefits" element={<RequireAccess perm="masterdata.view"><BenefitsPage /></RequireAccess>} />
           <Route path="/itineraries" element={<RequireAccess perm="masterdata.view"><ItinerariesPage /></RequireAccess>} />
           <Route path="/itineraries/new" element={<RequireAccess perm="masterdata.edit"><ItineraryFormPage /></RequireAccess>} />

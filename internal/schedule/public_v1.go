@@ -67,20 +67,10 @@ type SitemapEntryV1 struct {
 	Klasifikasi
 }
 
-// DestinationV1 adalah destinasi aktif beserta jumlah paket yang sedang dijual.
-type DestinationV1 struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Slug         string `json:"slug"`
-	PackageCount int    `json:"package_count"`
-}
-
 // filterV1 menampung filter daftar paket.
 type filterV1 struct {
 	Periode      string // YYYY-MM
-	Destinasi    string // slug destinasi
 	Tier         string // hemat|reguler|comfort|premium
-	Program      string // slug program
 	Durasi       int
 	HotelBintang int
 	HargaMaks    float64
@@ -111,8 +101,6 @@ func parseFilterV1(q map[string][]string) (filterV1, error) {
 		}
 		f.Periode = v
 	}
-	f.Destinasi = strings.ToLower(get("destinasi"))
-	f.Program = strings.ToLower(get("program"))
 	if v := strings.ToLower(get("tier")); v != "" {
 		if !tierValid[v] {
 			return f, fmt.Errorf("tier harus salah satu dari hemat, reguler, comfort, premium")
@@ -207,12 +195,6 @@ func (f filterV1) match(p PackageV1) bool {
 	if f.Periode != "" && !strings.HasPrefix(p.BerangkatTanggal, f.Periode) {
 		return false
 	}
-	if f.Destinasi != "" && (p.Destination == nil || p.Destination.Slug != f.Destinasi) {
-		return false
-	}
-	if f.Program != "" && (p.ProgramSlug == nil || *p.ProgramSlug != f.Program) {
-		return false
-	}
 	if f.Tier != "" && (p.Tier == nil || p.Tier.SEO == nil || *p.Tier.SEO != f.Tier) {
 		return false
 	}
@@ -299,7 +281,7 @@ func (h *Handler) visiblePackages(ctx context.Context, brandID int64) ([]Package
 
 // ListPackagesV1 godoc
 // GET /api/public/v1/packages?brand=ID
-// Filter: periode (YYYY-MM), destinasi (slug), tier, program, durasi, hotel_bintang, harga_maks, registrasi,
+// Filter: periode (YYYY-MM), tier, durasi, hotel_bintang, harga_maks, registrasi,
 // updated_since, page, per_page. Hanya paket published yang berangkat 30 hari atau lebih dari hari ini.
 func (h *Handler) ListPackagesV1(w http.ResponseWriter, r *http.Request) {
 	brandID, ok := brandParam(w, r)
@@ -394,23 +376,6 @@ func gonePackage(s *Schedule, k Klasifikasi, reason string) GonePackageV1 {
 	}
 }
 
-// ListDestinationsV1 godoc
-// GET /api/public/v1/destinations?brand=ID
-// Destinasi aktif yang punya paket dijual, beserta jumlah paketnya.
-func (h *Handler) ListDestinationsV1(w http.ResponseWriter, r *http.Request) {
-	brandID, ok := brandParam(w, r)
-	if !ok {
-		return
-	}
-	items, err := h.repo.ListPublicDestinations(r.Context(), brandID, batasPublikWIB())
-	if err != nil {
-		log.Printf("[ERROR] schedule v1: destinasi: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data destinasi")
-		return
-	}
-	writeJSON(w, http.StatusOK, items)
-}
-
 // SitemapFeedV1 godoc
 // GET /api/public/v1/sitemap-feed?brand=ID
 // Paket yang layak masuk sitemap (dijual saat ini) beserta waktu perubahan terakhir.
@@ -435,30 +400,4 @@ func (h *Handler) SitemapFeedV1(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-// ListPublicDestinations menghitung paket yang sedang dijual per destinasi aktif.
-func (r *Repository) ListPublicDestinations(ctx context.Context, brandID int64, batas string) ([]DestinationV1, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT d.id, d.name, d.slug, COUNT(s.id)
-		FROM destinations d
-		JOIN schedules s ON s.destination_id = d.id
-			AND s.status = 'published' AND s.brand_id = ? AND s.berangkat_tanggal >= ?
-		WHERE d.is_active = TRUE
-		GROUP BY d.id, d.name, d.slug
-		ORDER BY d.name ASC`, brandID, batas)
-	if err != nil {
-		return nil, fmt.Errorf("schedule.ListPublicDestinations: %w", err)
-	}
-	defer rows.Close()
-
-	out := make([]DestinationV1, 0)
-	for rows.Next() {
-		var d DestinationV1
-		if err := rows.Scan(&d.ID, &d.Name, &d.Slug, &d.PackageCount); err != nil {
-			return nil, fmt.Errorf("schedule.ListPublicDestinations scan: %w", err)
-		}
-		out = append(out, d)
-	}
-	return out, rows.Err()
 }

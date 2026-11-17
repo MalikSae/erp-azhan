@@ -8,6 +8,7 @@ import Textarea from 'shared/ui/Textarea';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import AutocompleteInput from 'shared/ui/AutocompleteInput';
 import Button from 'shared/ui/Button';
+import Toggle from 'shared/ui/Toggle';
 import FormLayout, { FormSection, SidebarSection, FormAside } from 'shared/ui/FormLayout';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
@@ -27,8 +28,8 @@ import { listHotels } from '../api/hotels';
 import { listAirlines } from '../api/airlines';
 import { listAirports } from '../api/airports';
 import { listCategories } from '../api/categories';
-import { listDestinations } from '../api/destinations';
-import { listItineraries } from '../api/itineraries';
+import { listItineraries, getItinerary } from '../api/itineraries';
+import ItineraryDaysEditor, { emptyDay, normalizeDays, daysToPayload, validateDays } from '../components/ItineraryDaysEditor';
 import { listBrandOptions } from '../api/brands';
 import { uploadMediaWithOptions } from '../api/media';
 
@@ -76,6 +77,8 @@ const ScheduleFormPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingBrosur, setIsUploadingBrosur] = useState(false);
   const [formError, setFormError] = useState(null);
+  // DP dan komisi khusus: mati = ikut brand; nilai tersimpan hanya bila dinyalakan.
+  const [aturKhusus, setAturKhusus] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const errorRef = useRef(null);
   // Snapshot isian setelah data awal selesai dimuat, untuk peringatan "belum disimpan".
@@ -98,7 +101,6 @@ const ScheduleFormPage = () => {
   const [airlineOptions, setAirlineOptions] = useState([]);
   const [airportOptions, setAirportOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
-  const [destinationOptions, setDestinationOptions] = useState([]);
   const [itineraryOptions, setItineraryOptions] = useState([]);
   const [brandOptions, setBrandOptions] = useState([]);
 
@@ -110,6 +112,15 @@ const ScheduleFormPage = () => {
   const [perlInherited, setPerlInherited] = useState([]);
   const [perlInheritedLabel, setPerlInheritedLabel] = useState('');
   const [perlWasCustom, setPerlWasCustom] = useState(false);
+  const [perlOpen, setPerlOpen] = useState(false);
+  // Itinerary: pilih dari daftar (master) atau salinan khusus milik paket ini.
+  const [itinMode, setItinMode] = useState('master');
+  const [itinDays, setItinDays] = useState([]);
+  const [itinOpen, setItinOpen] = useState(false);
+  const [itinWasKhusus, setItinWasKhusus] = useState(false);
+  const [itinError, setItinError] = useState('');
+  const [itinCache, setItinCache] = useState({});
+  const [itinLoadingId, setItinLoadingId] = useState('');
   const [excludeItemsText, setExcludeItemsText] = useState('');
 
   const [berangkatFlightNo, setBerangkatFlightNo] = useState('');
@@ -157,8 +168,6 @@ const ScheduleFormPage = () => {
     brand_id: '',
     category_id: '',
     journey_type: 'umroh',
-    program_slug: '',
-    destination_id: '',
     // Highlight benefit terpilih, berurutan: [{ id, teks, ikon, is_active }].
     benefits: [],
     // Lokasi dikunjungi: id tempat Jelajah Haramain, berurutan.
@@ -176,8 +185,7 @@ const ScheduleFormPage = () => {
           listCategories(),
           listItineraries(),
           listBrandOptions(),
-          listAirports(),
-          listDestinations().catch(() => [])
+          listAirports()
         ];
 
         const results = await Promise.all(promises);
@@ -187,7 +195,6 @@ const ScheduleFormPage = () => {
         const itineraries = results[3];
         const brands = results[4] || [];
         const airports = results[5] || [];
-        const destinations = results[6] || [];
 
         setHotelOptions(hotels || []);
         setAirlineOptions(airlines || []);
@@ -195,7 +202,6 @@ const ScheduleFormPage = () => {
         setItineraryOptions(itineraries || []);
         setBrandOptions(brands || []);
         setAirportOptions(airports || []);
-        setDestinationOptions(destinations);
 
         // Perlengkapan jamaah: katalog item + set tersimpan (gagal memuat tidak menghalangi form).
         listPerlengkapanItems().then((d) => setPerlCatalog(d || [])).catch(() => setPerlCatalog([]));
@@ -211,6 +217,15 @@ const ScheduleFormPage = () => {
 
         if (sourceId) {
           const scheduleData = await getSchedule(sourceId);
+          // Itinerary khusus: muat harinya sebagai salinan baru (duplikat tidak memakai ulang id privat).
+          const khususId = scheduleData.itinerary_khusus ? (scheduleData.itinerary?.id || scheduleData.itinerary_id) : null;
+          if (khususId) {
+            setItinMode('khusus');
+            setItinWasKhusus(isEditMode);
+            getItinerary(khususId)
+              .then((d) => setItinDays(normalizeDays(d?.days)))
+              .catch(() => setItinError('Gagal memuat itinerary khusus.'));
+          }
           const safeArray = (arr) => (Array.isArray(arr) && arr.length > 0) ? arr : [''];
 
           const parseTransitData = (raw) => {
@@ -335,7 +350,7 @@ const ScheduleFormPage = () => {
             minimal_dp: scheduleData.minimal_dp ?? '',
             nominal_komisi_langsung: scheduleData.nominal_komisi_langsung ?? '',
             nominal_bonus_pembinaan: scheduleData.nominal_bonus_pembinaan ?? '',
-            itinerary_id: scheduleData.itinerary?.id || scheduleData.itinerary_id || '',
+            itinerary_id: scheduleData.itinerary_khusus ? '' : (scheduleData.itinerary?.id || scheduleData.itinerary_id || ''),
             include_items: safeArray(scheduleData.include_items),
             exclude_items: safeArray(scheduleData.exclude_items),
             brosur_url: scheduleData.brosur_url || '',
@@ -344,14 +359,13 @@ const ScheduleFormPage = () => {
             brand_id: scheduleData.brand_id || '',
             category_id: scheduleData.category_id || (scheduleData.category?.id || ''),
             journey_type: scheduleData.journey_type || 'umroh',
-            program_slug: scheduleData.program_slug || '',
-            destination_id: scheduleData.destination_id || scheduleData.destination?.id || '',
             benefits: (Array.isArray(scheduleData.benefits) ? scheduleData.benefits : []).map(b => ({ id: b.id, teks: b.teks, ikon: b.ikon, is_active: b.is_active !== false })),
             lokasi_ids: (Array.isArray(scheduleData.lokasi_ids) ? scheduleData.lokasi_ids : []).map(Number)
           };
           setLokasiTersimpan(Array.isArray(scheduleData.lokasi) ? scheduleData.lokasi : []);
 
           // Salinan: tanggal diisi ulang, seat terisi direset, dan selalu mulai sebagai draft.
+          setAturKhusus([scheduleData.minimal_dp, scheduleData.nominal_komisi_langsung, scheduleData.nominal_bonus_pembinaan].some((v) => v !== null && v !== undefined));
           setFormData(isEditMode ? loadedForm : {
             ...loadedForm,
             jadwal_nama: `${loadedForm.jadwal_nama} (Salinan)`.trim(),
@@ -687,24 +701,6 @@ const ScheduleFormPage = () => {
     }));
   };
 
-  const programOptions = useMemo(() => {
-    const base = [
-      { value: '', label: 'Tanpa program' },
-      { value: 'plus', label: 'Plus' },
-      { value: 'ramadhan', label: 'Ramadhan' },
-    ];
-    const cur = formData.program_slug;
-    if (cur && !base.some((o) => o.value === cur)) base.push({ value: cur, label: cur });
-    return base;
-  }, [formData.program_slug]);
-
-  const destinationDropdownOptions = useMemo(() => {
-    const opts = destinationOptions
-      .filter((d) => d.is_active || String(d.id) === String(formData.destination_id))
-      .map((d) => ({ value: d.id, label: d.is_active ? d.name : `${d.name} (nonaktif)` }));
-    return [{ value: '', label: 'Tanpa destinasi' }, ...opts];
-  }, [destinationOptions, formData.destination_id]);
-
   const airportDropdownOptions = useMemo(() => {
     return airportOptions.map(a => ({
       value: a.code,
@@ -716,8 +712,59 @@ const ScheduleFormPage = () => {
   const butuhAlasanTanggal = isEditMode && formData.booking_aktif > 0 && !!formData.berangkat_tanggal_awal
     && formData.berangkat_tanggal !== formData.berangkat_tanggal_awal;
 
+  const ensureItinDays = async (itId) => {
+    if (!itId || itinCache[itId]) return itinCache[itId] || null;
+    setItinLoadingId(String(itId));
+    try {
+      const d = await getItinerary(itId);
+      const days = normalizeDays(d?.days);
+      setItinCache((prev) => ({ ...prev, [itId]: days }));
+      return days;
+    } catch {
+      return null;
+    } finally {
+      setItinLoadingId('');
+    }
+  };
+
+  // Rincian itinerary master dimuat hanya saat dibuka.
+  useEffect(() => {
+    if (itinMode === 'master' && itinOpen && formData.itinerary_id) ensureItinDays(formData.itinerary_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itinMode, itinOpen, formData.itinerary_id]);
+
+  const handleItinMode = async (val) => {
+    const khusus = val === 'khusus';
+    setItinError('');
+    if (!khusus) {
+      setItinMode('master');
+      setItinOpen(false);
+      return;
+    }
+    setItinMode('khusus');
+    setItinOpen(true);
+    if (itinDays.length > 0) return;
+    const masterDays = formData.itinerary_id ? await ensureItinDays(formData.itinerary_id) : null;
+    setItinDays(masterDays && masterDays.length > 0 ? JSON.parse(JSON.stringify(masterDays)) : [emptyDay()]);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setItinError('');
+    if (itinMode === 'khusus') {
+      const msg = validateDays(itinDays);
+      if (msg) {
+        setItinError(msg);
+        setItinOpen(true);
+        document.getElementById('sec-itinerary')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+    }
+    if (itinMode === 'master' && itinWasKhusus && !formData.itinerary_id) {
+      setItinError('Pilih itinerary.');
+      document.getElementById('sec-itinerary')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     setIsSubmitting(true);
     setFormError(null);
     setFieldErrors({});
@@ -727,15 +774,14 @@ const ScheduleFormPage = () => {
       const hargaTriple = parseCurrency(formData.harga_triple);
       const hargaDouble = parseCurrency(formData.harga_double);
       const hargaInfant = formData.harga_infant !== '' ? parseCurrency(formData.harga_infant) : null;
-      const minimalDP = formData.minimal_dp !== '' ? parseCurrency(formData.minimal_dp) : null;
+      const minimalDP = aturKhusus && formData.minimal_dp !== '' ? parseCurrency(formData.minimal_dp) : null;
       // Kosong = ikut komisi bawaan brand (NULL); 0 tetap disimpan sebagai 0 = sengaja tanpa komisi.
-      const komisiLangsung = formData.nominal_komisi_langsung !== '' ? parseCurrency(formData.nominal_komisi_langsung) : null;
-      const bonusPembinaan = formData.nominal_bonus_pembinaan !== '' ? parseCurrency(formData.nominal_bonus_pembinaan) : null;
+      const komisiLangsung = aturKhusus && formData.nominal_komisi_langsung !== '' ? parseCurrency(formData.nominal_komisi_langsung) : null;
+      const bonusPembinaan = aturKhusus && formData.nominal_bonus_pembinaan !== '' ? parseCurrency(formData.nominal_bonus_pembinaan) : null;
 
       const errors = {};
       if (minimalDP !== null && (minimalDP < 0 || minimalDP > Math.min(hargaQuad, hargaTriple, hargaDouble))) errors.minimal_dp = 'DP harus antara 0 dan harga kamar termurah.';
 if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal = 'Tanggal pulang harus setelah tanggal berangkat.';
-      if (formData.program_slug === 'plus' && !formData.destination_id) errors.destination_id = 'Pilih destinasi untuk program Plus.';
       if (hargaInfant === null) errors.harga_infant = 'Isi harga infant.';
       if (butuhAlasanTanggal && !(formData.alasan_ubah_tanggal || '').trim()) errors.alasan_ubah_tanggal = 'Isi alasan ubah tanggal.';
       if (hargaTriple < hargaQuad) errors.harga_triple = 'Harga Triple tidak boleh di bawah harga Quad.';
@@ -785,8 +831,6 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         ...(isEditMode && formData.status === formData.status_awal ? {} : { status: formData.status || 'draft' }),
         ...(butuhAlasanTanggal ? { alasan_ubah_tanggal: (formData.alasan_ubah_tanggal || '').trim() } : {}),
         journey_type: formData.journey_type || 'umroh',
-        program_slug: formData.program_slug || null,
-        destination_id: formData.destination_id ? parseInt(formData.destination_id, 10) : null,
         is_direct_flight: !!formData.is_direct_flight,
         seat_total: seatTotalNum,
         ...(isEditMode ? { expected_seat_total: formData.expected_seat_total } : {}),
@@ -812,7 +856,10 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         minimal_dp: minimalDP,
         nominal_komisi_langsung: komisiLangsung,
         nominal_bonus_pembinaan: bonusPembinaan,
-        itinerary_id: formData.itinerary_id ? parseInt(formData.itinerary_id, 10) : null,
+        itinerary_id: itinMode === 'khusus' ? null : (formData.itinerary_id ? parseInt(formData.itinerary_id, 10) : null),
+        ...(itinMode === 'khusus'
+          ? { itinerary_khusus: { title: (formData.jadwal_nama || '').trim(), days: daysToPayload(itinDays) } }
+          : {}),
         include_items: includeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
         exclude_items: excludeItemsText.split('\n').map(item => item.trim()).filter(item => item !== ''),
         brosur_url: formData.brosur_url || '',
@@ -992,6 +1039,51 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     )}
                   </div>
                 </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* Brand */}
+                  <div>
+                    <CustomDropdown
+                      label="Brand"
+                      className="!mb-0"
+                      value={formData.brand_id}
+                      onChange={(val) => {
+                        handleChange({ target: { name: 'brand_id', value: val } });
+                        // Benefit milik satu brand: ganti brand mengosongkan pilihan.
+                        if (String(val) !== String(formData.brand_id)) setFormData(prev => ({ ...prev, benefits: [] }));
+                        const selectedBid = parseInt(val, 10);
+                        const currentCat = categoryOptions.find(c => String(c.id) === String(formData.category_id));
+                        if (currentCat && currentCat.brands && currentCat.brands.length > 0) {
+                          const brandSupported = currentCat.brands.some(b => b.id === selectedBid);
+                          if (!brandSupported) {
+                            setFormData(prev => ({ ...prev, brand_id: val, category_id: '' }));
+                          }
+                        }
+                      }}
+                      required
+                      placeholder="Pilih brand"
+                      options={brandOptions.map(b => ({ value: b.id, label: b.name }))}
+                    />
+                  </div>
+
+                  {/* Kategori */}
+                  <div>
+                    <CustomDropdown
+                      label="Kategori"
+                      className="!mb-0"
+                      value={formData.category_id}
+                      onChange={(val) => {
+                        handleChange({ target: { name: 'category_id', value: val } });
+                        // Itinerary yang sudah dipilih dilepas bila tidak cocok dengan kategori baru.
+                        const chosen = itineraryOptions.find(it => String(it.id) === String(formData.itinerary_id));
+                        if (val && chosen && chosen.category_id && String(chosen.category_id) !== String(val)) {
+                          setFormData(prev => ({ ...prev, category_id: val, itinerary_id: '' }));
+                        }
+                      }}
+                      placeholder="Pilih kategori"
+                      options={filteredCategories.map(c => ({ value: c.id, label: c.is_active ? c.name : `${c.name} (nonaktif)` }))}
+                    />
+                  </div>
+                </div>
               </div>
             </FormSection>
 
@@ -1044,6 +1136,12 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   />
                 </div>
 
+                <div className="border-t border-neutral-200 pt-4 mt-4 flex items-center justify-between gap-3">
+                  <label htmlFor="atur_khusus" className="text-sm font-medium text-neutral-800 font-body cursor-pointer">DP dan komisi khusus</label>
+                  <Toggle id="atur_khusus" name="atur_khusus" checked={aturKhusus} onChange={(e) => setAturKhusus(e.target.checked)} />
+                </div>
+                {aturKhusus && (
+                  <>
                 <div className="border-t border-neutral-200 pt-4 mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Input
                     label="Minimal DP"
@@ -1087,6 +1185,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   </div>
                   <p className="text-xs text-neutral-500 font-body">Isi 0 untuk tanpa komisi.</p>
                 </div>
+                  </>
+                )}
               </div>
             </FormSection>
             <FormSection id="sec-penerbangan" title="Penerbangan">
@@ -1554,7 +1654,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
               </div>
             </FormSection>
 
-            <FormSection id="sec-benefit" title="Highlight Benefit">
+            <FormSection id="sec-benefit" title="Highlight Benefit" aside={<span className="text-xs font-body text-neutral-500">{formData.benefits.length}/{JUMLAH_BENEFIT_PAKET}</span>}>
               <HighlightBenefitSection
                 brandId={formData.brand_id}
                 value={formData.benefits}
@@ -1563,7 +1663,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
               />
             </FormSection>
 
-            <FormSection id="sec-lokasi" title="Lokasi Dikunjungi">
+            <FormSection id="sec-lokasi" title="Lokasi Dikunjungi" aside={<span className="text-xs font-body text-neutral-500">{formData.lokasi_ids.length}/{MAKS_LOKASI_PAKET}</span>}>
               <LokasiDikunjungiSection
                 value={formData.lokasi_ids}
                 tersimpan={lokasiTersimpan}
@@ -1610,6 +1710,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     const val = v?.target ? v.target.value : v;
                     const custom = val === 'khusus';
                     setPerlCustom(custom);
+                    setPerlOpen(custom);
                     // Pertama kali memilih set khusus: mulai dari set bawaan agar tinggal disesuaikan.
                     if (custom && perlItems.length === 0) {
                       setPerlItems(perlInherited.map((r) => ({ perlengkapan_item_id: r.perlengkapan_item_id, qty: r.qty, untuk: r.untuk || 'semua' })));
@@ -1621,31 +1722,110 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   ]}
                 />
 
-                {perlCustom ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 truncate text-sm font-body text-neutral-600">
+                    {perlCustom
+                      ? `${perlItems.length} item`
+                      : `${perlInheritedLabel || 'Set bawaan'} · ${perlInherited.length} item`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPerlOpen((v) => !v)}
+                    className="shrink-0 text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                  >
+                    {perlOpen ? 'Sembunyikan rincian' : 'Lihat rincian'}
+                  </button>
+                </div>
+
+                {perlOpen && (perlCustom ? (
                   <PerlengkapanSetEditor catalog={perlCatalog} value={perlItems} onChange={setPerlItems} />
                 ) : (
-                  <div>
-                    <p className="mb-1 text-xs font-body text-neutral-400">{perlInheritedLabel || 'Set bawaan'}</p>
-                    <PerlengkapanSetList items={perlInherited} emptyText="Belum ada set bawaan." />
-                  </div>
-                )}
+                  <PerlengkapanSetList items={perlInherited} emptyText="Belum ada set bawaan." />
+                ))}
               </div>
             </FormSection>
 
             <FormSection id="sec-itinerary" title="Itinerary">
               <div className="space-y-4">
-                {/* Itinerary Dropdown */}
-                <div className="w-full">
-                  <CustomDropdown
-                    className="!mb-0"
-                    value={formData.itinerary_id}
-                    onChange={(val) => handleChange({ target: { name: 'itinerary_id', value: val } })}
-                    placeholder="Pilih itinerary"
-                    options={itineraryOptions
+                <CustomDropdown
+                  label="Isi itinerary"
+                  className="!mb-0"
+                  value={itinMode === 'khusus' ? 'khusus' : (formData.itinerary_id ? String(formData.itinerary_id) : '')}
+                  placeholder="Pilih itinerary"
+                  onChange={(v) => {
+                    const val = v?.target ? v.target.value : v;
+                    if (val === 'khusus') {
+                      handleItinMode('khusus');
+                      return;
+                    }
+                    handleItinMode('master');
+                    handleChange({ target: { name: 'itinerary_id', value: val } });
+                  }}
+                  options={[
+                    ...itineraryOptions
                       .filter(it => !formData.category_id || !it.category_id || String(it.category_id) === String(formData.category_id) || String(it.id) === String(formData.itinerary_id))
-                      .map(it => ({ value: it.id, label: `${it.title} (${it.day_count || it.duration_days || '-'} hari)` }))}
-                  />
-                </div>
+                      .map(it => ({ value: String(it.id), label: `${it.title} (${it.day_count || it.duration_days || '-'} hari)` })),
+                    { value: 'khusus', label: 'Atur khusus untuk paket ini' },
+                  ]}
+                />
+
+                {itinMode === 'master' ? (
+                  <>
+                    {formData.itinerary_id && (() => {
+                      const picked = itineraryOptions.find((it) => String(it.id) === String(formData.itinerary_id));
+                      const days = itinCache[formData.itinerary_id];
+                      const total = days ? days.length : (picked?.day_count || picked?.duration_days || 0);
+                      return (
+                        <>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="min-w-0 truncate text-sm font-body text-neutral-600">
+                              {picked?.title || 'Itinerary'} · {total} hari
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setItinOpen((v) => !v)}
+                              className="shrink-0 text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                            >
+                              {itinOpen ? 'Sembunyikan rincian' : 'Lihat rincian'}
+                            </button>
+                          </div>
+                          {itinOpen && (
+                            itinLoadingId === String(formData.itinerary_id) && !days ? (
+                              <LoadingSpinner />
+                            ) : (
+                              <ol className="divide-y divide-neutral-200 text-sm font-body">
+                                {(days || []).map((d, i) => (
+                                  <li key={i} className="py-2">
+                                    <p className="font-medium text-neutral-800">Hari ke-{i + 1} · {d.location}</p>
+                                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-neutral-600">
+                                      {d.activities.map((act, j) => <li key={j}>{act.text}</li>)}
+                                    </ul>
+                                  </li>
+                                ))}
+                              </ol>
+                            )
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="min-w-0 truncate text-sm font-body text-neutral-600">{itinDays.length} hari</p>
+                      <button
+                        type="button"
+                        onClick={() => setItinOpen((v) => !v)}
+                        className="shrink-0 text-xs font-medium text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                      >
+                        {itinOpen ? 'Sembunyikan rincian' : 'Lihat rincian'}
+                      </button>
+                    </div>
+                    {itinOpen && <ItineraryDaysEditor days={itinDays} onChange={setItinDays} />}
+                  </>
+                )}
+
+                {itinError && <p className="text-xs font-body text-danger-600">{itinError}</p>}
               </div>
             </FormSection>
 
@@ -1663,92 +1843,6 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     { value: 'archived', label: 'Archived' }
                   ]}
                 />
-              </SidebarSection>
-
-              <SidebarSection title="Brand & Kategori">
-                <div className="space-y-4">
-                  {/* Brand */}
-                  <div>
-                    <CustomDropdown
-                      label="Brand"
-                      className="!mb-0"
-                      value={formData.brand_id}
-                      onChange={(val) => {
-                        handleChange({ target: { name: 'brand_id', value: val } });
-                        // Benefit milik satu brand: ganti brand mengosongkan pilihan.
-                        if (String(val) !== String(formData.brand_id)) setFormData(prev => ({ ...prev, benefits: [] }));
-                        const selectedBid = parseInt(val, 10);
-                        const currentCat = categoryOptions.find(c => String(c.id) === String(formData.category_id));
-                        if (currentCat && currentCat.brands && currentCat.brands.length > 0) {
-                          const brandSupported = currentCat.brands.some(b => b.id === selectedBid);
-                          if (!brandSupported) {
-                            setFormData(prev => ({ ...prev, brand_id: val, category_id: '' }));
-                          }
-                        }
-                      }}
-                      required
-                      placeholder="Pilih brand"
-                      options={brandOptions.map(b => ({ value: b.id, label: b.name }))}
-                    />
-                  </div>
-
-                  {/* Kategori */}
-                  <div>
-                    <CustomDropdown
-                      label="Kategori"
-                      className="!mb-0"
-                      value={formData.category_id}
-                      onChange={(val) => {
-                        handleChange({ target: { name: 'category_id', value: val } });
-                        // Itinerary yang sudah dipilih dilepas bila tidak cocok dengan kategori baru.
-                        const chosen = itineraryOptions.find(it => String(it.id) === String(formData.itinerary_id));
-                        if (val && chosen && chosen.category_id && String(chosen.category_id) !== String(val)) {
-                          setFormData(prev => ({ ...prev, category_id: val, itinerary_id: '' }));
-                        }
-                      }}
-                      placeholder="Pilih kategori"
-                      options={filteredCategories.map(c => ({ value: c.id, label: c.is_active ? c.name : `${c.name} (nonaktif)` }))}
-                    />
-                  </div>
-                </div>
-              </SidebarSection>
-
-              <SidebarSection title="Klasifikasi Web Publik">
-                <div className="space-y-4">
-                  {formData.journey_type && formData.journey_type !== 'umroh' ? (
-                    <div>
-                      <span className="mb-1.5 block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">Jenis perjalanan</span>
-                      <div className="h-9 flex items-center rounded-lg border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-500 font-body">
-                        {({ haji: 'Haji', wisata_halal: 'Wisata Halal' })[formData.journey_type] || formData.journey_type}
-                      </div>
-                    </div>
-                  ) : (
-                    <CustomDropdown
-                      label="Jenis perjalanan"
-                      className="!mb-0"
-                      value={formData.journey_type}
-                      onChange={(val) => handleChange({ target: { name: 'journey_type', value: val } })}
-                      options={[{ value: 'umroh', label: 'Umroh' }]}
-                    />
-                  )}
-                  <CustomDropdown
-                    label="Program"
-                    className="!mb-0"
-                    value={formData.program_slug}
-                    onChange={(val) => handleChange({ target: { name: 'program_slug', value: val } })}
-                    options={programOptions}
-                  />
-                  <CustomDropdown
-                    label="Destinasi"
-                    className="!mb-0"
-                    value={formData.destination_id}
-                    error={fieldErrors.destination_id}
-                    required={formData.program_slug === 'plus'}
-                    onChange={(val) => handleChange({ target: { name: 'destination_id', value: val } })}
-                    placeholder="Tanpa destinasi"
-                    options={destinationDropdownOptions}
-                  />
-                </div>
               </SidebarSection>
 
               <SidebarSection title="Gambar Utama">

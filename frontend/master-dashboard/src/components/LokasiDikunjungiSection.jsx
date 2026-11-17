@@ -129,9 +129,11 @@ export default function LokasiDikunjungiSection({ value = [], tersimpan = [], on
         </ol>
       )}
 
-      <p className={`text-xs font-body ${error ? 'text-danger-600' : 'text-neutral-500'}`} role={error ? 'alert' : undefined}>
-        {error || `${value.length} dari ${MAKS_LOKASI_PAKET} lokasi.`}
-      </p>
+      {error && (
+        <p className="text-xs font-body text-danger-600" role="alert">
+          {error}
+        </p>
+      )}
 
       {gagalMuat && (
         <div className="flex flex-wrap items-center gap-3">

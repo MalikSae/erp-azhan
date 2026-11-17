@@ -36,7 +36,7 @@ erp-azhan/
 ├── internal/
 │   ├── adminuser/           # Pengguna admin/staff dan reset password
 │   ├── agen/                # Agen Syiar: pengajuan, persetujuan, pencairan, ganti kaitan (portal agen belum dipasang)
-│   ├── airline/ airport/ hotel/ destination/ category/ itinerary/   # Master data
+│   ├── airline/ airport/ hotel/ category/ itinerary/   # Master data
 │   ├── bankaccount/         # Rekening transfer resmi per brand
 │   ├── booking/             # Booking (admin): status, diskon, progress, refund, cashback, perlengkapan
 │   ├── brand/               # Brand multi-brand dan resolusi domain
@@ -227,7 +227,7 @@ Daftar lengkap ada di `cmd/api/main.go`. Rute `/api/admin/*` dibatasi per izin (
 |---|---|---|
 | `GET` | `/api/health` | Status API dan koneksi database |
 | `GET` | `/api/public/v1/packages`, `/packages/{id}` | Paket untuk web publik (read-only, stabil, cache 60 detik) |
-| `GET` | `/api/public/v1/destinations`, `/sitemap-feed` | Destinasi dan data sitemap |
+| `GET` | `/sitemap-feed` | Data sitemap |
 | `GET` | `/api/schedules`, `/api/schedules/{id}` | Jadwal published |
 | `GET` | `/api/itineraries/{id}` | Itinerary paket |
 | `GET` | `/api/public/brand` | Identitas brand berdasarkan domain |
@@ -259,7 +259,7 @@ Kelompok rute di bawah `/api/admin/`:
 | Kelompok | Rute |
 |---|---|
 | Identitas dan organisasi | `users`, `roles`, `permissions`, `org-units`, `brands`, `bank-accounts` |
-| Master data | `hotels`, `airlines`, `airports`, `destinations`, `categories`, `itineraries` |
+| Master data | `hotels`, `airlines`, `airports`, `categories`, `itineraries` |
 | Paket | `schedules` (termasuk `/status`, `/seat`, `/perlengkapan`) |
 | Jamaah dan dokumen | `jamaah`, `jamaah/{id}/dokumen`, `dokumen/{id}/status` |
 | Booking | `bookings` (draft, finalize, status, seat-block, diskon, cashback, refund, progress, pax) |

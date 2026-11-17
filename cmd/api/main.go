@@ -31,7 +31,6 @@ import (
 	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/crmdeal"
 	"erp-azhan/api/internal/customer"
-	"erp-azhan/api/internal/destination"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/haramain"
 	"erp-azhan/api/internal/hotel"
@@ -39,11 +38,11 @@ import (
 	"erp-azhan/api/internal/itinerary"
 	"erp-azhan/api/internal/jamaah"
 	"erp-azhan/api/internal/mailer"
+	"erp-azhan/api/internal/manasik"
 	"erp-azhan/api/internal/media"
+	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
-	"erp-azhan/api/internal/manasik"
-	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/pengumuman"
 	"erp-azhan/api/internal/perlengkapan"
 	"erp-azhan/api/internal/rbac"
@@ -127,8 +126,6 @@ func main() {
 
 	airportRepo := airport.NewRepository(db)
 	airportHandler := airport.NewHandler(airportRepo)
-	destinationRepo := destination.NewRepository(db)
-	destinationHandler := destination.NewHandler(destinationRepo)
 
 	categoryRepo := category.NewRepository(db)
 	categoryHandler := category.NewHandler(categoryRepo)
@@ -231,7 +228,6 @@ func main() {
 	publicV1 := r.With(requireDB(db), shared.PublicCache(60))
 	publicV1.Get("/api/public/v1/packages", scheduleHandler.ListPackagesV1)
 	publicV1.Get("/api/public/v1/packages/{id}", scheduleHandler.GetPackageV1)
-	publicV1.Get("/api/public/v1/destinations", scheduleHandler.ListDestinationsV1)
 	publicV1.Get("/api/public/v1/sitemap-feed", scheduleHandler.SitemapFeedV1)
 	// Rentang komisi agen dari jadwal tayang untuk landing /jadi-agen (spek keagenan K23).
 	publicV1.Get("/api/public/v1/agen/ujroh", agenHandler.UjrohPublik)
@@ -405,12 +401,6 @@ func main() {
 		masterEdit.Post("/airports", airportHandler.CreateAirport)
 		masterEdit.Put("/airports/{id}", airportHandler.UpdateAirport)
 		masterEdit.Delete("/airports/{id}", airportHandler.DeleteAirport)
-
-		// ── Destinasi (master untuk hub Umroh Plus di web publik) ──
-		masterView.Get("/destinations", destinationHandler.ListDestinations)
-		masterEdit.Post("/destinations", destinationHandler.CreateDestination)
-		masterEdit.Put("/destinations/{id}", destinationHandler.UpdateDestination)
-		masterEdit.Delete("/destinations/{id}", destinationHandler.DeleteDestination)
 
 		// Categories
 		masterView.Get("/categories", categoryHandler.ListCategories)
