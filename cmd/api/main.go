@@ -20,14 +20,13 @@ import (
 
 	"erp-azhan/api/internal/adminuser"
 	"erp-azhan/api/internal/agen"
-	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/airline"
-	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/airport"
+	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/bankaccount"
+	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
-	"erp-azhan/api/internal/surat"
 	"erp-azhan/api/internal/category"
 	"erp-azhan/api/internal/crmdeal"
 	"erp-azhan/api/internal/customer"
@@ -47,6 +46,7 @@ import (
 	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/selfbooking"
 	"erp-azhan/api/internal/shared"
+	"erp-azhan/api/internal/surat"
 	"erp-azhan/api/internal/topbar"
 )
 
@@ -233,6 +233,8 @@ func main() {
 	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
 	// Publik: wajib brand, hanya rekening aktif dan field untuk pelanggan (handler admin terpisah).
 	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.ListPublic)
+	// Klik link referral agen dari situs publik (satu per pengunjung per hari).
+	r.With(requireDB(db)).Post("/api/public/referral/klik", agenHandler.KlikReferral)
 
 	// Akun pelanggan (email + password): daftar, masuk, lupa password
 	r.Route("/api/public/auth", func(r chi.Router) {
@@ -266,6 +268,9 @@ func main() {
 			r.Use(agenHandler.RequireAgenAktif)
 			r.Get("/dashboard", agenHandler.Dashboard)
 			r.Get("/komisi", agenHandler.RiwayatKomisiPortal)
+			r.Get("/mutasi", agenHandler.MutasiPortal)
+			r.Get("/data-jamaah", agenHandler.DataJamaahPortal)
+			r.Get("/binaan", agenHandler.AgenBinaanPortal)
 			r.Get("/pencairan", agenHandler.GetPencairan)
 			r.Post("/pencairan", agenHandler.AjukanPencairan)
 			r.Get("/pencairan/{id}/bukti", agenHandler.BuktiPencairanPortal)

@@ -14,15 +14,22 @@ import (
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/media"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
-	repo *Repository
+	repo       *Repository
+	klikIP     *shared.WindowLimiter
+	klikIPKode *shared.WindowLimiter
 }
 
 func NewHandler(repo *Repository) *Handler {
-	return &Handler{repo: repo}
+	return &Handler{
+		repo:       repo,
+		klikIP:     shared.NewWindowLimiter(klikPerIPPerJam, time.Hour),
+		klikIPKode: shared.NewWindowLimiter(klikPerIPPerKodeSehari, 24*time.Hour),
+	}
 }
 
 // validasiBuktiAdmin memastikan URL bukti yang diisi admin menunjuk unggahan admin resmi milik brand token
