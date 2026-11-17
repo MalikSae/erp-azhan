@@ -30,6 +30,8 @@ type PackageV1 struct {
 	DurationDays       int     `json:"duration_days"`
 	PriceFrom          float64 `json:"price_from"`
 	RegistrationStatus string  `json:"registration_status"`
+	// Lokasi: active Lokasi Dikunjungi in admin order; [] when none.
+	Lokasi []LokasiPaket `json:"lokasi"`
 }
 
 // GonePackageV1 menggantikan detail paket yang tidak dijual lagi (diarsipkan, atau berangkat kurang dari
@@ -196,6 +198,7 @@ func newPackageV1(s *PublicSchedule, k Klasifikasi, batas string) PackageV1 {
 		DurationDays:       durationDays(s.BerangkatTanggal, s.PulangTanggal),
 		PriceFrom:          priceFrom(s),
 		RegistrationStatus: registrationStatus(s.SeatTotal, s.SeatSisa, s.BerangkatTanggal, batas),
+		Lokasi:             []LokasiPaket{},
 	}
 }
 
@@ -273,6 +276,11 @@ func (h *Handler) visiblePackages(ctx context.Context, brandID int64) ([]Package
 	if err != nil {
 		return nil, err
 	}
+	// All pakets' locations in one query; a failure is an error, like the detail endpoint.
+	lokasi, err := h.repo.LokasiPublik(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	batas := batasPublikWIB()
 	out := make([]PackageV1, 0, len(items))
 	for _, it := range items {
@@ -280,7 +288,11 @@ func (h *Handler) visiblePackages(ctx context.Context, brandID int64) ([]Package
 		if !ok {
 			k = Klasifikasi{JourneyType: JourneyUmroh}
 		}
-		out = append(out, newPackageV1(it, k, batas))
+		p := newPackageV1(it, k, batas)
+		if l := lokasi[it.ID]; l != nil {
+			p.Lokasi = l
+		}
+		out = append(out, p)
 	}
 	return out, nil
 }
@@ -354,7 +366,17 @@ func (h *Handler) GetPackageV1(w http.ResponseWriter, r *http.Request) {
 	case s.Status == StatusPublished && s.BerangkatTanggal < batas:
 		writeJSON(w, http.StatusOK, gonePackage(s, k, "closed"))
 	case s.Status == StatusPublished:
-		writeJSON(w, http.StatusOK, newPackageV1(s.ToPublic(), k, batas))
+		p := newPackageV1(s.ToPublic(), k, batas)
+		lokasi, err := h.repo.LokasiPublik(r.Context(), []int64{s.ID})
+		if err != nil {
+			log.Printf("[ERROR] schedule v1: lokasi: %v", err)
+			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			return
+		}
+		if l := lokasi[s.ID]; l != nil {
+			p.Lokasi = l
+		}
+		writeJSON(w, http.StatusOK, p)
 	default:
 		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan atau belum dipublikasikan")
 	}

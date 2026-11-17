@@ -87,3 +87,15 @@ export async function listMutasiPerlengkapan(params = {}) {
   const response = await client.get('/api/admin/perlengkapan-mutasi', { params });
   return response.data;
 }
+
+// Antrean pengajuan perlengkapan dari app (belum diserahkan petugas).
+export async function listPengajuanPerlengkapan(params = {}) {
+  const response = await client.get('/api/admin/perlengkapan-pengajuan', { params });
+  return response.data;
+}
+
+// Serahkan perlengkapan satu jamaah (memotong stok dan mencatat petugas).
+export async function serahkanPerlengkapan(bookingId, paxId) {
+  const response = await client.put(`/api/admin/bookings/${bookingId}/pax/${paxId}/perlengkapan/distribusi`);
+  return response.data;
+}

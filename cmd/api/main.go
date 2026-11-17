@@ -24,6 +24,7 @@ import (
 	"erp-azhan/api/internal/airport"
 	"erp-azhan/api/internal/analitik"
 	"erp-azhan/api/internal/bankaccount"
+	"erp-azhan/api/internal/banner"
 	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
@@ -32,6 +33,7 @@ import (
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/destination"
 	"erp-azhan/api/internal/dokumen"
+	"erp-azhan/api/internal/haramain"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/itinerary"
@@ -40,6 +42,8 @@ import (
 	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
+	"erp-azhan/api/internal/manasik"
+	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/pengumuman"
 	"erp-azhan/api/internal/perlengkapan"
 	"erp-azhan/api/internal/rbac"
@@ -102,7 +106,7 @@ func main() {
 	allowedOrigins := corsOrigins(shared.IsProduction(), os.Getenv("CORS_ALLOWED_ORIGINS"))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Brand-Id"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -182,6 +186,7 @@ func main() {
 
 	if db != nil {
 		go runSeatHoldExpiry(crmDealRepo)
+		go notifikasi.JalankanPengingat(context.Background(), db, time.Minute)
 	}
 
 	dokumenRepo := dokumen.NewRepository(db)
@@ -198,6 +203,10 @@ func main() {
 	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
 	jamaahAkunHandler := customer.NewJamaahAkun(db, customerRepo, mailer.NewFromEnv())
 	pengumumanHandler := pengumuman.NewHandler(db)
+	manasikHandler := manasik.NewHandler(db)
+	bannerHandler := banner.NewHandler(db)
+	notifikasiHandler := notifikasi.NewHandler(db)
+	haramainHandler := haramain.NewHandler(db)
 	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
@@ -226,6 +235,12 @@ func main() {
 	publicV1.Get("/api/public/v1/sitemap-feed", scheduleHandler.SitemapFeedV1)
 	// Rentang komisi agen dari jadwal tayang untuk landing /jadi-agen (spek keagenan K23).
 	publicV1.Get("/api/public/v1/agen/ujroh", agenHandler.UjrohPublik)
+	// Banner Promosi Beranda app (maks 5 banner tayang).
+	publicV1.Get("/api/public/v1/promosi", bannerHandler.Promosi)
+	r.With(requireDB(db)).Post("/api/public/promosi/{id}/klik", bannerHandler.Klik)
+	// Jelajah Haramain (web dan app). Detail tanpa cache publik supaya ulasan baru langsung terlihat.
+	publicV1.Get("/api/public/v1/haramain", haramainHandler.DaftarPublik)
+	r.With(requireDB(db)).Get("/api/public/v1/haramain/{id}", haramainHandler.DetailPublik)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: categories & brand & bank accounts
@@ -243,6 +258,8 @@ func main() {
 		r.Post("/register-agen", customerHandler.RegisterAgen)
 		r.Post("/register-app", customerHandler.RegisterApp)
 		r.Post("/login", customerHandler.Login)
+		r.Post("/google", customerHandler.LoginGoogle)
+		r.Post("/google/daftar", customerHandler.DaftarGoogle)
 		r.Post("/forgot-password", customerHandler.ForgotPassword)
 		r.Post("/reset-password", customerHandler.ResetPassword)
 	})
@@ -288,13 +305,25 @@ func main() {
 		r.Get("/foto", customerHandler.Foto)
 		r.Put("/foto", customerHandler.UpdateFoto)
 		r.Get("/upline", customerHandler.Upline)
+		r.Get("/haramain/{id}/ulasan", haramainHandler.UlasanSayaAkun)
+		r.Put("/haramain/{id}/ulasan", haramainHandler.SimpanUlasanAkun)
+		r.Delete("/haramain/{id}/ulasan", haramainHandler.HapusUlasanAkun)
+		r.Post("/haramain/ulasan/{id}/laporkan", haramainHandler.LaporkanAkun)
 		r.Get("/upline/foto", customerHandler.UplineFoto)
 		r.Post("/password", customerHandler.ChangePassword)
+		r.Post("/password/buat", customerHandler.BuatPassword)
+		r.Get("/hapus", customerHandler.CekHapusAkun)
+		r.Post("/hapus", customerHandler.HapusAkun)
 		r.Post("/logout", customerHandler.Logout)
 		r.Get("/bank-accounts", customerOrders.BankAccounts)
 		r.Get("/travelers", customerOrders.Travelers)
 		r.Get("/jamaah", jamaahAkunHandler.Daftar)
 		r.Get("/pengumuman", pengumumanHandler.Akun)
+		r.Get("/notifikasi", notifikasiHandler.Daftar)
+		r.Get("/notifikasi/jumlah", notifikasiHandler.Jumlah)
+		r.Post("/notifikasi/baca-semua", notifikasiHandler.BacaSemua)
+		r.Post("/notifikasi/{id}/baca", notifikasiHandler.Baca)
+		r.Get("/notifikasi/pengumuman/{id}", notifikasiHandler.Pengumuman)
 		r.Get("/jamaah/{id}", jamaahAkunHandler.Detail)
 		r.Put("/jamaah/{id}", jamaahAkunHandler.Simpan)
 		r.Get("/bookings", customerOrders.List)
@@ -309,6 +338,11 @@ func main() {
 		r.Get("/bookings/{id}/surat", customerOrders.SuratDaftar)
 		r.Get("/bookings/{id}/surat/{jenis}", customerOrders.SuratUnduh)
 		r.Put("/bookings/{id}/jamaah/{jamaah_id}", customerOrders.SimpanDataJamaah)
+		r.Get("/bookings/{id}/perlengkapan", customerOrders.Perlengkapan)
+		r.Post("/bookings/{id}/perlengkapan/ajukan", customerOrders.AjukanPerlengkapan)
+		r.Post("/bookings/{id}/perlengkapan/terima", customerOrders.TerimaPerlengkapan)
+		r.Get("/bookings/{id}/manasik", manasikHandler.Booking)
+		r.Put("/bookings/{id}/manasik/rsvp", manasikHandler.RSVP)
 		r.Get("/bookings/{id}/payments", customerOrders.ListPayments)
 		r.Post("/bookings/{id}/payments", customerOrders.CreatePayment)
 		r.Post("/media/upload", mediaHandler.UploadPortalMedia)
@@ -448,6 +482,8 @@ func main() {
 		// chi mendahulukan segmen statis, jadi "benefit-options" tidak terbaca sebagai id.
 		scheduleView.Get("/schedules/benefit-options", benefitHandler.ListOpsi)
 		scheduleEdit.Post("/schedules/benefit-options", benefitHandler.CreateBenefit)
+		// Lokasi Dikunjungi: active Jelajah Haramain places; static segment, registered before /schedules/{id}.
+		scheduleView.Get("/schedules/lokasi-options", scheduleHandler.ListLokasiOptions)
 		scheduleView.Get("/schedules/{id}", scheduleHandler.GetScheduleAdmin)
 		scheduleView.Get("/schedules/{id}/seat", scheduleHandler.GetScheduleSeat)
 		scheduleEdit.Post("/schedules", scheduleHandler.CreateSchedule)
@@ -457,6 +493,20 @@ func main() {
 		scheduleEdit.Delete("/schedules/{id}", scheduleHandler.DeleteSchedule)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/schedules/{id}/perlengkapan", perlengkapanHandler.GetScheduleSet)
 		scheduleEdit.Put("/schedules/{id}/perlengkapan", perlengkapanHandler.PutScheduleSet)
+		scheduleView.Get("/schedules/{id}/manasik", manasikHandler.UntukPaket)
+
+		// Manasik: satu manasik untuk satu atau lebih paket, rekap kehadiran, dan absensi hari-H.
+		manasikView := r.With(identity.RequirePermission("manasik.view"))
+		manasikEdit := r.With(identity.RequirePermission("manasik.edit"))
+		manasikView.Get("/manasik", manasikHandler.Daftar)
+		manasikEdit.Get("/manasik/paket-tersedia", manasikHandler.PaketTersedia)
+		manasikEdit.Post("/manasik", manasikHandler.Buat)
+		manasikView.Get("/manasik/{id}", manasikHandler.Detail)
+		manasikEdit.Put("/manasik/{id}", manasikHandler.Ubah)
+		manasikEdit.Delete("/manasik/{id}", manasikHandler.Hapus)
+		manasikEdit.Post("/manasik/{id}/paket", manasikHandler.TambahPaket)
+		manasikEdit.Delete("/manasik/{id}/paket/{schedule_id}", manasikHandler.LepasPaket)
+		manasikEdit.Put("/manasik/{id}/absensi", manasikHandler.Absensi)
 
 		// Jamaah
 		jamaahView := r.With(identity.RequirePermission("jamaah.view"))
@@ -510,6 +560,7 @@ func main() {
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-stok", perlengkapanHandler.ListStok)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Put("/perlengkapan-stok/{item_id}", perlengkapanHandler.UpdateStok)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-mutasi", perlengkapanHandler.ListMutasi)
+		r.With(identity.RequirePermission("perlengkapan.view")).Get("/perlengkapan-pengajuan", perlengkapanHandler.ListPengajuan)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Post("/perlengkapan-mutasi/pembelian", perlengkapanHandler.Pembelian)
 		r.With(identity.RequirePermission("perlengkapan.edit")).Post("/perlengkapan-mutasi/koreksi", perlengkapanHandler.Koreksi)
 
@@ -539,6 +590,29 @@ func main() {
 		})
 
 		// Pengumuman untuk pelanggan (tampil di dashboard akun web).
+		r.Route("/banner-promosi", func(r chi.Router) {
+			r.Use(identity.RequirePermission("banner.manage"))
+			r.Get("/", bannerHandler.Daftar)
+			r.Post("/", bannerHandler.Buat)
+			r.Put("/urutan", bannerHandler.Urutkan)
+			r.Put("/{id}", bannerHandler.Ubah)
+			r.Delete("/{id}", bannerHandler.Hapus)
+		})
+		r.Route("/haramain", func(r chi.Router) {
+			r.Use(identity.RequirePermission("haramain.manage"))
+			r.Get("/", haramainHandler.DaftarAdmin)
+			r.Post("/", haramainHandler.BuatAdmin)
+			r.Put("/urutan", haramainHandler.UrutkanAdmin)
+			r.Get("/{id}", haramainHandler.DetailAdmin)
+			r.Put("/{id}", haramainHandler.UbahAdmin)
+			r.Delete("/{id}", haramainHandler.HapusAdmin)
+		})
+		r.Route("/haramain-ulasan", func(r chi.Router) {
+			r.Use(identity.RequirePermission("haramain.manage"))
+			r.Get("/", haramainHandler.UlasanAdminList)
+			r.Put("/{id}/tampil", haramainHandler.AturTampilAdmin)
+			r.Post("/{id}/abaikan", haramainHandler.AbaikanAdmin)
+		})
 		r.Route("/pengumuman", func(r chi.Router) {
 			r.Use(identity.RequirePermission("pengumuman.manage"))
 			r.Get("/", pengumumanHandler.DaftarAdmin)

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"erp-azhan/api/internal/notifikasi"
 )
 
 // Sentinel errors
@@ -152,7 +154,11 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, ErrVersionConflict
 	}
-	return r.GetByID(ctx, id, nil)
+	d, err := r.GetByID(ctx, id, nil)
+	if err == nil && (newStatus == "approved" || newStatus == "rejected") {
+		notifikasi.Dokumen(ctx, r.db, d.JamaahID, d.Jenis, newStatus == "approved")
+	}
+	return d, err
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
