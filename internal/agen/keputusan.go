@@ -177,7 +177,7 @@ func (h *Handler) Keputusan(w http.ResponseWriter, r *http.Request) {
 	}
 	var req KeputusanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())

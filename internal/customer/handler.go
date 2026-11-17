@@ -81,7 +81,7 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return false
 	}
 	return true
@@ -217,7 +217,7 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 		return
 	}
 	if !h.regIP.Take(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak pendaftaran, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak pendaftaran, coba lagi dalam 1 jam.")
 		return
 	}
 
@@ -230,16 +230,16 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 			if !errors.Is(err, shared.ErrCaptchaNotConfigured) {
 				log.Printf("[ERROR] customer captcha: %v", err)
 			}
-			writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, coba lagi")
+			writeError(w, http.StatusServiceUnavailable, "Verifikasi keamanan sedang tidak tersedia, coba lagi.")
 			return
 		}
 		if !ok {
-			writeError(w, http.StatusBadRequest, "verifikasi keamanan gagal, silakan coba lagi")
+			writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal. Coba lagi.")
 			return
 		}
 	}
 	if req.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 	req.NamaLengkap, req.Email, req.NoHP = strings.TrimSpace(req.NamaLengkap), strings.TrimSpace(req.Email), strings.TrimSpace(req.NoHP)
@@ -259,14 +259,14 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
 		log.Printf("[ERROR] customer hash: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), req.KodeReferral, bio)
 	if errors.Is(err, ErrEmailTaken) {
 		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
 		// Penebakan email tetap dibatasi captcha + registerIPLimit.
-		writeError(w, http.StatusConflict, "Pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, silakan masuk atau gunakan Lupa kata sandi.")
+		writeError(w, http.StatusConflict, "Pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, masuk atau gunakan Lupa kata sandi.")
 		return
 	}
 	if errors.Is(err, ErrPhoneTaken) {
@@ -275,13 +275,13 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer create: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	token, err := h.repo.CreateSession(r.Context(), acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] customer session: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	writeJSON(w, http.StatusCreated, authResponse{Account: acc, SessionToken: token})
@@ -304,16 +304,16 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Slot percobaan diambil SEBELUM bcrypt (Take atomik): request paralel tidak bisa lolos bersamaan
 	// sebelum kegagalannya tercatat. Login berhasil mengembalikan slot itu.
 	if !h.loginKey.Take(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan masuk, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan masuk, coba lagi dalam 15 menit.")
 		return
 	}
 	if !h.loginIP.Take(ip) {
 		h.loginKey.Refund(key)
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan masuk, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan masuk, coba lagi dalam 15 menit.")
 		return
 	}
 	fail := func() {
-		writeError(w, http.StatusUnauthorized, "email atau password salah")
+		writeError(w, http.StatusUnauthorized, "Email atau kata sandi salah.")
 	}
 	if req.BrandID <= 0 || len(req.Password) > 72 {
 		fail()
@@ -338,7 +338,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	token, err := h.repo.CreateSession(r.Context(), acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] customer session: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	h.repo.TouchLogin(r.Context(), acc.ID)
@@ -425,16 +425,16 @@ type updateProfileRequest struct {
 func (h *Handler) cekPasswordSaatIni(w http.ResponseWriter, acc *Account, password string) bool {
 	key := strconv.FormatInt(acc.ID, 10)
 	if !h.pwFail.Take(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan, coba lagi dalam 15 menit.")
 		return false
 	}
 	if password == "" {
 		h.pwFail.Refund(key)
-		writeError(w, http.StatusBadRequest, "masukkan password saat ini")
+		writeError(w, http.StatusBadRequest, "Masukkan kata sandi saat ini.")
 		return false
 	}
 	if len(password) > 72 || bcrypt.CompareHashAndPassword([]byte(acc.passwordHash), []byte(password)) != nil {
-		writeError(w, http.StatusBadRequest, "password saat ini salah")
+		writeError(w, http.StatusBadRequest, "Kata sandi saat ini salah.")
 		return false
 	}
 	h.pwFail.Reset(key)
@@ -473,13 +473,13 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	key := strconv.FormatInt(acc.ID, 10)
 	if !h.profile.Take(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak perubahan data, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak perubahan data, coba lagi dalam 1 jam.")
 		return
 	}
 
 	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir)
 	if errors.Is(err, ErrEmailTaken) {
-		writeError(w, http.StatusConflict, "email ini tidak dapat digunakan, coba email lain")
+		writeError(w, http.StatusConflict, "Email ini tidak dapat digunakan, coba email lain.")
 		return
 	}
 	if errors.Is(err, ErrPhoneTaken) {
@@ -488,7 +488,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer update profile: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if gantiEmail {
@@ -507,7 +507,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.repo.GetByID(r.Context(), acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] customer reload profile: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, updated)})
@@ -534,13 +534,13 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.PasswordBaru == req.PasswordSaatIni {
-		writeError(w, http.StatusBadRequest, "password baru harus berbeda dari password saat ini")
+		writeError(w, http.StatusBadRequest, "Kata sandi baru harus berbeda dari kata sandi saat ini.")
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.PasswordBaru), bcryptCost)
 	if err != nil {
 		log.Printf("[ERROR] customer hash: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	// Sesi lain dan tautan reset lama dicabut SEBELUM password diganti: bila salah satunya gagal, password tetap lama
@@ -553,7 +553,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer change password: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if name, domain, err := h.repo.BrandSite(r.Context(), acc.BrandID); err == nil && domain != "" {
@@ -580,12 +580,12 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	emailKey := strconv.FormatInt(req.BrandID, 10) + "|" + NormalizeEmail(req.Email)
 	key := ip + "|" + emailKey
 	if !h.forgot.Take(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan, coba lagi dalam 1 jam.")
 		return
 	}
 	if !h.forgotIP.Take(ip) {
 		h.forgot.Refund(key)
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan, coba lagi dalam 1 jam.")
 		return
 	}
 	// Batas per email: jawaban tetap generik (200) agar tidak menjadi oracle, tetapi email tidak dikirim.
@@ -630,7 +630,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	// Slot diambil atomik sebelum bcrypt; hanya token salah yang tetap terhitung sebagai kegagalan.
 	if !h.loginIP.Take(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan, coba lagi dalam 15 menit.")
 		return
 	}
 	tokenSalah := false
@@ -645,7 +645,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	accountID, err := h.repo.ConsumeToken(r.Context(), strings.TrimSpace(req.Token), PurposeResetPass)
@@ -656,12 +656,12 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer consume reset: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if err = h.repo.SetPassword(r.Context(), accountID, string(hash)); err != nil {
 		log.Printf("[ERROR] customer set password: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	_ = h.repo.RevokeAllSessions(r.Context(), accountID)

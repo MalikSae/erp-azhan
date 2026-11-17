@@ -25,25 +25,25 @@ func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			writeError(w, http.StatusUnauthorized, "Unauthorized.")
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := ValidateAccessClaims(tokenString)
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			writeError(w, http.StatusUnauthorized, "Unauthorized.")
 			return
 		}
 		// Cek ringan status user (cache 30 detik): akun nonaktif atau izin yang berubah tidak
 		// menunggu access token kedaluwarsa. 401 membuat klien me-refresh token.
 		ok, err := statusCache.allow(r.Context(), claims)
 		if err != nil {
-			writeError(w, http.StatusServiceUnavailable, "layanan sementara tidak tersedia, coba lagi")
+			writeError(w, http.StatusServiceUnavailable, "Layanan sementara tidak tersedia, coba lagi.")
 			return
 		}
 		if !ok {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			writeError(w, http.StatusUnauthorized, "Unauthorized.")
 			return
 		}
 
@@ -62,7 +62,7 @@ func RequireAuth(next http.Handler) http.Handler {
 func RequireAdminRole(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if GetRole(r.Context()) == "cs" {
-			writeError(w, http.StatusForbidden, "akun CS hanya dapat mengakses modul CRM")
+			writeError(w, http.StatusForbidden, "Akun CS hanya dapat mengakses modul CRM.")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -75,7 +75,7 @@ func RequirePermission(perm string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !HasPermission(r.Context(), perm) {
-				writeError(w, http.StatusForbidden, "anda tidak memiliki izin untuk aksi ini")
+				writeError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -91,7 +91,7 @@ func RequireHoldingPermission(perm string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !HasPermission(r.Context(), perm) || GetBrandID(r.Context()) != nil {
-				writeError(w, http.StatusForbidden, "anda tidak memiliki izin untuk aksi ini")
+				writeError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -138,7 +138,7 @@ func RequireAdminOrCRMAccess(next http.Handler) http.Handler {
 			(r.Method == http.MethodPost && r.URL.Path == "/api/admin/crm/deals") ||
 			(r.Method == http.MethodGet && crmPaymentPath.MatchString(r.URL.Path))
 		if !allowed {
-			writeError(w, http.StatusForbidden, "akun CS hanya dapat mengakses modul CRM")
+			writeError(w, http.StatusForbidden, "Akun CS hanya dapat mengakses modul CRM.")
 			return
 		}
 		next.ServeHTTP(w, r)

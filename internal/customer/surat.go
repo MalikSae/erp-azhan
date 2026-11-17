@@ -164,30 +164,30 @@ func (o *Orders) SuratDaftar(w http.ResponseWriter, r *http.Request) {
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		log.Printf("[ERROR] account surat daftar: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar surat")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil daftar surat.")
 		return
 	}
 	data, err := o.dataJamaahBooking(r, id)
 	if err != nil {
 		log.Printf("[ERROR] account surat jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	pengaturan, err := o.surat.Pengaturan(r.Context(), uint64(acc.BrandID))
 	if err != nil {
 		log.Printf("[ERROR] account surat pengaturan: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil pengaturan surat")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
 		return
 	}
 	nomor, err := o.surat.NomorBooking(r.Context(), id)
 	if err != nil {
 		log.Printf("[ERROR] account surat nomor: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil nomor surat")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil nomor surat.")
 		return
 	}
 	jamaah := []suratJamaah{}
@@ -218,28 +218,28 @@ func (o *Orders) SuratUnduh(w http.ResponseWriter, r *http.Request) {
 	}
 	jenis, ok := slugSurat[chi.URLParam(r, "jenis")]
 	if !ok {
-		writeError(w, http.StatusNotFound, "jenis surat tidak dikenal")
+		writeError(w, http.StatusNotFound, "Jenis surat tidak dikenal.")
 		return
 	}
 	jamaahID, err := strconv.ParseInt(r.URL.Query().Get("jamaah"), 10, 64)
 	if err != nil || jamaahID <= 0 {
-		writeError(w, http.StatusBadRequest, "jamaah tidak valid")
+		writeError(w, http.StatusBadRequest, "Jamaah tidak valid.")
 		return
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		log.Printf("[ERROR] account surat unduh: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil booking")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil booking.")
 		return
 	}
 	data, err := o.dataJamaahBooking(r, id)
 	if err != nil {
 		log.Printf("[ERROR] account surat jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	var jm *dataJamaah
@@ -249,13 +249,13 @@ func (o *Orders) SuratUnduh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if jm == nil {
-		writeError(w, http.StatusNotFound, "jamaah tidak ada di booking ini")
+		writeError(w, http.StatusNotFound, "Jamaah tidak ada di booking ini.")
 		return
 	}
 	pengaturan, err := o.surat.Pengaturan(r.Context(), uint64(acc.BrandID))
 	if err != nil {
 		log.Printf("[ERROR] account surat pengaturan: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil pengaturan surat")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
 		return
 	}
 	var item *suratItem
@@ -266,7 +266,7 @@ func (o *Orders) SuratUnduh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if item == nil {
-		writeError(w, http.StatusNotFound, "surat ini tidak tersedia untuk jamaah tersebut")
+		writeError(w, http.StatusNotFound, "Surat ini tidak tersedia untuk jamaah tersebut.")
 		return
 	}
 	if !item.Bisa {
@@ -277,12 +277,12 @@ func (o *Orders) SuratUnduh(w http.ResponseWriter, r *http.Request) {
 	var berangkat, pulang sql.NullString
 	if err := o.db.QueryRowContext(r.Context(), `SELECT DATE_FORMAT(berangkat_tanggal,'%Y-%m-%d'), DATE_FORMAT(pulang_tanggal,'%Y-%m-%d') FROM schedules WHERE id=?`, order.ScheduleID).Scan(&berangkat, &pulang); err != nil {
 		log.Printf("[ERROR] account surat jadwal: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil jadwal keberangkatan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil jadwal keberangkatan.")
 		return
 	}
 	tglBerangkat, tglPulang := parseTanggal(berangkat.String), parseTanggal(pulang.String)
 	if tglBerangkat.IsZero() || tglPulang.IsZero() {
-		writeError(w, http.StatusConflict, "tanggal keberangkatan atau kepulangan belum tersedia, hubungi kami")
+		writeError(w, http.StatusConflict, "Tanggal keberangkatan atau kepulangan belum tersedia, hubungi kami.")
 		return
 	}
 
@@ -291,7 +291,7 @@ func (o *Orders) SuratUnduh(w http.ResponseWriter, r *http.Request) {
 	if err := o.db.QueryRowContext(r.Context(), `SELECT name, address, city, phone, email, whatsapp_number, logo_url, ppiu_number, pihk_number FROM brands WHERE id=?`, acc.BrandID).
 		Scan(&nama, &alamat, &kota, &telepon, &email, &wa, &logo, &ppiu, &pihk); err != nil {
 		log.Printf("[ERROR] account surat brand: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data brand")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data brand.")
 		return
 	}
 	m = surat.Merek{Nama: nama.String, Alamat: alamat.String, Kota: kota.String, Telepon: telepon.String, Email: email.String, WhatsApp: wa.String, LogoURL: logo.String, PPIU: ppiu.String, PIHK: pihk.String}
@@ -303,7 +303,7 @@ func (o *Orders) SuratUnduh(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] account surat terbit: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menerbitkan nomor surat")
+		writeError(w, http.StatusInternalServerError, "Gagal menerbitkan nomor surat.")
 		return
 	}
 	pdf, err := surat.Render(surat.Data{
@@ -318,7 +318,7 @@ func (o *Orders) SuratUnduh(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("[ERROR] account surat render: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal membuat surat")
+		writeError(w, http.StatusInternalServerError, "Gagal membuat surat.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/pdf")

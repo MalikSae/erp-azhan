@@ -304,7 +304,7 @@ type putSetRequest struct {
 func parseIDParam(w http.ResponseWriter, r *http.Request, h *Handler) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		h.sendError(w, http.StatusBadRequest, "ID tidak valid")
+		h.sendError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -313,11 +313,11 @@ func parseIDParam(w http.ResponseWriter, r *http.Request, h *Handler) (int64, bo
 func (h *Handler) setError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		h.sendError(w, http.StatusNotFound, "Data tidak ditemukan")
+		h.sendError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrInvalidInput):
-		h.sendError(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), ErrInvalidInput.Error()+": "))
+		h.sendError(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), ErrInvalidInput.Error()+": ."))
 	default:
-		h.sendError(w, http.StatusInternalServerError, "Gagal memproses isi perlengkapan")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memproses isi perlengkapan.")
 	}
 }
 
@@ -343,7 +343,7 @@ func (h *Handler) PutCategorySet(w http.ResponseWriter, r *http.Request) {
 	}
 	var req putSetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	items, err := h.repo.PutCategorySet(r.Context(), id, req.Items)
@@ -377,7 +377,7 @@ func (h *Handler) PutScheduleSet(w http.ResponseWriter, r *http.Request) {
 	}
 	var req putSetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Custom == nil {
-		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	res, err := h.repo.PutScheduleSet(r.Context(), id, identity.GetBrandID(r.Context()), *req.Custom, req.Items)

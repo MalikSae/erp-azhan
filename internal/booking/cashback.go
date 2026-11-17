@@ -218,11 +218,11 @@ func (h *Handler) PakaiKreditCashback(w http.ResponseWriter, r *http.Request) {
 	}
 	var req PakaiCashbackRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if req.Nominal <= 0 || !shared.RupiahBulat(req.Nominal) {
-		writeError(w, http.StatusBadRequest, "nominal harus bilangan bulat lebih dari 0")
+		writeError(w, http.StatusBadRequest, "Nominal harus bilangan bulat lebih dari 0.")
 		return
 	}
 	brandID := identity.GetBrandID(r.Context())

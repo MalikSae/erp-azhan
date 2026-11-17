@@ -34,7 +34,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -43,14 +43,14 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "benefit tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Benefit tidak ditemukan.")
 	case errors.Is(err, ErrDuplikat), errors.Is(err, ErrDuplikatNonaktif), errors.Is(err, ErrDipakai):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrBrandTidakSah):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		log.Printf("[ERROR] benefit: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -105,7 +105,7 @@ func (h *Handler) ListIkon(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateBenefit(w http.ResponseWriter, r *http.Request) {
 	var req CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	teks, ikon, err := ValidasiIsi(req.Teks, req.Ikon)
@@ -133,7 +133,7 @@ func (h *Handler) UpdateBenefit(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	teks, ikon, err := ValidasiIsi(req.Teks, req.Ikon)

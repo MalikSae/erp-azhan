@@ -48,17 +48,17 @@ func (o *Orders) Progress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, _, err := o.owned(r.Context(), acc.ID, id); errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	} else if err != nil {
 		log.Printf("[ERROR] account progress: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil progres")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil progres.")
 		return
 	}
 	b, err := o.bookingRepo.GetByID(r.Context(), id, nil)
 	if err != nil {
 		log.Printf("[ERROR] account progress booking: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil progres")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil progres.")
 		return
 	}
 
@@ -68,7 +68,7 @@ func (o *Orders) Progress(w http.ResponseWriter, r *http.Request) {
 		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif'`, id)
 	if err != nil {
 		log.Printf("[ERROR] account progress dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil progres")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil progres.")
 		return
 	}
 	defer rows.Close()
@@ -78,7 +78,7 @@ func (o *Orders) Progress(w http.ResponseWriter, r *http.Request) {
 		var jenis string
 		if err := rows.Scan(&jid, &jenis); err != nil {
 			log.Printf("[ERROR] account progress scan: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal mengambil progres")
+			writeError(w, http.StatusInternalServerError, "Gagal mengambil progres.")
 			return
 		}
 		if disetujui[jid] == nil {
@@ -88,7 +88,7 @@ func (o *Orders) Progress(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := rows.Err(); err != nil {
 		log.Printf("[ERROR] account progress rows: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil progres")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil progres.")
 		return
 	}
 

@@ -45,7 +45,7 @@ func validasiBuktiAdmin(w http.ResponseWriter, r *http.Request, db *sql.DB, url 
 		return false
 	}
 	log.Printf("[ERROR] agen validasi bukti: %v", err)
-	writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+	writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	return false
 }
 
@@ -75,7 +75,7 @@ func (h *Handler) GetStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 	var req AjukanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	req.Domisili = strings.TrimSpace(req.Domisili)
@@ -86,7 +86,7 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n := utf8.RuneCountInString(req.Domisili); n < 2 || n > 100 {
-		writeError(w, http.StatusBadRequest, "domisili wajib diisi (2–100 karakter)")
+		writeError(w, http.StatusBadRequest, "Domisili wajib diisi (2–100 karakter).")
 		return
 	}
 	if msg := validasiBiodataAgen(&req, time.Now()); msg != "" {
@@ -94,7 +94,7 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !req.SetujuSyaratKetentuan {
-		writeError(w, http.StatusBadRequest, "anda wajib menyetujui Syarat & Ketentuan Agen")
+		writeError(w, http.StatusBadRequest, "Anda wajib menyetujui Syarat & Ketentuan Agen.")
 		return
 	}
 
@@ -111,7 +111,7 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !ok {
-			writeError(w, http.StatusBadRequest, "foto wajib berupa gambar yang diunggah dari akun Anda")
+			writeError(w, http.StatusBadRequest, "Foto wajib berupa gambar yang diunggah dari akun Anda.")
 			return
 		}
 	}
@@ -126,12 +126,12 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UploadBukti(w http.ResponseWriter, r *http.Request) {
 	var req BuktiRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	req.BuktiTransferURL = strings.TrimSpace(req.BuktiTransferURL)
 	if !buktiPortalURL.MatchString(req.BuktiTransferURL) {
-		writeError(w, http.StatusBadRequest, "bukti transfer wajib diunggah (gambar atau PDF)")
+		writeError(w, http.StatusBadRequest, "Bukti transfer wajib diunggah (gambar atau PDF).")
 		return
 	}
 	akunID := identity.GetCustomerAccountID(r.Context())
@@ -140,7 +140,7 @@ func (h *Handler) UploadBukti(w http.ResponseWriter, r *http.Request) {
 			handleError(w, err)
 			return
 		}
-		writeError(w, http.StatusBadRequest, "bukti transfer wajib diunggah (gambar atau PDF)")
+		writeError(w, http.StatusBadRequest, "Bukti transfer wajib diunggah (gambar atau PDF).")
 		return
 	}
 	if err := h.repo.UploadBuktiAkun(r.Context(), akunID, req.BuktiTransferURL); err != nil {
@@ -170,7 +170,7 @@ func (h *Handler) ListAgenAktif(w http.ResponseWriter, r *http.Request) {
 	if brandID == nil {
 		id, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64)
 		if err != nil || id <= 0 {
-			writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+			writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 			return
 		}
 		brandID = &id
@@ -223,7 +223,7 @@ func (h *Handler) UbahStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	var req StatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := h.repo.UbahStatus(r.Context(), id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), strings.TrimSpace(req.Status), req.Alasan); err != nil {
@@ -274,12 +274,12 @@ func (h *Handler) UploadBuktiAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	var req BuktiRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	req.BuktiTransferURL = strings.TrimSpace(req.BuktiTransferURL)
 	if !buktiAdminURL.MatchString(req.BuktiTransferURL) {
-		writeError(w, http.StatusBadRequest, "bukti transfer wajib diunggah (gambar atau PDF)")
+		writeError(w, http.StatusBadRequest, "Bukti transfer wajib diunggah (gambar atau PDF).")
 		return
 	}
 	// Bentuk URL saja tidak cukup: berkas harus unggahan admin resmi milik brand ini.
@@ -299,7 +299,7 @@ func (h *Handler) UploadBuktiAdmin(w http.ResponseWriter, r *http.Request) {
 func readAlasan(w http.ResponseWriter, r *http.Request, msg string) (string, bool) {
 	var req AlasanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return "", false
 	}
 	alasan := strings.TrimSpace(req.Alasan)
@@ -313,7 +313,7 @@ func readAlasan(w http.ResponseWriter, r *http.Request, msg string) (string, boo
 func parseID(w http.ResponseWriter, r *http.Request, param string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, param), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -334,7 +334,7 @@ func handleError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] agen: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 

@@ -33,7 +33,7 @@ func (h *Handler) Cari(w http.ResponseWriter, r *http.Request) {
 	hasil, err := Cari(r.Context(), h.db, aksesDari(r), r.URL.Query().Get("q"))
 	if err != nil {
 		log.Printf("[ERROR] %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mencari")
+		writeError(w, http.StatusInternalServerError, "Gagal mencari.")
 		return
 	}
 	writeJSON(w, http.StatusOK, hasil)
@@ -44,7 +44,7 @@ func (h *Handler) Notifikasi(w http.ResponseWriter, r *http.Request) {
 	n, err := HitungNotifikasi(r.Context(), h.db, aksesDari(r))
 	if err != nil {
 		log.Printf("[ERROR] %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memuat notifikasi")
+		writeError(w, http.StatusInternalServerError, "Gagal memuat notifikasi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, n)

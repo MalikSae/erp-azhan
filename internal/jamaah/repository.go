@@ -19,7 +19,7 @@ import (
 var (
 	ErrNotFound        = errors.New("data tidak ditemukan")
 	ErrDuplicateNIK    = errors.New("NIK sudah terdaftar")
-	ErrKodeBrandNotSet = errors.New("kode_brand belum diatur untuk brand ini, hubungi Super Admin untuk mengatur di Kelola Brand")
+	ErrKodeBrandNotSet = errors.New("Kode brand belum diatur. Hubungi admin.")
 )
 
 const kodeJamaahCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"

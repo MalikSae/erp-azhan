@@ -27,7 +27,7 @@ func (h *Handler) ListDestinations(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.List(r.Context(), false)
 	if err != nil {
 		log.Printf("[ERROR] destination: list: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data destinasi")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data destinasi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -97,21 +97,21 @@ func (h *Handler) DeleteDestination(w http.ResponseWriter, r *http.Request) {
 func decodeSave(w http.ResponseWriter, r *http.Request) (name, slug string, active *bool, ok bool) {
 	var req SaveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return "", "", nil, false
 	}
 	name = strings.TrimSpace(req.Name)
 	if name == "" {
-		writeError(w, http.StatusBadRequest, "nama destinasi wajib diisi")
+		writeError(w, http.StatusBadRequest, "Nama destinasi wajib diisi.")
 		return "", "", nil, false
 	}
 	if len([]rune(name)) > 100 {
-		writeError(w, http.StatusBadRequest, "nama destinasi maksimal 100 karakter")
+		writeError(w, http.StatusBadRequest, "Nama destinasi maksimal 100 karakter.")
 		return "", "", nil, false
 	}
 	slug = strings.ToLower(strings.TrimSpace(req.Slug))
 	if !ValidSlug(slug) {
-		writeError(w, http.StatusBadRequest, "slug destinasi hanya huruf kecil, angka, dan tanda hubung (mis. abu-dhabi)")
+		writeError(w, http.StatusBadRequest, "Slug destinasi hanya huruf kecil, angka, dan tanda hubung (mis. abu-dhabi).")
 		return "", "", nil, false
 	}
 	return name, slug, req.IsActive, true
@@ -122,9 +122,9 @@ func decodeSave(w http.ResponseWriter, r *http.Request) (name, slug string, acti
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "data tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrDuplicateSlug):
-		writeError(w, http.StatusConflict, "Slug destinasi sudah digunakan")
+		writeError(w, http.StatusConflict, "Slug destinasi sudah digunakan.")
 	case errors.Is(err, ErrInUse):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
@@ -132,15 +132,15 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		if errors.As(err, &mysqlErr) {
 			switch mysqlErr.Number {
 			case 1062:
-				writeError(w, http.StatusConflict, "Slug destinasi sudah digunakan")
+				writeError(w, http.StatusConflict, "Slug destinasi sudah digunakan.")
 				return
 			case 1451:
-				writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh data lain")
+				writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh data lain.")
 				return
 			}
 		}
 		log.Printf("[ERROR] destination: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -149,7 +149,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
