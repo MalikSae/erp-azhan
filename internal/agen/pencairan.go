@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/komisi"
+	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/shared"
 )
 
@@ -56,15 +57,15 @@ type PencairanRiwayat struct {
 // PencairanAdmin adalah satu baris antrian C1.
 type PencairanAdmin struct {
 	PencairanRiwayat
-	AkunAgenID     int64     `json:"akun_agen_id"`
-	NamaAgen       string    `json:"nama_agen"`
-	KodeReferral   *string   `json:"kode_referral"`
-	BrandID        int64     `json:"brand_id"`
-	BrandName      string    `json:"brand_name"`
-	SaldoTersedia  float64   `json:"saldo_tersedia"` // sudah dikurangi pengajuan ini bila pending
-	DiprosesOlehNama *string `json:"diproses_oleh_nama"`
-	BuktiURL       *string   `json:"bukti_transfer_keluar_url"`
-	DiajukanAt     time.Time `json:"diajukan_at"`
+	AkunAgenID       int64     `json:"akun_agen_id"`
+	NamaAgen         string    `json:"nama_agen"`
+	KodeReferral     *string   `json:"kode_referral"`
+	BrandID          int64     `json:"brand_id"`
+	BrandName        string    `json:"brand_name"`
+	SaldoTersedia    float64   `json:"saldo_tersedia"` // sudah dikurangi pengajuan ini bila pending
+	DiprosesOlehNama *string   `json:"diproses_oleh_nama"`
+	BuktiURL         *string   `json:"bukti_transfer_keluar_url"`
+	DiajukanAt       time.Time `json:"diajukan_at"`
 }
 
 func (req *AjukanPencairanRequest) normalize() error {
@@ -220,6 +221,7 @@ func setujuiPencairanTx(ctx context.Context, tx *sql.Tx, id, adminID int64, bukt
 	if err != nil {
 		return fmt.Errorf("agen: setujui pencairan: %w", err)
 	}
+	notifikasi.Pencairan(ctx, tx, id, true)
 	return nil
 }
 
@@ -233,6 +235,7 @@ func tolakPencairanTx(ctx context.Context, tx *sql.Tx, id, adminID int64, catata
 	if err != nil {
 		return fmt.Errorf("agen: tolak pencairan: %w", err)
 	}
+	notifikasi.Pencairan(ctx, tx, id, false)
 	return nil
 }
 

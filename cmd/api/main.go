@@ -42,6 +42,7 @@ import (
 	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
 	"erp-azhan/api/internal/manasik"
+	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/pengumuman"
 	"erp-azhan/api/internal/perlengkapan"
 	"erp-azhan/api/internal/rbac"
@@ -184,6 +185,7 @@ func main() {
 
 	if db != nil {
 		go runSeatHoldExpiry(crmDealRepo)
+		go notifikasi.JalankanPengingat(context.Background(), db, time.Minute)
 	}
 
 	dokumenRepo := dokumen.NewRepository(db)
@@ -202,6 +204,7 @@ func main() {
 	pengumumanHandler := pengumuman.NewHandler(db)
 	manasikHandler := manasik.NewHandler(db)
 	bannerHandler := banner.NewHandler(db)
+	notifikasiHandler := notifikasi.NewHandler(db)
 	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
@@ -307,6 +310,11 @@ func main() {
 		r.Get("/travelers", customerOrders.Travelers)
 		r.Get("/jamaah", jamaahAkunHandler.Daftar)
 		r.Get("/pengumuman", pengumumanHandler.Akun)
+		r.Get("/notifikasi", notifikasiHandler.Daftar)
+		r.Get("/notifikasi/jumlah", notifikasiHandler.Jumlah)
+		r.Post("/notifikasi/baca-semua", notifikasiHandler.BacaSemua)
+		r.Post("/notifikasi/{id}/baca", notifikasiHandler.Baca)
+		r.Get("/notifikasi/pengumuman/{id}", notifikasiHandler.Pengumuman)
 		r.Get("/jamaah/{id}", jamaahAkunHandler.Detail)
 		r.Put("/jamaah/{id}", jamaahAkunHandler.Simpan)
 		r.Get("/bookings", customerOrders.List)
