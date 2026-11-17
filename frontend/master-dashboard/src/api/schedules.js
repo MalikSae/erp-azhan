@@ -45,3 +45,9 @@ export async function getScheduleManasik(id) {
   const response = await client.get(`/api/admin/schedules/${id}/manasik`);
   return response.data;
 }
+
+// Pilihan "Lokasi Dikunjungi": tempat Jelajah Haramain yang aktif [{ id, nama, kota, foto_url }].
+export async function getScheduleLokasiOptions() {
+  const response = await client.get('/api/admin/schedules/lokasi-options');
+  return response.data;
+}

@@ -1,10 +1,10 @@
 package schedule
 
 import (
-	"erp-azhan/api/internal/benefit"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"erp-azhan/api/internal/benefit"
 	"errors"
 	"fmt"
 	"log"
@@ -159,6 +159,14 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	inp.BenefitIDs = &ids
+	lokasi := []int64{}
+	if req.LokasiIDs != nil {
+		lokasi = *req.LokasiIDs
+	}
+	if !h.lokasiSah(r.Context(), w, lokasi) {
+		return
+	}
+	inp.LokasiIDs = &lokasi
 	s, err := h.repo.Create(r.Context(), *inp)
 	if err != nil {
 		handleRepoError(w, err)
@@ -257,6 +265,13 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	if !benefitCukup(w, finalStatus, jumlahBenefit) {
 		return
+	}
+	// Lokasi Dikunjungi: replaced only when sent.
+	if req.LokasiIDs != nil {
+		if !h.lokasiSah(r.Context(), w, *req.LokasiIDs) {
+			return
+		}
+		inp.LokasiIDs = req.LokasiIDs
 	}
 	inp.AlasanUbahTanggal = strings.TrimSpace(req.AlasanUbahTanggal)
 	if err := validateMaxLen("alasan_ubah_tanggal", inp.AlasanUbahTanggal, maxAlasanTanggal); err != nil {
@@ -822,7 +837,10 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 func handleRepoError(w http.ResponseWriter, err error) {
+	var le LokasiError
 	switch {
+	case errors.As(err, &le):
+		writeError(w, http.StatusBadRequest, le.Error())
 	case errors.Is(err, ErrConflict):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):

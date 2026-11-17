@@ -1,11 +1,11 @@
 package schedule
 
 import (
-	"erp-azhan/api/internal/benefit"
-	"erp-azhan/api/internal/shared"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"erp-azhan/api/internal/benefit"
+	"erp-azhan/api/internal/shared"
 	"errors"
 	"fmt"
 	"log"
@@ -374,6 +374,11 @@ func (r *Repository) Create(ctx context.Context, inp ScheduleInput) (*Schedule, 
 			return nil, err
 		}
 	}
+	if inp.LokasiIDs != nil {
+		if err := gantiLokasi(ctx, tx, id, *inp.LokasiIDs); err != nil {
+			return nil, err
+		}
+	}
 
 	if err := setKlasifikasiTx(ctx, tx, id, inp.Klasifikasi); err != nil {
 		return nil, err
@@ -446,6 +451,12 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 	// nil: klien lama yang tidak mengirim benefit_ids tidak menghapus benefit yang tersimpan.
 	if inp.BenefitIDs != nil {
 		if err := benefit.GantiTautan(ctx, tx, id, *inp.BenefitIDs); err != nil {
+			return nil, err
+		}
+	}
+	// nil: clients that do not send lokasi_ids keep the stored locations.
+	if inp.LokasiIDs != nil {
+		if err := ubahLokasi(ctx, tx, id, *inp.LokasiIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -712,6 +723,11 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 	if s.Benefits == nil {
 		s.Benefits = []benefit.Ref{}
 	}
+
+	if s.Lokasi, err = lokasiJadwal(ctx, r.db, s.ID); err != nil {
+		return nil, fmt.Errorf("schedule.GetByID lokasi: %w", err)
+	}
+	s.LokasiIDs = idLokasi(s.Lokasi)
 
 	var bCount int
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id = ?`, s.ID).Scan(&bCount); err != nil {

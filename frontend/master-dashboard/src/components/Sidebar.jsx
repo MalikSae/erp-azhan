@@ -24,6 +24,7 @@ import {
   Sparkles,
   BookOpen,
   GalleryHorizontal,
+  Landmark,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { listPerubahanJamaah, EVENT_PERUBAHAN_JAMAAH, listPencairanAdmin, EVENT_PENCAIRAN_KOMISI } from 'shared';
@@ -149,6 +150,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       items: [
         { name: 'Pengumuman', path: '/pengumuman', icon: Megaphone, perm: 'pengumuman.manage' },
         { name: 'Banner Promosi', path: '/banner-promosi', icon: GalleryHorizontal, perm: 'banner.manage' },
+        { name: 'Jelajah Haramain', path: '/haramain', icon: Landmark, perm: 'haramain.manage' },
       ],
     },
     {

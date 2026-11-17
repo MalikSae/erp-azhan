@@ -23,6 +23,7 @@ import BenefitIcon from 'shared/ui/BenefitIcon';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import SeatManagement from '../components/SeatManagement';
 import ManasikPaketRingkas from '../components/ManasikPaketRingkas';
+import { LokasiTerpilihList } from '../components/LokasiDikunjungiSection';
 import { AuthContext } from '../context/AuthContext';
 import { getSchedule } from '../api/schedules';
 import { getItinerary } from '../api/itineraries';
@@ -601,6 +602,14 @@ const ScheduleDetailPage = () => {
               </ul>
             ) : (
               <EmptyState variant="inline" message="Belum ada highlight benefit untuk paket ini." />
+            )}
+          </Section>
+
+          <Section title="Lokasi Dikunjungi">
+            {(schedule.lokasi || []).length > 0 ? (
+              <LokasiTerpilihList lokasi={schedule.lokasi} />
+            ) : (
+              <EmptyState variant="inline" message="Belum ada lokasi." />
             )}
           </Section>
 

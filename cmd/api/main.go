@@ -33,6 +33,7 @@ import (
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/destination"
 	"erp-azhan/api/internal/dokumen"
+	"erp-azhan/api/internal/haramain"
 	"erp-azhan/api/internal/hotel"
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/itinerary"
@@ -205,6 +206,7 @@ func main() {
 	manasikHandler := manasik.NewHandler(db)
 	bannerHandler := banner.NewHandler(db)
 	notifikasiHandler := notifikasi.NewHandler(db)
+	haramainHandler := haramain.NewHandler(db)
 	topbarHandler := topbar.NewHandler(db)
 	customerOrders := customer.NewOrders(db, bookingRepo, paymentRepo)
 
@@ -236,6 +238,9 @@ func main() {
 	// Banner Promosi Beranda app (maks 5 banner tayang).
 	publicV1.Get("/api/public/v1/promosi", bannerHandler.Promosi)
 	r.With(requireDB(db)).Post("/api/public/promosi/{id}/klik", bannerHandler.Klik)
+	// Jelajah Haramain (web dan app). Detail tanpa cache publik supaya ulasan baru langsung terlihat.
+	publicV1.Get("/api/public/v1/haramain", haramainHandler.DaftarPublik)
+	r.With(requireDB(db)).Get("/api/public/v1/haramain/{id}", haramainHandler.DetailPublik)
 	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: categories & brand & bank accounts
@@ -300,6 +305,10 @@ func main() {
 		r.Get("/foto", customerHandler.Foto)
 		r.Put("/foto", customerHandler.UpdateFoto)
 		r.Get("/upline", customerHandler.Upline)
+		r.Get("/haramain/{id}/ulasan", haramainHandler.UlasanSayaAkun)
+		r.Put("/haramain/{id}/ulasan", haramainHandler.SimpanUlasanAkun)
+		r.Delete("/haramain/{id}/ulasan", haramainHandler.HapusUlasanAkun)
+		r.Post("/haramain/ulasan/{id}/laporkan", haramainHandler.LaporkanAkun)
 		r.Get("/upline/foto", customerHandler.UplineFoto)
 		r.Post("/password", customerHandler.ChangePassword)
 		r.Post("/password/buat", customerHandler.BuatPassword)
@@ -473,6 +482,8 @@ func main() {
 		// chi mendahulukan segmen statis, jadi "benefit-options" tidak terbaca sebagai id.
 		scheduleView.Get("/schedules/benefit-options", benefitHandler.ListOpsi)
 		scheduleEdit.Post("/schedules/benefit-options", benefitHandler.CreateBenefit)
+		// Lokasi Dikunjungi: active Jelajah Haramain places; static segment, registered before /schedules/{id}.
+		scheduleView.Get("/schedules/lokasi-options", scheduleHandler.ListLokasiOptions)
 		scheduleView.Get("/schedules/{id}", scheduleHandler.GetScheduleAdmin)
 		scheduleView.Get("/schedules/{id}/seat", scheduleHandler.GetScheduleSeat)
 		scheduleEdit.Post("/schedules", scheduleHandler.CreateSchedule)
@@ -586,6 +597,21 @@ func main() {
 			r.Put("/urutan", bannerHandler.Urutkan)
 			r.Put("/{id}", bannerHandler.Ubah)
 			r.Delete("/{id}", bannerHandler.Hapus)
+		})
+		r.Route("/haramain", func(r chi.Router) {
+			r.Use(identity.RequirePermission("haramain.manage"))
+			r.Get("/", haramainHandler.DaftarAdmin)
+			r.Post("/", haramainHandler.BuatAdmin)
+			r.Put("/urutan", haramainHandler.UrutkanAdmin)
+			r.Get("/{id}", haramainHandler.DetailAdmin)
+			r.Put("/{id}", haramainHandler.UbahAdmin)
+			r.Delete("/{id}", haramainHandler.HapusAdmin)
+		})
+		r.Route("/haramain-ulasan", func(r chi.Router) {
+			r.Use(identity.RequirePermission("haramain.manage"))
+			r.Get("/", haramainHandler.UlasanAdminList)
+			r.Put("/{id}/tampil", haramainHandler.AturTampilAdmin)
+			r.Post("/{id}/abaikan", haramainHandler.AbaikanAdmin)
 		})
 		r.Route("/pengumuman", func(r chi.Router) {
 			r.Use(identity.RequirePermission("pengumuman.manage"))
