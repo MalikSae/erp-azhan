@@ -119,7 +119,6 @@ type Tempat struct {
 	Ringkas      string   `json:"ringkas"`
 	Deskripsi    *string  `json:"deskripsi"`
 	Alamat       *string  `json:"alamat"`
-	JamBuka      *string  `json:"jam_buka"`
 	GmapsURL     *string  `json:"gmaps_url"`
 	Populer      bool     `json:"populer"`
 	Aktif        bool     `json:"aktif"`
@@ -138,7 +137,6 @@ type Input struct {
 	Ringkas     string   `json:"ringkas"`
 	Deskripsi   *string  `json:"deskripsi"`
 	Alamat      *string  `json:"alamat"`
-	JamBuka     *string  `json:"jam_buka"`
 	GmapsURL    *string  `json:"gmaps_url"`
 	Populer     bool     `json:"populer"`
 	Aktif       bool     `json:"aktif"`
@@ -148,7 +146,7 @@ func (in *Input) validasi() error {
 	in.Nama = strings.TrimSpace(in.Nama)
 	in.Ringkas = strings.TrimSpace(in.Ringkas)
 	in.FotoURL = strings.TrimSpace(in.FotoURL)
-	in.NamaLengkap, in.Deskripsi, in.Alamat, in.JamBuka, in.GmapsURL = opsional(in.NamaLengkap), opsional(in.Deskripsi), opsional(in.Alamat), opsional(in.JamBuka), opsional(in.GmapsURL)
+	in.NamaLengkap, in.Deskripsi, in.Alamat, in.GmapsURL = opsional(in.NamaLengkap), opsional(in.Deskripsi), opsional(in.Alamat), opsional(in.GmapsURL)
 	// The description comes from the admin editor as limited HTML (judul, tebal, miring, daftar): keep only the safe
 	// tags, and store an empty editor as NULL.
 	if in.Deskripsi != nil {
@@ -180,8 +178,6 @@ func (in *Input) validasi() error {
 		return galat("Deskripsi terlalu panjang")
 	case in.Alamat != nil && panjang(*in.Alamat) > 300:
 		return galat("Alamat maksimal 300 karakter")
-	case in.JamBuka != nil && panjang(*in.JamBuka) > 60:
-		return galat("Jam buka maksimal 60 karakter")
 	case len(in.Galeri) > maksGaleri:
 		return galat("Galeri maksimal %d foto", maksGaleri)
 	}
@@ -203,19 +199,19 @@ func (in *Input) validasi() error {
 const maksDeskripsi = 8000
 
 const kolomTempat = `t.id, t.nama, t.nama_lengkap, t.kategori, t.kota, t.foto_url, t.galeri, t.ringkas, t.deskripsi, t.alamat,
-	t.jam_buka, t.gmaps_url, t.populer, t.aktif, t.urutan,
+	t.gmaps_url, t.populer, t.aktif, t.urutan,
 	(SELECT COUNT(*) FROM haramain_ulasan u WHERE u.tempat_id = t.id AND NOT u.disembunyikan)`
 
 func scanTempat(row interface{ Scan(...any) error }) (*Tempat, error) {
 	var t Tempat
 	var galeri sql.NullString
-	var namaLengkap, deskripsi, alamat, jam, gmaps sql.NullString
+	var namaLengkap, deskripsi, alamat, gmaps sql.NullString
 	if err := row.Scan(&t.ID, &t.Nama, &namaLengkap, &t.Kategori, &t.Kota, &t.FotoURL, &galeri, &t.Ringkas, &deskripsi, &alamat,
-		&jam, &gmaps, &t.Populer, &t.Aktif, &t.Urutan, &t.JumlahUlasan); err != nil {
+		&gmaps, &t.Populer, &t.Aktif, &t.Urutan, &t.JumlahUlasan); err != nil {
 		return nil, err
 	}
 	t.Galeri = bacaDaftar(galeri)
-	for p, n := range map[**string]sql.NullString{&t.NamaLengkap: namaLengkap, &t.Deskripsi: deskripsi, &t.Alamat: alamat, &t.JamBuka: jam, &t.GmapsURL: gmaps} {
+	for p, n := range map[**string]sql.NullString{&t.NamaLengkap: namaLengkap, &t.Deskripsi: deskripsi, &t.Alamat: alamat, &t.GmapsURL: gmaps} {
 		if n.Valid {
 			v := n.String
 			*p = &v
@@ -265,11 +261,11 @@ func Buat(ctx context.Context, q querier, adminID int64, in Input) (int64, error
 		return 0, err
 	}
 	res, err := q.ExecContext(ctx, `
-		INSERT INTO haramain_tempat (nama, nama_lengkap, kategori, kota, foto_url, galeri, ringkas, deskripsi, alamat, jam_buka,
+		INSERT INTO haramain_tempat (nama, nama_lengkap, kategori, kota, foto_url, galeri, ringkas, deskripsi, alamat,
 			gmaps_url, populer, aktif, urutan, diubah_oleh)
-		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(urutan), 0) + 1, ? FROM haramain_tempat`,
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(urutan), 0) + 1, ? FROM haramain_tempat`,
 		in.Nama, in.NamaLengkap, in.Kategori, in.Kota, in.FotoURL, jsonDaftar(in.Galeri), in.Ringkas, in.Deskripsi, in.Alamat,
-		in.JamBuka, in.GmapsURL, in.Populer, in.Aktif, adminAtauNull(adminID))
+		in.GmapsURL, in.Populer, in.Aktif, adminAtauNull(adminID))
 	if err != nil {
 		return 0, err
 	}
@@ -287,10 +283,10 @@ func Ubah(ctx context.Context, q querier, id, adminID int64, in Input) error {
 	}
 	_, err = q.ExecContext(ctx, `
 		UPDATE haramain_tempat SET nama = ?, nama_lengkap = ?, kategori = ?, kota = ?, foto_url = ?, galeri = ?, ringkas = ?,
-			deskripsi = ?, alamat = ?, jam_buka = ?, gmaps_url = ?, populer = ?, aktif = ?, diubah_oleh = ?
+			deskripsi = ?, alamat = ?, gmaps_url = ?, populer = ?, aktif = ?, diubah_oleh = ?
 		WHERE id = ?`,
 		in.Nama, in.NamaLengkap, in.Kategori, in.Kota, in.FotoURL, jsonDaftar(in.Galeri), in.Ringkas, in.Deskripsi, in.Alamat,
-		in.JamBuka, in.GmapsURL, in.Populer, in.Aktif, adminAtauNull(adminID), id)
+		in.GmapsURL, in.Populer, in.Aktif, adminAtauNull(adminID), id)
 	if err != nil {
 		return err
 	}
