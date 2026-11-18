@@ -153,7 +153,7 @@ func TestRegisterAppKodeAgenKetik(t *testing.T) {
 			k := "salah" + nama
 			// kode_referral otomatis yang valid tidak boleh menyelamatkan kode ketik yang salah.
 			rec := post(h.RegisterApp, f.body(k, map[string]any{"kode_agen": kode, "kode_referral": f.kode("A")}), "")
-			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"Kode agen tidak ditemukan"`) || !strings.Contains(rec.Body.String(), `"code":"KODE_AGEN_TIDAK_ADA"`) {
+			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"Kode agen tidak ditemukan."`) || !strings.Contains(rec.Body.String(), `"code":"KODE_AGEN_TIDAK_ADA"`) {
 				t.Fatalf("%s: %d %s", nama, rec.Code, rec.Body)
 			}
 			if strings.Contains(rec.Body.String(), "session_token") {
@@ -232,7 +232,7 @@ func TestDaftarGoogleKodeAgenKetik(t *testing.T) {
 
 	for nama, kode := range map[string]string{"tidakada": "TDKADA", "nonaktif": f.kode("O")} {
 		code, body := daftar("salah"+nama, map[string]any{"kode_agen": kode, "kode_referral": f.kode("A")})
-		if code != http.StatusBadRequest || !strings.Contains(body, `"Kode agen tidak ditemukan"`) || !strings.Contains(body, `"code":"KODE_AGEN_TIDAK_ADA"`) {
+		if code != http.StatusBadRequest || !strings.Contains(body, `"Kode agen tidak ditemukan."`) || !strings.Contains(body, `"code":"KODE_AGEN_TIDAK_ADA"`) {
 			t.Fatalf("%s: %d %s", nama, code, body)
 		}
 		if _, ada := f.upline(t, "salah"+nama); ada {

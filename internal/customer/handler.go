@@ -110,7 +110,7 @@ func (h *Handler) pilihKodeAgen(w http.ResponseWriter, r *http.Request, ip strin
 		return "", false
 	}
 	if !ok {
-		writeErrorCode(w, http.StatusBadRequest, "Kode agen tidak ditemukan", KodeGalatKodeAgenTidakAda)
+		writeErrorCode(w, http.StatusBadRequest, "Kode agen tidak ditemukan.", KodeGalatKodeAgenTidakAda)
 		return "", false
 	}
 	if hitung {
