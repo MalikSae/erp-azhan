@@ -57,7 +57,7 @@ func anonimkanAkun(ctx context.Context, tx *sql.Tx, akunID int64) error {
 			nama_lengkap = 'Akun dihapus', email = ?, email_normal = ?, no_hp = '', password_hash = '!',
 			foto_url = NULL, domisili = NULL, tanggal_lahir = NULL, jenis_kelamin = NULL, nik_agen = NULL,
 			kode_referral = NULL, rekening_bank_agen = NULL, rekening_nomor_agen = NULL, rekening_atas_nama_agen = NULL,
-			email_verified_at = NULL, google_sub = NULL, dihapus_at = NOW()
+			email_verified_at = NULL, google_sub = NULL, jamaah_id = NULL, dihapus_at = NOW()
 		WHERE id = ?`, email, email, akunID); err != nil {
 		return fmt.Errorf("customer: anonimkan akun: %w", err)
 	}
