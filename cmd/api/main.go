@@ -329,7 +329,6 @@ func main() {
 		r.Get("/bank-accounts", customerOrders.BankAccounts)
 		r.Get("/travelers", customerOrders.Travelers)
 		r.Get("/jamaah", jamaahAkunHandler.Daftar)
-		r.Post("/jamaah/tautkan", aktivasiHandler.Akun)
 		r.Get("/pengumuman", pengumumanHandler.Akun)
 		r.Get("/notifikasi", notifikasiHandler.Daftar)
 		r.Get("/notifikasi/jumlah", notifikasiHandler.Jumlah)

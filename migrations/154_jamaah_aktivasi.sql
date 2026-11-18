@@ -2,16 +2,16 @@
 --
 -- jamaah_aktivasi_log: jejak untuk admin. Hanya kegagalan di kode booking yang ada dan keberhasilan yang
 -- ditulis. Kode, NIK, IP, dan perangkat disimpan sebagai HMAC (pepper AKTIVASI_PEPPER), tidak pernah mentah.
--- alasan: sebab sebenarnya (kode_salah, nik_salah, bukan_peserta, sudah_tertaut, booking_batal, upline_beda, dan
+-- alasan: sebab sebenarnya (kode_salah, nik_salah, bukan_peserta, sudah_tertaut, booking_batal, dan
 -- seterusnya); pengguna selalu menerima satu pesan galat yang sama.
 -- jamaah_aktivasi_hitung: penghitung percobaan gagal yang atomik (INSERT .. ON DUPLICATE KEY UPDATE).
--- jenis: ip, dev, akun, pasangan, kode_24, nik_24, brand, simpan_ip. jendela: nomor jendela waktu tetap.
+-- jenis: ip, dev, pasangan, kode_24, nik_24, brand, simpan_ip. jendela: nomor jendela waktu tetap.
 -- Baris kedaluwarsa dibersihkan berkala (kedaluwarsa_at).
 
 CREATE TABLE IF NOT EXISTS jamaah_aktivasi_log (
   id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   brand_id      BIGINT UNSIGNED NOT NULL,
-  aksi          ENUM('cek_gagal','cek_ok','aktivasi','tautan','tolak','lepas_admin','kode_dikunci','reset_admin') NOT NULL,
+  aksi          ENUM('cek_gagal','cek_ok','aktivasi','lepas_admin','kode_dikunci','reset_admin') NOT NULL,
   jamaah_id     BIGINT UNSIGNED NULL,
   akun_id       BIGINT UNSIGNED NULL,
   kode_hash     CHAR(64) NULL,

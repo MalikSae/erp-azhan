@@ -29,7 +29,6 @@ type jenisBatas struct {
 var (
 	batasIP        = jenisBatas{"ip", 15 * time.Minute, 5}
 	batasPerangkat = jenisBatas{"dev", 15 * time.Minute, 5}
-	batasAkun      = jenisBatas{"akun", 15 * time.Minute, 5}
 	batasPasangan  = jenisBatas{"pasangan", 15 * time.Minute, 5}
 	batasKode24    = jenisBatas{"kode_24", 24 * time.Hour, 100}
 	batasNIK24     = jenisBatas{"nik_24", 24 * time.Hour, 100}
@@ -159,7 +158,7 @@ func bolehTulisLogGagal(ctx context.Context, q rowQueryer, kodeHash string) bool
 	var n int
 	err := q.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM jamaah_aktivasi_log
-		WHERE kode_hash = ? AND aksi IN ('cek_gagal','tolak','kode_dikunci') AND dibuat_pada >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`, kodeHash).Scan(&n)
+		WHERE kode_hash = ? AND aksi IN ('cek_gagal','kode_dikunci') AND dibuat_pada >= DATE_SUB(NOW(), INTERVAL 24 HOUR)`, kodeHash).Scan(&n)
 	return err != nil || n < maxLogGagalPerKode
 }
 
@@ -167,7 +166,7 @@ type rowQueryer interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// Masa simpan: penghitung dibuang setelah kedaluwarsa_at; log kegagalan 90 hari; jejak aktivasi, tautan, dan
+// Masa simpan: penghitung dibuang setelah kedaluwarsa_at; log kegagalan 90 hari; jejak aktivasi dan
 // lepas_admin 2 tahun.
 const (
 	simpanLogGagalHari = 90
@@ -186,7 +185,7 @@ func BersihkanAktivasi(ctx context.Context, db *sql.DB) (HasilBersih, error) {
 		return h, err
 	}
 	if h.LogGagal, err = hapusBertahap(ctx, db, fmt.Sprintf(`DELETE FROM jamaah_aktivasi_log
-		WHERE aksi IN ('cek_gagal','cek_ok','tolak','kode_dikunci') AND dibuat_pada < DATE_SUB(NOW(), INTERVAL %d DAY) LIMIT ?`, simpanLogGagalHari)); err != nil {
+		WHERE aksi IN ('cek_gagal','cek_ok','kode_dikunci') AND dibuat_pada < DATE_SUB(NOW(), INTERVAL %d DAY) LIMIT ?`, simpanLogGagalHari)); err != nil {
 		return h, err
 	}
 	if h.LogJejak, err = hapusBertahap(ctx, db, fmt.Sprintf(`DELETE FROM jamaah_aktivasi_log
