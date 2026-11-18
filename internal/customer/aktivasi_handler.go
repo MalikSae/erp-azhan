@@ -91,7 +91,7 @@ func (h *AktivasiHandler) jalankan(w http.ResponseWriter, r *http.Request, in Ak
 	case errors.Is(err, ErrAktivasiGagal):
 		writeErrorCode(w, http.StatusBadRequest, PesanAktivasiGagal, KodeGalatAktivasiGagal)
 	case errors.Is(err, ErrKodeAgenTidakAda):
-		writeErrorCode(w, http.StatusBadRequest, "Kode agen tidak ditemukan", KodeGalatKodeAgenTidakAda)
+		writeErrorCode(w, http.StatusBadRequest, "Kode agen tidak ditemukan.", KodeGalatKodeAgenTidakAda)
 	case errors.Is(err, ErrEmailTaken):
 		writeError(w, http.StatusConflict, "Pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, masuk atau gunakan Lupa kata sandi.")
 	case errors.Is(err, ErrPhoneTaken):
