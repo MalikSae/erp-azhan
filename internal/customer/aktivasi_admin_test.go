@@ -321,3 +321,49 @@ func TestBersihkanAktivasi(t *testing.T) {
 		t.Errorf("penghitung: kedaluwarsa harus dibuang, yang berlaku tetap")
 	}
 }
+
+func TestDetailAkunJamaahTertautDanRiwayat(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
+	admin := adminId(t, tx)
+	kunci := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Pemilik Kunci", StatusAgen: "aktif"})
+	nik := nikUji(30)
+	jamaah := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Ahmad", Direkrut: kunci, NIK: nik})
+	akun := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Akun Ahmad", Direkrut: kunci})
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, jamaah, akun)
+	// Akun lain memegang NIK jamaah tertaut sebagai NIK agen.
+	squat := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Pemegang NIK", StatusAgen: "pengajuan"})
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nik, squat)
+	must(t, "log aktivasi", catatLogAktivasi(ctx, tx, entriLogAktivasi{BrandID: brand, Aksi: "aktivasi", JamaahID: jamaah, AkunID: akun, KodeHash: strings.Repeat("a", 64)}))
+
+	d, err := getAkunDetail(ctx, tx, &brand, akun)
+	must(t, "detail", err)
+	if d.Jamaah == nil || !strings.HasPrefix(d.Jamaah.Nama, "Ahmad") || d.Jamaah.PemilikKunciID == nil || *d.Jamaah.PemilikKunciID != kunci || !strings.HasPrefix(*d.Jamaah.PemilikKunciNama, "Pemilik Kunci") {
+		t.Fatalf("jamaah tertaut = %+v", d.Jamaah)
+	}
+	if len(d.RiwayatAktivasi) != 1 || d.RiwayatAktivasi[0].Aksi != "aktivasi" {
+		t.Fatalf("riwayat = %+v", d.RiwayatAktivasi)
+	}
+	ds, err := getAkunDetail(ctx, tx, &brand, squat)
+	must(t, "detail squat", err)
+	if !ds.NIKAgenBentrok {
+		t.Fatal("nik_agen_bentrok = false, want true")
+	}
+	if d.NIKAgenBentrok {
+		t.Fatal("akun tanpa NIK agen ditandai bentrok")
+	}
+
+	must(t, "lepas", lepasTautanTx(ctx, tx, &brand, akun, admin, AlasanRequest{Alasan: "tertaut ke orang salah"}))
+	d, err = getAkunDetail(ctx, tx, &brand, akun)
+	must(t, "detail lepas", err)
+	if d.Jamaah != nil || len(d.RiwayatAktivasi) != 2 || d.RiwayatAktivasi[0].Aksi != "lepas_admin" || d.RiwayatAktivasi[0].Catatan != "tertaut ke orang salah" || d.RiwayatAktivasi[0].Admin == nil {
+		t.Fatalf("setelah lepas: jamaah=%v riwayat=%+v", d.Jamaah, d.RiwayatAktivasi)
+	}
+
+	hasil, err := listAkun(ctx, tx, &brand, FilterAkun{Cari: "Akun Ahmad"})
+	must(t, "list", err)
+	if len(hasil.Items) != 1 || hasil.Items[0].JamaahID != nil {
+		t.Fatalf("list setelah lepas = %+v", hasil.Items)
+	}
+}

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronDown, ChevronRight, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Unlink } from 'lucide-react';
 import { getAkunPelanggan, ubahProfilAkun } from '../api/akun';
 import Alert from '../components/ui/Alert';
+import { KosongkanNikAgenModal, LepasTautanModal } from '../components/AktivasiAkunModal';
 import { GantiUplineModal } from '../components/GantiKaitanModal';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
@@ -19,6 +20,13 @@ import { StatusAkun } from './DaftarAkunPage';
 const dateTime = (v) => (!v ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(v)));
 
 const KOLOM = { nama_lengkap: 'Nama', no_hp: 'WhatsApp', domisili: 'Domisili', nik_agen: 'NIK agen' };
+
+// Kaitan jamaah ke agen (kunci), dengan kata yang sama di menu Jamaah.
+const KAITAN = {
+  terikat_agen: { label: 'Terikat agen', variant: 'success' },
+  tanpa_agen: { label: 'Tanpa agen', variant: 'neutral' },
+  belum_ditentukan: { label: 'Belum ditentukan', variant: 'warning' },
+};
 
 
 const BULAN = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES'];
@@ -40,6 +48,14 @@ const TombolUbah = ({ onClick, children }) => (
   <Button variant="secondary" size="sm" onClick={onClick}><Pencil size={14} className="mr-1.5" />{children}</Button>
 );
 
+// Judul satu baris riwayat aktivasi di linimasa Riwayat Perubahan.
+const judulAktivasi = (l) => {
+  const nama = l.jamaah_nama || 'jamaah';
+  if (l.aksi === 'aktivasi') return `Akun dibuat dari aktivasi jamaah ${nama}`;
+  if (l.aksi === 'lepas_admin') return `Tautan ke jamaah ${nama} dilepas`;
+  return `Aktivasi jamaah ${nama}`;
+};
+
 // Detail satu akun pelanggan. showBrandColumn: Admin Master, boleh membuka layar Ganti Kaitan Agen.
 // izin: { ubahProfil, gantiUpline, lihatAgen, setujuiAgen, lihatBooking } menentukan tombol dan tautan (API tetap memeriksa izin sendiri).
 // Data keagenan (NIK agen, kinerja, komisi) tidak ditampilkan di sini; rumahnya di halaman agen.
@@ -53,6 +69,9 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
   const [saving, setSaving] = useState(false);
   const [galat, setGalat] = useState(null);
   const [gantiUplineBuka, setGantiUplineBuka] = useState(false);
+  const [lepasBuka, setLepasBuka] = useState(false);
+  const [nikBuka, setNikBuka] = useState(false);
+  const [pesan, setPesan] = useState('');
 
   const muat = useCallback(() => getAkunPelanggan(id)
     .then(setAkun)
@@ -94,15 +113,29 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
     }
   };
 
-  // Riwayat perubahan data dan upline digabung, terbaru dulu.
+  // NIK agen dikosongkan oleh pemegang izin menurut status akun (sama dengan aturan backend).
+  const bolehKosongkanNik = akun.nik_agen_bentrok && (jadiAgen ? izin.gantiUpline : izin.setujuiAgen);
+  const selesaiAksi = (teks) => {
+    setLepasBuka(false);
+    setNikBuka(false);
+    setPesan(teks);
+    return muat();
+  };
+
+  // Riwayat perubahan data, upline, dan aktivasi digabung, terbaru dulu. Pelepasan tautan tercatat di riwayat
+  // aktivasi, jadi barisnya di log data (kolom jamaah_id) tidak ditampilkan dua kali.
   const riwayat = [
-    ...akun.riwayat_data.map((l, i) => ({
+    ...akun.riwayat_data.filter((l) => l.kolom !== 'jamaah_id').map((l, i) => ({
       key: `d${i}`, waktu: l.diubah_at, oleh: l.diubah_oleh, alasan: l.alasan,
       judul: `${KOLOM[l.kolom] || l.kolom}: ${l.nilai_lama || '-'} → ${l.nilai_baru || '-'}`,
     })),
     ...akun.riwayat_upline.map((l) => ({
       key: `u${l.id}`, waktu: l.diganti_at, oleh: l.diganti_oleh, alasan: l.alasan,
       judul: `Upline: ${l.agen_lama_nama || 'Tanpa upline'} → ${l.agen_baru_nama || 'Tanpa upline'}`,
+    })),
+    ...(akun.riwayat_aktivasi || []).map((l, i) => ({
+      key: `a${i}`, waktu: l.dibuat_pada, oleh: l.admin || 'Sistem', alasan: l.aksi === 'lepas_admin' ? l.catatan : '',
+      judul: judulAktivasi(l),
     })),
   ].sort((x, y) => new Date(y.waktu) - new Date(x.waktu));
 
@@ -113,7 +146,6 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
     ['Tanggal lahir', akun.tanggal_lahir ? dateLabel(akun.tanggal_lahir) : null],
     ['Terdaftar', dateLabel(akun.created_at)],
     ['Login terakhir', akun.last_login_at ? dateTime(akun.last_login_at) : null],
-    ['Jamaah', akun.jamaah ? <Link to={`/jamaah/${akun.jamaah.id}`} className="font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">{akun.jamaah.nama_lengkap}</Link> : null],
   ].filter(([, v]) => v);
 
   const inisial = akun.nama_lengkap.split(/\s+/).filter(Boolean).slice(0, 2).map((k) => k[0]).join('').toUpperCase();
@@ -150,6 +182,13 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
       </PageHeader>
 
       <div className="max-w-3xl space-y-6">
+      {pesan && <Alert variant="success" message={pesan} onClose={() => setPesan('')} />}
+      {bolehKosongkanNik && (
+        <Alert variant="warning">
+          <span>NIK agen akun ini juga milik jamaah yang tertaut ke akun lain.</span>{' '}
+          <button type="button" onClick={() => setNikBuka(true)} className={tautan}>Kosongkan NIK Agen</button>
+        </Alert>
+      )}
       {/* Profil: foto dan data diri (label di atas nilai). */}
       <div className={kartu}>
         <div className="flex items-start gap-5 p-5">
@@ -170,6 +209,38 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
           )}
         </div>
       </div>
+
+      {/* Jamaah tertaut: hasil aktivasi (kode booking + NIK). Lepas Tautan hanya untuk pemegang akun.edit. */}
+      {akun.jamaah && (
+        <div className={kartu}>
+          <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-2">
+            <h2 className="font-heading text-base md:text-lg font-semibold tracking-tight text-neutral-900">Jamaah Tertaut</h2>
+            {izin.ubahProfil && !jadiAgen && (
+              <Button variant="danger-outline" size="sm" onClick={() => setLepasBuka(true)}><Unlink size={14} />Lepas Tautan</Button>
+            )}
+          </div>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 p-5 pt-3 sm:grid-cols-3">
+            <div className="min-w-0">
+              <dt className="text-xs font-body text-neutral-500">Jamaah</dt>
+              <dd className="mt-0.5 truncate text-sm font-body font-medium text-neutral-900">
+                {izin.lihatJamaah ? <Link to={`/jamaah/${akun.jamaah.id}`} className={tautan}>{akun.jamaah.nama_lengkap}</Link> : akun.jamaah.nama_lengkap}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs font-body text-neutral-500">Kaitan agen</dt>
+              <dd className="mt-0.5">{(() => { const k = KAITAN[akun.jamaah.kaitan_status]; return k ? <Badge variant={k.variant}>{k.label}</Badge> : <span className="text-sm text-neutral-400">-</span>; })()}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs font-body text-neutral-500">Pemilik kunci</dt>
+              <dd className="mt-0.5 truncate text-sm font-body font-medium text-neutral-900">
+                {akun.jamaah.pemilik_kunci_akun_id
+                  ? (izin.lihatAgen ? <Link to={`/agen/${akun.jamaah.pemilik_kunci_akun_id}`} className={tautan}>{akun.jamaah.pemilik_kunci_nama}</Link> : akun.jamaah.pemilik_kunci_nama)
+                  : <span className="font-normal text-neutral-400">-</span>}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      )}
 
       {/* Booking: tile tanggal berangkat di kiri, tiap baris membuka detail bookingnya. */}
       <div className={kartu}>
@@ -261,6 +332,9 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
           <Textarea label="Alasan perubahan *" value={form.alasan || ''} onChange={isi('alasan')} rows={3} placeholder="Contoh: salah ketik saat mendaftar, diminta pemilik akun" />
         </div>
       </Modal>
+
+      <LepasTautanModal akun={akun} isOpen={lepasBuka} onClose={() => setLepasBuka(false)} onSaved={() => selesaiAksi('Tautan dilepas.')} />
+      <KosongkanNikAgenModal akun={akun} isOpen={nikBuka} onClose={() => setNikBuka(false)} onSaved={() => selesaiAksi('NIK agen dikosongkan.')} />
 
       {izin.gantiUpline && (
         <GantiUplineModal

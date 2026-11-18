@@ -47,6 +47,9 @@ type AkunBaris struct {
 	UplineNama   *string    `json:"upline_nama"`
 	// JumlahBooking: semua booking yang dibuat akun ini, termasuk yang batal (sama dengan angka di detail akun).
 	JumlahBooking int        `json:"jumlah_booking"`
+	// JamaahID dan JamaahNama: jamaah yang tertaut ke akun lewat aktivasi; nil bila belum tertaut.
+	JamaahID   *int64  `json:"jamaah_id"`
+	JamaahNama *string `json:"jamaah_nama"`
 	CreatedAt     time.Time  `json:"created_at"`
 	LastLoginAt   *time.Time `json:"last_login_at"`
 }
@@ -61,6 +64,21 @@ type HasilListAkun struct {
 type JamaahRingkas struct {
 	ID   int64  `json:"id"`
 	Nama string `json:"nama_lengkap"`
+	// Kunci jamaah tertaut: status kaitan agen dan akun pemilik kunci (direkrut jamaah); nil bila tanpa agen.
+	KaitanStatus     string  `json:"kaitan_status"`
+	PemilikKunciID   *int64  `json:"pemilik_kunci_akun_id"`
+	PemilikKunciNama *string `json:"pemilik_kunci_nama"`
+}
+
+// LogAktivasi: satu baris riwayat aktivasi akun (tanpa kode, NIK, IP, atau perangkat). Alasan adalah sebab
+// singkat dari sistem; Catatan hanya terisi untuk aksi admin (alasan yang diketik admin).
+type LogAktivasi struct {
+	Aksi       string    `json:"aksi"` // aktivasi | lepas_admin
+	Alasan     string    `json:"alasan"`
+	Catatan    string    `json:"catatan"`
+	JamaahNama *string   `json:"jamaah_nama"`
+	Admin      *string   `json:"admin"`
+	DibuatPada time.Time `json:"dibuat_pada"`
 }
 
 // LogData: satu perubahan data akun oleh admin. NIK agen sudah disamarkan saat dicatat.
@@ -112,6 +130,10 @@ type AkunDetail struct {
 	Booking []BookingAkun `json:"booking"`
 	// Jamaah milik akun sendiri (yang dipakai sebagai PIC booking).
 	Jamaah *JamaahRingkas        `json:"jamaah"`
+	// NIKAgenBentrok: NIK agen akun juga milik jamaah yang tertaut ke akun lain (kandidat Kosongkan NIK Agen).
+	NIKAgenBentrok bool `json:"nik_agen_bentrok"`
+	// RiwayatAktivasi: aktivasi, tautan, penolakan, dan lepas tautan akun ini (terbaru dulu, maks 50).
+	RiwayatAktivasi []LogAktivasi `json:"riwayat_aktivasi"`
 	Log    []agen.AkunKaitanLog `json:"riwayat_upline"`
 	// Perubahan nama, WhatsApp, domisili, dan NIK agen oleh admin (terbaru dulu).
 	RiwayatData []LogData `json:"riwayat_data"`
@@ -187,10 +209,11 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 	rows, err := q.QueryContext(ctx, `
 		SELECT a.id, a.nama_lengkap, a.email, a.no_hp, a.brand_id, b.name, a.status_agen, a.kode_referral,
 		       a.direkrut_oleh_akun_id, up.nama_lengkap,
-		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id), a.created_at, a.last_login_at
+		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id), a.jamaah_id, jt.nama_lengkap, a.created_at, a.last_login_at
 		FROM customer_accounts a
 		JOIN brands b ON b.id = a.brand_id
 		LEFT JOIN customer_accounts up ON up.id = a.direkrut_oleh_akun_id
+		LEFT JOIN jamaah jt ON jt.id = a.jamaah_id
 		WHERE `+cond+` ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?`,
 		append(args, f.PerPage, (f.Page-1)*f.PerPage)...)
 	if err != nil {
@@ -199,13 +222,16 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 	defer rows.Close()
 	for rows.Next() {
 		var a AkunBaris
-		var upline sql.NullInt64
+		var upline, jamaahID sql.NullInt64
 		if err := rows.Scan(&a.AkunID, &a.NamaLengkap, &a.Email, &a.NoHP, &a.BrandID, &a.BrandName, &a.StatusAgen, &a.KodeReferral,
-			&upline, &a.UplineNama, &a.JumlahBooking, &a.CreatedAt, &a.LastLoginAt); err != nil {
+			&upline, &a.UplineNama, &a.JumlahBooking, &jamaahID, &a.JamaahNama, &a.CreatedAt, &a.LastLoginAt); err != nil {
 			return out, fmt.Errorf("customer: scan akun: %w", err)
 		}
 		if upline.Valid {
 			a.UplineID = &upline.Int64
+		}
+		if jamaahID.Valid {
+			a.JamaahID = &jamaahID.Int64
 		}
 		out.Items = append(out.Items, a)
 	}
@@ -215,12 +241,12 @@ func listAkun(ctx context.Context, q adminQuerier, brandID *int64, f FilterAkun)
 // getAkunDetail: brandID nil = semua brand; admin brand hanya melihat akun brand-nya. Riwayat upline diisi pemanggil.
 func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID int64) (*AkunDetail, error) {
 	var d AkunDetail
-	var upline, jamaahID sql.NullInt64
-	var nik, jamaahNama sql.NullString
+	var upline, jamaahID, kunciID sql.NullInt64
+	var nik, jamaahNama, kaitan, kunciNama sql.NullString
 	err := q.QueryRowContext(ctx, `
 		SELECT a.id, a.brand_id, b.name, a.nama_lengkap, a.email, a.no_hp, a.domisili, a.created_at, a.last_login_at,
 		       a.direkrut_oleh_akun_id, up.nama_lengkap, a.status_agen, a.kode_referral, a.diajukan_agen_at, a.disetujui_agen_at, a.nik_agen,
-		       a.jamaah_id, j.nama_lengkap,
+		       a.jamaah_id, j.nama_lengkap, j.kaitan_status, j.direkrut_oleh_akun_id, ku.nama_lengkap,
 		       (SELECT COUNT(*) FROM jamaah WHERE direkrut_oleh_akun_id = a.id),
 		       (SELECT COUNT(*) FROM customer_accounts WHERE direkrut_oleh_akun_id = a.id),
 		       (SELECT COUNT(*) FROM bookings WHERE customer_account_id = a.id), a.foto_url,
@@ -229,10 +255,11 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 		JOIN brands b ON b.id = a.brand_id
 		LEFT JOIN customer_accounts up ON up.id = a.direkrut_oleh_akun_id
 		LEFT JOIN jamaah j ON j.id = a.jamaah_id
+		LEFT JOIN customer_accounts ku ON ku.id = j.direkrut_oleh_akun_id
 		WHERE a.id = ?`, akunID).
 		Scan(&d.AkunID, &d.BrandID, &d.BrandName, &d.NamaLengkap, &d.Email, &d.NoHP, &d.Domisili, &d.CreatedAt, &d.LastLoginAt,
 			&upline, &d.UplineNama, &d.StatusAgen, &d.KodeReferral, &d.DiajukanAt, &d.DisetujuiAt, &nik,
-			&jamaahID, &jamaahNama, &d.JumlahJamaahAgen, &d.JumlahDiajak, &d.JumlahBooking, &d.FotoURL, &d.TanggalLahir, &d.JenisKelamin)
+			&jamaahID, &jamaahNama, &kaitan, &kunciID, &kunciNama, &d.JumlahJamaahAgen, &d.JumlahDiajak, &d.JumlahBooking, &d.FotoURL, &d.TanggalLahir, &d.JenisKelamin)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && brandID != nil && *brandID != d.BrandID) {
 		return nil, ErrNotFound
 	}
@@ -247,7 +274,21 @@ func getAkunDetail(ctx context.Context, q adminQuerier, brandID *int64, akunID i
 		d.NIKAgen = &m
 	}
 	if jamaahID.Valid {
-		d.Jamaah = &JamaahRingkas{ID: jamaahID.Int64, Nama: jamaahNama.String}
+		d.Jamaah = &JamaahRingkas{ID: jamaahID.Int64, Nama: jamaahNama.String, KaitanStatus: kaitan.String}
+		if kunciID.Valid {
+			d.Jamaah.PemilikKunciID = &kunciID.Int64
+			d.Jamaah.PemilikKunciNama = &kunciNama.String
+		}
+	}
+	if nik.Valid && nik.String != "" {
+		if err := q.QueryRowContext(ctx, `
+			SELECT EXISTS (SELECT 1 FROM jamaah j JOIN customer_accounts ca ON ca.jamaah_id = j.id AND ca.id <> ?
+			               WHERE j.brand_id = ? AND j.nik = ?)`, akunID, d.BrandID, nik.String).Scan(&d.NIKAgenBentrok); err != nil {
+			return nil, fmt.Errorf("customer: cek NIK agen bentrok: %w", err)
+		}
+	}
+	if d.RiwayatAktivasi, err = riwayatAktivasiAkun(ctx, q, akunID); err != nil {
+		return nil, err
 	}
 	d.Log = []agen.AkunKaitanLog{}
 	rows, err := q.QueryContext(ctx, `
@@ -359,4 +400,29 @@ func (h *AdminAkun) Detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
+}
+
+// riwayatAktivasiAkun: jejak aktivasi, tautan, penolakan, dan lepas tautan satu akun. Kode, NIK, IP, dan perangkat
+// (hash) tidak diambil. Catatan hanya diteruskan untuk aksi admin.
+func riwayatAktivasiAkun(ctx context.Context, q adminQuerier, akunID int64) ([]LogAktivasi, error) {
+	rows, err := q.QueryContext(ctx, `
+		SELECT l.aksi, l.alasan, IF(l.aksi = 'lepas_admin', l.catatan, ''), j.nama_lengkap, COALESCE(au.display_name, au.email), l.dibuat_pada
+		FROM jamaah_aktivasi_log l
+		LEFT JOIN jamaah j ON j.id = l.jamaah_id
+		LEFT JOIN admin_users au ON au.id = l.oleh_admin_id
+		WHERE l.akun_id = ? AND l.aksi IN ('aktivasi','lepas_admin')
+		ORDER BY l.id DESC LIMIT 50`, akunID)
+	if err != nil {
+		return nil, fmt.Errorf("customer: riwayat aktivasi akun: %w", err)
+	}
+	defer rows.Close()
+	out := []LogAktivasi{}
+	for rows.Next() {
+		var l LogAktivasi
+		if err := rows.Scan(&l.Aksi, &l.Alasan, &l.Catatan, &l.JamaahNama, &l.Admin, &l.DibuatPada); err != nil {
+			return nil, fmt.Errorf("customer: scan riwayat aktivasi akun: %w", err)
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }

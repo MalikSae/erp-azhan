@@ -11,16 +11,13 @@ import PageHeader from 'shared/ui/PageHeader';
 import PeriodePicker from 'shared/ui/PeriodePicker';
 import SegmentedTabs from 'shared/ui/SegmentedTabs';
 import { AuthContext } from '../context/AuthContext';
+import AgenDariTautanTabel from '../components/AgenDariTautanTabel';
 import { BAYAR_META, muatPengajuanAgen, useJumlahPengajuanAgen } from '../utils/pengajuanAgen';
+import { STATUS_AGEN_ADMIN as STATUS } from '../utils/statusAgen';
 
-const ALAMAT_TAB = { semua: '/agen', pengajuan: '/agen/pengajuan' };
+const ALAMAT_TAB = { semua: '/agen', pengajuan: '/agen/pengajuan', tautan: '/agen/dari-tautan' };
 
 // Nada Badge per status agen (satu gaya status, lihat Badge.jsx).
-const STATUS = {
-  aktif: { label: 'Aktif', variant: 'success' },
-  nonaktif: { label: 'Nonaktif', variant: 'neutral' },
-  pengajuan: { label: 'Mengajukan', variant: 'warning' },
-};
 // Urutan saat kolom Status diklik: yang butuh perhatian dulu.
 const URUT_STATUS = { pengajuan: 0, aktif: 1, nonaktif: 2 };
 
@@ -45,6 +42,7 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
   const { hasPermission } = useContext(AuthContext);
   const bolehSetujui = hasPermission('agen.approve');
   const bolehLihat = hasPermission('agen.view');
+  const bolehLihatTautan = hasPermission('akun.view');
   const jumlahPengajuan = useJumlahPengajuanAgen(bolehSetujui);
 
   const [brands, setBrands] = useState([]);
@@ -61,6 +59,8 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
   const brandsMap = useMemo(() => Object.fromEntries(brands.map((b) => [b.id, b])), [brands]);
 
   useEffect(() => {
+    // Tab Dari Tautan memuat datanya sendiri (AgenDariTautanTabel).
+    if (tab === 'tautan') return undefined;
     let batal = false;
     setError('');
     if (tab === 'pengajuan') {
@@ -161,6 +161,7 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
   const tabs = [
     bolehLihat && { id: 'semua', label: 'Semua Agen' },
     bolehSetujui && { id: 'pengajuan', label: 'Pengajuan', count: jumlahPengajuan ?? undefined },
+    bolehLihatTautan && { id: 'tautan', label: 'Dari Tautan' },
   ].filter(Boolean);
   // Satu tab saja tidak perlu pemilih tab.
   const pemilihTab = tabs.length > 1
@@ -168,6 +169,32 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
     : undefined;
 
   const pilih = (setter) => (val) => setter(val?.target ? val.target.value : val);
+
+  const filterBrand = showBrandColumn && brands.length > 0 && (
+    <CustomDropdown
+      value={brandId}
+      onChange={pilih(setBrandId)}
+      className="!mb-0 w-44"
+      placeholder="Semua Brand"
+      options={[{ value: '', label: 'Semua Brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
+    />
+  );
+
+  if (tab === 'tautan') {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Agen" />
+        {pemilihTab}
+        <AgenDariTautanTabel
+          key={brandId}
+          brandId={brandId}
+          brandsMap={brandsMap}
+          showBrandColumn={showBrandColumn}
+          toolbarActions={filterBrand || undefined}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -189,15 +216,7 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
             {tab !== 'pengajuan' && (
               <PeriodePicker value={periode} onChange={setPeriode} labelSemua="Sepanjang waktu" className="w-48" />
             )}
-            {showBrandColumn && brands.length > 0 && (
-              <CustomDropdown
-                value={brandId}
-                onChange={pilih(setBrandId)}
-                className="!mb-0 w-44"
-                placeholder="Semua Brand"
-                options={[{ value: '', label: 'Semua Brand' }, ...brands.map((b) => ({ value: String(b.id), label: b.name }))]}
-              />
-            )}
+            {filterBrand}
           </div>
         )}
       />
