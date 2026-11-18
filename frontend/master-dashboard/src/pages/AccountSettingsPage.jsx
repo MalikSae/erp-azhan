@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { KeyRound, LockKeyhole } from 'lucide-react';
 import api from '../api/client';
 import Alert from 'shared/ui/Alert';
 import Button from 'shared/ui/Button';
@@ -68,7 +68,7 @@ export default function AccountSettingsPage() {
         <Alert variant={error ? 'error' : 'success'} message={error || success} />
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)]">
+      <div className="max-w-3xl">
         <Card className="p-0 overflow-hidden">
           <div className="border-b border-neutral-100 px-5 py-5 md:px-6">
             <div className="flex items-start gap-3">
@@ -130,21 +130,6 @@ export default function AccountSettingsPage() {
               </Button>
             </div>
           </form>
-        </Card>
-
-        <Card className="h-fit bg-neutral-50/70">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-100 text-success-600">
-            <ShieldCheck size={20} strokeWidth={1.75} />
-          </div>
-          <h2 className="mt-4 font-heading text-base font-semibold text-neutral-900">Akses aman</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-500">
-            Email, brand, dan peran akun sengaja dikunci agar perubahan identitas hanya dilakukan oleh Admin Master.
-          </p>
-          <ul className="mt-5 space-y-3 text-sm text-neutral-600">
-            <li className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-success-500" />Password baru minimal 8 karakter.</li>
-            <li className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-success-500" />Password saat ini wajib diverifikasi.</li>
-            <li className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-success-500" />Perubahan berlaku pada login berikutnya.</li>
-          </ul>
         </Card>
       </div>
     </div>
