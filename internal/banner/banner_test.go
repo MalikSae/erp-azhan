@@ -113,7 +113,7 @@ func TestBannerDanPromosi(t *testing.T) {
 		t.Errorf("status: %+v", status)
 	}
 
-	p, err := AmbilPromosi(ctx, tx, brand, now)
+	p, err := AmbilPromosi(ctx, tx, brand, "", now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,6 +124,41 @@ func TestBannerDanPromosi(t *testing.T) {
 		if b.ID == nonaktif || b.ID == terjadwal || b.ID == berakhir {
 			t.Errorf("banner tidak tayang ikut terkirim: %+v", b)
 		}
+	}
+
+	// Tempat tampil: banner khusus web tidak ikut ke app, khusus app tidak ikut ke web.
+	if _, err := Buat(ctx, tx, dir, 0, Input{BrandID: brand, Judul: "Salah", GambarURL: g, Aktif: true, TampilDi: "lainnya"}); !galatValidasi(err) {
+		t.Errorf("tampil_di tidak sah: %v", err)
+	}
+	soloWeb, err := Buat(ctx, tx, dir, 0, Input{BrandID: brand, Judul: "Solo web", GambarURL: g, Aktif: true, TampilDi: TampilWeb})
+	if err != nil {
+		t.Fatal(err)
+	}
+	soloApp, err := Buat(ctx, tx, dir, 0, Input{BrandID: brand, Judul: "Solo app", GambarURL: g, Aktif: true, TampilDi: TampilApp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE banner_promosi SET urutan = urutan + 100 WHERE brand_id = ? AND id NOT IN (?, ?)`, brand, soloWeb, soloApp); err != nil {
+		t.Fatal(err)
+	}
+	pw, _ := AmbilPromosi(ctx, tx, brand, TampilWeb, now)
+	pa, _ := AmbilPromosi(ctx, tx, brand, TampilApp, now)
+	punya := func(p *Promosi, id int64) bool {
+		for _, b := range p.Banner {
+			if b.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+	if !punya(pw, soloWeb) || punya(pw, soloApp) || !punya(pa, soloApp) || punya(pa, soloWeb) {
+		t.Errorf("tampil_di: web=%+v app=%+v", pw.Banner, pa.Banner)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE banner_promosi SET urutan = urutan - 100 WHERE brand_id = ? AND id NOT IN (?, ?)`, brand, soloWeb, soloApp); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM banner_promosi WHERE id IN (?, ?)`, soloWeb, soloApp); err != nil {
+		t.Fatal(err)
 	}
 
 	// Urutan: Ekstra1 dipindah ke paling atas.
@@ -139,7 +174,7 @@ func TestBannerDanPromosi(t *testing.T) {
 	if err := Urutkan(ctx, tx, brand, ids); err != nil {
 		t.Fatal(err)
 	}
-	if p, _ = AmbilPromosi(ctx, tx, brand, now); p.Banner[0].ID != ekstra1 {
+	if p, _ = AmbilPromosi(ctx, tx, brand, "", now); p.Banner[0].ID != ekstra1 {
 		t.Errorf("urutan baru: %+v", p.Banner[0])
 	}
 

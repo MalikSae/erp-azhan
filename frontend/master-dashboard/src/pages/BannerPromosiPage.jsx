@@ -23,6 +23,7 @@ const tanggal = (iso) => {
   return `${d} ${BULAN[m - 1]} ${y}`;
 };
 const jadwal = (b) => (b.mulai || b.selesai ? `${tanggal(b.mulai) || '…'} – ${tanggal(b.selesai) || '…'}` : 'Tanpa batas');
+const TAMPIL = { web: 'Website', app: 'Aplikasi', keduanya: 'Website + Aplikasi' };
 const STATUS = {
   tayang: { label: 'Tayang', variant: 'success' },
   terjadwal: { label: 'Terjadwal', variant: 'info' },
@@ -109,6 +110,7 @@ const BannerPromosiPage = () => {
   const kolom = [
     { header: 'Banner', key: 'judul' },
     { header: 'Tujuan', key: 'tujuan' },
+    { header: 'Tampil di', key: 'tampil' },
     { header: 'Jadwal', key: 'jadwal' },
     { header: 'Status', key: 'status' },
     { header: 'Klik', key: 'klik', align: 'right' },
@@ -127,6 +129,7 @@ const BannerPromosiPage = () => {
       );
     }
     if (key === 'tujuan') return <span className="text-neutral-700">{labelTujuan(b.tujuan, b.tujuan_nilai, paket)}</span>;
+    if (key === 'tampil') return <span className="whitespace-nowrap text-neutral-700">{TAMPIL[b.tampil_di] || TAMPIL.keduanya}</span>;
     if (key === 'jadwal') return <span className="whitespace-nowrap text-neutral-700">{jadwal(b)}</span>;
     if (key === 'status') return <Badge variant={STATUS[b.status]?.variant}>{STATUS[b.status]?.label}</Badge>;
     if (key === 'klik') return <span className="tabular-nums">{b.klik}</span>;
