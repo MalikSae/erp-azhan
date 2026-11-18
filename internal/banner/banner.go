@@ -60,6 +60,15 @@ const (
 	TujuanTautan     = "tautan"
 )
 
+// TampilDi: tempat banner tampil. Admin memilih website, app, atau keduanya.
+const (
+	TampilApp      = "app"
+	TampilWeb      = "web"
+	TampilKeduanya = "keduanya"
+)
+
+func tampilSah(v string) bool { return v == TampilApp || v == TampilWeb || v == TampilKeduanya }
+
 // JenisPaket: filter tab Paket di app (data/paket.ts, JenisPaket).
 var JenisPaket = map[string]bool{"umroh": true, "low-cost": true, "private": true, "wisata": true, "haji": true}
 
@@ -139,6 +148,7 @@ type Banner struct {
 	Judul     string  `json:"judul"`
 	GambarURL string  `json:"gambar_url"`
 	Tujuan            // tujuan, tujuan_nilai
+	TampilDi  string  `json:"tampil_di"` // app | web | keduanya
 	Mulai     *string `json:"mulai"`   // YYYY-MM-DD
 	Selesai   *string `json:"selesai"` // YYYY-MM-DD
 	Aktif     bool    `json:"aktif"`
@@ -167,6 +177,7 @@ type Input struct {
 	Judul     string  `json:"judul"`
 	GambarURL string  `json:"gambar_url"`
 	Tujuan            // tujuan, tujuan_nilai
+	TampilDi  string  `json:"tampil_di"` // kosong = keduanya
 	Mulai     *string `json:"mulai"`
 	Selesai   *string `json:"selesai"`
 	Aktif     bool    `json:"aktif"`
@@ -224,6 +235,13 @@ func (in *Input) validasi(ctx context.Context, q querier) error {
 	case utf8.RuneCountInString(in.Judul) > 100:
 		return galat("Judul maksimal 100 karakter")
 	}
+	in.TampilDi = strings.TrimSpace(in.TampilDi)
+	if in.TampilDi == "" {
+		in.TampilDi = TampilKeduanya
+	}
+	if !tampilSah(in.TampilDi) {
+		return galat("Pilih tempat tampil")
+	}
 	var err error
 	if in.Mulai, err = tanggalOpsional(in.Mulai); err != nil {
 		return err
@@ -237,13 +255,13 @@ func (in *Input) validasi(ctx context.Context, q querier) error {
 	return validasiTujuan(ctx, q, in.BrandID, &in.Tujuan)
 }
 
-const kolomBanner = `b.id, b.brand_id, b.judul, b.gambar_url, b.tujuan, b.tujuan_nilai,
+const kolomBanner = `b.id, b.brand_id, b.judul, b.gambar_url, b.tujuan, b.tujuan_nilai, b.tampil_di,
 	DATE_FORMAT(b.mulai, '%Y-%m-%d'), DATE_FORMAT(b.selesai, '%Y-%m-%d'), b.aktif, b.urutan, b.klik`
 
 func scanBanner(row interface{ Scan(...any) error }) (*Banner, error) {
 	var b Banner
 	var nilai, mulai, selesai sql.NullString
-	if err := row.Scan(&b.ID, &b.BrandID, &b.Judul, &b.GambarURL, &b.Tujuan.Jenis, &nilai, &mulai, &selesai, &b.Aktif, &b.Urutan, &b.Klik); err != nil {
+	if err := row.Scan(&b.ID, &b.BrandID, &b.Judul, &b.GambarURL, &b.Tujuan.Jenis, &nilai, &b.TampilDi, &mulai, &selesai, &b.Aktif, &b.Urutan, &b.Klik); err != nil {
 		return nil, err
 	}
 	if nilai.Valid {
@@ -308,9 +326,9 @@ func Buat(ctx context.Context, q querier, dirUnggah string, adminID int64, in In
 		return 0, err
 	}
 	res, err := q.ExecContext(ctx, `
-		INSERT INTO banner_promosi (brand_id, judul, gambar_url, tujuan, tujuan_nilai, mulai, selesai, aktif, urutan, dibuat_oleh, diubah_oleh)
-		SELECT ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(urutan), 0) + 1, ?, ? FROM banner_promosi WHERE brand_id = ?`,
-		in.BrandID, in.Judul, in.GambarURL, in.Tujuan.Jenis, in.Tujuan.Nilai, in.Mulai, in.Selesai, in.Aktif,
+		INSERT INTO banner_promosi (brand_id, judul, gambar_url, tujuan, tujuan_nilai, tampil_di, mulai, selesai, aktif, urutan, dibuat_oleh, diubah_oleh)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(urutan), 0) + 1, ?, ? FROM banner_promosi WHERE brand_id = ?`,
+		in.BrandID, in.Judul, in.GambarURL, in.Tujuan.Jenis, in.Tujuan.Nilai, in.TampilDi, in.Mulai, in.Selesai, in.Aktif,
 		adminAtauNull(adminID), adminAtauNull(adminID), in.BrandID)
 	if err != nil {
 		return 0, err
@@ -334,9 +352,9 @@ func Ubah(ctx context.Context, q querier, dirUnggah string, id int64, scope *int
 		}
 	}
 	_, err = q.ExecContext(ctx, `
-		UPDATE banner_promosi SET judul = ?, gambar_url = ?, tujuan = ?, tujuan_nilai = ?, mulai = ?, selesai = ?, aktif = ?, diubah_oleh = ?
+		UPDATE banner_promosi SET judul = ?, gambar_url = ?, tujuan = ?, tujuan_nilai = ?, tampil_di = ?, mulai = ?, selesai = ?, aktif = ?, diubah_oleh = ?
 		WHERE id = ?`,
-		in.Judul, in.GambarURL, in.Tujuan.Jenis, in.Tujuan.Nilai, in.Mulai, in.Selesai, in.Aktif, adminAtauNull(adminID), id)
+		in.Judul, in.GambarURL, in.Tujuan.Jenis, in.Tujuan.Nilai, in.TampilDi, in.Mulai, in.Selesai, in.Aktif, adminAtauNull(adminID), id)
 	return err
 }
 
@@ -398,11 +416,14 @@ type Promosi struct {
 // syaratTayang: aktif dan dalam jadwal (tanggal WIB).
 const syaratTayang = `b.aktif AND (b.mulai IS NULL OR b.mulai <= ?) AND (b.selesai IS NULL OR b.selesai >= ?)`
 
-// AmbilPromosi memuat maksimal 5 banner yang sedang tayang.
-func AmbilPromosi(ctx context.Context, q querier, brandID int64, now time.Time) (*Promosi, error) {
+// AmbilPromosi memuat maksimal 5 banner yang sedang tayang untuk satu platform (web; selain itu dianggap app).
+func AmbilPromosi(ctx context.Context, q querier, brandID int64, platform string, now time.Time) (*Promosi, error) {
 	today := hariIni(now)
+	if platform != TampilWeb {
+		platform = TampilApp
+	}
 	rows, err := q.QueryContext(ctx, `SELECT b.id, b.judul, b.gambar_url, b.tujuan, b.tujuan_nilai FROM banner_promosi b
-		WHERE b.brand_id = ? AND `+syaratTayang+` ORDER BY b.urutan, b.id LIMIT ?`, brandID, today, today, MaksTayang)
+		WHERE b.brand_id = ? AND b.tampil_di IN (?, 'keduanya') AND `+syaratTayang+` ORDER BY b.urutan, b.id LIMIT ?`, brandID, platform, today, today, MaksTayang)
 	if err != nil {
 		return nil, err
 	}

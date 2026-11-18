@@ -17,7 +17,15 @@ import { uploadMedia } from '../api/media';
 import PotongGambarModal from '../components/PotongGambarModal';
 import { bacaGambar, cukupBesar, lepasGambar, pas21, siapkanGambar21 } from '../utils/gambarBanner';
 
-const KOSONG = { judul: '', gambar_url: '', tujuan: 'tidak_ada', tujuan_nilai: '', mulai: '', selesai: '', aktif: true };
+const KOSONG = { judul: '', gambar_url: '', tujuan: 'tidak_ada', tujuan_nilai: '', tampil_di: 'keduanya', mulai: '', selesai: '', aktif: true };
+// Dua kotak centang (Website, Aplikasi) ke satu nilai: web | app | keduanya. Minimal satu tetap tercentang.
+const ubahTampil = (sekarang, kode, centang) => {
+  const lain = kode === 'web' ? 'app' : 'web';
+  const adaLain = sekarang === 'keduanya' || sekarang === lain;
+  if (centang) return adaLain ? 'keduanya' : kode;
+  return adaLain ? lain : sekarang;
+};
+
 const BannerPromosiFormPage = () => {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -46,7 +54,7 @@ const BannerPromosiFormPage = () => {
         if (isEdit) {
           const b = d.banner.find((x) => String(x.id) === String(id));
           if (!b) throw new Error('Banner tidak ditemukan.');
-          setForm({ judul: b.judul, gambar_url: b.gambar_url, tujuan: b.tujuan, tujuan_nilai: b.tujuan_nilai || '', mulai: b.mulai || '', selesai: b.selesai || '', aktif: b.aktif });
+          setForm({ judul: b.judul, gambar_url: b.gambar_url, tujuan: b.tujuan, tujuan_nilai: b.tujuan_nilai || '', tampil_di: b.tampil_di || 'keduanya', mulai: b.mulai || '', selesai: b.selesai || '', aktif: b.aktif });
           setPratinjau(mediaSrc(b.gambar_url));
         }
       } catch (err) {
@@ -139,6 +147,21 @@ const BannerPromosiFormPage = () => {
               helperText="1200 × 600 px (rasio 2:1), JPG/PNG/WebP"
               placeholder="Pilih gambar..."
             />
+          </div>
+        </FormSection>
+        <FormSection title="Tampil di">
+          <div className="flex flex-wrap gap-6">
+            {[['web', 'Website'], ['app', 'Aplikasi']].map(([kode, label]) => (
+              <label key={kode} className="flex items-center gap-2 font-body text-sm text-neutral-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 rounded border-neutral-300 accent-primary-500"
+                  checked={form.tampil_di === 'keduanya' || form.tampil_di === kode}
+                  onChange={(e) => setForm((f) => ({ ...f, tampil_di: ubahTampil(f.tampil_di, kode, e.target.checked) }))}
+                />
+                {label}
+              </label>
+            ))}
           </div>
         </FormSection>
         <FormSection title="Tujuan">

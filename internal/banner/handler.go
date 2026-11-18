@@ -181,14 +181,14 @@ func (h *Handler) Urutkan(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Promosi GET /api/public/v1/promosi?brand_id= : banner tayang (maks 5) untuk Beranda app.
+// Promosi GET /api/public/v1/promosi?brand_id=&platform=web|app (kosong = app) : banner tayang (maks 5) untuk Beranda app.
 func (h *Handler) Promosi(w http.ResponseWriter, r *http.Request) {
 	brand, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64)
 	if err != nil || brand <= 0 {
 		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
-	p, err := AmbilPromosi(r.Context(), h.db, brand, h.now())
+	p, err := AmbilPromosi(r.Context(), h.db, brand, r.URL.Query().Get("platform"), h.now())
 	if err != nil {
 		tulisGalat(w, err)
 		return
