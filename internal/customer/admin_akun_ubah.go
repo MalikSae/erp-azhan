@@ -257,6 +257,8 @@ func tulisGalatUbah(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrDilarang):
 		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, ErrAgenAktif), errors.Is(err, ErrTidakTertaut), errors.Is(err, ErrNIKTidakBentrok):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "Akun tidak ditemukan.")
 	case errors.As(err, &bentrok):

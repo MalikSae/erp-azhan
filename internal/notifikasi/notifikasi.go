@@ -35,6 +35,7 @@ const (
 	JenisPerubahanDitolak    = "perubahan_ditolak"
 	JenisAgenDisetujui       = "agen_disetujui"
 	JenisJamaahReferral      = "jamaah_referral"
+	JenisJamaahAktivasi      = "jamaah_aktivasi"
 	JenisKomisiTersedia      = "komisi_tersedia"
 	JenisKomisiBatal         = "komisi_batal"
 	JenisPencairanDiproses   = "pencairan_diproses"

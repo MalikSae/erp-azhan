@@ -15,6 +15,12 @@ _Hindari_: pemilik jamaah (data identitas tetap milik jamaah); menyamakan dengan
 
 **Akses terbatas**: yang didapat akun atas jamaah yang bukan buatannya: nama, NIK tersamar, jenis pax, dan angka kelengkapan. Tidak bisa melihat atau mengubah isian, tidak bisa mengunduh surat, dan hanya bisa mengunggah jenis dokumen yang belum ada berkasnya.
 
+**Aktivasi Akun Jamaah**: jamaah yang didaftarkan orang lain membuat akunnya sendiri (atau menautkan akun yang sudah ada) dengan kode booking dan NIK. Satu galat generik untuk semua sebab gagal. Upline akun baru adalah pemilik kunci jamaah. Rute `/api/public/auth/aktivasi` dan `/api/account/jamaah/tautkan`, dinyalakan flag `AKTIVASI_JAMAAH_AKTIF`. Keputusan: `docs/adr/0003-aktivasi-akun-jamaah.md`.
+_Hindari_: klaim akun, verifikasi jamaah, OTP (tidak dipakai).
+
+**Tautan Jamaah**: ikatan satu akun ke satu jamaah, kolom `customer_accounts.jamaah_id` (unik). Dibuat oleh aktivasi; hanya admin yang melepas (**Lepas Tautan Jamaah**, ditolak untuk akun agen aktif atau nonaktif). Memberi akses terbatas (lihat): label paket, tanggal berangkat, data jamaah, dokumen. Tidak mengubah kunci jamaah atau upline.
+_Hindari_: memakai "akun pembuat" untuk tautan; akun pembuat (`dibuat_oleh_akun_id`) dan tautan adalah dua hal berbeda.
+
 **Agen**: akun yang punya kode referral dan berstatus aktif. Agen tidak harus pernah berangkat umroh. Program keagenan disebut **Syiar**.
 _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lama, sistem belum deploy).
 

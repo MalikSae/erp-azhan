@@ -21,6 +21,7 @@ import (
 var (
 	ErrEmailTaken     = errors.New("email sudah terdaftar")
 	ErrPhoneTaken     = errors.New("nomor WhatsApp sudah terdaftar")
+	ErrJamaahTertaut  = errors.New("jamaah sudah tertaut ke akun lain")
 	ErrNotFound       = errors.New("akun tidak ditemukan")
 	ErrTokenInvalid   = errors.New("tautan tidak valid atau sudah kedaluwarsa")
 	ErrSessionInvalid = errors.New("sesi tidak valid")
@@ -144,10 +145,28 @@ func (r *Repository) Create(ctx context.Context, brandID int64, nama, email, noH
 	return r.GetByID(ctx, id)
 }
 
-// mapDuplicate mengubah pelanggaran kunci unik (1062) menjadi ErrPhoneTaken atau ErrEmailTaken; galat lain dibungkus dengan op.
+// CreateTx membuat akun di dalam transaksi aktivasi jamaah: tertaut ke jamaahID, dengan upline (direkrut) opsional
+// dan biodata dari data jamaah. Create dan CreateGoogle tidak berubah. Mengembalikan id akun.
+func (r *Repository) CreateTx(ctx context.Context, tx *sql.Tx, brandID int64, nama, email, noHP, passwordHash string, direkrutID, jamaahID int64, bio Biodata) (int64, error) {
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO customer_accounts (brand_id, nama_lengkap, email, email_normal, no_hp, password_hash, direkrut_oleh_akun_id,
+		 jamaah_id, jenis_kelamin, domisili, tanggal_lahir) VALUES (?,?,?,?,?,?,?,?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''))`,
+		brandID, nama, strings.TrimSpace(email), NormalizeEmail(email), noHP, passwordHash, nullableAgen(direkrutID),
+		nullableAgen(jamaahID), bio.JenisKelamin, bio.Domisili, bio.TanggalLahir)
+	if err != nil {
+		return 0, mapDuplicate(err, "create account tx")
+	}
+	return res.LastInsertId()
+}
+
+// mapDuplicate mengubah pelanggaran kunci unik (1062) menjadi ErrJamaahTertaut, ErrPhoneTaken, atau ErrEmailTaken;
+// galat lain dibungkus dengan op.
 func mapDuplicate(err error, op string) error {
 	var me *mysql.MySQLError
 	if errors.As(err, &me) && me.Number == 1062 {
+		if strings.Contains(me.Message, "uq_customer_jamaah") {
+			return ErrJamaahTertaut
+		}
 		if strings.Contains(me.Message, "uq_customer_brand_hp") {
 			return ErrPhoneTaken
 		}

@@ -55,3 +55,8 @@ func ValidName(s string) bool {
 	}
 	return strings.IndexFunc(s, unicode.IsLetter) >= 0
 }
+
+var polaNIK = regexp.MustCompile(`^[0-9]{16}$`)
+
+// ValidNIK: tepat 16 digit angka.
+func ValidNIK(s string) bool { return polaNIK.MatchString(s) }

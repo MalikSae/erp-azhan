@@ -142,6 +142,94 @@ func IkatAkunDariJamaah(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64)
 	return nil
 }
 
+// ErrUplineBentrok: upline akun berbeda dari pemilik kunci jamaah (atau beda brand). Diselesaikan admin lewat Ganti Upline atau Lepas Tautan.
+var ErrUplineBentrok = errors.New("agen: upline akun berbeda dari pemilik kunci jamaah")
+
+// AlasanIkatAkunDariKunci: alasan di log kaitan akun saat aktivasi akun jamaah mengisi upline.
+const AlasanIkatAkunDariKunci = "aktivasi akun"
+
+// IkatAkunDariKunciTx memberi upline kepada akun yang ditautkan ke jamaah (aktivasi akun jamaah): upline akun
+// adalah pemilik kunci jamaah itu. Berlaku hanya bila jamaah terikat_agen. Hanya direkrut_oleh_akun_id yang diisi;
+// upline_akun_id disalin saat pengajuan agen disetujui. Pemilik kunci aktif maupun nonaktif tetap mengikat.
+//
+//   - direkrut akun kosong: diisi pemilik kunci dan dicatat di akun_kaitan_log.
+//   - direkrut akun sama dengan pemilik kunci: tidak ada perubahan.
+//   - direkrut akun berbeda, atau pemilik kunci beda brand: ErrUplineBentrok.
+//   - akun agen aktif/nonaktif: wajib upline_akun_id = pemilik kunci, selain itu ErrUplineBentrok.
+//   - akun itu sendiri pemilik kunci: lolos hanya untuk jamaah miliknya (NIK = nik_agen), selain itu ErrUplineBentrok.
+//
+// Mengunci baris akun; dipanggil di dalam transaksi aktivasi.
+func IkatAkunDariKunciTx(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64) error {
+	if akunID <= 0 || jamaahID <= 0 {
+		return nil
+	}
+	var kaitan string
+	var kunci sql.NullInt64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT kaitan_status, direkrut_oleh_akun_id FROM jamaah WHERE id = ?`, jamaahID).Scan(&kaitan, &kunci); err != nil {
+		return fmt.Errorf("agen: baca kunci jamaah: %w", err)
+	}
+	if kaitan != "terikat_agen" || !kunci.Valid {
+		return nil
+	}
+	if kunci.Int64 == akunID {
+		// Pemilik kunci hanya boleh menautkan jamaah miliknya sendiri (NIK jamaah = NIK agen akun).
+		var nikAkun, nikJamaah sql.NullString
+		if err := tx.QueryRowContext(ctx, `SELECT nik_agen FROM customer_accounts WHERE id = ?`, akunID).Scan(&nikAkun); err != nil {
+			return fmt.Errorf("agen: baca NIK agen: %w", err)
+		}
+		if err := tx.QueryRowContext(ctx, `SELECT nik FROM jamaah WHERE id = ?`, jamaahID).Scan(&nikJamaah); err != nil {
+			return fmt.Errorf("agen: baca NIK jamaah: %w", err)
+		}
+		if nikAkun.Valid && nikAkun.String != "" && nikAkun.String == nikJamaah.String {
+			return nil
+		}
+		return ErrUplineBentrok
+	}
+	var brandAkun int64
+	var statusAkun string
+	var direkrut, upline sql.NullInt64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT brand_id, status_agen, direkrut_oleh_akun_id, upline_akun_id FROM customer_accounts WHERE id = ? FOR UPDATE`, akunID).
+		Scan(&brandAkun, &statusAkun, &direkrut, &upline); err != nil {
+		return fmt.Errorf("agen: baca akun: %w", err)
+	}
+	var brandKunci int64
+	var statusKunci string
+	err := tx.QueryRowContext(ctx, `SELECT brand_id, status_agen FROM customer_accounts WHERE id = ?`, kunci.Int64).Scan(&brandKunci, &statusKunci)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("agen: baca pemilik kunci: %w", err)
+	}
+	if brandKunci != brandAkun {
+		return ErrUplineBentrok
+	}
+	if statusKunci != "aktif" && statusKunci != "nonaktif" {
+		return nil
+	}
+	if (statusAkun == "aktif" || statusAkun == "nonaktif") && (!upline.Valid || upline.Int64 != kunci.Int64) {
+		return ErrUplineBentrok
+	}
+	if direkrut.Valid {
+		if direkrut.Int64 != kunci.Int64 {
+			return ErrUplineBentrok
+		}
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE customer_accounts SET direkrut_oleh_akun_id = ? WHERE id = ? AND direkrut_oleh_akun_id IS NULL`, kunci.Int64, akunID); err != nil {
+		return fmt.Errorf("agen: ikat akun dari kunci: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO akun_kaitan_log (akun_id, direkrut_oleh_akun_id_lama, direkrut_oleh_akun_id_baru, upline_diubah, diganti_oleh, alasan)
+		VALUES (?, NULL, ?, FALSE, NULL, ?)`, akunID, kunci.Int64, AlasanIkatAkunDariKunci); err != nil {
+		return fmt.Errorf("agen: log ikat akun dari kunci: %w", err)
+	}
+	return nil
+}
+
 // IkatRombongan mengikat semua jamaah yang masih 'belum_ditentukan' ke akun
 // agen (auto-bind multi-pax). Jamaah yang sudah terikat tidak diubah. Prioritas
 // penentu agen ditetapkan pemanggil: portal agen memakai agen pembuat booking,

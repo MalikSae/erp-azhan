@@ -413,10 +413,22 @@ type meView struct {
 	NIKMasked    string `json:"nik_masked"`
 	// NIKAgenMasked: NIK yang agen simpan saat mendaftar, tersamar; untuk petunjuk "terisi otomatis" di form booking agen.
 	NIKAgenMasked string `json:"nik_agen_masked"`
+	// JamaahTertaut: akun sudah tertaut ke jamaah lewat aktivasi akun jamaah.
+	JamaahTertaut bool `json:"jamaah_tertaut"`
+	// PerjalananTertaut: perjalanan jamaah tertaut (label paket dan tanggal berangkat). Tanpa kode booking.
+	PerjalananTertaut []PerjalananTertaut `json:"perjalanan_tertaut"`
+}
+
+// PerjalananTertaut: satu perjalanan jamaah tertaut untuk ditampilkan di akun. Sengaja tanpa kode booking, harga, dan pax lain.
+type PerjalananTertaut struct {
+	Paket            string `json:"paket"`
+	BerangkatTanggal string `json:"berangkat_tanggal"`
+	Status           string `json:"status"`
 }
 
 type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
 // MaskNIK menyisakan 4 digit terakhir, sisanya "•". Kosong tetap kosong.
@@ -435,7 +447,7 @@ func MaskNIK(nik string) string {
 
 // buildMeView melengkapi akun dengan jenis kelamin dan NIK tersamar dari jamaah akun (bila ada).
 func buildMeView(ctx context.Context, q rowQuerier, a *Account) meView {
-	view := meView{Account: a}
+	view := meView{Account: a, PerjalananTertaut: []PerjalananTertaut{}}
 	if a != nil {
 		var nikAgen, jkAkun sql.NullString
 		if err := q.QueryRowContext(ctx, `SELECT nik_agen, jenis_kelamin FROM customer_accounts WHERE id=?`, a.ID).Scan(&nikAgen, &jkAkun); err == nil {
@@ -452,8 +464,39 @@ func buildMeView(ctx context.Context, q rowQuerier, a *Account) meView {
 			}
 			view.NIKMasked = MaskNIK(nik.String)
 		}
+		view.JamaahTertaut = true
+		view.PerjalananTertaut = perjalananTertaut(ctx, q, *a.JamaahID)
 	}
 	return view
+}
+
+// perjalananTertaut: perjalanan aktif jamaah tertaut (booking baru/dp/lunas, pax aktif), terbaru dulu, maksimal 10.
+// Galat baca tidak menggagalkan /me: daftar kosong.
+func perjalananTertaut(ctx context.Context, q rowQuerier, jamaahID int64) []PerjalananTertaut {
+	out := []PerjalananTertaut{}
+	rows, err := q.QueryContext(ctx, `
+		SELECT s.jadwal_nama, DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d'), b.status
+		FROM booking_pax bp
+		JOIN bookings b ON b.id = bp.booking_id AND b.status IN ('baru','dp','lunas')
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE bp.jamaah_id = ? AND bp.pax_status = 'aktif'
+		ORDER BY s.berangkat_tanggal DESC, b.id DESC LIMIT 10`, jamaahID)
+	if err != nil {
+		log.Printf("[WARN] customer perjalanan tertaut: %v", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p PerjalananTertaut
+		var tgl sql.NullString
+		if err := rows.Scan(&p.Paket, &tgl, &p.Status); err != nil {
+			log.Printf("[WARN] customer perjalanan tertaut: %v", err)
+			return out
+		}
+		p.BerangkatTanggal = tgl.String
+		out = append(out, p)
+	}
+	return out
 }
 
 // Me GET /api/account/me
