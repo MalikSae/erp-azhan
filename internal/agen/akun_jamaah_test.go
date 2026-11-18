@@ -191,23 +191,6 @@ func TestAjukanAkunTertautOtomatisAktif(t *testing.T) {
 	}
 }
 
-// Akun tertaut dengan direkrut NULL: diisi pemilik kunci sebelum setujuiTx lewat ajukanTx.
-func TestAjukanAkunTertautMengisiDirekrut(t *testing.T) {
-	x := newFxTertaut(t, 500_000, testdb.JamaahOpts{Direkrut: -1}, 0)
-	x.booking(t, "lunas")
-	must(t, "ajukan", ajukanTx(context.Background(), x.f.tx, x.akunUji, ajuan))
-	var upline sql.NullInt64
-	must(t, "baca", x.f.tx.QueryRow(`SELECT upline_akun_id FROM customer_accounts WHERE id=?`, x.akunUji).Scan(&upline))
-	if upline.Int64 != x.ibrahim {
-		t.Fatalf("upline = %d, want Ibrahim %d", upline.Int64, x.ibrahim)
-	}
-	var log int
-	must(t, "log", x.f.tx.QueryRow(`SELECT COUNT(*) FROM akun_kaitan_log WHERE akun_id=? AND alasan=?`, x.akunUji, AlasanIkatAkunDariKunci).Scan(&log))
-	if log != 1 {
-		t.Fatalf("log kaitan = %d, want 1", log)
-	}
-}
-
 // Akun beda upline dari pemilik kunci: pengajuan tidak otomatis; admin memutuskan dengan biaya normal.
 func TestAjukanAkunTertautBedaUplineLewatAdmin(t *testing.T) {
 	x := newFxTertaut(t, 500_000, testdb.JamaahOpts{Direkrut: -1}, 0)

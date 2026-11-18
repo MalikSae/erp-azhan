@@ -201,8 +201,7 @@ const catatanOtomatisJamaah = "Dibebaskan otomatis: akun jamaah (booking minimal
 
 // nikAgenPengajuan menentukan nik_agen yang disimpan saat mengajukan. Akun tertaut ke jamaah: NIK jamaah itu,
 // isian pengguna diabaikan. Akun tidak tertaut: NIK isian, ditolak bila sudah tercatat sebagai NIK jamaah di
-// brand yang sama, kecuali jamaah buatan akun itu sendiri yang tidak tertaut ke akun lain; admin menyelesaikannya lewat tautan akun atau Kosongkan NIK Agen. Pada akun tertaut, direkrut
-// kosong diisi pemilik kunci jamaah (setujuiTx menyalinnya ke upline_akun_id).
+// brand yang sama, kecuali jamaah buatan akun itu sendiri yang tidak tertaut ke akun lain; admin menyelesaikannya lewat Kosongkan NIK Agen.
 func nikAgenPengajuan(ctx context.Context, tx *sql.Tx, akunID, brandID int64, isian string) (string, error) {
 	var jamaahID sql.NullInt64
 	if err := tx.QueryRowContext(ctx, `SELECT jamaah_id FROM customer_accounts WHERE id = ?`, akunID).Scan(&jamaahID); err != nil {
@@ -230,20 +229,13 @@ func nikAgenPengajuan(ctx context.Context, tx *sql.Tx, akunID, brandID int64, is
 		}
 		return isian, nil
 	}
-	var nik, kaitan sql.NullString
-	var kunci sql.NullInt64
-	if err := tx.QueryRowContext(ctx, `SELECT nik, kaitan_status, direkrut_oleh_akun_id FROM jamaah WHERE id = ? FOR UPDATE`, jamaahID.Int64).
-		Scan(&nik, &kaitan, &kunci); err != nil {
+	var nik sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT nik FROM jamaah WHERE id = ? FOR UPDATE`, jamaahID.Int64).
+		Scan(&nik); err != nil {
 		return "", fmt.Errorf("agen.Ajukan baca jamaah tertaut: %w", err)
 	}
 	if !nikAgenPattern.MatchString(nik.String) {
 		return "", ErrNIKAgenTidakBisaDipakai
-	}
-	// Bentrok upline tidak menggagalkan pengajuan: akunJamaah menghitung ulang dan akun masuk persetujuan admin.
-	if kaitan.String == "terikat_agen" && kunci.Valid && kunci.Int64 != akunID {
-		if err := IkatAkunDariKunciTx(ctx, tx, akunID, jamaahID.Int64); err != nil && !errors.Is(err, ErrUplineBentrok) {
-			return "", err
-		}
 	}
 	return nik.String, nil
 }
