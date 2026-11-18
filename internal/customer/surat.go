@@ -192,6 +192,9 @@ func (o *Orders) SuratDaftar(w http.ResponseWriter, r *http.Request) {
 	}
 	jamaah := []suratJamaah{}
 	for i := range data {
+		if !order.bolehJamaah(data[i].JamaahID) {
+			continue
+		}
 		items := evaluasiSurat(order, &data[i], pengaturan.Lengkap(), nomor)
 		if len(items) == 0 {
 			continue
@@ -234,6 +237,10 @@ func (o *Orders) SuratUnduh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[ERROR] account surat unduh: %v", err)
 		writeError(w, http.StatusInternalServerError, "Gagal mengambil booking.")
+		return
+	}
+	if !order.bolehJamaah(jamaahID) {
+		writeError(w, http.StatusForbidden, pesanBukanDiriSendiri)
 		return
 	}
 	data, err := o.dataJamaahBooking(r, id)

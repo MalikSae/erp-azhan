@@ -692,10 +692,13 @@ type JamaahRSVP struct {
 	Hadir    *bool  `json:"hadir"`
 }
 
-// bookingAkun: paket sebuah booking milik akun pelanggan. ErrTidakAda bila bukan miliknya atau tidak berlaku lagi.
+// bookingAkun: paket sebuah booking milik akun pelanggan, atau booking orang lain yang memuat jamaah tertaut
+// ke akun itu (peran jamaah). ErrTidakAda bila bukan keduanya atau tidak berlaku lagi.
 func bookingAkun(ctx context.Context, q querier, accountID, bookingID int64) (scheduleID int64, err error) {
-	err = q.QueryRowContext(ctx, `SELECT b.schedule_id FROM bookings b WHERE b.id = ? AND b.customer_account_id = ? AND `+bookingBerlaku,
-		bookingID, accountID).Scan(&scheduleID)
+	err = q.QueryRowContext(ctx, `SELECT b.schedule_id FROM bookings b WHERE b.id = ? AND (b.customer_account_id = ? OR EXISTS (
+			SELECT 1 FROM booking_pax bpj JOIN customer_accounts caj ON caj.jamaah_id = bpj.jamaah_id
+			WHERE bpj.booking_id = b.id AND bpj.pax_status = 'aktif' AND caj.id = ? AND caj.dihapus_at IS NULL)) AND `+bookingBerlaku,
+		bookingID, accountID, accountID).Scan(&scheduleID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrTidakAda
 	}
@@ -703,14 +706,17 @@ func bookingAkun(ctx context.Context, q querier, accountID, bookingID int64) (sc
 }
 
 // jamaahBooking: jamaah dewasa aktif sebuah booking beserta jawaban RSVP-nya (manasikID 0 = belum ada manasik).
-func jamaahBooking(ctx context.Context, q querier, bookingID, manasikID int64) ([]JamaahRSVP, error) {
+// Pemesan melihat semua; peran jamaah hanya jamaah yang tertaut ke akunnya.
+func jamaahBooking(ctx context.Context, q querier, accountID, bookingID, manasikID int64) ([]JamaahRSVP, error) {
 	rows, err := q.QueryContext(ctx, `
 		SELECT j.id, j.nama_lengkap, r.hadir
 		FROM booking_pax bp
+		JOIN bookings b ON b.id = bp.booking_id
 		JOIN jamaah j ON j.id = bp.jamaah_id
 		LEFT JOIN manasik_rsvp r ON r.manasik_id = ? AND r.jamaah_id = j.id
 		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
-		ORDER BY bp.id`, manasikID, bookingID)
+		  AND (b.customer_account_id = ? OR EXISTS (SELECT 1 FROM customer_accounts caj WHERE caj.id = ? AND caj.jamaah_id = bp.jamaah_id))
+		ORDER BY bp.id`, manasikID, bookingID, accountID, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -756,7 +762,7 @@ func UntukBooking(ctx context.Context, q querier, accountID, bookingID int64, no
 		out.Manasik, manasikID = m, m.ID
 		out.BisaRSVP = now.Before(m.Mulai())
 	}
-	if out.Jamaah, err = jamaahBooking(ctx, q, bookingID, manasikID); err != nil {
+	if out.Jamaah, err = jamaahBooking(ctx, q, accountID, bookingID, manasikID); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -787,8 +793,11 @@ func SimpanRSVP(ctx context.Context, q querier, accountID, bookingID, jamaahID i
 		return ErrRSVPDitutup
 	}
 	var x int
-	err = q.QueryRowContext(ctx, `SELECT 1 FROM booking_pax WHERE booking_id = ? AND jamaah_id = ? AND pax_status = 'aktif'
-		AND pax_type <> 'infant' LIMIT 1`, bookingID, jamaahID).Scan(&x)
+	// Peran jamaah (bukan pemesan) hanya menjawab untuk jamaah yang tertaut ke akunnya.
+	err = q.QueryRowContext(ctx, `SELECT 1 FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
+		WHERE bp.booking_id = ? AND bp.jamaah_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
+		  AND (b.customer_account_id = ? OR EXISTS (SELECT 1 FROM customer_accounts caj WHERE caj.id = ? AND caj.jamaah_id = bp.jamaah_id))
+		LIMIT 1`, bookingID, jamaahID, accountID, accountID).Scan(&x)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrBukanJamaah
 	} else if err != nil {

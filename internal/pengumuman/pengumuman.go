@@ -211,18 +211,22 @@ func Hapus(ctx context.Context, q dbq, id int64, scope *int64) error {
 }
 
 // UntukAkun: pengumuman yang masih tayang pada sekarang dan sesuai akun: tanpa jadwal untuk semua pelanggan brand, dengan jadwal hanya bila
-// akun punya booking (selain draft dan batal) di jadwal itu. Terbaru di atas; limit <= 0 berarti semua. total = jumlah seluruhnya.
+// akun punya booking (selain draft dan batal) di jadwal itu, atau jamaah tertaut ke akun ada di booking aktif jadwal itu (peran jamaah). Terbaru di atas; limit <= 0 berarti semua. total = jumlah seluruhnya.
 func UntukAkun(ctx context.Context, q dbq, brandID, akunID int64, limit int, sekarang time.Time) (items []Pengumuman, total int, err error) {
 	hari := hariIni(sekarang)
 	const sesuai = ` FROM pengumuman p LEFT JOIN schedules s ON s.id = p.schedule_id
 		WHERE p.brand_id = ? AND ? BETWEEN p.mulai_tayang AND p.akhir_tayang
 		  AND (p.schedule_id IS NULL OR p.schedule_id IN (
-		       SELECT b.schedule_id FROM bookings b WHERE b.customer_account_id = ? AND b.status NOT IN ('draft','batal')))`
-	if err = q.QueryRowContext(ctx, `SELECT COUNT(*)`+sesuai, brandID, hari, akunID).Scan(&total); err != nil {
+		       SELECT b.schedule_id FROM bookings b WHERE b.customer_account_id = ? AND b.status NOT IN ('draft','batal')
+		       UNION
+		       SELECT b.schedule_id FROM bookings b JOIN booking_pax bp ON bp.booking_id = b.id
+		       JOIN customer_accounts ca ON ca.jamaah_id = bp.jamaah_id
+		       WHERE ca.id = ? AND ca.dihapus_at IS NULL AND bp.pax_status = 'aktif' AND b.status NOT IN ('draft','batal')))`
+	if err = q.QueryRowContext(ctx, `SELECT COUNT(*)`+sesuai, brandID, hari, akunID, akunID).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	query := `SELECT ` + kolom + sesuai + ` ORDER BY p.mulai_tayang DESC, p.id DESC`
-	args := []any{brandID, hari, akunID}
+	args := []any{brandID, hari, akunID, akunID}
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)

@@ -196,6 +196,12 @@ func (o *Orders) AjukanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Metode pengambilan tidak tersedia.")
 		return
 	}
+	for _, jid := range req.JamaahIDs {
+		if !order.bolehJamaah(jid) {
+			writeError(w, http.StatusForbidden, pesanBukanDiriSendiri)
+			return
+		}
+	}
 	if !bisaAjukanPerlengkapan(order) {
 		writeError(w, http.StatusConflict, "Perlengkapan bisa diajukan setelah DP terverifikasi.")
 		return
@@ -272,6 +278,10 @@ func (o *Orders) TerimaPerlengkapan(w http.ResponseWriter, r *http.Request) {
 	var req terimaPerlengkapanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.JamaahID <= 0 {
 		writeError(w, http.StatusBadRequest, "Jamaah wajib diisi.")
+		return
+	}
+	if !order.bolehJamaah(req.JamaahID) {
+		writeError(w, http.StatusForbidden, pesanBukanDiriSendiri)
 		return
 	}
 	err := dalamTx(r.Context(), o.db, func(tx *sql.Tx) error {

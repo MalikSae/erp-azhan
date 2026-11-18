@@ -183,6 +183,10 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "Booking ini sudah dibatalkan atau kedaluwarsa.")
 		return
 	}
+	if !order.bolehJamaah(req.JamaahID) {
+		writeError(w, http.StatusForbidden, pesanBukanDiriSendiri)
+		return
+	}
 	var jamaahOK bool
 	if err := o.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM booking_pax WHERE booking_id=? AND jamaah_id=? AND pax_status='aktif')`, id, req.JamaahID).Scan(&jamaahOK); err != nil {
 		log.Printf("[ERROR] account kirim dokumen: %v", err)

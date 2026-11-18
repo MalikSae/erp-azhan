@@ -21,7 +21,7 @@ _Hindari_: klaim akun, verifikasi jamaah, OTP (tidak dipakai).
 **Tautan Jamaah**: ikatan satu akun ke satu jamaah, kolom `customer_accounts.jamaah_id` (unik). Dibuat oleh aktivasi; hanya admin yang melepas (**Lepas Tautan Jamaah**, ditolak untuk akun agen aktif atau nonaktif). Memberi akses terbatas (lihat): label paket, tanggal berangkat, data jamaah, dokumen. Tidak mengubah kunci jamaah atau upline.
 _Hindari_: memakai "akun pembuat" untuk tautan; akun pembuat (`dibuat_oleh_akun_id`) dan tautan adalah dua hal berbeda.
 
-**Pandangan Jamaah** (peran jamaah): tampilan baca terbatas perjalanan akun tertaut yang dibuat orang lain, lewat `GET /api/account/perjalanan-jamaah`: label paket, tanggal berangkat, status, dan baris pax miliknya. Tanpa kode booking, pax lain, harga, pembayaran, rekening. Tidak bisa bayar atau batalkan. Keputusan: `docs/adr/0005-pandangan-jamaah.md`.
+**Peran Jamaah**: akun tertaut melihat booking orang lain yang memuat dirinya lewat endpoint booking biasa (`peran: "jamaah"`), utuh termasuk harga dan pembayaran, ditambah pembuat booking dan kontaknya. Boleh bayar; tidak boleh batal; aksi per jamaah hanya atas dirinya. Keputusan: `docs/adr/0005-pandangan-jamaah.md`.
 
 **Agen**: akun yang punya kode referral dan berstatus aktif. Agen tidak harus pernah berangkat umroh. Program keagenan disebut **Syiar**.
 _Hindari_: memakai "jamaah" untuk menyebut agen; "agen lama" (tidak ada agen lama, sistem belum deploy).

@@ -331,4 +331,4 @@ Nama yang dipakai di kode (migrasi 114), bila berbeda dari usulan di atas:
 
 ## Pandangan jamaah (E4a, 2026-11-18)
 
-Akun tertaut jamaah melihat perjalanan buatan orang lain secara terbatas lewat `GET /api/account/perjalanan-jamaah`; kontrak JSON dan batasan di `docs/adr/0005-pandangan-jamaah.md`. Data Jamaah akun tertaut memuat baris pax miliknya dari booking itu, hanya lihat. `owned()` dan `sqlAksesPenuh` tidak berubah.
+Akun tertaut jamaah melihat booking buatan orang lain lewat endpoint booking biasa (`peran: "jamaah"`): tampil utuh, boleh bayar, tidak boleh batal, aksi per jamaah hanya atas dirinya, akses penuh atas data dirinya. Rincian di `docs/adr/0005-pandangan-jamaah.md`.

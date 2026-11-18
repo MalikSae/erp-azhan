@@ -297,6 +297,10 @@ func (o *Orders) SimpanDataJamaah(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "Booking ini sudah dibatalkan atau kedaluwarsa.")
 		return
 	}
+	if !order.bolehJamaah(jamaahID) {
+		writeError(w, http.StatusForbidden, pesanBukanDiriSendiri)
+		return
+	}
 	var punya bool
 	if err := o.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM booking_pax WHERE booking_id=? AND jamaah_id=? AND pax_status='aktif')`, id, jamaahID).Scan(&punya); err != nil {
 		log.Printf("[ERROR] account simpan data jamaah: %v", err)
