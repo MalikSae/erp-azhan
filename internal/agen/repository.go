@@ -50,6 +50,11 @@ func (r *Repository) Ajukan(ctx context.Context, akunID int64, req AjukanRequest
 	return r.withTx(ctx, func(tx *sql.Tx) error { return ajukanTx(ctx, tx, akunID, req) })
 }
 
+// AjukanTx menjalankan pengajuan agen di dalam transaksi pemanggil (dipakai tes lintas paket).
+func AjukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) error {
+	return ajukanTx(ctx, tx, akunID, req)
+}
+
 func (r *Repository) UploadBuktiAkun(ctx context.Context, akunID int64, url string) error {
 	return r.withTx(ctx, func(tx *sql.Tx) error { return uploadBuktiAkunTx(ctx, tx, akunID, url) })
 }
@@ -139,10 +144,14 @@ func ajukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) 
 		return ErrMoUWajib
 	}
 
+	nik, err := nikAgenPengajuan(ctx, tx, akunID, brandID, req.NIK)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE customer_accounts SET domisili = ?, nik_agen = NULLIF(?, ''), jenis_kelamin = NULLIF(?, ''), tanggal_lahir = NULLIF(?, ''), menyetujui_syarat_ketentuan_agen_at = NOW(),
 		       status_agen = 'pengajuan', diajukan_agen_at = NOW()
-		WHERE id = ?`, req.Domisili, req.NIK, req.JenisKelamin, req.TanggalLahir, akunID); err != nil {
+		WHERE id = ?`, req.Domisili, nik, req.JenisKelamin, req.TanggalLahir, akunID); err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
 			return ErrNIKAgenTidakBisaDipakai
@@ -190,11 +199,68 @@ func ajukanTx(ctx context.Context, tx *sql.Tx, akunID int64, req AjukanRequest) 
 // catatanOtomatisJamaah: catatan admin pada tagihan yang dibebaskan sistem untuk akun jamaah.
 const catatanOtomatisJamaah = "Dibebaskan otomatis: akun jamaah (booking minimal DP)."
 
-// akunJamaah melaporkan akun yang punya booking dengan pembayaran minimal DP (status dp atau lunas, termasuk yang
-// sudah berangkat). Definisi "akun jamaah" untuk pendaftaran agen (keputusan 14 November 2026).
+// nikAgenPengajuan menentukan nik_agen yang disimpan saat mengajukan. Akun tertaut ke jamaah: NIK jamaah itu,
+// isian pengguna diabaikan. Akun tidak tertaut: NIK isian, ditolak bila sudah tercatat sebagai NIK jamaah di
+// brand yang sama, kecuali jamaah buatan akun itu sendiri yang tidak tertaut ke akun lain; admin menyelesaikannya lewat Kosongkan NIK Agen.
+func nikAgenPengajuan(ctx context.Context, tx *sql.Tx, akunID, brandID int64, isian string) (string, error) {
+	var jamaahID sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT jamaah_id FROM customer_accounts WHERE id = ?`, akunID).Scan(&jamaahID); err != nil {
+		return "", fmt.Errorf("agen.Ajukan baca tautan: %w", err)
+	}
+	if !jamaahID.Valid {
+		// NIK wajib untuk akun tidak tertaut diperiksa handler; di sini isian kosong tidak ditolak.
+		if isian == "" {
+			return "", nil
+		}
+		if !nikAgenPattern.MatchString(isian) {
+			return "", ErrNIKAgenTidakValid
+		}
+		// Jamaah buatan akun ini sendiri yang tidak tertaut ke akun lain tidak menghalangi (pemesan untuk dirinya).
+		var ada bool
+		if err := tx.QueryRowContext(ctx, `
+			SELECT EXISTS (SELECT 1 FROM jamaah j WHERE j.brand_id = ? AND j.nik = ?
+			    AND NOT (j.dibuat_oleh_akun_id <=> ?
+			             AND NOT EXISTS (SELECT 1 FROM customer_accounts c WHERE c.jamaah_id = j.id AND c.id <> ?)))`,
+			brandID, isian, akunID, akunID).Scan(&ada); err != nil {
+			return "", fmt.Errorf("agen.Ajukan cek NIK jamaah: %w", err)
+		}
+		if ada {
+			return "", ErrNIKAgenTidakBisaDipakai
+		}
+		return isian, nil
+	}
+	var nik sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT nik FROM jamaah WHERE id = ? FOR UPDATE`, jamaahID.Int64).
+		Scan(&nik); err != nil {
+		return "", fmt.Errorf("agen.Ajukan baca jamaah tertaut: %w", err)
+	}
+	if !nikAgenPattern.MatchString(nik.String) {
+		return "", ErrNIKAgenTidakBisaDipakai
+	}
+	return nik.String, nil
+}
+
+// akunJamaah melaporkan akun jamaah untuk pendaftaran agen (keputusan 14 November 2026, dipersempit E3):
+//   - akun punya booking sendiri dengan pembayaran minimal DP (status dp atau lunas, termasuk yang sudah berangkat); atau
+//   - akun hasil aktivasi: jamaah tertaut terikat_agen dengan pemilik kunci terisi, upline akun sama dengan
+//     pemilik kunci itu (direkrut_oleh_akun_id; upline_akun_id bila sudah terisi), dan ada booking dp atau lunas
+//     yang memuat jamaah itu (pax aktif, bukan bayi).
+//
+// Jamaah tanpa_agen dan belum_ditentukan tidak termasuk: akunnya lewat persetujuan admin.
 func akunJamaah(ctx context.Context, q querier, akunID int64) (bool, error) {
 	var ada bool
-	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM bookings WHERE customer_account_id = ? AND status IN ('dp', 'lunas'))`, akunID).Scan(&ada); err != nil {
+	if err := q.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM bookings WHERE customer_account_id = ? AND status IN ('dp', 'lunas'))
+		    OR EXISTS (
+		        SELECT 1 FROM customer_accounts c
+		        JOIN jamaah j ON j.id = c.jamaah_id
+		        WHERE c.id = ? AND j.kaitan_status = 'terikat_agen' AND j.direkrut_oleh_akun_id IS NOT NULL
+		          AND c.direkrut_oleh_akun_id = j.direkrut_oleh_akun_id
+		          AND (c.upline_akun_id IS NULL OR c.upline_akun_id = j.direkrut_oleh_akun_id)
+		          AND EXISTS (
+		              SELECT 1 FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
+		              WHERE bp.jamaah_id = j.id AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
+		                AND b.status IN ('dp', 'lunas')))`, akunID, akunID).Scan(&ada); err != nil {
 		return false, fmt.Errorf("agen: cek akun jamaah: %w", err)
 	}
 	return ada, nil

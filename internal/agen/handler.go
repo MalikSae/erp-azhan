@@ -1,6 +1,7 @@
 package agen
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -22,13 +23,25 @@ type Handler struct {
 	repo       *Repository
 	klikIP     *shared.WindowLimiter
 	klikIPKode *shared.WindowLimiter
+
+	nikGagalAkun *shared.WindowLimiter
+	nikGagalIP   *shared.WindowLimiter
 }
+
+// Batas percobaan NIK bentrok saat ajukan agen (galatnya membedakan NIK jamaah dari NIK lain).
+const (
+	nikGagalPerAkunSehari = 5
+	nikGagalPerIPSehari   = 20
+)
 
 func NewHandler(repo *Repository) *Handler {
 	return &Handler{
 		repo:       repo,
 		klikIP:     shared.NewWindowLimiter(klikPerIPPerJam, time.Hour),
 		klikIPKode: shared.NewWindowLimiter(klikPerIPPerKodeSehari, 24*time.Hour),
+
+		nikGagalAkun: shared.NewWindowLimiter(nikGagalPerAkunSehari, 24*time.Hour),
+		nikGagalIP:   shared.NewWindowLimiter(nikGagalPerIPSehari, 24*time.Hour),
 	}
 }
 
@@ -71,6 +84,15 @@ func (h *Handler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s)
 }
 
+// akunTertaut: akun tertaut ke jamaah (customer_accounts.jamaah_id). Galat baca dianggap tidak tertaut.
+func (h *Handler) akunTertaut(ctx context.Context, akunID int64) bool {
+	var ada bool
+	if err := h.repo.db.QueryRowContext(ctx, `SELECT jamaah_id IS NOT NULL FROM customer_accounts WHERE id = ?`, akunID).Scan(&ada); err != nil {
+		return false
+	}
+	return ada
+}
+
 // Ajukan POST /api/portal/agen/pengajuan — screen A1a.
 func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 	var req AjukanRequest
@@ -81,9 +103,13 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 	req.Domisili = strings.TrimSpace(req.Domisili)
 	req.NIK = strings.TrimSpace(req.NIK)
 
-	if !nikAgenPattern.MatchString(req.NIK) {
-		writeError(w, http.StatusBadRequest, ErrNIKAgenTidakValid.Error())
-		return
+	// Akun tertaut ke jamaah memakai NIK jamaahnya (isian diabaikan, app tidak mengirim NIK); akun lain wajib mengisi.
+	akunID := identity.GetCustomerAccountID(r.Context())
+	if req.NIK != "" || !h.akunTertaut(r.Context(), akunID) {
+		if !nikAgenPattern.MatchString(req.NIK) {
+			writeError(w, http.StatusBadRequest, ErrNIKAgenTidakValid.Error())
+			return
+		}
 	}
 	if n := utf8.RuneCountInString(req.Domisili); n < 2 || n > 100 {
 		writeError(w, http.StatusBadRequest, "Domisili wajib diisi (2–100 karakter).")
@@ -98,7 +124,6 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	akunID := identity.GetCustomerAccountID(r.Context())
 	// Foto dari form app: harus unggahan akun ini sendiri (sama seperti PUT /api/account/foto).
 	req.FotoURL = strings.TrimSpace(req.FotoURL)
 	if req.FotoURL != "" {
@@ -115,7 +140,23 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := h.repo.Ajukan(r.Context(), akunID, req); err != nil {
+	kunciAkun, kunciIP := strconv.FormatInt(akunID, 10), shared.ClientIP(r)
+	if !h.nikGagalAkun.Take(kunciAkun) {
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan. Coba lagi besok.")
+		return
+	}
+	if !h.nikGagalIP.Take(kunciIP) {
+		h.nikGagalAkun.Refund(kunciAkun)
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan. Coba lagi besok.")
+		return
+	}
+	err := h.repo.Ajukan(r.Context(), akunID, req)
+	if !errors.Is(err, ErrNIKAgenTidakBisaDipakai) {
+		// Hanya NIK bentrok yang dihitung.
+		h.nikGagalAkun.Refund(kunciAkun)
+		h.nikGagalIP.Refund(kunciIP)
+	}
+	if err != nil {
 		handleError(w, err)
 		return
 	}

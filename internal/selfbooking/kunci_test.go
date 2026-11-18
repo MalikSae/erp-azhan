@@ -326,8 +326,9 @@ func TestSkenarioIbrahimAhmadIstri(t *testing.T) {
 		t.Fatalf("istri %s/%d, want terikat/%d", st, by, ahmad)
 	}
 	got = ledger(r2.Booking.BookingID)
-	if got[ibrahim]["langsung"] != 1_000_000 || got[ibrahim]["pembinaan"] != 300_000 || got[ahmad]["langsung"] != 1_000_000 || got[ahmad]["pembinaan"] != 0 {
-		t.Fatalf("ledger B2 = %v, want Ibrahim langsung 1jt + pembinaan 300rb, Ahmad langsung 1jt", got)
+	// B1 (jadwal sama, batal setelah lunas) sudah membayar komisi langsung Ahmad ke Ibrahim: B2 tidak membayar lagi (ADR 0004).
+	if got[ibrahim]["langsung"] != 0 || got[ibrahim]["pembinaan"] != 300_000 || got[ahmad]["langsung"] != 1_000_000 || got[ahmad]["pembinaan"] != 0 {
+		t.Fatalf("ledger B2 = %v, want Ibrahim pembinaan 300rb saja, Ahmad langsung 1jt", got)
 	}
 }
 

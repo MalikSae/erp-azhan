@@ -69,6 +69,10 @@ _Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti k
 
 **Saya sendiri**: pemesan agen aktif yang ikut berangkat (`pemesan_tidak_ikut` salah), di jalur booking mana pun. Jamaah pertama = diri agen, NIK dari profil agen, ditandai `saya_sendiri_akun_id`. Agen tidak mendapat komisi dari booking dirinya sendiri, komisinya mengalir ke upline agen. Mode agen mengikuti status akun pemesan, bukan endpoint (ADR 0002).
 
+**Diri agen**: pax yang ditandai `saya_sendiri_akun_id` atau jamaahnya tertaut ke akun agen. NIK sama dengan `nik_agen` bukan penentu lagi (ADR 0004). Komisi langsungnya ke pemilik kunci jamaah bila jamaah terikat ke agen lain, selain itu ke upline akun; `tanpa_agen` tanpa komisi. Pendaftaran Ahmad oleh Ibrahim tetap ke Ibrahim walau Ahmad menjadi agen.
+
+**Akun jamaah**: akun yang bebas biaya agen dan aktif otomatis saat mengajukan: punya booking sendiri dp/lunas, atau tertaut ke jamaah `terikat_agen` yang upline akunnya sama dengan pemilik kunci dan memuat booking dp/lunas. Jamaah `tanpa_agen` dan `belum_ditentukan` lewat persetujuan admin. `nik_agen` akun tertaut = NIK jamaah tertaut.
+
 **Komisi langsung**: nominal flat per pax berangkat untuk agen pemilik kunci jamaah.
 
 **Bonus pembinaan**: nominal flat per pax berangkat untuk upline agen pemilik kunci.
