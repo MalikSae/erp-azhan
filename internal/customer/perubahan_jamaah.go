@@ -91,7 +91,10 @@ type anggotaJamaah struct {
 	Paket         string
 	Berangkat     string
 	// Penuh: akun adalah pembuat jamaah ini (akses_jamaah.go).
-	Penuh         bool
+	Penuh bool
+	// DariPeran: baris berasal dari booking orang lain yang memuat jamaah tertaut (pandangan jamaah, ADR 0005).
+	// Kode booking tidak boleh dikirim untuk baris ini.
+	DariPeran bool
 }
 
 func normalNama(s string) string {
@@ -127,7 +130,21 @@ func muatAnggota(ctx context.Context, q dbq, akunID int64) ([]anggotaJamaah, err
 		sudah[a.ID] = true
 		out = append(out, a)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	peran, err := muatAnggotaPeran(ctx, q, akunID)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range peran {
+		if sudah[a.ID] { // sudah ada lewat booking akun sendiri
+			continue
+		}
+		sudah[a.ID] = true
+		out = append(out, a)
+	}
+	return out, nil
 }
 
 // cocokOrang: nama sama dan tanggal lahir sama (atau salah satunya belum diisi). Baris dengan akses berbeda

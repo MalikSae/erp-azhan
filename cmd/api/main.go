@@ -344,6 +344,7 @@ func main() {
 		r.Delete("/perangkat-push", tabunganHandler.HapusPerangkat)
 		r.Get("/jamaah/{id}", jamaahAkunHandler.Detail)
 		r.Put("/jamaah/{id}", jamaahAkunHandler.Simpan)
+		r.Get("/perjalanan-jamaah", customerOrders.PerjalananJamaah)
 		r.Get("/bookings", customerOrders.List)
 		r.Post("/bookings", selfBookingHandler.CreateBooking)
 		r.Post("/bookings-app", selfBookingHandler.CreateBookingApp)

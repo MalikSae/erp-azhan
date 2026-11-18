@@ -328,3 +328,7 @@ Nama yang dipakai di kode (migrasi 114), bila berbeda dari usulan di atas:
 - `customer_accounts.jamaah_id` dibiarkan opsional dan tidak lagi ditulis. (Revisi 18 November 2026: kolom ini kini ditulis oleh Aktivasi Akun Jamaah dan unik per jamaah (migrasi 153); upline akun baru hasil aktivasi mengikuti pemilik kunci jamaah lewat `agen.IkatAkunDariKunciTx`. Lihat `docs/adr/0003-aktivasi-akun-jamaah.md`.)
 - Tambahan: `bookings.dibuat_oleh_agen_akun_id` (agen pembuat booking portal, terpisah dari penerima komisi) dan `booking_pax.saya_sendiri_akun_id` (penanda "Saya sendiri").
 - Flag komisi: `komisi.KomisiRepeatCashbackAktif` (default `false`).
+
+## Pandangan jamaah (E4a, 2026-11-18)
+
+Akun tertaut jamaah melihat perjalanan buatan orang lain secara terbatas lewat `GET /api/account/perjalanan-jamaah`; kontrak JSON dan batasan di `docs/adr/0005-pandangan-jamaah.md`. Data Jamaah akun tertaut memuat baris pax miliknya dari booking itu, hanya lihat. `owned()` dan `sqlAksesPenuh` tidak berubah.
