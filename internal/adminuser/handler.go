@@ -69,7 +69,7 @@ func (h *Handler) writeRepoError(w http.ResponseWriter, err error, action string
 		h.sendError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] adminuser.%s: %v", action, err)
-		h.sendError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		h.sendError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -115,7 +115,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
-		h.sendError(w, http.StatusBadRequest, "ID pengguna tidak valid")
+		h.sendError(w, http.StatusBadRequest, "ID pengguna tidak valid.")
 		return
 	}
 	user, err := h.repo.GetByID(r.Context(), id)
@@ -130,7 +130,7 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req CreateAdminUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "payload tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if msg := validateUpsert(&req.UpsertInput); msg != "" {
@@ -144,7 +144,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "gagal memproses password")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memproses kata sandi.")
 		return
 	}
 
@@ -166,12 +166,12 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
-		h.sendError(w, http.StatusBadRequest, "ID pengguna tidak valid")
+		h.sendError(w, http.StatusBadRequest, "ID pengguna tidak valid.")
 		return
 	}
 	var req UpdateAdminUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "payload tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if msg := validateUpsert(&req.UpsertInput); msg != "" {
@@ -195,12 +195,12 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetStatus(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
-		h.sendError(w, http.StatusBadRequest, "ID pengguna tidak valid")
+		h.sendError(w, http.StatusBadRequest, "ID pengguna tidak valid.")
 		return
 	}
 	var req SetStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IsActive == nil {
-		h.sendError(w, http.StatusBadRequest, "is_active wajib diisi")
+		h.sendError(w, http.StatusBadRequest, "Status wajib diisi.")
 		return
 	}
 	actor := uint64(identity.GetAdminUserID(r.Context()))
@@ -221,7 +221,7 @@ func (h *Handler) SetStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
-		h.sendError(w, http.StatusBadRequest, "ID pengguna tidak valid")
+		h.sendError(w, http.StatusBadRequest, "ID pengguna tidak valid.")
 		return
 	}
 	actor := uint64(identity.GetAdminUserID(r.Context()))
@@ -238,13 +238,13 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "ID user tidak valid")
+		h.sendError(w, http.StatusBadRequest, "ID user tidak valid.")
 		return
 	}
 
 	var req ResetPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -256,21 +256,21 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memproses password")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memproses kata sandi.")
 		return
 	}
 
 	if err := h.repo.ResetPassword(r.Context(), id, string(hash)); err != nil {
 		if errors.Is(err, ErrNotFound) {
-			h.sendError(w, http.StatusNotFound, "User tidak ditemukan")
+			h.sendError(w, http.StatusNotFound, "User tidak ditemukan.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal mereset password")
+		h.sendError(w, http.StatusInternalServerError, "Gagal mereset kata sandi.")
 		return
 	}
 	if err := h.revoker.RevokeAllRefreshTokens(r.Context(), int64(id)); err != nil {
 		log.Printf("[ERROR] adminuser.ResetPassword RevokeAllRefreshTokens user_id=%d: %v", id, err)
-		h.sendError(w, http.StatusInternalServerError, "Password tersimpan, tetapi gagal mengakhiri sesi lama. Silakan reset ulang")
+		h.sendError(w, http.StatusInternalServerError, "Kata sandi tersimpan, tetapi gagal mengakhiri sesi lama. Reset ulang.")
 		return
 	}
 
@@ -300,19 +300,19 @@ func pesanPanjangPassword(password, label string) string {
 // Hanya Admin Travel yang boleh mengubah password akunnya sendiri.
 func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	if identity.GetRole(r.Context()) != "admin" || identity.GetBrandID(r.Context()) == nil {
-		h.sendError(w, http.StatusForbidden, "hanya Admin Travel yang dapat mengubah password akunnya sendiri")
+		h.sendError(w, http.StatusForbidden, "Hanya Admin Travel yang dapat mengubah kata sandi akunnya sendiri.")
 		return
 	}
 
 	var req ChangeOwnPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Payload request tidak valid")
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	currentPassword := strings.TrimSpace(req.CurrentPassword)
 	newPassword := strings.TrimSpace(req.NewPassword)
 	if currentPassword == "" || newPassword == "" {
-		h.sendError(w, http.StatusBadRequest, "Password saat ini dan password baru wajib diisi")
+		h.sendError(w, http.StatusBadRequest, "Kata sandi saat ini dan kata sandi baru wajib diisi.")
 		return
 	}
 	if msg := pesanPanjangPassword(newPassword, "Password baru"); msg != "" {
@@ -320,7 +320,7 @@ func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if currentPassword == newPassword {
-		h.sendError(w, http.StatusBadRequest, "Password baru harus berbeda dari password saat ini")
+		h.sendError(w, http.StatusBadRequest, "Kata sandi baru harus berbeda dari kata sandi saat ini.")
 		return
 	}
 
@@ -328,31 +328,31 @@ func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	passwordHash, err := h.repo.GetPasswordHash(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			h.sendError(w, http.StatusNotFound, "Akun tidak ditemukan")
+			h.sendError(w, http.StatusNotFound, "Akun tidak ditemukan.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal memverifikasi password saat ini")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memverifikasi kata sandi saat ini.")
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(currentPassword)); err != nil {
-		h.sendError(w, http.StatusUnauthorized, "Password saat ini salah")
+		h.sendError(w, http.StatusUnauthorized, "Kata sandi saat ini salah.")
 		return
 	}
 
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memproses password baru")
+		h.sendError(w, http.StatusInternalServerError, "Gagal memproses kata sandi baru.")
 		return
 	}
 	if err := h.repo.ResetPassword(r.Context(), userID, string(newHash)); err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal menyimpan password baru")
+		h.sendError(w, http.StatusInternalServerError, "Gagal menyimpan kata sandi baru.")
 		return
 	}
 	// Semua sesi akun ini diakhiri, termasuk sesi saat ini: perm_version naik bersama password, jadi access
 	// token lama ditolak pada permintaan berikutnya dan pengguna login ulang dengan password baru.
 	if err := h.revoker.RevokeAllRefreshTokens(r.Context(), int64(userID)); err != nil {
 		log.Printf("[ERROR] adminuser.ChangeOwnPassword RevokeAllRefreshTokens user_id=%d: %v", userID, err)
-		h.sendError(w, http.StatusInternalServerError, "Password tersimpan, tetapi gagal mengakhiri sesi lama. Silakan ganti ulang")
+		h.sendError(w, http.StatusInternalServerError, "Kata sandi tersimpan, tetapi gagal mengakhiri sesi lama. Ganti ulang.")
 		return
 	}
 

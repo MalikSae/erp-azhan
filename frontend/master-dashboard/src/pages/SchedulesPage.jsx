@@ -114,7 +114,7 @@ const SchedulesPage = () => {
       });
       setBrandsMap(bMap);
     } catch (error) {
-      const msg = error.response?.data?.error || "Gagal memuat data paket.";
+      const msg = error.response?.data?.error || "Data paket gagal dimuat. Coba lagi.";
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -150,7 +150,7 @@ const SchedulesPage = () => {
       await updateScheduleStatus(row.id, status);
       fetchSchedules();
     } catch (error) {
-      setErrorMessage(error.response?.data?.error || 'Gagal mengubah status paket.');
+      setErrorMessage(error.response?.data?.error || 'Status paket gagal diubah. Coba lagi.');
     }
   };
 
@@ -173,7 +173,7 @@ const SchedulesPage = () => {
       handleCloseDeleteModal();
       setErrorMessage(error.response?.data?.error || (error.response?.status === 409
         ? "Tidak bisa dihapus, data ini sedang digunakan."
-        : "Terjadi kesalahan saat menghapus data."));
+        : "Data gagal dihapus. Coba lagi."));
     }
   };
 
@@ -455,7 +455,7 @@ const SchedulesPage = () => {
       <Modal
         isOpen={deleteConfirmId !== null}
         onClose={handleCloseDeleteModal}
-        title="Hapus Paket?"
+        title="Hapus Paket"
         size="sm"
         footer={
           <>
@@ -472,7 +472,7 @@ const SchedulesPage = () => {
       >
         <div className="space-y-4 font-body">
           <p className="text-neutral-600 text-sm">
-            Yakin ingin menghapus <strong>{scheduleToDelete?.jadwal_nama}</strong>? Tindakan ini tidak bisa dibatalkan.
+            Hapus <strong>{scheduleToDelete?.jadwal_nama}</strong>? Data tidak bisa dikembalikan.
           </p>
 
           <div className="bg-neutral-100 border border-neutral-200 rounded-md p-3 text-center">
@@ -490,7 +490,7 @@ const SchedulesPage = () => {
               type="text"
               value={inputConfirmCode}
               onChange={(e) => setInputConfirmCode(e.target.value)}
-              placeholder="Ketik kode di atas untuk konfirmasi"
+             
               className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-md focus:outline-none focus:ring-1 focus:ring-danger-500 focus:border-danger-500 font-mono tracking-wider text-neutral-900 bg-white"
               autoFocus
             />

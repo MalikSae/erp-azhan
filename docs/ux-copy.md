@@ -82,3 +82,8 @@ Arti dan pilihan kata: `GLOSSARY.md`. Yang paling sering salah:
 ## Menulis
 
 - Teks antarmuka ini pendek dan padat. Catatan, dokumen, pesan ke manusia lain (commit, PR, isu) ditulis normal, bukan dipotong.
+
+## Penegakan
+
+- Dashboard ERP: `npm run test:copy` di `frontend/master-dashboard` memindai teks tampil (`src/lib/copy.test.js`).
+- API: `go test ./internal/uxcopy` memindai pesan galat handler (huruf kapital, titik, tanpa nama field teknis dan "silakan").

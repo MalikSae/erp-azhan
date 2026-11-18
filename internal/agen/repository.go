@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/shared"
 )
 
@@ -331,6 +332,7 @@ func setujuiTx(ctx context.Context, tx *sql.Tx, akunID int64, brandID *int64, ad
 		WHERE id = ?`, kode.String, adminID, akunID); err != nil {
 		return fmt.Errorf("agen.Setujui update: %w", err)
 	}
+	notifikasi.AgenDisetujui(ctx, tx, akunID)
 	return catatKeputusan(ctx, tx, akunID, "disetujui", nil)
 }
 

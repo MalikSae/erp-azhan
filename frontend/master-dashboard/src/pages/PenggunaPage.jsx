@@ -54,7 +54,7 @@ const PenggunaPage = () => {
       setUsers(usersData || []);
       setRoles(rolesData || []);
     } catch (error) {
-      setErrorMessage(errMsg(error, 'Gagal memuat data pengguna.'));
+      setErrorMessage(errMsg(error, 'Data pengguna gagal dimuat. Coba lagi.'));
     } finally {
       setIsLoading(false);
     }
@@ -101,7 +101,7 @@ const PenggunaPage = () => {
       setStatusTarget(null);
       fetchData();
     } catch (error) {
-      setStatusError(errMsg(error, 'Gagal mengubah status pengguna.'));
+      setStatusError(errMsg(error, 'Status pengguna gagal diubah. Coba lagi.'));
     } finally {
       setIsSavingStatus(false);
     }
@@ -110,16 +110,16 @@ const PenggunaPage = () => {
   const handleReset = async (e) => {
     e.preventDefault();
     setResetError(null);
-    if (resetForm.password.length < 8) { setResetError('Password baru minimal 8 karakter.'); return; }
-    if (passwordTerlaluPanjang(resetForm.password)) { setResetError('Password baru maksimal 72 byte (sekitar 72 huruf biasa).'); return; }
-    if (resetForm.password !== resetForm.confirm) { setResetError('Konfirmasi password tidak cocok.'); return; }
+    if (resetForm.password.length < 8) { setResetError('Kata sandi baru minimal 8 karakter.'); return; }
+    if (passwordTerlaluPanjang(resetForm.password)) { setResetError('Kata sandi baru terlalu panjang.'); return; }
+    if (resetForm.password !== resetForm.confirm) { setResetError('Konfirmasi kata sandi tidak cocok.'); return; }
     setIsSavingReset(true);
     try {
       await resetAdminUserPassword(resetTarget.id, resetForm.password);
-      setSuccessMessage(`Password "${resetTarget.display_name}" berhasil diganti. Sesi lamanya dicabut.`);
+      setSuccessMessage(`Kata sandi "${resetTarget.display_name}" diganti.`);
       setResetTarget(null);
     } catch (error) {
-      setResetError(errMsg(error, 'Gagal mengganti password.'));
+      setResetError(errMsg(error, 'Kata sandi gagal diganti. Coba lagi.'));
     } finally {
       setIsSavingReset(false);
     }
@@ -211,7 +211,7 @@ const PenggunaPage = () => {
               const menuItems = [
                 { label: 'Edit', icon: Pencil, tooltip: 'Edit Pengguna', onClick: () => navigate(`/users/${row.id}`) },
                 {
-                  label: 'Ganti Password',
+                  label: 'Ganti Kata Sandi',
                   icon: KeyRound,
                   disabled: !row.is_active,
                   disabledTooltip: 'Pengguna nonaktif',
@@ -260,22 +260,22 @@ const PenggunaPage = () => {
         </div>
       </Modal>
 
-      {/* Ganti password */}
+      {/* Ganti Kata Sandi */}
       <Modal
         isOpen={!!resetTarget}
         onClose={() => { if (!isSavingReset) setResetTarget(null); }}
-        title={`Ganti Password — ${resetTarget?.display_name || ''}`}
+        title={`Ganti Kata Sandi — ${resetTarget?.display_name || ''}`}
       >
         <form onSubmit={handleReset} className="space-y-1">
           {resetError && <Alert variant="error" className="mb-4">{resetError}</Alert>}
-          <Input label="Password Baru" type="password" required value={resetForm.password}
+          <Input label="Kata sandi baru" type="password" required value={resetForm.password}
             onChange={(e) => setResetForm(p => ({ ...p, password: e.target.value }))} autoFocus />
-          <Input label="Konfirmasi Password Baru" type="password" required value={resetForm.confirm}
+          <Input label="Konfirmasi kata sandi baru" type="password" required value={resetForm.confirm}
             onChange={(e) => setResetForm(p => ({ ...p, confirm: e.target.value }))} />
-          <p className="text-xs font-body text-neutral-500 pb-2">Semua sesi pengguna ini akan dicabut; ia perlu login ulang dengan password baru.</p>
+          <p className="text-xs font-body text-neutral-500 pb-2">Semua sesi pengguna ini akan dicabut; ia perlu login ulang dengan kata sandi baru.</p>
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
             <Button type="button" variant="secondary" onClick={() => setResetTarget(null)} disabled={isSavingReset}>Batal</Button>
-            <Button type="submit" variant="primary" disabled={isSavingReset}>{isSavingReset ? 'Menyimpan...' : 'Simpan Password'}</Button>
+            <Button type="submit" variant="primary" disabled={isSavingReset}>{isSavingReset ? 'Menyimpan...' : 'Simpan kata sandi'}</Button>
           </div>
         </form>
       </Modal>

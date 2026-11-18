@@ -12,6 +12,7 @@ import (
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/mailer"
+	"erp-azhan/api/internal/notifikasi"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -86,7 +87,7 @@ func (h *JamaahAkun) ListAdmin(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		log.Printf("[ERROR] admin list perubahan jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar perubahan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil daftar perubahan.")
 		return
 	}
 	defer rows.Close()
@@ -95,7 +96,7 @@ func (h *JamaahAkun) ListAdmin(w http.ResponseWriter, r *http.Request) {
 		b, err := scanPerubahan(rows)
 		if err != nil {
 			log.Printf("[ERROR] admin list perubahan jamaah scan: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal mengambil daftar perubahan")
+			writeError(w, http.StatusInternalServerError, "Gagal mengambil daftar perubahan.")
 			return
 		}
 		out = append(out, *b)
@@ -106,7 +107,7 @@ func (h *JamaahAkun) ListAdmin(w http.ResponseWriter, r *http.Request) {
 func idPerubahan(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id < 1 {
-		writeError(w, http.StatusBadRequest, "id perubahan tidak valid")
+		writeError(w, http.StatusBadRequest, "ID perubahan tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -127,18 +128,18 @@ func (h *JamaahAkun) DetailAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := scanPerubahan(h.db.QueryRowContext(r.Context(), query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "perubahan tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Perubahan tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		log.Printf("[ERROR] admin detail perubahan jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil perubahan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil perubahan.")
 		return
 	}
 	items, err := muatItem(r.Context(), h.db, id, b.Status != "menunggu")
 	if err != nil {
 		log.Printf("[ERROR] admin detail perubahan jamaah item: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil perubahan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil perubahan.")
 		return
 	}
 	writeJSON(w, http.StatusOK, perubahanDetail{perubahanBaris: *b, Perubahan: items})
@@ -197,18 +198,18 @@ func tulisGalatPutus(w http.ResponseWriter, err error) {
 	case errors.As(err, &berubah):
 		writeError(w, http.StatusConflict, berubah.Error())
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "perubahan tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Perubahan tidak ditemukan.")
 	case errors.Is(err, errPerubahanSelesai):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, errCatatanWajib):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.As(err, &hp):
-		writeError(w, http.StatusConflict, hp.Error()+"; pengajuan tidak dapat disetujui")
+		writeError(w, http.StatusConflict, hp.Error()+"; pengajuan tidak dapat disetujui.")
 	case errors.As(err, &val):
 		writeError(w, http.StatusBadRequest, val.Pesan)
 	default:
 		log.Printf("[ERROR] putus perubahan jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memproses pengajuan")
+		writeError(w, http.StatusInternalServerError, "Gagal memproses pengajuan.")
 	}
 }
 
@@ -326,6 +327,7 @@ func (h *JamaahAkun) kabari(akunID, jamaahID int64, setuju bool, catatan string)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	notifikasi.PerubahanData(ctx, h.db, akunID, jamaahID, setuju)
 	var email, nama, namaJamaah string
 	var brandID int64
 	if err := h.db.QueryRowContext(ctx, `SELECT a.email, a.nama_lengkap, a.brand_id, j.nama_lengkap FROM customer_accounts a, jamaah j WHERE a.id=? AND j.id=?`,

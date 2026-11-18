@@ -83,7 +83,7 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
             biaya_keadaan: keadaanBiaya(it.pembayaran),
           })));
         })
-        .catch(() => { if (!batal) { setRows([]); setError('Pengajuan agen gagal dimuat. Silakan coba kembali.'); } })
+        .catch(() => { if (!batal) { setRows([]); setError('Pengajuan agen gagal dimuat. Coba lagi.'); } })
         .finally(() => { if (!batal) setLoading(false); });
       return () => { batal = true; };
     }
@@ -95,7 +95,7 @@ export default function KelolaAgenPage({ tab = 'semua', showBrandColumn = false 
         const urut = [...data].sort((a, b) => (b.pax_closing - a.pax_closing) || (Number(b.total_komisi) - Number(a.total_komisi)) || a.nama_lengkap.localeCompare(b.nama_lengkap));
         setRows(urut.map((it) => ({ ...it, keterangan: it.kode_referral || '-' })));
       })
-      .catch(() => { if (!batal) { setRows([]); setError('Daftar agen gagal dimuat. Silakan coba kembali.'); } })
+      .catch(() => { if (!batal) { setRows([]); setError('Daftar agen gagal dimuat. Coba lagi.'); } })
       .finally(() => { if (!batal) setLoading(false); });
     return () => { batal = true; };
   }, [tab, brandId, periode]);

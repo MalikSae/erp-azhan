@@ -32,7 +32,7 @@ func (h *Handler) ListItineraries(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.List(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] itinerary: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data itinerary")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data itinerary.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -82,7 +82,7 @@ func (h *Handler) GetPublicItinerary(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateItinerary(w http.ResponseWriter, r *http.Request) {
 	var req CreateItineraryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -114,7 +114,7 @@ func (h *Handler) UpdateItinerary(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateItineraryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -159,11 +159,11 @@ func (h *Handler) validateCategory(w http.ResponseWriter, r *http.Request, categ
 	exists, err := h.repo.CategoryExists(r.Context(), *categoryID)
 	if err != nil {
 		log.Printf("[ERROR] itinerary: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return false
 	}
 	if !exists {
-		writeError(w, http.StatusBadRequest, "category_id tidak valid")
+		writeError(w, http.StatusBadRequest, "Kategori tidak valid.")
 		return false
 	}
 	return true
@@ -176,38 +176,39 @@ func (h *Handler) validateCategory(w http.ResponseWriter, r *http.Request, categ
 func validateItineraryInput(w http.ResponseWriter, rawTitle string, days []DayRequest) bool {
 	// Gate 1: title wajib
 	if strings.TrimSpace(rawTitle) == "" {
-		writeError(w, http.StatusBadRequest, "title wajib diisi")
+		writeError(w, http.StatusBadRequest, "Title wajib diisi.")
 		return false
 	}
+	if err := ValidateDays(days); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+	return true
+}
 
-	// Gate 2: days boleh kosong/nil — tidak wajib ada
-	// Gate 3-5: validasi per-hari (hanya jika ada)
+// ValidateDays memeriksa hari-hari itinerary. Aturannya sama untuk master dan itinerary khusus paket.
+func ValidateDays(days []DayRequest) error {
+	// Days boleh kosong/nil; setiap hari yang ada divalidasi.
 	for i, d := range days {
 		n := i + 1 // posisi 1-based untuk pesan error
 
-		// Gate 3: judul atau rute/lokasi hari wajib (format baru memakai rute sebagai judul hari)
+		// Judul atau rute/lokasi hari wajib (format baru memakai rute sebagai judul hari)
 		if strings.TrimSpace(d.Title) == "" && strings.TrimSpace(d.Location) == "" {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("rute/lokasi hari ke-%d wajib diisi", n))
-			return false
+			return fmt.Errorf("rute/lokasi hari ke-%d wajib diisi", n)
 		}
-
-		// Gate 4: activities minimal 1 elemen
+		// Activities minimal 1 elemen
 		if len(d.Activities) == 0 {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("aktivitas hari ke-%d minimal 1", n))
-			return false
+			return fmt.Errorf("aktivitas hari ke-%d minimal 1", n)
 		}
-
-		// Gate 5: setiap activity harus punya text tidak kosong
+		// Setiap activity harus punya text tidak kosong
 		for _, act := range d.Activities {
 			if strings.TrimSpace(act.Text) == "" {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("aktivitas hari ke-%d memiliki teks kosong", n))
-				return false
+				return fmt.Errorf("aktivitas hari ke-%d memiliki teks kosong", n)
 			}
 		}
-		// Gate 6: location BOLEH kosong — tidak divalidasi
+		// Location BOLEH kosong
 	}
-
-	return true
+	return nil
 }
 
 // ─── Error handling ───────────────────────────────────────────────────────────
@@ -216,15 +217,15 @@ func validateItineraryInput(w http.ResponseWriter, rawTitle string, days []DayRe
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "data tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	default:
 		// Tangkap MySQL FK constraint violation (error 1451)
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh paket lain")
+			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh paket lain.")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -235,7 +236,7 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true

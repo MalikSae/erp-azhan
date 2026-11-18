@@ -2,6 +2,7 @@
 
 > **Status:** Rancangan awal 20 Okt 2026, kini sebagian besar terimplementasi dan ter-merge (Tahap 1, Tahap 2, Tahap 3 CMS, dan Fase 2 sampai gelombang 2E-1). Keadaan terbaru dan hal yang belum ada: §15; keputusan yang masih terbuka: §12.
 > **Tanggal:** 20 Oktober 2026
+> **Diubah 17 Nov 2026:** program dan destinasi paket pindah dari ERP ke CMS (§3, §4, §15.1). Kolom `schedules.program_slug` dan `schedules.destination_id`, tabel `destinations`, menu Destinasi, dan endpoint `/api/public/v1/destinations` dihapus dari ERP (migrasi 150). Bagian lain yang masih menyebut keduanya di ERP berlaku untuk keadaan sebelum tanggal itu.
 > **Sumber keputusan:** sesi diskusi 20 Okt 2026 (grilling Q1–Q35), dokumen SEO di Drive (Spec CMS v2.3-A, Launch Plan v2.3, Mockup Reference Pack v2.3, Kebijakan Partner v1.0), desain Figma Hana & Alsha, memori keputusan arsitektur 2 Okt 2026.
 > **Prinsip utama:** *CMS memiliki kata-kata, ERP memiliki angka.* Dokumen SEO adalah acuan struktur web; ERP/booking dibangun relevan dengannya.
 
@@ -49,7 +50,8 @@ Catatan: riwayat 2 Okt menyebut master-dashboard dipasang di `office.azhan.id` d
 | Data | Pemilik | Catatan |
 |---|---|---|
 | Harga (quad/triple/double/infant), tanggal berangkat/pulang, seat total/sisa, status, maskapai, hotel, itinerary, include/exclude, brosur | **ERP** | Tidak pernah disalin ke CMS. |
-| Tier (dari kategori), destinasi, program, `journey_type`, durasi (dihitung) | **ERP** | Atribut klasifikasi (§4). |
+| Tier (dari kategori), `journey_type`, durasi (dihitung) | **ERP** | Atribut klasifikasi (§4). |
+| Program (saat ini hanya `plus`) dan destinasi paket, master Destinasi | **CMS** | Sejak 17 Nov 2026. Diisi di halaman paket CMS, bagian Klasifikasi; Plus wajib destinasi. Paket tanpa klasifikasi hanya muncul di daftar umum. |
 | Slug paket, meta title/description, canonical, robots, OG, fokus keyword, schema override, FAQ, H1/intro/slot konten | **CMS** | Slug dimiliki tim SEO. |
 | Landing bulan, alias pencarian, redirect, riwayat URL | **CMS** | |
 | Identitas brand: nama PT, alamat, telepon, WhatsApp, email, jam buka, sosial, NAP, logo, warna | **ERP** (profil brand) | Satu sumber; sudah ada field SEO/NAP (migrasi 050). |
@@ -64,9 +66,8 @@ Usulan; nomor migrasi menyusul setelah 107.
 
 1. `schedules` — tambah kolom:
    - `journey_type` ENUM('umroh','haji','wisata_halal') NOT NULL DEFAULT 'umroh'.
-   - `program_slug` VARCHAR(50) NULL (mis. `plus`, `ramadhan`; NULL = paket tanpa program khusus).
-   - `destination_id` BIGINT UNSIGNED NULL → `destinations`.
-2. `destinations` (master baru): `id`, `name`, `slug` (unik), `is_active`. Dikelola dari dashboard ERP; tidak ada kombinasi destinasi→tier yang di-hardcode (aturan spek).
+   - ~~`program_slug`~~ dan ~~`destination_id`~~: dibuang 17 Nov 2026 (migrasi 150); program dan destinasi kini dimiliki CMS.
+2. ~~`destinations`~~: dibuang dari ERP 17 Nov 2026. Master Destinasi (`name`, `slug` unik, `is_active`) dikelola di CMS; tidak ada kombinasi destinasi→tier yang di-hardcode (aturan spek).
 3. `package_categories` — tambah `seo_tier` ENUM('hemat','reguler','comfort','premium') NULL sebagai pemetaan stabil dari kategori ke vocab tier SEO. Kategori tetap pemilik klasifikasi tier (tidak ada field `tier` terpisah).
 4. **Durasi tidak menjadi kolom.** Dihitung dari `berangkat_tanggal` dan `pulang_tanggal` (sudah ada dan sudah dipakai `durasiHari` di `azhan-booking`).
 5. **Slug tidak disimpan di ERP.**
@@ -88,9 +89,8 @@ Endpoint lama (`/api/schedules`, `/api/schedules/{id}`, `/api/public/*`) tetap b
 
 | Endpoint | Fungsi |
 |---|---|
-| `GET /api/public/v1/packages` | Daftar paket brand. Filter: `periode` (YYYY-MM), `destinasi`, `tier`, `program`, `durasi`, `hotel_bintang`, `harga_max`, `registrasi`; `updated_since`; paginasi. |
-| `GET /api/public/v1/packages/{id}` | Detail: fakta paket, itinerary, include/exclude, hotel, maskapai, harga per tipe kamar, `registration_status`, atribut klasifikasi (`journey_type`, `program`, `destination`, `tier`, `duration_days`). |
-| `GET /api/public/v1/destinations` | Destinasi aktif beserta jumlah paket yang dijual (untuk hub). |
+| `GET /api/public/v1/packages` | Daftar paket brand. Filter: `periode` (YYYY-MM), `tier`, `durasi`, `hotel_bintang`, `harga_max`, `registrasi`; `updated_since`; paginasi. |
+| `GET /api/public/v1/packages/{id}` | Detail: fakta paket, itinerary, include/exclude, hotel, maskapai, harga per tipe kamar, `registration_status`, atribut klasifikasi (`journey_type`, `tier`, `duration_days`). |
 | `GET /api/public/v1/sitemap-feed` | ID + `updated_at` paket yang layak masuk sitemap. |
 | `GET /api/public/brand` | Sudah ada; diperluas bila perlu (nama PT, jam buka, sosial). |
 
@@ -301,7 +301,7 @@ Per 22 Okt 2026. Yang disebut "ter-merge" sudah ada di cabang `main` masing-masi
 | §4.2 status registrasi | `OPEN/ALMOST_FULL/CLOSED/SOLD_OUT` diturunkan (ambang `max(5, 20%)`, batas 30 hari). | `internal/schedule/registration.go` |
 | §4.3 API publik v1 | `GET /api/public/v1/packages` (filter dan paginasi), `/packages/{id}` (`visible` / `gone` / 404 untuk draft), `/destinations`, `/sitemap-feed`; `GET /api/admin/me` untuk identitas dan izin (PR #7); `ketentuan_pembatalan` di profil publik brand (PR #8). | `internal/schedule/public_v1.go`, `internal/identity/`, `internal/brand/` |
 | Tier kategori | Kolom dan isian `seo_tier` ada di API dan form Kategori. **Belum diisi di data dev** (§12.4). | `internal/category/` |
-| Dashboard ERP | Halaman "Kelola Destinasi"; "Klasifikasi Web Publik" di form dan detail paket; isian "Tier SEO" di Kategori. | `frontend/master-dashboard/` |
+| Dashboard ERP | Isian "Tier SEO" di Kategori. (Halaman Kelola Destinasi dan "Klasifikasi Web Publik" di form dan detail paket dihapus 17 Nov 2026.) | `frontend/master-dashboard/` |
 | Istilah | Seragam "booking" dan "seat" di email, galat API, dan dashboard (PR #9; panduan lengkap di `azhan-booking/docs/ux-copy.md`). | `internal/mailer/`, dashboard |
 | Email booking | Email "Booking berhasil dibuat" dikirim setelah booking mandiri pelanggan baru dibuat (asinkron; kegagalan kirim hanya dicatat; tidak dikirim untuk retry idempoten maupun booking agen). Sebelumnya fungsi templatenya tidak dipanggil di mana pun. Belum ter-merge saat dokumen ini ditulis (cabang `fix/email-booking-dibuat`). | `internal/selfbooking/notify.go` |
 

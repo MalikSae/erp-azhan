@@ -35,15 +35,15 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		user, err := h.repo.GetByID(ctx, resp.UserID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				writeError(w, http.StatusUnauthorized, "unauthorized")
+				writeError(w, http.StatusUnauthorized, "Unauthorized.")
 				return
 			}
 			log.Printf("[ERROR] identity.Me GetByID: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return
 		}
 		if !user.IsActive {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			writeError(w, http.StatusUnauthorized, "Unauthorized.")
 			return
 		}
 		resp.DisplayName = user.DisplayName

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -25,12 +26,20 @@ const (
 	SumberIkutPIC  = "ikut_pic"
 )
 
+// polaKodeAgen: kode agen dibuat acak otomatis, tepat 6 karakter huruf kapital atau angka.
+var polaKodeAgen = regexp.MustCompile(`^[A-Z0-9]{6}$`)
+
+// KodeAgenValid true bila kode (setelah dipangkas dan dijadikan huruf kapital) tepat 6 karakter A-Z0-9.
+func KodeAgenValid(kode string) bool {
+	return polaKodeAgen.MatchString(strings.ToUpper(strings.TrimSpace(kode)))
+}
+
 // ResolveKodeReferral mengembalikan ID agen aktif pemilik kode di brand ini.
 // Kode kosong, tidak dikenal, milik agen nonaktif, atau brand lain -> 0 tanpa
 // error (diabaikan diam-diam, keputusan L8).
 func ResolveKodeReferral(ctx context.Context, q querier, brandID int64, kode string) (int64, error) {
 	kode = strings.ToUpper(strings.TrimSpace(kode))
-	if kode == "" || len(kode) > 20 {
+	if !KodeAgenValid(kode) {
 		return 0, nil
 	}
 	var id int64

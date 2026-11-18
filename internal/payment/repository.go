@@ -9,6 +9,7 @@ import (
 
 	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/media"
+	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/shared"
 )
 
@@ -299,6 +300,7 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 	}
 
 	if status == StatusConfirmed {
+		notifikasi.Pembayaran(ctx, tx, bookingID, true, req.Jumlah)
 		if err := r.syncBookingStatusTx(ctx, tx, bookingID); err != nil {
 			return nil, fmt.Errorf("payment.Create sync booking: %w", err)
 		}
@@ -391,6 +393,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 	if err != nil {
 		return nil, fmt.Errorf("payment.UpdateStatus update: %w", err)
 	}
+	notifikasi.Pembayaran(ctx, tx, bookingID, newStatus == StatusConfirmed, amount)
 
 	if err := r.syncBookingStatusTx(ctx, tx, bookingID); err != nil {
 		return nil, fmt.Errorf("payment.UpdateStatus sync booking: %w", err)
@@ -492,6 +495,7 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 		targetStatus, pegang, pegang, totalPaid, pegang, bookingID); err != nil {
 		return fmt.Errorf("payment: sinkron status, simpan status %s: %w", targetStatus, err)
 	}
+	notifikasi.StatusBooking(ctx, tx, bookingID, currentStatus, targetStatus)
 	return sinkronKomisiTx(ctx, tx, bookingID, currentStatus, targetStatus)
 }
 

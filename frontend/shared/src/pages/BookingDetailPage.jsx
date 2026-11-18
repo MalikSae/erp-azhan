@@ -68,6 +68,33 @@ const formatTanggal = (dateStr) => {
 // Status ringan memakai Badge bersama (satu gaya status, lihat Badge.jsx).
 const DotText = ({ tone, children }) => <Badge variant={tone}>{children}</Badge>;
 
+// "2026-11-14 10:20" -> "14 Nov 2026, 10.20"
+const formatWaktuLog = (s) => {
+  if (!s) return '';
+  const [tgl, jam] = s.split(' ');
+  return jam ? `${formatTanggal(tgl)}, ${jam.replace(':', '.')}` : formatTanggal(tgl);
+};
+
+// Riwayat perlengkapan satu jamaah: pengajuan dari app, penyerahan petugas, dan konfirmasi terima dari akun.
+const LogPerlengkapan = ({ pax }) => {
+  if (pax.pax_type === 'infant') return <span className="text-sm text-neutral-400">-</span>;
+  const baris = [];
+  if (pax.perlengkapan_diajukan_at) baris.push(`Diajukan ${formatWaktuLog(pax.perlengkapan_diajukan_at)} (ambil di kantor)`);
+  if (pax.perlengkapan_status === 'sudah_diberikan') {
+    const waktu = pax.perlengkapan_diserahkan_at ? formatWaktuLog(pax.perlengkapan_diserahkan_at) : formatTanggal(pax.perlengkapan_tanggal);
+    baris.push(`Diserahkan ${waktu}${pax.perlengkapan_diserahkan_nama ? ` oleh ${pax.perlengkapan_diserahkan_nama}` : ''}`);
+  }
+  if (pax.perlengkapan_diterima_at) {
+    baris.push(`Diterima ${formatWaktuLog(pax.perlengkapan_diterima_at)}${pax.perlengkapan_diterima_oleh ? ` (dikonfirmasi ${pax.perlengkapan_diterima_oleh})` : ''}`);
+  }
+  if (baris.length === 0) return <span className="text-sm text-neutral-400">-</span>;
+  return (
+    <ul className="space-y-0.5 text-xs text-neutral-600 font-body">
+      {baris.map((b) => <li key={b}>{b}</li>)}
+    </ul>
+  );
+};
+
 // Nada Badge status booking di header, sama dengan daftar Booking.
 const STATUS_BOOKING_BADGE = {
   draft: { label: 'Draft', variant: 'warning' },
@@ -1033,7 +1060,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                 columns={[
                   { header: "Nama Jamaah", key: "nama" },
                   { header: "Status", key: "status" },
-                  { header: "Tanggal", key: "tanggal" },
+                  { header: "Riwayat", key: "tanggal" },
                   { header: "Aksi", key: "aksi", align: "right" },
                 ]}
                 data={activePaxList}
@@ -1055,21 +1082,23 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
 
                   if (key === "status") {
                     if (pax.pax_type === 'infant') return <span className="text-xs text-neutral-400 font-body">N/A</span>;
-                    return pax.perlengkapan_status === 'sudah_diberikan'
-                      ? <DotText tone="success">Selesai</DotText>
-                      : <DotText tone="neutral">Pending</DotText>;
+                    // Alur app: diajukan akun -> diserahkan petugas -> diterima (dikonfirmasi akun).
+                    if (pax.perlengkapan_diterima_at) return <DotText tone="success">Diterima</DotText>;
+                    if (pax.perlengkapan_status === 'sudah_diberikan') return <DotText tone="warning">Menunggu konfirmasi</DotText>;
+                    if (pax.perlengkapan_diajukan_at) return <DotText tone="info">Diajukan</DotText>;
+                    return <DotText tone="neutral">Belum diajukan</DotText>;
                   }
 
                   if (key === "tanggal") {
                     return (
-                      <span className="text-sm text-neutral-600 whitespace-nowrap">
-                        {(pax.pax_type !== 'infant' && pax.perlengkapan_tanggal) ? formatTanggal(pax.perlengkapan_tanggal) : '-'}
-                      </span>
+                      <LogPerlengkapan pax={pax} />
                     );
                   }
 
                   if (key === "aksi") {
                     if (pax.pax_type === 'infant') return null;
+                    // Setelah akun mengonfirmasi terima, penyerahan terkunci (tidak bisa dibatalkan).
+                    if (pax.perlengkapan_diterima_at) return null;
                     return pax.perlengkapan_status === 'sudah_diberikan' ? (
                       <Button
                         size="sm"

@@ -18,12 +18,12 @@ func TestCreateRefundValidasiInput(t *testing.T) {
 		body  string
 		pesan string
 	}{
-		{`{"jumlah":0,"tanggal":"2026-09-01"}`, "jumlah harus bilangan bulat"},
-		{`{"jumlah":1500.5,"tanggal":"2026-09-01"}`, "jumlah harus bilangan bulat"},
-		{`{"jumlah":1e15,"tanggal":"2026-09-01"}`, "jumlah terlalu besar"},
-		{`{"jumlah":1000,"tanggal":"2999-01-01"}`, "tanggal pengembalian tidak valid"},
-		{`{"jumlah":1000,"tanggal":"01-09-2026"}`, "tanggal pengembalian tidak valid"},
-		{`bukan json`, "request body tidak valid"},
+		{`{"jumlah":0,"tanggal":"2026-09-01"}`, "Jumlah harus bilangan bulat"},
+		{`{"jumlah":1500.5,"tanggal":"2026-09-01"}`, "Jumlah harus bilangan bulat"},
+		{`{"jumlah":1e15,"tanggal":"2026-09-01"}`, "Jumlah terlalu besar"},
+		{`{"jumlah":1000,"tanggal":"2999-01-01"}`, "Tanggal pengembalian tidak valid"},
+		{`{"jumlah":1000,"tanggal":"01-09-2026"}`, "Tanggal pengembalian tidak valid"},
+		{`bukan json`, "Data tidak valid"},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()

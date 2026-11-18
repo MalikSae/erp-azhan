@@ -180,7 +180,7 @@ func decodeAuthBody(w http.ResponseWriter, r *http.Request, v any) error {
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := decodeAuthBody(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -188,7 +188,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// supaya kredensial tetap bekerja walau pengguna mengetik huruf kapital.
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "email dan password wajib diisi")
+		writeError(w, http.StatusBadRequest, "Email dan kata sandi wajib diisi.")
 		return
 	}
 
@@ -210,7 +210,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	fail := func(reason string) {
 		log.Printf("[AUDIT] login_failed ip=%s email=%s reason=%s", clientIP, maskEmail(req.Email), reason)
-		writeError(w, http.StatusUnauthorized, "email atau password salah")
+		writeError(w, http.StatusUnauthorized, "Email atau kata sandi salah.")
 	}
 	if len(req.Password) > 72 { // batas bcrypt; jangan biarkan input panjang membuang CPU
 		fail("bad_password")
@@ -225,7 +225,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		if h.loginIP != nil {
 			h.loginIP.Refund(clientIP)
 		}
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	// Selalu jalankan bcrypt (hash tiruan untuk email tak dikenal/nonaktif) agar waktu jawab sama.
@@ -258,19 +258,19 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		access.Roles, access.Permissions, access.PermVersion)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateAccessToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal membuat access token")
+		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 
 	refreshToken, refreshJTI, refreshExp, err := GenerateRefreshToken(user.ID)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateRefreshToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal membuat refresh token")
+		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 	if err := h.repo.SaveRefreshToken(r.Context(), refreshJTI, user.ID, refreshExp); err != nil {
 		log.Printf("[ERROR] identity.Login SaveRefreshToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal membuat refresh token")
+		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 
@@ -309,34 +309,34 @@ func maskEmail(email string) string {
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
 	if err := decodeAuthBody(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if strings.TrimSpace(req.RefreshToken) == "" {
-		writeError(w, http.StatusBadRequest, "refresh_token wajib diisi")
+		writeError(w, http.StatusBadRequest, "Sesi wajib diisi.")
 		return
 	}
 
 	adminUserID, jti, err := ParseRefreshToken(req.RefreshToken)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
+		writeError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
 		return
 	}
 
 	user, err := h.repo.GetByID(r.Context(), adminUserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "user tidak ditemukan")
+			writeError(w, http.StatusUnauthorized, "User tidak ditemukan.")
 			return
 		}
 		log.Printf("[ERROR] identity.Refresh GetByID: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 
 	if !user.IsActive {
-		writeError(w, http.StatusUnauthorized, "user tidak ditemukan")
+		writeError(w, http.StatusUnauthorized, "User tidak ditemukan.")
 		return
 	}
 
@@ -344,19 +344,19 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	refreshToken, refreshJTI, refreshExp, err := GenerateRefreshToken(user.ID)
 	if err != nil {
 		log.Printf("[ERROR] identity.Refresh GenerateRefreshToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal membuat refresh token")
+		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 	if err := h.repo.RotasiRefreshToken(r.Context(), jti, user.ID, refreshJTI, refreshExp); err != nil {
 		switch {
 		case errors.Is(err, ErrRefreshDipakaiUlang):
 			log.Printf("[WARN] identity.Refresh token lama dipakai ulang, semua sesi user=%d dicabut", user.ID)
-			writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
+			writeError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
 		case errors.Is(err, ErrRefreshTidakValid):
-			writeError(w, http.StatusUnauthorized, "refresh token tidak valid")
+			writeError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
 		default:
 			log.Printf("[ERROR] identity.Refresh RotasiRefreshToken: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		}
 		return
 	}
@@ -366,7 +366,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		access.Roles, access.Permissions, access.PermVersion)
 	if err != nil {
 		log.Printf("[ERROR] identity.Refresh GenerateAccessToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal membuat access token")
+		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 
@@ -399,7 +399,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		if _, jti, err := ParseRefreshToken(token); err == nil {
 			if err := h.repo.RevokeRefreshToken(r.Context(), jti); err != nil {
 				log.Printf("[ERROR] identity.Logout RevokeRefreshToken: %v", err)
-				writeError(w, http.StatusInternalServerError, "gagal logout, silakan coba lagi")
+				writeError(w, http.StatusInternalServerError, "Gagal keluar. Coba lagi.")
 				return
 			}
 		}

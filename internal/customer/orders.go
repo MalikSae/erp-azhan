@@ -34,13 +34,26 @@ func NewOrders(db *sql.DB, b *booking.Repository, p *payment.Repository) *Orders
 }
 
 type orderSummary struct {
-	ID                 int64      `json:"id"`
-	BookingCode        string     `json:"booking_code"`
-	Status             string     `json:"status"`
-	Tab                string     `json:"tab"` // menunggu | sebagian | lunas | batal
-	ScheduleID         int64      `json:"schedule_id"`
-	JadwalNama         string     `json:"jadwal_nama"`
-	BerangkatTanggal   string     `json:"berangkat_tanggal"`
+	ID               int64  `json:"id"`
+	BookingCode      string `json:"booking_code"`
+	Status           string `json:"status"`
+	Tab              string `json:"tab"` // menunggu | sebagian | lunas | batal
+	ScheduleID       int64  `json:"schedule_id"`
+	JadwalNama       string `json:"jadwal_nama"`
+	BerangkatTanggal string `json:"berangkat_tanggal"`
+	PulangTanggal    string `json:"pulang_tanggal"`
+	// Rute: bandara asal dan tujuan penerbangan berangkat, misalnya "CGK → JED"; kosong bila jadwal belum mengisinya.
+	Rute string `json:"rute"`
+	// BatasPelunasan: tenggat lunas yang disimpan saat booking dibuat (berangkat dikurangi batas_pelunasan_hari brand, tidak
+	// lebih awal dari hari booking dibuat); booking tanpa checkout memakai hitungan yang sama. Lewat hari ini tanpa lunas,
+	// booking dibatalkan otomatis.
+	BatasPelunasan string `json:"batas_pelunasan"`
+	// JumlahJamaah: jamaah aktif termasuk bayi (bayi tidak memakai seat, jadi bisa lebih dari seat_count).
+	JumlahJamaah int `json:"jumlah_jamaah"`
+	// PemesanIkut: pemilik akun ikut berangkat; null pada booking lama yang belum mencatatnya. JamaahPertama: nama
+	// jamaah pertama (PIC), pembeda booking di daftar bila satu akun memesan untuk beberapa keluarga.
+	PemesanIkut        *bool      `json:"pemesan_ikut"`
+	JamaahPertama      string     `json:"jamaah_pertama"`
 	SeatCount          int        `json:"seat_count"`
 	TotalHarga         float64    `json:"total_harga"`
 	MinimalDP          float64    `json:"minimal_dp"`
@@ -59,13 +72,19 @@ type orderSummary struct {
 
 const orderSelect = `
 	SELECT b.id, b.id_booking, b.status, b.schedule_id, s.jadwal_nama, DATE_FORMAT(s.berangkat_tanggal,'%Y-%m-%d'),
+	       DATE_FORMAT(s.pulang_tanggal,'%Y-%m-%d'), COALESCE(s.berangkat_bandara_asal,''), COALESCE(s.berangkat_bandara_tujuan,''),
+	       COALESCE(DATE_FORMAT(c.due_at,'%Y-%m-%d'), DATE_FORMAT(DATE_SUB(s.berangkat_tanggal, INTERVAL COALESCE(br.batas_pelunasan_hari,0) DAY),'%Y-%m-%d')),
+	       (SELECT COUNT(*) FROM booking_pax bpx WHERE bpx.booking_id = b.id AND bpx.pax_status = 'aktif'),
 	       b.seat_count, COALESCE(b.total_harga,0), b.is_seat_blocked, b.seat_hold_expires_at,
 	       c.due_at, COALESCE(c.dp_per_pax,0), COALESCE(c.full_payment,FALSE), b.created_at,
 	       COALESCE(SUM(CASE WHEN p.status='confirmed' THEN p.jumlah END),0),
 	       COALESCE(SUM(CASE WHEN p.status='pending' THEN p.jumlah END),0),
-	       COUNT(p.id)
+	       COUNT(p.id),
+	       b.pemesan_ikut,
+	       COALESCE((SELECT j.nama_lengkap FROM jamaah j WHERE j.id = b.pic_jamaah_id), '')
 	FROM bookings b
 	JOIN schedules s ON s.id = b.schedule_id
+	LEFT JOIN brands br ON br.id = s.brand_id
 	LEFT JOIN booking_checkout c ON c.booking_id = b.id
 	LEFT JOIN payments p ON p.booking_id = b.id
 	WHERE b.customer_account_id = ? AND b.status <> 'draft'`
@@ -76,11 +95,19 @@ func scanOrder(row interface{ Scan(...any) error }) (*orderSummary, int, error) 
 	var hold, due sql.NullTime
 	var dpPerPax float64
 	var paymentCount int
+	var asal, tujuan string
+	var ikut sql.NullBool
 	if err := row.Scan(&o.ID, &o.BookingCode, &o.Status, &o.ScheduleID, &o.JadwalNama, &o.BerangkatTanggal,
+		&o.PulangTanggal, &asal, &tujuan, &o.BatasPelunasan, &o.JumlahJamaah,
 		&o.SeatCount, &o.TotalHarga, &blocked, &hold, &due, &dpPerPax, &o.FullPayment, &o.CreatedAt,
-		&o.Terbayar, &o.MenungguVerifikasi, &paymentCount); err != nil {
+		&o.Terbayar, &o.MenungguVerifikasi, &paymentCount, &ikut, &o.JamaahPertama); err != nil {
 		return nil, 0, err
 	}
+	if ikut.Valid {
+		v := ikut.Bool
+		o.PemesanIkut = &v
+	}
+	o.Rute = susunRute(asal, tujuan)
 	if hold.Valid {
 		t := hold.Time
 		o.SeatHoldExpiresAt = &t
@@ -115,6 +142,15 @@ func scanOrder(row interface{ Scan(...any) error }) (*orderSummary, int, error) 
 	return &o, paymentCount, nil
 }
 
+// susunRute menggabungkan bandara asal dan tujuan; kosong bila salah satunya belum diisi.
+func susunRute(asal, tujuan string) string {
+	asal, tujuan = strings.TrimSpace(asal), strings.TrimSpace(tujuan)
+	if asal == "" || tujuan == "" {
+		return ""
+	}
+	return asal + " → " + tujuan
+}
+
 func minFloat(a, b float64) float64 {
 	if a < b {
 		return a
@@ -134,7 +170,7 @@ func (o *Orders) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := o.db.QueryContext(r.Context(), orderSelect+` GROUP BY b.id ORDER BY b.id DESC LIMIT 200`, acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] account list bookings: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil daftar booking")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil daftar booking.")
 		return
 	}
 	defer rows.Close()
@@ -144,7 +180,7 @@ func (o *Orders) List(w http.ResponseWriter, r *http.Request) {
 		it, _, err := scanOrder(rows)
 		if err != nil {
 			log.Printf("[ERROR] account scan booking: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal membaca booking")
+			writeError(w, http.StatusInternalServerError, "Gagal membaca booking.")
 			return
 		}
 		if tab == "" || tab == it.Tab {
@@ -155,11 +191,21 @@ func (o *Orders) List(w http.ResponseWriter, r *http.Request) {
 }
 
 type paxView struct {
+	JamaahID int64   `json:"jamaah_id"`
 	Nama     string  `json:"nama"`
 	PaxType  string  `json:"pax_type"`
 	RoomType *string `json:"room_type"`
 	Harga    float64 `json:"harga"`
 	Status   string  `json:"status"`
+	// PerlengkapanStatus: belum_diberikan | sudah_diberikan (diisi petugas saat perlengkapan diambil).
+	PerlengkapanStatus string `json:"perlengkapan_status"`
+}
+
+// kantorView: kantor brand untuk pengambilan perlengkapan (alamat, link Google Maps, jam kantor).
+type kantorView struct {
+	Alamat    *string `json:"alamat"`
+	GmapsURL  *string `json:"gmaps_url"`
+	JamKantor *string `json:"jam_kantor"`
 }
 
 // discountView: diskon atau cashback yang dipotong dari total booking (booking_discounts), ditampilkan di rincian booking.
@@ -211,7 +257,7 @@ func (o *Orders) owned(ctx context.Context, accountID, bookingID int64) (*orderS
 func bookingIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id booking tidak valid")
+		writeError(w, http.StatusBadRequest, "ID booking tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -226,21 +272,21 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		log.Printf("[ERROR] account booking detail: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil booking")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil booking.")
 		return
 	}
 	pax := []paxView{}
-	rows, err := o.db.QueryContext(r.Context(), `SELECT j.nama_lengkap, bp.pax_type, bp.room_type, bp.harga_pax, bp.pax_status FROM booking_pax bp JOIN jamaah j ON j.id=bp.jamaah_id WHERE bp.booking_id=? ORDER BY bp.id`, id)
+	rows, err := o.db.QueryContext(r.Context(), `SELECT j.id, j.nama_lengkap, bp.pax_type, bp.room_type, bp.harga_pax, bp.pax_status, COALESCE(bp.perlengkapan_status,'belum_diberikan') FROM booking_pax bp JOIN jamaah j ON j.id=bp.jamaah_id WHERE bp.booking_id=? ORDER BY bp.id`, id)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var p paxView
-			if rows.Scan(&p.Nama, &p.PaxType, &p.RoomType, &p.Harga, &p.Status) == nil {
+			if rows.Scan(&p.JamaahID, &p.Nama, &p.PaxType, &p.RoomType, &p.Harga, &p.Status, &p.PerlengkapanStatus) == nil {
 				pax = append(pax, p)
 			}
 		}
@@ -258,16 +304,22 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 	}
 	payments, err := o.paymentRepo.ListByBookingID(r.Context(), id, nil)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil riwayat pembayaran")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil riwayat pembayaran.")
 		return
 	}
 	payments = pembayaranUntukPelanggan(payments)
 	banks, err := o.banks(r.Context(), acc.BrandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil rekening")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil rekening.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": order, "pax": pax, "discounts": discounts, "payments": payments, "bank_accounts": banks})
+	var kantor kantorView
+	if err := o.db.QueryRowContext(r.Context(), `SELECT NULLIF(TRIM(address),''), NULLIF(TRIM(gmaps_url),''), NULLIF(TRIM(jam_kantor),'') FROM brands WHERE id=?`, acc.BrandID).Scan(&kantor.Alamat, &kantor.GmapsURL, &kantor.JamKantor); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("[ERROR] account booking kantor: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data kantor.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"order": order, "pax": pax, "discounts": discounts, "payments": payments, "bank_accounts": banks, "kantor": kantor})
 }
 
 // Cancel POST /api/account/bookings/{id}/cancel: hanya sebelum ada pembayaran tercatat.
@@ -279,26 +331,26 @@ func (o *Orders) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil booking")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil booking.")
 		return
 	}
 	if !order.CanCancel {
-		writeError(w, http.StatusConflict, "booking ini tidak bisa dibatalkan sendiri, silakan hubungi admin")
+		writeError(w, http.StatusConflict, "Booking ini tidak bisa dibatalkan sendiri. Hubungi admin.")
 		return
 	}
 	// Syarat diperiksa ulang di dalam transaksi setelah baris booking dikunci (FOR UPDATE): pembayaran
 	// yang masuk di antara pengecekan di atas dan pembatalan tidak bisa terlewat (TOCTOU).
 	if _, err = o.bookingRepo.UpdateBookingStatusGuarded(r.Context(), id, "batal", cancelGuard(acc.ID, id)); err != nil {
 		if errors.Is(err, errTidakBisaBatal) {
-			writeError(w, http.StatusConflict, "booking ini tidak bisa dibatalkan sendiri, silakan hubungi admin")
+			writeError(w, http.StatusConflict, "Booking ini tidak bisa dibatalkan sendiri. Hubungi admin.")
 			return
 		}
 		log.Printf("[ERROR] account cancel booking %d: %v", id, err)
-		writeError(w, http.StatusInternalServerError, "gagal membatalkan booking")
+		writeError(w, http.StatusInternalServerError, "Gagal membatalkan booking.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "batal"})
@@ -336,12 +388,12 @@ func (o *Orders) ListPayments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, _, err := o.owned(r.Context(), acc.ID, id); err != nil {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	payments, err := o.paymentRepo.ListByBookingID(r.Context(), id, nil)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil riwayat pembayaran")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil riwayat pembayaran.")
 		return
 	}
 	payments = pembayaranUntukPelanggan(payments)
@@ -357,15 +409,15 @@ func (o *Orders) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 	order, _, err := o.owned(r.Context(), acc.ID, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "booking tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil booking")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil booking.")
 		return
 	}
 	if !order.CanPay {
-		writeError(w, http.StatusConflict, "booking ini tidak bisa menerima pembayaran, silakan hubungi admin")
+		writeError(w, http.StatusConflict, "Booking ini tidak bisa menerima pembayaran. Hubungi admin.")
 		return
 	}
 	var req payment.CreatePaymentRequest
@@ -377,21 +429,21 @@ func (o *Orders) CreatePayment(w http.ResponseWriter, r *http.Request) {
 	metode := metodeTransfer
 	req.Metode, req.ReceivedBy, req.Notes = &metode, nil, nil
 	if req.Tanggal == nil {
-		writeError(w, http.StatusBadRequest, "tanggal transfer wajib diisi")
+		writeError(w, http.StatusBadRequest, "Tanggal transfer wajib diisi.")
 		return
 	}
 	tanggal := strings.TrimSpace(*req.Tanggal)
 	if !shared.TanggalTidakDiMasaDepan(tanggal) {
-		writeError(w, http.StatusBadRequest, "tanggal transfer tidak valid atau berada di masa depan")
+		writeError(w, http.StatusBadRequest, "Tanggal transfer tidak valid atau berada di masa depan.")
 		return
 	}
 	req.Tanggal = &tanggal
 	if req.Jumlah <= 0 || req.BankAccountID == nil || req.SenderName == nil || strings.TrimSpace(*req.SenderName) == "" || req.BuktiURL == nil || strings.TrimSpace(*req.BuktiURL) == "" {
-		writeError(w, http.StatusBadRequest, "rekening tujuan, nominal, nama pengirim, dan bukti transfer wajib diisi")
+		writeError(w, http.StatusBadRequest, "Rekening tujuan, nominal, nama pengirim, dan bukti transfer wajib diisi.")
 		return
 	}
 	if !shared.RupiahBulat(req.Jumlah) {
-		writeError(w, http.StatusBadRequest, "nominal harus bilangan bulat rupiah")
+		writeError(w, http.StatusBadRequest, "Nominal harus bilangan bulat rupiah.")
 		return
 	}
 	if msg := rapikanPengirim(&req); msg != "" {
@@ -399,23 +451,23 @@ func (o *Orders) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := media.ValidateCustomerUpload(r.Context(), o.db, *req.BuktiURL, acc.ID); err != nil {
-		writeError(w, http.StatusBadRequest, "bukti transfer harus berupa unggahan akun Anda yang masih tersedia")
+		writeError(w, http.StatusBadRequest, "Bukti transfer harus berupa unggahan akun Anda yang masih tersedia.")
 		return
 	}
 	var accountBrand int64
 	if err := o.db.QueryRowContext(r.Context(), `SELECT brand_id FROM bank_accounts WHERE id=? AND is_active=TRUE`, *req.BankAccountID).Scan(&accountBrand); err != nil || accountBrand != acc.BrandID {
-		writeError(w, http.StatusBadRequest, "rekening tujuan tidak tersedia untuk brand ini")
+		writeError(w, http.StatusBadRequest, "Rekening tujuan tidak tersedia untuk brand ini.")
 		return
 	}
 	if req.Jumlah > order.Sisa {
-		writeError(w, http.StatusBadRequest, "nominal melebihi sisa tagihan")
+		writeError(w, http.StatusBadRequest, "Nominal melebihi sisa tagihan.")
 		return
 	}
 	// Konfirmasi yang masih menunggu verifikasi ikut dihitung, supaya tumpukan konfirmasi tidak melebihi tagihan.
 	var menunggu float64
 	if err := o.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status='pending'`, id).Scan(&menunggu); err != nil {
 		log.Printf("[ERROR] account create payment cek menunggu: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan konfirmasi pembayaran")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan konfirmasi pembayaran.")
 		return
 	}
 	if msg := pesanMelebihiMenunggu(req.Jumlah, menunggu, order.Sisa); msg != "" {
@@ -433,7 +485,7 @@ func (o *Orders) CreatePayment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("[ERROR] account create payment: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan konfirmasi pembayaran")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan konfirmasi pembayaran.")
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
@@ -443,7 +495,7 @@ func (o *Orders) CreatePayment(w http.ResponseWriter, r *http.Request) {
 func (o *Orders) BankAccounts(w http.ResponseWriter, r *http.Request) {
 	banks, err := o.banks(r.Context(), FromContext(r.Context()).BrandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil rekening")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil rekening.")
 		return
 	}
 	writeJSON(w, http.StatusOK, banks)
@@ -456,14 +508,14 @@ type travelerView struct {
 	NoHP         *string `json:"no_hp"`
 	TanggalLahir *string `json:"tanggal_lahir"`
 	// NIK tidak pernah dikirim utuh: hanya empat digit terakhir sebagai petunjuk.
-	NIKMasked    string  `json:"nik_masked"`
+	NIKMasked string `json:"nik_masked"`
 }
 
 // Travelers GET /api/account/travelers
 func (o *Orders) Travelers(w http.ResponseWriter, r *http.Request) {
 	rows, err := o.db.QueryContext(r.Context(), `SELECT id, nama_lengkap, jenis_kelamin, no_hp, DATE_FORMAT(tanggal_lahir,'%Y-%m-%d'), nik FROM customer_travelers WHERE account_id=? ORDER BY id DESC LIMIT 300`, FromContext(r.Context()).ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil jamaah tersimpan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil jamaah tersimpan.")
 		return
 	}
 	defer rows.Close()
@@ -473,7 +525,7 @@ func (o *Orders) Travelers(w http.ResponseWriter, r *http.Request) {
 		var nik sql.NullString
 		if err := rows.Scan(&t.ID, &t.NamaLengkap, &t.JenisKelamin, &t.NoHP, &t.TanggalLahir, &nik); err != nil {
 			log.Printf("[ERROR] account travelers scan: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal mengambil jamaah tersimpan")
+			writeError(w, http.StatusInternalServerError, "Gagal mengambil jamaah tersimpan.")
 			return
 		}
 		t.NIKMasked = nikTersamar(nik.String)
@@ -481,7 +533,7 @@ func (o *Orders) Travelers(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := rows.Err(); err != nil {
 		log.Printf("[ERROR] account travelers: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil jamaah tersimpan")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil jamaah tersimpan.")
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

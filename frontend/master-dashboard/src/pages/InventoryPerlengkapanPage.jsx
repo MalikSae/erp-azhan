@@ -101,7 +101,7 @@ const InventoryPerlengkapanPage = () => {
       });
       setBrands([...seen.values()].sort((a, b) => String(a.name).localeCompare(String(b.name))));
     } catch (error) {
-      setErrorMessage(error.response?.data?.error || 'Gagal memuat data perlengkapan.');
+      setErrorMessage(error.response?.data?.error || 'Data perlengkapan gagal dimuat. Coba lagi.');
     } finally {
       setIsLoading(false);
     }
@@ -171,7 +171,7 @@ const InventoryPerlengkapanPage = () => {
       const url = await uploadMedia(file, 'perlengkapan');
       setFormData((prev) => ({ ...prev, photo_url: url }));
     } catch (error) {
-      setFormErrors(error.response?.data?.error || 'Gagal mengunggah foto item.');
+      setFormErrors(error.response?.data?.error || 'Foto item gagal diunggah. Coba lagi.');
       setPhotoPreview(null);
     } finally {
       setIsUploadingPhoto(false);
@@ -199,10 +199,10 @@ const InventoryPerlengkapanPage = () => {
       setIsModalOpen(false);
       setEditingItem(null);
       setFormData(initialItemForm);
-      setSuccessMessage(`Item "${nama}" berhasil ${editingItem ? 'diperbarui' : 'ditambahkan'}.`);
+      setSuccessMessage(editingItem ? 'Perubahan disimpan.' : 'Item ditambahkan.');
       fetchData();
     } catch (error) {
-      setFormErrors(error.response?.data?.error || 'Terjadi kesalahan saat menyimpan item.');
+      setFormErrors(error.response?.data?.error || 'Data gagal disimpan. Coba lagi.');
       setIsSubmitting(false);
     }
   };
@@ -214,7 +214,7 @@ const InventoryPerlengkapanPage = () => {
       fetchData();
     } catch (error) {
       setDeleteConfirmId(null);
-      setErrorMessage(error.response?.data?.error || 'Gagal menghapus item perlengkapan.');
+      setErrorMessage(error.response?.data?.error || 'Item perlengkapan gagal dihapus. Coba lagi.');
     }
   };
 
@@ -254,7 +254,7 @@ const InventoryPerlengkapanPage = () => {
       setSuccessMessage(`${qty} unit "${nama}" masuk ke stok ${brand}.`);
       fetchData();
     } catch (error) {
-      setStokModalError(error.response?.data?.error || 'Gagal mencatat barang masuk.');
+      setStokModalError(error.response?.data?.error || 'Barang masuk gagal dicatat. Coba lagi.');
     } finally {
       setStokSubmitting(false);
     }
@@ -296,7 +296,7 @@ const InventoryPerlengkapanPage = () => {
       setSuccessMessage(`Stok "${aturItem.nama}" (${brand}) diubah dari ${aturCurrent} menjadi ${aturNext}.`);
       fetchData();
     } catch (error) {
-      setStokModalError(error.response?.data?.error || 'Gagal mengubah stok.');
+      setStokModalError(error.response?.data?.error || 'Stok gagal diubah. Coba lagi.');
     } finally {
       setStokSubmitting(false);
     }
@@ -374,7 +374,7 @@ const InventoryPerlengkapanPage = () => {
           {canEditStok && (
             <Button variant="secondary" onClick={openTerima}>
               <PackagePlus size={16} strokeWidth={1.75} />
-              <span>Terima Barang</span>
+              <span>Terima barang</span>
             </Button>
           )}
         </div>
@@ -423,7 +423,7 @@ const InventoryPerlengkapanPage = () => {
               name="nama"
               value={formData.nama}
               onChange={(e) => setFormData((prev) => ({ ...prev, nama: e.target.value }))}
-              placeholder="Contoh: Koper 24 inch, Kain Ihram, Buku Doa"
+              placeholder="Koper 24 inch, Kain Ihram, Buku Doa"
               autoFocus
               required
             />
@@ -526,7 +526,7 @@ const InventoryPerlengkapanPage = () => {
         <form onSubmit={submitAtur} className="space-y-4">
           {stokModalError && <Alert variant="error">{stokModalError}</Alert>}
           <p className="text-xs font-body text-neutral-500">
-            Untuk menambah stok dari pembelian, gunakan <strong>Terima Barang</strong>. Di sini untuk barang rusak/hilang
+            Untuk menambah stok dari pembelian, gunakan <strong>Terima barang</strong>. Di sini untuk barang rusak/hilang
             atau menyamakan stok dengan hasil hitung fisik.
           </p>
           <CustomDropdown
@@ -585,14 +585,11 @@ const InventoryPerlengkapanPage = () => {
       <Modal
         isOpen={!!deleteConfirmId}
         onClose={() => setDeleteConfirmId(null)}
-        title="Konfirmasi Hapus Item"
+        title="Hapus Item"
       >
         <div className="space-y-4">
           <p className="text-sm font-body text-neutral-700">
-            Apakah Anda yakin ingin menghapus item <strong className="text-neutral-900 font-heading">{itemToDelete?.nama}</strong> dari katalog perlengkapan?
-          </p>
-          <p className="text-xs font-body text-neutral-500">
-            Catatan: item tidak dapat dihapus jika masih dipakai di isi perlengkapan kategori atau paket, atau masih memiliki stok di brand manapun.
+            Hapus item <strong className="text-neutral-900 font-heading">{itemToDelete?.nama}</strong>? Data tidak bisa dikembalikan.
           </p>
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
             <Button type="button" variant="secondary" onClick={() => setDeleteConfirmId(null)}>Batal</Button>

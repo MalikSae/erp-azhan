@@ -15,24 +15,31 @@ type BookingDiscount struct {
 
 // BookingPax adalah detail penumpang (pax) pada booking.
 type BookingPax struct {
-	ID                       int64     `json:"id"`
-	BookingID                int64     `json:"booking_id"`
-	JamaahID                 int64     `json:"jamaah_id"`
-	NamaJamaah               string    `json:"nama_jamaah,omitempty"`
-	PaxType                  string    `json:"pax_type"`
-	RoomType                 *string   `json:"room_type"`
-	HargaPax                 float64   `json:"harga_pax"`
-	CountsForSeat            bool      `json:"counts_for_seat"`
-	PaxStatus                string    `json:"pax_status"`
-	ProgressPaspor           bool      `json:"progress_paspor"`
-	ProgressVisa             bool      `json:"progress_visa"`
-	ProgressSiskopatuh       bool      `json:"progress_siskopatuh"`
-	ProgressManasik          bool      `json:"progress_manasik"`
-	ProgressVaksinMeningitis bool      `json:"progress_vaksin_meningitis"`
-	PerlengkapanStatus       string    `json:"perlengkapan_status"`
-	PerlengkapanTanggal      *string   `json:"perlengkapan_tanggal"`
-	CreatedAt                time.Time `json:"created_at"`
-	UpdatedAt                time.Time `json:"updated_at"`
+	ID                       int64   `json:"id"`
+	BookingID                int64   `json:"booking_id"`
+	JamaahID                 int64   `json:"jamaah_id"`
+	NamaJamaah               string  `json:"nama_jamaah,omitempty"`
+	PaxType                  string  `json:"pax_type"`
+	RoomType                 *string `json:"room_type"`
+	HargaPax                 float64 `json:"harga_pax"`
+	CountsForSeat            bool    `json:"counts_for_seat"`
+	PaxStatus                string  `json:"pax_status"`
+	ProgressPaspor           bool    `json:"progress_paspor"`
+	ProgressVisa             bool    `json:"progress_visa"`
+	ProgressSiskopatuh       bool    `json:"progress_siskopatuh"`
+	ProgressManasik          bool    `json:"progress_manasik"`
+	ProgressVaksinMeningitis bool    `json:"progress_vaksin_meningitis"`
+	PerlengkapanStatus       string  `json:"perlengkapan_status"`
+	PerlengkapanTanggal      *string `json:"perlengkapan_tanggal"`
+	// Log pengajuan dan penerimaan perlengkapan (migrasi 141), waktu "YYYY-MM-DD HH:MM" WIB server.
+	PerlengkapanMetode         *string   `json:"perlengkapan_metode"`
+	PerlengkapanDiajukanAt     *string   `json:"perlengkapan_diajukan_at"`
+	PerlengkapanDiserahkanAt   *string   `json:"perlengkapan_diserahkan_at"`
+	PerlengkapanDiserahkanNama *string   `json:"perlengkapan_diserahkan_nama"`
+	PerlengkapanDiterimaAt     *string   `json:"perlengkapan_diterima_at"`
+	PerlengkapanDiterimaOleh   *string   `json:"perlengkapan_diterima_oleh"`
+	CreatedAt                  time.Time `json:"created_at"`
+	UpdatedAt                  time.Time `json:"updated_at"`
 }
 
 // Booking adalah response lengkap admin — JOIN nama jamaah + jadwal_nama schedule + primary pax.
@@ -72,21 +79,21 @@ type Booking struct {
 	TotalRefund  float64 `json:"total_refund"`
 	PerluRefund  bool    `json:"perlu_refund"`
 	// ProgressPaspor dihitung dinamis dari dokumen_jamaah
-	ProgressPaspor bool `json:"progress_paspor"`
-	ProgressVisa   bool `json:"progress_visa"`
-	ProgressTiket             bool           `json:"progress_tiket"`
-	ProgressHotel             bool           `json:"progress_hotel"`
-	ProgressLandArrangement   bool           `json:"progress_land_arrangement"`
-	ProgressManasik           bool           `json:"progress_manasik"`
-	ProgressSiskopatuh        bool           `json:"progress_siskopatuh"`
-	ProgressVaksinMeningitis  bool           `json:"progress_vaksin_meningitis"`
-	SiapBerangkat             bool           `json:"siap_berangkat"`
-	Pax                       []BookingPax   `json:"pax"`
-	Discounts                 []BookingDiscount `json:"discounts"`
+	ProgressPaspor           bool              `json:"progress_paspor"`
+	ProgressVisa             bool              `json:"progress_visa"`
+	ProgressTiket            bool              `json:"progress_tiket"`
+	ProgressHotel            bool              `json:"progress_hotel"`
+	ProgressLandArrangement  bool              `json:"progress_land_arrangement"`
+	ProgressManasik          bool              `json:"progress_manasik"`
+	ProgressSiskopatuh       bool              `json:"progress_siskopatuh"`
+	ProgressVaksinMeningitis bool              `json:"progress_vaksin_meningitis"`
+	SiapBerangkat            bool              `json:"siap_berangkat"`
+	Pax                      []BookingPax      `json:"pax"`
+	Discounts                []BookingDiscount `json:"discounts"`
 	// Pemesan: akun pelanggan yang memesan lewat situs publik (nil untuk booking dari ERP/agen).
-	Pemesan                   *Pemesan          `json:"pemesan,omitempty"`
-	CreatedBy                 *int64            `json:"created_by"`
-	CreatedAt                 time.Time      `json:"created_at"`
+	Pemesan   *Pemesan  `json:"pemesan,omitempty"`
+	CreatedBy *int64    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // ─── Request structs ──────────────────────────────────────────────────────────

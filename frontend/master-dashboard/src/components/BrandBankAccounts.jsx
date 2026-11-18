@@ -116,7 +116,7 @@ const BrandBankAccounts = ({ brandId }) => {
       const url = await uploadMedia(file, 'bank-logos');
       setForm((prev) => ({ ...prev, logo_url: url }));
     } catch (err) {
-      setFormError(err.response?.data?.error || 'Gagal mengupload logo bank.');
+      setFormError(err.response?.data?.error || 'Logo gagal diunggah. Coba lagi.');
       setLogoPreview(null);
     } finally {
       setIsUploadingLogo(false);
@@ -235,7 +235,7 @@ const BrandBankAccounts = ({ brandId }) => {
 
           <Input
             label="Nama Bank"
-            placeholder="Contoh: Bank Central Asia (BCA)"
+            placeholder="Bank Central Asia (BCA)"
             value={form.bank_name}
             onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
             required
@@ -258,7 +258,7 @@ const BrandBankAccounts = ({ brandId }) => {
 
           <Input
             label="Nomor Rekening"
-            placeholder="Contoh: 1234567890"
+            placeholder="1234567890"
             value={form.account_number}
             onChange={(e) => setForm({ ...form, account_number: e.target.value.replace(/\D/g, '') })}
             required
@@ -266,7 +266,7 @@ const BrandBankAccounts = ({ brandId }) => {
 
           <Input
             label="Atas Nama (Pemilik Rekening)"
-            placeholder="Contoh: PT Azhan Tour & Travel"
+            placeholder="PT Azhan Tour & Travel"
             value={form.account_holder}
             onChange={(e) => setForm({ ...form, account_holder: e.target.value })}
             required
@@ -274,7 +274,7 @@ const BrandBankAccounts = ({ brandId }) => {
 
           <Input
             label="Instruksi Pembayaran (Opsional)"
-            placeholder="Contoh: Tambahkan kode unik saat transfer"
+            placeholder="Tambahkan kode unik saat transfer"
             value={form.instructions}
             onChange={(e) => setForm({ ...form, instructions: e.target.value })}
           />
@@ -296,7 +296,7 @@ const BrandBankAccounts = ({ brandId }) => {
       <Modal
         isOpen={deleteTarget !== null}
         onClose={() => !isDeleting && setDeleteTarget(null)}
-        title="Hapus Rekening?"
+        title="Hapus Rekening"
         size="sm"
         footer={
           <>
@@ -306,7 +306,7 @@ const BrandBankAccounts = ({ brandId }) => {
         }
       >
         <p className="text-neutral-600 font-body">
-          Yakin ingin menghapus rekening <strong>{deleteTarget?.bank_name} - {deleteTarget?.account_number}</strong>? Tindakan ini tidak bisa dibatalkan.
+          Hapus rekening <strong>{deleteTarget?.bank_name} - {deleteTarget?.account_number}</strong>? Data tidak bisa dikembalikan.
         </p>
       </Modal>
     </div>

@@ -37,7 +37,7 @@ func tulisGalat(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	default:
 		log.Printf("[ERROR] pengumuman: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal memproses pengumuman")
+		writeError(w, http.StatusInternalServerError, "Gagal memproses pengumuman.")
 	}
 }
 
@@ -65,7 +65,7 @@ func (h *Handler) DaftarAdmin(w http.ResponseWriter, r *http.Request) {
 func idParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id < 1 {
-		writeError(w, http.StatusBadRequest, "id pengumuman tidak valid")
+		writeError(w, http.StatusBadRequest, "ID pengumuman tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -74,7 +74,7 @@ func idParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return false
 	}
 	return true
@@ -91,7 +91,7 @@ func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 		brand = in.BrandID
 	}
 	if brand == nil || *brand < 1 {
-		writeError(w, http.StatusBadRequest, "brand wajib dipilih")
+		writeError(w, http.StatusBadRequest, "Brand wajib dipilih.")
 		return
 	}
 	id, err := Buat(r.Context(), h.db, *brand, identity.GetAdminUserID(r.Context()), in)

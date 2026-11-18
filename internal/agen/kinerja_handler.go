@@ -173,7 +173,7 @@ func (h *Handler) KlikReferral(w http.ResponseWriter, r *http.Request) {
 		Pengunjung   string `json:"pengunjung"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "payload tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	// IP dari shared.ClientIP: header proxy hanya dipercaya dari proxy tepercaya (TRUSTED_PROXIES), jadi pemanggil

@@ -26,7 +26,7 @@ var (
 	ErrAmbiguousJamaah      = errors.New("lebih dari satu jamaah memiliki nomor telepon tersebut")
 	ErrIdempotencyConflict  = errors.New("idempotency key pernah digunakan untuk payload berbeda")
 	ErrLeadAlreadyConverted = errors.New("lead ini sudah pernah dikonversi")
-	ErrBrandCodeMissing     = errors.New("kode_brand belum diatur")
+	ErrBrandCodeMissing     = errors.New("Kode brand belum diatur. Hubungi admin.")
 	ErrInvalidPayment       = errors.New("nominal pembayaran tidak sesuai")
 	ErrMaxPaxExceeded       = errors.New("Deal CRM saat ini hanya mendukung 1 pax per transaksi. Untuk booking lebih dari 1 orang, gunakan menu Booking di dashboard admin.")
 )

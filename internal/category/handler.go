@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	"erp-azhan/api/internal/identity"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
-	"erp-azhan/api/internal/identity"
 )
 
 type Handler struct {
@@ -75,7 +75,7 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -84,9 +84,9 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "kategori tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Kategori tidak ditemukan.")
 	case errors.Is(err, ErrSlugDuplicate):
-		writeError(w, http.StatusConflict, "slug kategori sudah digunakan")
+		writeError(w, http.StatusConflict, "Slug kategori sudah digunakan.")
 	case errors.Is(err, ErrConflict):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrForbidden):
@@ -94,11 +94,11 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	default:
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih dipakai oleh paket umroh")
+			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh paket umroh.")
 			return
 		}
 		log.Printf("[ERROR] category: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -150,7 +150,7 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !linked {
-			writeError(w, http.StatusNotFound, "kategori tidak ditemukan")
+			writeError(w, http.StatusNotFound, "Kategori tidak ditemukan.")
 			return
 		}
 	}
@@ -162,31 +162,31 @@ func (h *Handler) GetCategory(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	var req CreateCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	badge, ok := normalizeBadgeColor(req.BadgeColor)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "warna badge tidak valid")
+		writeError(w, http.StatusBadRequest, "Warna badge tidak valid.")
 		return
 	}
 	req.BadgeColor = badge
 
 	tier, ok := normalizeSEOTier(req.SEOTier)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "seo_tier harus salah satu dari hemat, reguler, comfort, premium")
+		writeError(w, http.StatusBadRequest, "Tingkat SEO harus salah satu dari hemat, reguler, comfort, premium.")
 		return
 	}
 	req.SEOTier = tier
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "nama kategori wajib diisi")
+		writeError(w, http.StatusBadRequest, "Nama kategori wajib diisi.")
 		return
 	}
 	if len([]rune(req.Name)) > 100 {
-		writeError(w, http.StatusBadRequest, "nama kategori maksimal 100 karakter")
+		writeError(w, http.StatusBadRequest, "Nama kategori maksimal 100 karakter.")
 		return
 	}
 
@@ -200,7 +200,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	} else if exists {
-		writeError(w, http.StatusConflict, "slug kategori sudah digunakan")
+		writeError(w, http.StatusConflict, "Slug kategori sudah digunakan.")
 		return
 	}
 
@@ -214,7 +214,7 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	} else if !valid {
-		writeError(w, http.StatusBadRequest, "satu atau lebih brand_id tidak valid")
+		writeError(w, http.StatusBadRequest, "Satu atau lebih brand tidak valid.")
 		return
 	}
 
@@ -236,31 +236,31 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	badge, ok := normalizeBadgeColor(req.BadgeColor)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "warna badge tidak valid")
+		writeError(w, http.StatusBadRequest, "Warna badge tidak valid.")
 		return
 	}
 	req.BadgeColor = badge
 
 	tier, ok := normalizeSEOTier(req.SEOTier)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "seo_tier harus salah satu dari hemat, reguler, comfort, premium")
+		writeError(w, http.StatusBadRequest, "Tingkat SEO harus salah satu dari hemat, reguler, comfort, premium.")
 		return
 	}
 	req.SEOTier = tier
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "nama kategori wajib diisi")
+		writeError(w, http.StatusBadRequest, "Nama kategori wajib diisi.")
 		return
 	}
 	if len([]rune(req.Name)) > 100 {
-		writeError(w, http.StatusBadRequest, "nama kategori maksimal 100 karakter")
+		writeError(w, http.StatusBadRequest, "Nama kategori maksimal 100 karakter.")
 		return
 	}
 
@@ -270,11 +270,26 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		req.Slug = slugify(req.Slug)
 	}
 
+	lama, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	if lama.Slug == SlugLowCost {
+		// Kategori low cost dikenali app dari slug-nya (strip promosi Beranda, filter tab Paket): slug dan tier
+		// SEO tetap, kategori tidak bisa dinonaktifkan. Nama, deskripsi, warna, dan brand boleh diubah.
+		if req.IsActive != nil && !*req.IsActive {
+			writeError(w, http.StatusConflict, "Kategori low cost tidak bisa dinonaktifkan.")
+			return
+		}
+		req.Slug, req.SEOTier = lama.Slug, lama.SEOTier
+	}
+
 	if exists, err := h.repo.CheckSlugExists(r.Context(), req.Slug, &id); err != nil {
 		handleRepoError(w, err)
 		return
 	} else if exists {
-		writeError(w, http.StatusConflict, "slug kategori sudah digunakan")
+		writeError(w, http.StatusConflict, "Slug kategori sudah digunakan.")
 		return
 	}
 
@@ -286,7 +301,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	} else if !valid {
-		writeError(w, http.StatusBadRequest, "satu atau lebih brand_id tidak valid")
+		writeError(w, http.StatusBadRequest, "Satu atau lebih brand tidak valid.")
 		return
 	}
 
@@ -336,6 +351,13 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
+	if lama, err := h.repo.GetByID(r.Context(), id); err != nil {
+		handleRepoError(w, err)
+		return
+	} else if lama.Slug == SlugLowCost {
+		writeError(w, http.StatusConflict, "Kategori low cost tidak bisa dihapus.")
+		return
+	}
 
 	if err := h.repo.Delete(r.Context(), id); err != nil {
 		if strings.Contains(err.Error(), "tidak bisa dihapus") {
@@ -360,7 +382,7 @@ func (h *Handler) ListPublicCategories(w http.ResponseWriter, r *http.Request) {
 	// brand_id wajib, sama dengan daftar paket dan rekening publik: tanpa itu kategori semua brand terbaca.
 	bid, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64)
 	if err != nil || bid <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 

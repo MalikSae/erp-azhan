@@ -41,7 +41,7 @@ const StrukturOrganisasiPage = () => {
     try {
       setTree((await listOrgUnits()) || []);
     } catch (error) {
-      setErrorMessage(errMsg(error, 'Gagal memuat struktur organisasi.'));
+      setErrorMessage(errMsg(error, 'Struktur organisasi gagal dimuat. Coba lagi.'));
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +97,7 @@ const StrukturOrganisasiPage = () => {
       setEditor(null);
       fetchData();
     } catch (error) {
-      setEditorError(errMsg(error, 'Gagal menyimpan unit.'));
+      setEditorError(errMsg(error, 'Unit gagal disimpan. Coba lagi.'));
     } finally {
       setIsSaving(false);
     }

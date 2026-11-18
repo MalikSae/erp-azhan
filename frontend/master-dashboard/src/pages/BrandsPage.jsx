@@ -42,7 +42,7 @@ const BrandsPage = () => {
       const data = await listBrands();
       setBrands(data || []);
     } catch (error) {
-      const msg = error.response?.data?.error || "Gagal memuat data brand.";
+      const msg = error.response?.data?.error || "Data brand gagal dimuat. Coba lagi.";
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -74,7 +74,7 @@ const BrandsPage = () => {
       setDeleteConfirmId(null);
       setErrorMessage(error.response?.data?.error || (error.response?.status === 409
         ? "Tidak bisa dihapus, masih dipakai."
-        : "Terjadi kesalahan saat menghapus data."));
+        : "Data gagal dihapus. Coba lagi."));
     }
   };
 
@@ -156,7 +156,7 @@ const BrandsPage = () => {
       <Modal
         isOpen={deleteConfirmId !== null}
         onClose={cancelDelete}
-        title="Hapus Brand?"
+        title="Hapus Brand"
         size="sm"
         footer={
           <>
@@ -166,7 +166,7 @@ const BrandsPage = () => {
         }
       >
         <p className="text-neutral-600 font-body">
-          Yakin ingin menghapus {brandToDelete?.name}? Tindakan ini tidak bisa dibatalkan.
+          Hapus {brandToDelete?.name}? Data tidak bisa dikembalikan.
         </p>
       </Modal>
     </div>

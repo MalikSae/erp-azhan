@@ -50,7 +50,7 @@ func (h *Handler) GetPencairan(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AjukanPencairan(w http.ResponseWriter, r *http.Request) {
 	var req AjukanPencairanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	agenID := identity.GetCustomerAccountID(r.Context())
@@ -105,11 +105,11 @@ func (h *Handler) SetujuiPencairan(w http.ResponseWriter, r *http.Request) {
 		BuktiURL string `json:"bukti_transfer_keluar_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if !buktiKeluarURL.MatchString(strings.TrimSpace(req.BuktiURL)) {
-		writeError(w, http.StatusBadRequest, "bukti transfer keluar wajib diunggah")
+		writeError(w, http.StatusBadRequest, "Bukti transfer keluar wajib diunggah.")
 		return
 	}
 	if !validasiBuktiAdmin(w, r, h.repo.db, strings.TrimSpace(req.BuktiURL), "payment-proofs") {
@@ -177,12 +177,12 @@ func (h *Handler) GantiKaitan(w http.ResponseWriter, r *http.Request) {
 	}
 	var req GantiKaitanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	req.Alasan = strings.TrimSpace(req.Alasan)
 	if n := utf8.RuneCountInString(req.Alasan); n < 5 || n > 1000 {
-		writeError(w, http.StatusBadRequest, "alasan wajib diisi (5–1000 karakter)")
+		writeError(w, http.StatusBadRequest, "Alasan wajib diisi (5–1000 karakter).")
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())

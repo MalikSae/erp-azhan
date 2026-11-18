@@ -70,7 +70,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
     try {
       setAllItems((await listPencairanAdmin({ status: '', brandId })) || []);
     } catch {
-      setError('Pengajuan pencairan gagal dimuat. Silakan coba kembali.');
+      setError('Pengajuan pencairan gagal dimuat. Coba lagi.');
     } finally {
       setLoading(false);
     }
@@ -304,7 +304,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
             )}
 
             {selected.status === 'disetujui' && selected.bukti_transfer_keluar_url && (
-              <Button variant="secondary" onClick={() => lihatBukti(selected.bukti_transfer_keluar_url)}>Lihat Bukti Transfer</Button>
+              <Button variant="secondary" onClick={() => lihatBukti(selected.bukti_transfer_keluar_url)}>Lihat bukti</Button>
             )}
 
             {mode === 'setujui' && (
@@ -326,7 +326,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
                 value={alasan}
                 onChange={(e) => setAlasan(e.target.value)}
                 rows={3}
-                placeholder="Contoh: nama pemilik rekening tidak sesuai"
+                placeholder="nama pemilik rekening tidak sesuai"
               />
             )}
           </div>

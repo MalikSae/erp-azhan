@@ -30,15 +30,15 @@ export default function AccountSettingsPage() {
     setSuccess('');
 
     if (form.newPassword.length < 8) {
-      setError('Password baru minimal 8 karakter.');
+      setError('Kata sandi baru minimal 8 karakter.');
       return;
     }
     if (passwordTerlaluPanjang(form.newPassword)) {
-      setError('Password baru maksimal 72 byte (sekitar 72 huruf biasa).');
+      setError('Kata sandi baru terlalu panjang.');
       return;
     }
     if (form.newPassword !== form.confirmPassword) {
-      setError('Konfirmasi password baru tidak cocok.');
+      setError('Konfirmasi kata sandi baru tidak cocok.');
       return;
     }
 
@@ -51,10 +51,10 @@ export default function AccountSettingsPage() {
       setForm(initialForm);
       // Server mengakhiri semua sesi akun ini, termasuk yang sekarang: arahkan ke login sebelum permintaan
       // berikutnya ditolak tanpa penjelasan.
-      setSuccess('Password berhasil diubah. Anda akan diminta login ulang dengan password baru.');
+      setSuccess('Kata sandi diubah. Masuk ulang dengan kata sandi baru.');
       setTimeout(() => { logout(); }, 2500);
     } catch (requestError) {
-      setError(requestError.response?.data?.error || 'Password gagal diubah. Silakan coba lagi.');
+      setError(requestError.response?.data?.error || 'Kata sandi gagal diubah. Coba lagi.');
     } finally {
       setSaving(false);
     }
@@ -62,7 +62,7 @@ export default function AccountSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Pengaturan akun" />
+      <PageHeader title="Pengaturan Akun" />
 
       {(error || success) && (
         <Alert variant={error ? 'error' : 'success'} message={error || success} />
@@ -76,7 +76,7 @@ export default function AccountSettingsPage() {
                 <KeyRound size={20} strokeWidth={1.75} />
               </div>
               <div>
-                <h2 className="font-heading text-base font-semibold text-neutral-900">Informasi akun</h2>
+                <h2 className="font-heading text-base font-semibold text-neutral-900">Informasi Akun</h2>
                 <p className="mt-1 text-sm text-neutral-500">Data akun dikelola oleh Admin Master dan tidak dapat diubah di sini.</p>
               </div>
             </div>
@@ -93,20 +93,20 @@ export default function AccountSettingsPage() {
             <div className="border-t border-neutral-100 pt-5">
               <div className="mb-4 flex items-center gap-2">
                 <LockKeyhole size={16} strokeWidth={1.75} className="text-neutral-500" />
-                <h3 className="font-heading text-sm font-semibold text-neutral-900">Ubah password</h3>
+                <h3 className="font-heading text-sm font-semibold text-neutral-900">Ubah Kata Sandi</h3>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <Input
-                  label="Password saat ini"
+                  label="Kata sandi saat ini"
                   type="password"
                   value={form.currentPassword}
                   onChange={updateField('currentPassword')}
-                  placeholder="Masukkan password saat ini"
+                  
                   required
                   className="md:col-span-2"
                 />
                 <Input
-                  label="Password baru"
+                  label="Kata sandi baru"
                   type="password"
                   value={form.newPassword}
                   onChange={updateField('newPassword')}
@@ -114,11 +114,11 @@ export default function AccountSettingsPage() {
                   required
                 />
                 <Input
-                  label="Konfirmasi password baru"
+                  label="Konfirmasi kata sandi baru"
                   type="password"
                   value={form.confirmPassword}
                   onChange={updateField('confirmPassword')}
-                  placeholder="Ulangi password baru"
+                  
                   required
                 />
               </div>
@@ -126,7 +126,7 @@ export default function AccountSettingsPage() {
 
             <div className="flex justify-end border-t border-neutral-100 pt-5">
               <Button type="submit" isLoading={saving} disabled={saving} icon={<LockKeyhole size={16} />}>
-                Simpan password
+                Simpan kata sandi
               </Button>
             </div>
           </form>

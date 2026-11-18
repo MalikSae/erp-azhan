@@ -491,7 +491,7 @@ func TestRegisterMengikatAkunKeAgenDariKodeReferral(t *testing.T) {
 		id, _ := res.LastInsertId()
 		return id
 	}
-	kode := func(p string) string { return strings.ToUpper(p + u[len(u)-6:]) }
+	kode := func(p string) string { return strings.ToUpper(p + u[len(u)-5:]) }
 	_ = agen("w", kode("w"), "aktif", 1)
 	x := agen("x", kode("x"), "aktif", 2)
 	_ = agen("q", kode("q"), "aktif", 3)

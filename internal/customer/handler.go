@@ -33,21 +33,28 @@ const (
 	// ketat: per email (lintas IP) dan per IP (lintas email), selain per IP+email di atas.
 	forgotEmailLimit = 3  // per jam per brand+email
 	forgotIPLimit    = 20 // per jam per IP
+	// Kode agen ketik yang tidak valid per IP: mencegah penebakan kode agen lewat pendaftaran app.
+	kodeAgenGagalLimit = 10 // per jam per IP
 )
 
+// KodeGalatKodeAgenTidakAda: kode mesin stabil untuk 400 kode agen ketik yang tidak valid.
+const KodeGalatKodeAgenTidakAda = "KODE_AGEN_TIDAK_ADA"
+
 type Handler struct {
-	repo        *Repository
-	mail        mailer.Sender
-	captcha     *shared.Turnstile
-	regIP       *shared.WindowLimiter
-	loginKey    *shared.WindowLimiter
-	loginIP     *shared.WindowLimiter
-	forgot      *shared.WindowLimiter
-	forgotEmail *shared.WindowLimiter
-	forgotIP    *shared.WindowLimiter
-	profile     *shared.WindowLimiter
-	pwFail      *shared.WindowLimiter
-	dummyHash   []byte
+	repo          *Repository
+	mail          mailer.Sender
+	captcha       *shared.Turnstile
+	regIP         *shared.WindowLimiter
+	kodeAgenGagal *shared.WindowLimiter
+	loginKey      *shared.WindowLimiter
+	loginIP       *shared.WindowLimiter
+	forgot        *shared.WindowLimiter
+	forgotEmail   *shared.WindowLimiter
+	forgotIP      *shared.WindowLimiter
+	profile       *shared.WindowLimiter
+	pwFail        *shared.WindowLimiter
+	dummyHash     []byte
+	google        VerifikatorGoogle
 }
 
 func NewHandler(repo *Repository, m mailer.Sender) *Handler {
@@ -55,15 +62,17 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 	dummy, _ := bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), bcryptCost)
 	return &Handler{
 		repo: repo, mail: m, captcha: shared.NewTurnstile(),
-		regIP:       shared.NewWindowLimiter(registerIPLimit, time.Hour),
-		loginKey:    shared.NewWindowLimiter(loginKeyLimit, 15*time.Minute),
-		loginIP:     shared.NewWindowLimiter(loginIPLimit, 15*time.Minute),
-		forgot:      shared.NewWindowLimiter(forgotKeyLimit, time.Hour),
-		forgotEmail: shared.NewWindowLimiter(forgotEmailLimit, time.Hour),
-		forgotIP:    shared.NewWindowLimiter(forgotIPLimit, time.Hour),
-		profile:     shared.NewWindowLimiter(profileUpdateLimit, time.Hour),
-		pwFail:      shared.NewWindowLimiter(passwordFailLimit, 15*time.Minute),
-		dummyHash:   dummy,
+		regIP:         shared.NewWindowLimiter(registerIPLimit, time.Hour),
+		kodeAgenGagal: shared.NewWindowLimiter(kodeAgenGagalLimit, time.Hour),
+		loginKey:      shared.NewWindowLimiter(loginKeyLimit, 15*time.Minute),
+		loginIP:       shared.NewWindowLimiter(loginIPLimit, 15*time.Minute),
+		forgot:        shared.NewWindowLimiter(forgotKeyLimit, time.Hour),
+		forgotEmail:   shared.NewWindowLimiter(forgotEmailLimit, time.Hour),
+		forgotIP:      shared.NewWindowLimiter(forgotIPLimit, time.Hour),
+		profile:       shared.NewWindowLimiter(profileUpdateLimit, time.Hour),
+		pwFail:        shared.NewWindowLimiter(passwordFailLimit, 15*time.Minute),
+		dummyHash:     dummy,
+		google:        NewVerifikatorGoogle(),
 	}
 }
 
@@ -78,10 +87,42 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
+func writeErrorCode(w http.ResponseWriter, status int, msg, code string) {
+	writeJSON(w, status, map[string]string{"error": msg, "code": code})
+}
+
+// pilihKodeAgen memilih kode agen untuk akun baru di app (dipakai register-app dan google/daftar).
+// Kode ketik kosong tidak dihitung. Kode ketik dihitung per IP sampai terbukti valid; di atas batas dijawab 429.
+// Mengembalikan ok=false bila jawaban galat sudah ditulis.
+func (h *Handler) pilihKodeAgen(w http.ResponseWriter, r *http.Request, ip string, brandID int64, ketik, otomatis string) (string, bool) {
+	hitung := strings.TrimSpace(ketik) != ""
+	if hitung && !h.kodeAgenGagal.Take(ip) {
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan, coba lagi dalam 1 jam.")
+		return "", false
+	}
+	kode, ok, err := h.repo.KodeAgenDipakai(r.Context(), brandID, ketik, otomatis)
+	if err != nil {
+		if hitung {
+			h.kodeAgenGagal.Refund(ip)
+		}
+		log.Printf("[ERROR] customer kode agen: %v", err)
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		return "", false
+	}
+	if !ok {
+		writeErrorCode(w, http.StatusBadRequest, "Kode agen tidak ditemukan", KodeGalatKodeAgenTidakAda)
+		return "", false
+	}
+	if hitung {
+		h.kodeAgenGagal.Refund(ip)
+	}
+	return kode, true
+}
+
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return false
 	}
 	return true
@@ -181,6 +222,8 @@ type registerRequest struct {
 	// KodeReferral diisi route handler web publik dari cookie azhan_ref (klik terakhir, 90 hari), bukan dari input
 	// pengguna. Hanya dibaca di sini, saat akun dibuat: akun terikat ke agen pemilik kode (spek 4.1).
 	KodeReferral string `json:"kode_referral"`
+	// KodeAgen kode yang diketik jamaah di form daftar app. Hanya dibaca RegisterApp; menang atas KodeReferral.
+	KodeAgen string `json:"kode_agen"`
 	// Biodata opsional (dipakai form daftar app, keputusan 14 November 2026): jenis kelamin L/P, domisili,
 	// dan tanggal lahir YYYY-MM-DD. Kosong = tidak diisi.
 	JenisKelamin string `json:"jenis_kelamin"`
@@ -191,6 +234,8 @@ type registerRequest struct {
 // modeDaftar membedakan pendaftaran akun biasa dari pendaftaran lewat form agen (K2): form agen tanpa captcha.
 type modeDaftar struct {
 	captcha bool
+	// kodeAgenKetik: baca kode_agen dari body. Hanya true untuk RegisterApp.
+	kodeAgenKetik bool
 }
 
 // Register POST /api/public/auth/register
@@ -202,7 +247,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 // captcha web, jadi endpoint ini tanpa captcha dan hanya dibatasi pembatas per IP (keputusan 14 November 2026).
 // Verifikasi perangkat (Play Integrity / App Attest) direncanakan sebelum rilis di toko aplikasi.
 func (h *Handler) RegisterApp(w http.ResponseWriter, r *http.Request) {
-	h.daftar(w, r, modeDaftar{})
+	h.daftar(w, r, modeDaftar{kodeAgenKetik: true})
 }
 
 // RegisterAgen POST /api/public/auth/register-agen: akun untuk calon agen. Pembatas per IP tetap berlaku.
@@ -217,7 +262,7 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 		return
 	}
 	if !h.regIP.Take(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak pendaftaran, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak pendaftaran, coba lagi dalam 1 jam.")
 		return
 	}
 
@@ -230,16 +275,16 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 			if !errors.Is(err, shared.ErrCaptchaNotConfigured) {
 				log.Printf("[ERROR] customer captcha: %v", err)
 			}
-			writeError(w, http.StatusServiceUnavailable, "verifikasi keamanan sedang tidak tersedia, coba lagi")
+			writeError(w, http.StatusServiceUnavailable, "Verifikasi keamanan sedang tidak tersedia, coba lagi.")
 			return
 		}
 		if !ok {
-			writeError(w, http.StatusBadRequest, "verifikasi keamanan gagal, silakan coba lagi")
+			writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal. Coba lagi.")
 			return
 		}
 	}
 	if req.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "brand_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 	req.NamaLengkap, req.Email, req.NoHP = strings.TrimSpace(req.NamaLengkap), strings.TrimSpace(req.Email), strings.TrimSpace(req.NoHP)
@@ -256,17 +301,25 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	kodeAgen := req.KodeReferral
+	if mode.kodeAgenKetik {
+		kode, ok := h.pilihKodeAgen(w, r, ip, req.BrandID, req.KodeAgen, req.KodeReferral)
+		if !ok {
+			return
+		}
+		kodeAgen = kode
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
 		log.Printf("[ERROR] customer hash: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
-	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), req.KodeReferral, bio)
+	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), kodeAgen, bio)
 	if errors.Is(err, ErrEmailTaken) {
 		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
 		// Penebakan email tetap dibatasi captcha + registerIPLimit.
-		writeError(w, http.StatusConflict, "Pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, silakan masuk atau gunakan Lupa kata sandi.")
+		writeError(w, http.StatusConflict, "Pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, masuk atau gunakan Lupa kata sandi.")
 		return
 	}
 	if errors.Is(err, ErrPhoneTaken) {
@@ -275,13 +328,13 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer create: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	token, err := h.repo.CreateSession(r.Context(), acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] customer session: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	writeJSON(w, http.StatusCreated, authResponse{Account: acc, SessionToken: token})
@@ -304,16 +357,16 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Slot percobaan diambil SEBELUM bcrypt (Take atomik): request paralel tidak bisa lolos bersamaan
 	// sebelum kegagalannya tercatat. Login berhasil mengembalikan slot itu.
 	if !h.loginKey.Take(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan masuk, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan masuk, coba lagi dalam 15 menit.")
 		return
 	}
 	if !h.loginIP.Take(ip) {
 		h.loginKey.Refund(key)
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan masuk, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan masuk, coba lagi dalam 15 menit.")
 		return
 	}
 	fail := func() {
-		writeError(w, http.StatusUnauthorized, "email atau password salah")
+		writeError(w, http.StatusUnauthorized, "Email atau kata sandi salah.")
 	}
 	if req.BrandID <= 0 || len(req.Password) > 72 {
 		fail()
@@ -338,7 +391,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	token, err := h.repo.CreateSession(r.Context(), acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] customer session: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	h.repo.TouchLogin(r.Context(), acc.ID)
@@ -393,7 +446,8 @@ func buildMeView(ctx context.Context, q rowQuerier, a *Account) meView {
 	if a != nil && a.JamaahID != nil {
 		var jk, nik sql.NullString
 		if err := q.QueryRowContext(ctx, `SELECT jenis_kelamin, nik FROM jamaah WHERE id=?`, *a.JamaahID).Scan(&jk, &nik); err == nil {
-			if jk.String != "" {
+			// Jenis kelamin akun (diisi saat daftar, bisa diubah di Pengaturan app) diutamakan; data jamaah cadangan.
+			if view.JenisKelamin == "" && jk.String != "" {
 				view.JenisKelamin = jk.String
 			}
 			view.NIKMasked = MaskNIK(nik.String)
@@ -416,6 +470,8 @@ type updateProfileRequest struct {
 	NoHP         string  `json:"no_hp"`
 	Domisili     *string `json:"domisili"`
 	TanggalLahir *string `json:"tanggal_lahir"`
+	// JenisKelamin opsional: "L" atau "P"; tidak dikirim = tidak berubah.
+	JenisKelamin *string `json:"jenis_kelamin"`
 	// PasswordSaatIni wajib bila email diganti: sesi yang dicuri tidak cukup untuk memindahkan akun ke email lain.
 	PasswordSaatIni string `json:"password_saat_ini"`
 }
@@ -425,16 +481,16 @@ type updateProfileRequest struct {
 func (h *Handler) cekPasswordSaatIni(w http.ResponseWriter, acc *Account, password string) bool {
 	key := strconv.FormatInt(acc.ID, 10)
 	if !h.pwFail.Take(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan, coba lagi dalam 15 menit.")
 		return false
 	}
 	if password == "" {
 		h.pwFail.Refund(key)
-		writeError(w, http.StatusBadRequest, "masukkan password saat ini")
+		writeError(w, http.StatusBadRequest, "Masukkan kata sandi saat ini.")
 		return false
 	}
 	if len(password) > 72 || bcrypt.CompareHashAndPassword([]byte(acc.passwordHash), []byte(password)) != nil {
-		writeError(w, http.StatusBadRequest, "password saat ini salah")
+		writeError(w, http.StatusBadRequest, "Kata sandi saat ini salah.")
 		return false
 	}
 	h.pwFail.Reset(key)
@@ -467,19 +523,27 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
+	if req.JenisKelamin != nil {
+		jk := strings.ToUpper(strings.TrimSpace(*req.JenisKelamin))
+		if jk != "L" && jk != "P" {
+			writeError(w, http.StatusBadRequest, "Jenis kelamin harus L atau P.")
+			return
+		}
+		req.JenisKelamin = &jk
+	}
 	gantiEmail := NormalizeEmail(req.Email) != NormalizeEmail(acc.Email)
 	if gantiEmail && !h.cekPasswordSaatIni(w, acc, req.PasswordSaatIni) {
 		return
 	}
 	key := strconv.FormatInt(acc.ID, 10)
 	if !h.profile.Take(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak perubahan data, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak perubahan data, coba lagi dalam 1 jam.")
 		return
 	}
 
-	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir)
+	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir, req.JenisKelamin)
 	if errors.Is(err, ErrEmailTaken) {
-		writeError(w, http.StatusConflict, "email ini tidak dapat digunakan, coba email lain")
+		writeError(w, http.StatusConflict, "Email ini tidak dapat digunakan, coba email lain.")
 		return
 	}
 	if errors.Is(err, ErrPhoneTaken) {
@@ -488,7 +552,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer update profile: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if gantiEmail {
@@ -507,7 +571,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.repo.GetByID(r.Context(), acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] customer reload profile: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, updated)})
@@ -534,13 +598,13 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.PasswordBaru == req.PasswordSaatIni {
-		writeError(w, http.StatusBadRequest, "password baru harus berbeda dari password saat ini")
+		writeError(w, http.StatusBadRequest, "Kata sandi baru harus berbeda dari kata sandi saat ini.")
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.PasswordBaru), bcryptCost)
 	if err != nil {
 		log.Printf("[ERROR] customer hash: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	// Sesi lain dan tautan reset lama dicabut SEBELUM password diganti: bila salah satunya gagal, password tetap lama
@@ -553,7 +617,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer change password: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if name, domain, err := h.repo.BrandSite(r.Context(), acc.BrandID); err == nil && domain != "" {
@@ -580,12 +644,12 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	emailKey := strconv.FormatInt(req.BrandID, 10) + "|" + NormalizeEmail(req.Email)
 	key := ip + "|" + emailKey
 	if !h.forgot.Take(key) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan, coba lagi dalam 1 jam.")
 		return
 	}
 	if !h.forgotIP.Take(ip) {
 		h.forgot.Refund(key)
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak permintaan, coba lagi dalam 1 jam")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan, coba lagi dalam 1 jam.")
 		return
 	}
 	// Batas per email: jawaban tetap generik (200) agar tidak menjadi oracle, tetapi email tidak dikirim.
@@ -630,7 +694,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	// Slot diambil atomik sebelum bcrypt; hanya token salah yang tetap terhitung sebagai kegagalan.
 	if !h.loginIP.Take(ip) {
-		writeError(w, http.StatusTooManyRequests, "terlalu banyak percobaan, coba lagi dalam 15 menit")
+		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan, coba lagi dalam 15 menit.")
 		return
 	}
 	tokenSalah := false
@@ -645,7 +709,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	accountID, err := h.repo.ConsumeToken(r.Context(), strings.TrimSpace(req.Token), PurposeResetPass)
@@ -656,12 +720,12 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("[ERROR] customer consume reset: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if err = h.repo.SetPassword(r.Context(), accountID, string(hash)); err != nil {
 		log.Printf("[ERROR] customer set password: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	_ = h.repo.RevokeAllSessions(r.Context(), accountID)

@@ -33,3 +33,6 @@ Thumbs.db
 /tmp/
 *.sql.gz
 backup-*.sql
+
+# Claude Code
+.claude/worktrees/

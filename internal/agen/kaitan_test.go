@@ -44,8 +44,11 @@ func TestResolveKodeReferral(t *testing.T) {
 		{brand, " ujiakt ", aktif},     // dinormalisasi
 		{brand, "UJINON", 0},           // agen nonaktif diabaikan (L8)
 		{brand + 999_999, "UJIAKT", 0}, // brand lain diabaikan (L8)
-		{brand, "TIDAKADA", 0},
+		{brand, "TDKADA", 0},
 		{brand, "", 0},
+		{brand, "UJIAK", 0},   // 5 karakter
+		{brand, "UJIAKTT", 0}, // 7 karakter
+		{brand, "UJI-AK", 0},  // tanda hubung
 	}
 	for _, c := range cases {
 		got, err := ResolveKodeReferral(ctx, tx, c.brand, c.kode)

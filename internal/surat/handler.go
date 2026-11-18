@@ -33,11 +33,11 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func brandID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id == 0 {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil && int64(id) != *scoped {
-		writeError(w, http.StatusNotFound, "brand tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 		return 0, false
 	}
 	return id, true
@@ -51,7 +51,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.repo.Pengaturan(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil pengaturan surat")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
@@ -86,7 +86,7 @@ func (h *Handler) Put(w http.ResponseWriter, r *http.Request) {
 	}
 	var p Pengaturan
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&p); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := p.Validasi(); err != nil {
@@ -96,20 +96,20 @@ func (h *Handler) Put(w http.ResponseWriter, r *http.Request) {
 	p.BrandID = id
 	saatIni, err := h.repo.Pengaturan(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil pengaturan surat")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
 		return
 	}
 	if p.NomorTerakhir < saatIni.NomorTerakhir {
-		writeError(w, http.StatusBadRequest, "nomor terakhir tidak boleh diturunkan agar tidak ada nomor surat ganda")
+		writeError(w, http.StatusBadRequest, "Nomor terakhir tidak boleh diturunkan agar tidak ada nomor surat ganda.")
 		return
 	}
 	if err := h.repo.SimpanPengaturan(r.Context(), p); err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan pengaturan surat")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan pengaturan surat.")
 		return
 	}
 	hasil, err := h.repo.Pengaturan(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "gagal mengambil pengaturan surat")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
 		return
 	}
 	writeJSON(w, http.StatusOK, hasil)

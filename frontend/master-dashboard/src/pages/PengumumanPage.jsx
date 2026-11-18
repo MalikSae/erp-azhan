@@ -53,7 +53,7 @@ export default function PengumumanPage() {
     try {
       setItems(await listPengumuman());
     } catch {
-      setError('Pengumuman gagal dimuat. Silakan coba kembali.');
+      setError('Pengumuman gagal dimuat. Coba lagi.');
     } finally {
       setLoading(false);
     }

@@ -1,10 +1,11 @@
 package schedule
 
 import (
-	"erp-azhan/api/internal/benefit"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"erp-azhan/api/internal/benefit"
+	"erp-azhan/api/internal/itinerary"
 	"errors"
 	"fmt"
 	"log"
@@ -39,7 +40,7 @@ func (h *Handler) ListSchedulesAdmin(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.List(r.Context(), brandID)
 	if err != nil {
 		log.Printf("[ERROR] schedule: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jadwal")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jadwal.")
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -72,20 +73,20 @@ func (h *Handler) GetScheduleAdmin(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListSchedulesPublic(w http.ResponseWriter, r *http.Request) {
 	brandRaw := r.URL.Query().Get("brand")
 	if strings.TrimSpace(brandRaw) == "" {
-		writeError(w, http.StatusBadRequest, "parameter brand wajib diisi")
+		writeError(w, http.StatusBadRequest, "Parameter brand wajib diisi.")
 		return
 	}
 
 	brandID, err := strconv.ParseInt(brandRaw, 10, 64)
 	if err != nil || brandID <= 0 {
-		writeError(w, http.StatusBadRequest, "parameter brand tidak valid")
+		writeError(w, http.StatusBadRequest, "Parameter brand tidak valid.")
 		return
 	}
 
 	items, err := h.repo.ListPublic(r.Context(), brandID)
 	if err != nil {
 		log.Printf("[ERROR] schedule.ListPublic: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jadwal")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jadwal.")
 		return
 	}
 	if items == nil {
@@ -105,7 +106,7 @@ func (h *Handler) GetSchedulePublic(w http.ResponseWriter, r *http.Request) {
 
 	brandID, err := strconv.ParseInt(r.URL.Query().Get("brand"), 10, 64)
 	if err != nil || brandID <= 0 {
-		writeError(w, http.StatusBadRequest, "parameter brand wajib diisi dan harus valid")
+		writeError(w, http.StatusBadRequest, "Parameter brand wajib diisi dan harus valid.")
 		return
 	}
 	s, err := h.repo.GetByID(r.Context(), id, &brandID)
@@ -117,7 +118,7 @@ func (h *Handler) GetSchedulePublic(w http.ResponseWriter, r *http.Request) {
 	// Paket yang berangkat kurang dari 30 hari lagi (termasuk yang sudah berangkat) tidak ditampilkan
 	// dan tidak bisa dipesan lagi (MP-04); daftar publik memakai batas yang sama.
 	if s.Status != StatusPublished || s.BerangkatTanggal < batasPublikWIB() {
-		writeError(w, http.StatusNotFound, "jadwal tidak ditemukan atau belum dipublikasikan")
+		writeError(w, http.StatusNotFound, "Jadwal tidak ditemukan atau belum dipublikasikan.")
 		return
 	}
 
@@ -132,7 +133,7 @@ func (h *Handler) GetSchedulePublic(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	var req CreateScheduleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -159,6 +160,14 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	inp.BenefitIDs = &ids
+	lokasi := []int64{}
+	if req.LokasiIDs != nil {
+		lokasi = *req.LokasiIDs
+	}
+	if !h.lokasiSah(r.Context(), w, lokasi) {
+		return
+	}
+	inp.LokasiIDs = &lokasi
 	s, err := h.repo.Create(r.Context(), *inp)
 	if err != nil {
 		handleRepoError(w, err)
@@ -180,7 +189,7 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateScheduleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -258,6 +267,13 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	if !benefitCukup(w, finalStatus, jumlahBenefit) {
 		return
 	}
+	// Lokasi Dikunjungi: replaced only when sent.
+	if req.LokasiIDs != nil {
+		if !h.lokasiSah(r.Context(), w, *req.LokasiIDs) {
+			return
+		}
+		inp.LokasiIDs = req.LokasiIDs
+	}
 	inp.AlasanUbahTanggal = strings.TrimSpace(req.AlasanUbahTanggal)
 	if err := validateMaxLen("alasan_ubah_tanggal", inp.AlasanUbahTanggal, maxAlasanTanggal); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -288,13 +304,13 @@ func (h *Handler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	validStatuses := map[string]bool{StatusDraft: true, StatusPublished: true, StatusArchived: true}
 	if !validStatuses[req.Status] {
-		writeError(w, http.StatusBadRequest, "status tidak valid, harus draft/published/archived")
+		writeError(w, http.StatusBadRequest, "Status tidak valid, harus draft/published/archived.")
 		return
 	}
 
@@ -340,7 +356,7 @@ func (h *Handler) UpdateScheduleSeat(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateSeatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "request body tidak valid")
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -353,7 +369,7 @@ func (h *Handler) UpdateScheduleSeat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.SeatSisa < 0 || req.SeatSisa > seatTotal {
-		writeError(w, http.StatusBadRequest, "seat_sisa harus antara 0 dan seat_total")
+		writeError(w, http.StatusBadRequest, "Sisa seat harus antara 0 dan total seat.")
 		return
 	}
 
@@ -419,7 +435,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		finalBrandID = *ctxBrandID
 	} else {
 		if req.BrandID == nil {
-			writeError(w, http.StatusBadRequest, "brand_id wajib diisi oleh Super Admin")
+			writeError(w, http.StatusBadRequest, "Brand wajib dipilih.")
 			return nil, false
 		}
 		finalBrandID = *req.BrandID
@@ -427,11 +443,11 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 1: jadwal_nama wajib
 	if strings.TrimSpace(req.JadwalNama) == "" {
-		writeError(w, http.StatusBadRequest, "jadwal_nama wajib diisi")
+		writeError(w, http.StatusBadRequest, "Nama paket wajib diisi.")
 		return nil, false
 	}
 	if len([]rune(strings.TrimSpace(req.JadwalNama))) > 255 {
-		writeError(w, http.StatusBadRequest, "jadwal_nama maksimal 255 karakter")
+		writeError(w, http.StatusBadRequest, "Nama paket maksimal 255 karakter.")
 		return nil, false
 	}
 
@@ -439,14 +455,14 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	reqStatus := strings.TrimSpace(req.Status)
 	if reqStatus != "" {
 		if reqStatus != StatusDraft && reqStatus != StatusPublished && reqStatus != StatusArchived {
-			writeError(w, http.StatusBadRequest, "status tidak valid, harus 'draft', 'published', atau 'archived'")
+			writeError(w, http.StatusBadRequest, "Status tidak valid, harus 'draft', 'published', atau 'archived'.")
 			return nil, false
 		}
 	}
 
 	// Gate 2: seat_total > 0
 	if req.SeatTotal <= 0 {
-		writeError(w, http.StatusBadRequest, "seat_total harus lebih dari 0")
+		writeError(w, http.StatusBadRequest, "Total seat harus lebih dari 0.")
 		return nil, false
 	}
 
@@ -464,51 +480,51 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 5: maskapai_id wajib
 	if req.MaskapaiID == 0 {
-		writeError(w, http.StatusBadRequest, "maskapai_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Maskapai wajib diisi.")
 		return nil, false
 	}
 
 	// Gate 6: maskapai exist di DB
 	if exists, err := h.repo.AirlineExists(ctx, req.MaskapaiID); err != nil {
 		log.Printf("[ERROR] schedule: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return nil, false
 	} else if !exists {
-		writeError(w, http.StatusBadRequest, "maskapai_id tidak valid")
+		writeError(w, http.StatusBadRequest, "Maskapai tidak valid.")
 		return nil, false
 	}
 
 	// Gate 7: berangkat_tanggal wajib + format valid
 	if strings.TrimSpace(req.BerangkatTanggal) == "" {
-		writeError(w, http.StatusBadRequest, "berangkat_tanggal tidak valid")
+		writeError(w, http.StatusBadRequest, "Tanggal berangkat tidak valid.")
 		return nil, false
 	}
 	berangkatTime, err := time.Parse(dateLayout, req.BerangkatTanggal)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "berangkat_tanggal tidak valid")
+		writeError(w, http.StatusBadRequest, "Tanggal berangkat tidak valid.")
 		return nil, false
 	}
 
 	// Gate 8: pulang_tanggal wajib + format valid
 	if strings.TrimSpace(req.PulangTanggal) == "" {
-		writeError(w, http.StatusBadRequest, "pulang_tanggal tidak valid")
+		writeError(w, http.StatusBadRequest, "Tanggal pulang tidak valid.")
 		return nil, false
 	}
 	pulangTime, err := time.Parse(dateLayout, req.PulangTanggal)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "pulang_tanggal tidak valid")
+		writeError(w, http.StatusBadRequest, "Tanggal pulang tidak valid.")
 		return nil, false
 	}
 
 	// Gate 9: pulang_tanggal harus SETELAH berangkat_tanggal
 	if !pulangTime.After(berangkatTime) {
-		writeError(w, http.StatusBadRequest, "pulang_tanggal harus setelah berangkat_tanggal")
+		writeError(w, http.StatusBadRequest, "Tanggal pulang harus setelah tanggal berangkat.")
 		return nil, false
 	}
 
 	// Gate 10: hotel_mekkah_id wajib
 	if req.HotelMekkahID == 0 {
-		writeError(w, http.StatusBadRequest, "hotel_mekkah_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Hotel Makkah wajib diisi.")
 		return nil, false
 	}
 
@@ -519,7 +535,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 12: hotel_madinah_id wajib
 	if req.HotelMadinahID == 0 {
-		writeError(w, http.StatusBadRequest, "hotel_madinah_id wajib diisi")
+		writeError(w, http.StatusBadRequest, "Hotel Madinah wajib diisi.")
 		return nil, false
 	}
 
@@ -537,21 +553,21 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 				continue
 			}
 			if thID == req.HotelMekkahID || thID == req.HotelMadinahID {
-				writeError(w, http.StatusBadRequest, "hotel transit tidak boleh sama dengan hotel Mekkah atau hotel Madinah")
+				writeError(w, http.StatusBadRequest, "Hotel transit tidak boleh sama dengan hotel Mekkah atau hotel Madinah.")
 				return nil, false
 			}
 			if seenTransit[thID] {
-				writeError(w, http.StatusBadRequest, "hotel transit tidak boleh duplikat")
+				writeError(w, http.StatusBadRequest, "Hotel transit tidak boleh duplikat.")
 				return nil, false
 			}
 			seenTransit[thID] = true
 
 			if exists, err := h.repo.HotelExists(ctx, thID); err != nil {
 				log.Printf("[ERROR] schedule: %v", err)
-				writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+				writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 				return nil, false
 			} else if !exists {
-				writeError(w, http.StatusBadRequest, "hotel transit tidak valid")
+				writeError(w, http.StatusBadRequest, "Hotel transit tidak valid.")
 				return nil, false
 			}
 			finalTransitHotelIDs = append(finalTransitHotelIDs, thID)
@@ -569,24 +585,24 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 14: harga_quad, harga_triple, harga_double masing-masing > 0
 	if req.HargaQuad <= 0 {
-		writeError(w, http.StatusBadRequest, "harga_quad harus lebih dari 0")
+		writeError(w, http.StatusBadRequest, "Harga Quad harus lebih dari 0.")
 		return nil, false
 	}
 	if req.HargaTriple <= 0 {
-		writeError(w, http.StatusBadRequest, "harga_triple harus lebih dari 0")
+		writeError(w, http.StatusBadRequest, "Harga Triple harus lebih dari 0.")
 		return nil, false
 	}
 	if req.HargaDouble <= 0 {
-		writeError(w, http.StatusBadRequest, "harga_double harus lebih dari 0")
+		writeError(w, http.StatusBadRequest, "Harga Double harus lebih dari 0.")
 		return nil, false
 	}
 	// Gate 14.1: makin sedikit orang per kamar, harga per orang tidak boleh lebih murah (MP-09).
 	if req.HargaTriple < req.HargaQuad {
-		writeError(w, http.StatusBadRequest, "harga_triple tidak boleh lebih murah dari harga_quad")
+		writeError(w, http.StatusBadRequest, "Harga Triple tidak boleh lebih murah dari harga Quad.")
 		return nil, false
 	}
 	if req.HargaDouble < req.HargaTriple {
-		writeError(w, http.StatusBadRequest, "harga_double tidak boleh lebih murah dari harga_triple")
+		writeError(w, http.StatusBadRequest, "Harga Double tidak boleh lebih murah dari harga Triple.")
 		return nil, false
 	}
 
@@ -594,12 +610,12 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	// menabrak FK saat insert dan sampai ke klien sebagai 500 (TP-01).
 	brandDP, err := h.repo.BrandMinimalDP(ctx, finalBrandID)
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusBadRequest, "brand_id tidak valid")
+		writeError(w, http.StatusBadRequest, "Brand tidak valid.")
 		return nil, false
 	}
 	if err != nil {
 		log.Printf("[ERROR] schedule: cek brand: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return nil, false
 	}
 	effectiveDP := req.MinimalDP
@@ -615,11 +631,11 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	var finalHargaInfant *float64
 	if req.HargaInfant != nil {
 		if *req.HargaInfant < 0 {
-			writeError(w, http.StatusBadRequest, "harga_infant tidak boleh kurang dari 0")
+			writeError(w, http.StatusBadRequest, "Harga bayi tidak boleh kurang dari 0.")
 			return nil, false
 		}
 		if *req.HargaInfant > req.HargaQuad {
-			writeError(w, http.StatusBadRequest, "harga_infant tidak boleh lebih mahal dari harga_quad")
+			writeError(w, http.StatusBadRequest, "Harga bayi tidak boleh lebih mahal dari harga Quad.")
 			return nil, false
 		}
 		finalHargaInfant = req.HargaInfant
@@ -627,22 +643,34 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 14.3: Nominal komisi Syiar (opsional; kosong = jadwal tidak ikut program)
 	if req.NominalKomisiLangsung != nil && *req.NominalKomisiLangsung < 0 {
-		writeError(w, http.StatusBadRequest, "nominal_komisi_langsung tidak boleh kurang dari 0")
+		writeError(w, http.StatusBadRequest, "Komisi langsung tidak boleh kurang dari 0.")
 		return nil, false
 	}
 	if req.NominalBonusPembinaan != nil && *req.NominalBonusPembinaan < 0 {
-		writeError(w, http.StatusBadRequest, "nominal_bonus_pembinaan tidak boleh kurang dari 0")
+		writeError(w, http.StatusBadRequest, "Bonus pembinaan tidak boleh kurang dari 0.")
 		return nil, false
 	}
 
 	// Gate 15: itinerary_id opsional, tapi kalau dikirim harus ada di DB
+	// Itinerary khusus (objek) menggantikan itinerary_id master dari body yang sama.
+	if req.ItineraryKhusus != nil {
+		req.ItineraryID = nil
+		if err := itinerary.ValidateDays(req.ItineraryKhusus.Days); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return nil, false
+		}
+	}
 	if req.ItineraryID != nil {
-		if exists, err := h.repo.ItineraryExists(ctx, *req.ItineraryID); err != nil {
+		var paketID int64
+		if existing != nil {
+			paketID = existing.ID
+		}
+		if exists, err := h.repo.ItineraryTersedia(ctx, *req.ItineraryID, paketID); err != nil {
 			log.Printf("[ERROR] schedule: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return nil, false
 		} else if !exists {
-			writeError(w, http.StatusBadRequest, "itinerary_id tidak valid")
+			writeError(w, http.StatusBadRequest, "Itinerary tidak valid.")
 			return nil, false
 		}
 	}
@@ -654,39 +682,24 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		tetap := existing != nil && existing.CategoryID != nil && *existing.CategoryID == *req.CategoryID
 		if exists, err := h.repo.CategoryAvailable(ctx, *req.CategoryID, finalBrandID, tetap); err != nil {
 			log.Printf("[ERROR] schedule: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return nil, false
 		} else if !exists {
-			writeError(w, http.StatusBadRequest, "category_id tidak valid atau kategori tidak aktif")
+			writeError(w, http.StatusBadRequest, "Kategori tidak valid atau kategori tidak aktif.")
 			return nil, false
 		}
 	}
 
-	// Gate 15.3: klasifikasi web publik (journey_type, program_slug, destination_id).
+	// Gate 15.3: klasifikasi web publik (journey_type).
 	// Paket baru tanpa journey_type memakai default umroh; saat edit, tanpa journey_type klasifikasi tidak diubah.
 	journey := req.JourneyType
 	if journey == "" && existing == nil {
 		journey = JourneyUmroh
 	}
-	klasifikasi, err := normalizeKlasifikasi(journey, req.ProgramSlug, req.DestinationID)
+	klasifikasi, err := normalizeKlasifikasi(journey)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return nil, false
-	}
-	// Destinasi nonaktif hanya ditolak untuk pilihan baru; paket yang sudah memakainya tetap bisa disimpan.
-	destinasiTetap := existing != nil && klasifikasi != nil && klasifikasi.DestinationID != nil &&
-		existing.DestinationID != nil && *existing.DestinationID == *klasifikasi.DestinationID
-	if klasifikasi != nil && klasifikasi.DestinationID != nil && !destinasiTetap {
-		aktif, err := h.repo.DestinationActive(ctx, *klasifikasi.DestinationID)
-		if err != nil {
-			log.Printf("[ERROR] schedule: cek destinasi: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
-			return nil, false
-		}
-		if !aktif {
-			writeError(w, http.StatusBadRequest, "destination_id tidak valid atau destinasi tidak aktif")
-			return nil, false
-		}
 	}
 
 	// Gate 16: include_items & exclude_items — tidak boleh berisi string kosong
@@ -700,13 +713,13 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 	}
 	for _, item := range includeItems {
 		if strings.TrimSpace(item) == "" {
-			writeError(w, http.StatusBadRequest, "include_items tidak boleh berisi teks kosong")
+			writeError(w, http.StatusBadRequest, "Item termasuk tidak boleh berisi teks kosong.")
 			return nil, false
 		}
 	}
 	for _, item := range excludeItems {
 		if strings.TrimSpace(item) == "" {
-			writeError(w, http.StatusBadRequest, "exclude_items tidak boleh berisi teks kosong")
+			writeError(w, http.StatusBadRequest, "Item tidak termasuk tidak boleh berisi teks kosong.")
 			return nil, false
 		}
 	}
@@ -730,11 +743,11 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		exists, err := h.repo.AirportCodeExists(ctx, code)
 		if err != nil {
 			log.Printf("[ERROR] schedule: cek bandara: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return nil, false
 		}
 		if !exists {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("%s %q tidak terdaftar, pilih kode dari daftar bandara", ap.nama, code))
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("%s %q tidak terdaftar, pilih kode dari daftar bandara.", ap.nama, code))
 			return nil, false
 		}
 	}
@@ -755,7 +768,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 
 	// Gate 17: brosur_url dan brosur_thumb_url harus path unggahan atau URL http(s) (MP-08)
 	if !shared.ValidMediaURL(req.BrosurURL) || !shared.ValidMediaURL(req.BrosurThumbURL) {
-		writeError(w, http.StatusBadRequest, "brosur harus berupa berkas unggahan atau URL http(s)")
+		writeError(w, http.StatusBadRequest, "Brosur harus berupa berkas unggahan atau URL http(s).")
 		return nil, false
 	}
 
@@ -770,11 +783,11 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		taken, err := h.repo.NameTaken(ctx, finalBrandID, namaFinal, req.BerangkatTanggal, excludeID)
 		if err != nil {
 			log.Printf("[ERROR] schedule: cek nama kembar: %v", err)
-			writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return nil, false
 		}
 		if taken {
-			writeError(w, http.StatusConflict, "paket dengan nama dan tanggal berangkat yang sama sudah ada di brand ini")
+			writeError(w, http.StatusConflict, "Paket dengan nama dan tanggal berangkat yang sama sudah ada di brand ini.")
 			return nil, false
 		}
 	}
@@ -812,6 +825,7 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		NominalKomisiLangsung:    req.NominalKomisiLangsung,
 		NominalBonusPembinaan:    req.NominalBonusPembinaan,
 		ItineraryID:              req.ItineraryID,
+		ItineraryKhusus:          req.ItineraryKhusus,
 		IncludeItems:             includeItems,
 		ExcludeItems:             excludeItems,
 		BrosurURL:                req.BrosurURL,
@@ -822,20 +836,23 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 func handleRepoError(w http.ResponseWriter, err error) {
+	var le LokasiError
 	switch {
+	case errors.As(err, &le):
+		writeError(w, http.StatusBadRequest, le.Error())
 	case errors.Is(err, ErrConflict):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "data tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	default:
 		// Tangkap MySQL FK constraint violation (error 1451) — defensive
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "tidak bisa dihapus, masih ada jamaah yang booking paket ini")
+			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih ada jamaah yang booking paket ini.")
 			return
 		}
 		log.Printf("[ERROR] schedule: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal, silakan coba lagi")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -843,16 +860,16 @@ func handleRepoError(w http.ResponseWriter, err error) {
 func (h *Handler) checkHotelCity(ctx context.Context, w http.ResponseWriter, id int64, kota, field string) bool {
 	city, err := h.repo.HotelCity(ctx, id)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusBadRequest, field+" tidak valid")
+		writeError(w, http.StatusBadRequest, field+" Tidak valid.")
 		return false
 	}
 	if err != nil {
 		log.Printf("[ERROR] schedule: cek hotel: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return false
 	}
 	if normalizeKota(city) != normalizeKota(kota) {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("%s harus hotel di %s (hotel terpilih berada di %s)", field, kota, city))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("%s harus hotel di %s (hotel terpilih berada di %s).", field, kota, city))
 		return false
 	}
 	return true
@@ -877,11 +894,11 @@ func (h *Handler) bolehArsip(ctx context.Context, w http.ResponseWriter, id int6
 	aktif, err := h.repo.CountActiveBookings(ctx, id)
 	if err != nil {
 		log.Printf("[ERROR] schedule: hitung booking aktif: %v", err)
-		writeError(w, http.StatusInternalServerError, "terjadi kesalahan internal")
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return false
 	}
 	if aktif > 0 {
-		writeError(w, http.StatusConflict, fmt.Sprintf("paket belum berangkat dan masih punya %d booking aktif; untuk menghentikan penjualan, ubah status ke Draft", aktif))
+		writeError(w, http.StatusConflict, fmt.Sprintf("Paket belum berangkat dan masih punya %d booking aktif; untuk menghentikan penjualan, ubah status ke Draft.", aktif))
 		return false
 	}
 	return true
@@ -913,7 +930,7 @@ func (h *Handler) benefitSah(ctx context.Context, w http.ResponseWriter, brandID
 		return false
 	}
 	log.Printf("[ERROR] schedule: validasi benefit: %v", err)
-	writeError(w, http.StatusInternalServerError, "gagal memeriksa highlight benefit")
+	writeError(w, http.StatusInternalServerError, "Gagal memeriksa highlight benefit.")
 	return false
 }
 
@@ -925,7 +942,7 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id tidak valid")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true

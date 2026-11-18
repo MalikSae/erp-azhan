@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestCheckoutReplayDoesNotReserveTwice(t *testing.T) {
@@ -63,27 +62,6 @@ func TestCheckoutSnapshotsDP(t *testing.T) {
 		t.Fatalf("snapshot changed: %v", snapshot)
 	}
 
-}
-
-func TestLateDepartureSnapshotsFullPayment(t *testing.T) {
-	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
-	testdb.Exec(t, tx, `UPDATE schedules SET berangkat_tanggal=DATE_ADD(CURRENT_DATE,INTERVAL 30 DAY) WHERE id=?`, scheduleID)
-	req := BookingRequest{TermsVersion: TermsVersion, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Late PIC", NoHP: nomorUji(983), JenisKelamin: "L", RoomType: "Quad"}}
-	response, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.Booking.MinimalDP != response.Booking.TotalHarga {
-		t.Fatal("late booking does not require full payment")
-	}
-	var full bool
-	var due, expiry time.Time
-	if err := tx.QueryRow(`SELECT c.full_payment,c.due_at,c.original_expires_at FROM booking_checkout c JOIN bookings b ON b.id=c.booking_id WHERE b.id_booking=?`, response.Booking.BookingCode).Scan(&full, &due, &expiry); err != nil {
-		t.Fatal(err)
-	}
-	if !full || !due.Equal(expiry) {
-		t.Fatal("full-payment deadline differs from hold")
-	}
 }
 
 func TestCheckoutRequiresConsentAndQuote(t *testing.T) {

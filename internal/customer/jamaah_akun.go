@@ -70,13 +70,13 @@ func (h *JamaahAkun) Daftar(w http.ResponseWriter, r *http.Request) {
 	semua, err := muatAnggota(r.Context(), h.db, acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] account daftar jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	menunggu, err := jamaahMenunggu(r.Context(), h.db, acc.ID)
 	if err != nil {
 		log.Printf("[ERROR] account daftar jamaah menunggu: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	out := []jamaahBaris{}
@@ -84,7 +84,7 @@ func (h *JamaahAkun) Daftar(w http.ResponseWriter, r *http.Request) {
 		d, err := muatDataOrang(r.Context(), h.db, idGrup(grup))
 		if err != nil {
 			log.Printf("[ERROR] account daftar jamaah data: %v", err)
-			writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+			writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 			return
 		}
 		terisi, total, _ := kelengkapanOrang(d.Nilai, adaBayi(grup))
@@ -170,7 +170,7 @@ func (h *JamaahAkun) bangunDetail(ctx context.Context, q dbq, akunID int64, grup
 func idJamaahParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id jamaah tidak valid")
+		writeError(w, http.StatusBadRequest, "ID jamaah tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -185,18 +185,18 @@ func (h *JamaahAkun) Detail(w http.ResponseWriter, r *http.Request) {
 	}
 	grup, err := kelompokDari(r.Context(), h.db, acc.ID, id)
 	if errors.Is(err, errJamaahTidakAda) {
-		writeError(w, http.StatusNotFound, "jamaah tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		log.Printf("[ERROR] account detail jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	d, err := h.bangunDetail(r.Context(), h.db, acc.ID, grup)
 	if err != nil {
 		log.Printf("[ERROR] account detail jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal mengambil data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
@@ -209,16 +209,16 @@ func tulisGalatSimpan(w http.ResponseWriter, err error) {
 	case errors.As(err, &val):
 		writeError(w, http.StatusBadRequest, val.Pesan)
 	case errors.Is(err, ErrTidakBerubah):
-		writeError(w, http.StatusBadRequest, "tidak ada perubahan untuk disimpan")
+		writeError(w, http.StatusBadRequest, "Tidak ada perubahan untuk disimpan.")
 	case errors.As(err, &hp):
 		writeError(w, http.StatusConflict, hp.Error())
 	case errors.Is(err, errJamaahTidakAda):
-		writeError(w, http.StatusNotFound, "jamaah tidak ditemukan")
+		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan.")
 	case errors.Is(err, errAksesTerbatas):
 		writeError(w, http.StatusForbidden, pesanAksesTerbatas)
 	default:
 		log.Printf("[ERROR] account simpan jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "gagal menyimpan data jamaah")
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan data jamaah.")
 	}
 }
 

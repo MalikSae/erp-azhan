@@ -54,7 +54,7 @@ func pesanKurangDP(jumlah, minimalDP, terbayar, menunggu float64) string {
 	if kurang <= 0 || jumlah >= kurang {
 		return ""
 	}
-	return "nominal minimal " + rupiahTeks(kurang) + " untuk memenuhi DP. Hubungi admin bila ingin mencicil DP"
+	return "DP dibayar sekaligus, minimal " + rupiahTeks(kurang)
 }
 
 // rupiahTeks menulis nominal bulat dengan titik ribuan, misalnya Rp5.000.000.
