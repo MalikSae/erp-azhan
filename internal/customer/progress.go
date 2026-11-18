@@ -47,7 +47,8 @@ func (o *Orders) Progress(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, _, err := o.owned(r.Context(), acc.ID, id); errors.Is(err, ErrNotFound) {
+	order, _, err := o.owned(r.Context(), acc.ID, id)
+	if errors.Is(err, ErrNotFound) {
 		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	} else if err != nil {
@@ -95,7 +96,8 @@ func (o *Orders) Progress(w http.ResponseWriter, r *http.Request) {
 	pax := []progressPax{}
 	semuaLengkap := true
 	for _, p := range b.Pax {
-		if p.PaxStatus != "aktif" {
+		// Peran jamaah hanya melihat progres dirinya.
+		if p.PaxStatus != "aktif" || !order.bolehJamaah(p.JamaahID) {
 			continue
 		}
 		item := progressPax{

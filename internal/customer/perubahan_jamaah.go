@@ -92,8 +92,8 @@ type anggotaJamaah struct {
 	Berangkat     string
 	// Penuh: akun adalah pembuat jamaah ini (akses_jamaah.go).
 	Penuh bool
-	// DariPeran: baris berasal dari booking orang lain yang memuat jamaah tertaut (pandangan jamaah, ADR 0005).
-	// Kode booking tidak boleh dikirim untuk baris ini.
+	// DariPeran: baris berasal dari booking orang lain yang memuat jamaah tertaut (peran jamaah, ADR 0005).
+	// Baris booking akun sendiri didahulukan saat jamaah yang sama ada di keduanya.
 	DariPeran bool
 }
 

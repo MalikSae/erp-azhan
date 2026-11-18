@@ -27,91 +27,141 @@ func siapkanPeran(t *testing.T, tx *sql.Tx) skenarioPeran {
 	s.jadwal, s.brand = testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-03-01"})
 	s.ibrahim = testdb.NewAkun(t, tx, s.brand, testdb.AkunOpts{Nama: "Ibrahim", StatusAgen: "aktif"})
 	s.ahmad = testdb.NewJamaah(t, tx, s.brand, testdb.JamaahOpts{Nama: "Ahmad", Direkrut: s.ibrahim})
-	s.istri = testdb.NewJamaah(t, tx, s.brand, testdb.JamaahOpts{Nama: "IstriRahasia", Direkrut: s.ibrahim})
+	s.istri = testdb.NewJamaah(t, tx, s.brand, testdb.JamaahOpts{Nama: "Istri", Direkrut: s.ibrahim})
 	testdb.Exec(t, tx, `UPDATE jamaah SET dibuat_oleh_akun_id=? WHERE id IN (?,?)`, s.ibrahim, s.ahmad, s.istri)
 	s.ahmadAkun = testdb.NewAkun(t, tx, s.brand, testdb.AkunOpts{Nama: "AhmadAkun", Direkrut: s.ibrahim, Upline: s.ibrahim})
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, s.ahmad, s.ahmadAkun)
 	s.booking, _ = testdb.NewBookingPax(t, tx, s.jadwal, "dp", 54321000, testdb.Pax{JamaahID: s.ahmad}, testdb.Pax{JamaahID: s.istri})
 	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, s.ibrahim, s.booking)
 	testdb.AddPayment(t, tx, s.booking, 7777000, "confirmed")
-	testdb.Exec(t, tx, `INSERT INTO booking_discounts (booking_id, nama, nominal) VALUES (?, 'DiskonRahasia', 123000)`, s.booking)
 	if err := tx.QueryRow(`SELECT id_booking FROM bookings WHERE id=?`, s.booking).Scan(&s.kodeBooking); err != nil {
 		t.Fatal(err)
 	}
 	return s
 }
 
-func bodyPerjalanan(t *testing.T, tx *sql.Tx, akun int64) (string, []perjalananJamaah) {
+func hpAkun(t *testing.T, tx *sql.Tx, akun int64) string {
 	t.Helper()
-	items, err := muatPerjalananJamaah(context.Background(), tx, akun)
+	var hp string
+	if err := tx.QueryRow(`SELECT no_hp FROM customer_accounts WHERE id=?`, akun).Scan(&hp); err != nil {
+		t.Fatal(err)
+	}
+	return hp
+}
+
+func TestPeranJamaahMelihatBookingUtuh(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	s := siapkanPeran(t, tx)
+	ctx := context.Background()
+
+	items, err := daftarOrder(ctx, tx, s.ahmadAkun, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := json.Marshal(map[string]any{"perjalanan": items})
-	return string(b), items
-}
+	if len(items) != 1 {
+		t.Fatalf("Ahmad harus melihat 1 booking: %+v", items)
+	}
+	o := items[0]
+	if o.ID != s.booking || o.Peran != peranJamaah || o.BookingCode != s.kodeBooking {
+		t.Fatalf("booking peran salah: %+v", o)
+	}
+	if o.TotalHarga != 54321000 || o.Terbayar != 7777000 || o.Sisa != 54321000-7777000 {
+		t.Errorf("nominal harus transparan: total %v terbayar %v sisa %v", o.TotalHarga, o.Terbayar, o.Sisa)
+	}
+	if o.CanCancel {
+		t.Error("peran jamaah tidak boleh membatalkan")
+	}
+	want := pembuatBooking{Nama: "Ibrahim (uji)", Kontak: "agen", WhatsApp: hpAkun(t, tx, s.ibrahim)}
+	if o.DibuatOleh == nil || *o.DibuatOleh != want {
+		t.Errorf("dibuat_oleh = %+v, mau %+v", o.DibuatOleh, want)
+	}
+	b, _ := json.Marshal(o)
+	if !strings.Contains(string(b), `"peran":"jamaah"`) || strings.Contains(string(b), "pemilikID") {
+		t.Errorf("json: %s", b)
+	}
 
-func TestPandanganJamaahIsiBodyTerbatas(t *testing.T) {
-	_, tx := testdb.Tx(t)
-	s := siapkanPeran(t, tx)
-	body, items := bodyPerjalanan(t, tx, s.ahmadAkun)
-	if len(items) != 1 || items[0].BookingID != s.booking || items[0].Status != "dp" || items[0].Berangkat != "2099-03-01" || items[0].Paket == "" {
-		t.Fatalf("kartu salah: %s", body)
+	// Pemesan tetap melihat booking yang sama sebagai pemesan, tanpa dibuat_oleh.
+	itemsI, err := daftarOrder(ctx, tx, s.ibrahim, "")
+	if err != nil || len(itemsI) != 1 || itemsI[0].Peran != peranPemesan || itemsI[0].DibuatOleh != nil {
+		t.Fatalf("pemesan: %+v %v", itemsI, err)
 	}
-	if len(items[0].Pax) != 1 || items[0].Pax[0].JamaahID != s.ahmad {
-		t.Fatalf("pax harus hanya miliknya: %s", body)
-	}
-	for _, terlarang := range []string{s.kodeBooking, "IstriRahasia", "54321", "7777", "123000", "DiskonRahasia", "harga", "total", "dp_", "sisa", "diskon", "payment", "bank", "rekening", "kantor", "booking_code"} {
-		if strings.Contains(strings.ToLower(body), strings.ToLower(terlarang)) {
-			t.Errorf("body memuat %q: %s", terlarang, body)
-		}
-	}
-	var raw struct {
-		P []map[string]json.RawMessage `json:"perjalanan"`
-	}
-	_ = json.Unmarshal([]byte(body), &raw)
-	boleh := map[string]bool{"booking_id": true, "paket": true, "berangkat": true, "status": true, "pax": true, "can_pay": true, "can_cancel": true}
-	for k := range raw.P[0] {
-		if !boleh[k] {
-			t.Errorf("field tak terduga %q", k)
-		}
-	}
-	if items[0].CanPay || items[0].CanCancel {
-		t.Error("CanPay/CanCancel harus false")
-	}
-}
-
-func TestPandanganJamaahPembatalanDanDraftMenghilang(t *testing.T) {
-	_, tx := testdb.Tx(t)
-	s := siapkanPeran(t, tx)
-	for _, st := range []string{"batal", "draft"} {
-		testdb.Exec(t, tx, `UPDATE bookings SET status=? WHERE id=?`, st, s.booking)
-		if _, items := bodyPerjalanan(t, tx, s.ahmadAkun); len(items) != 0 {
-			t.Errorf("status %s harus hilang: %+v", st, items)
-		}
-	}
-	testdb.Exec(t, tx, `UPDATE bookings SET status='lunas' WHERE id=?`, s.booking)
-	if _, items := bodyPerjalanan(t, tx, s.ahmadAkun); len(items) != 1 || items[0].Status != "lunas" {
-		t.Errorf("lunas: %+v", items)
+	if bI, _ := json.Marshal(itemsI[0]); strings.Contains(string(bI), "dibuat_oleh") {
+		t.Errorf("pemesan tidak menerima dibuat_oleh: %s", bI)
 	}
 }
 
-func TestPandanganJamaahAkunTakTertautTakBerubah(t *testing.T) {
+func TestPeranJamaahHanyaBertindakAtasDirinya(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	s := siapkanPeran(t, tx)
+	ctx := context.Background()
+
+	o, _, err := ownedQ(ctx, tx, s.ahmadAkun, s.booking)
+	if err != nil {
+		t.Fatalf("Ahmad harus lolos owned: %v", err)
+	}
+	if !o.bolehJamaah(s.ahmad) || o.bolehJamaah(s.istri) {
+		t.Errorf("Ahmad hanya boleh atas dirinya: ahmad=%v istri=%v", o.bolehJamaah(s.ahmad), o.bolehJamaah(s.istri))
+	}
+	oi, _, err := ownedQ(ctx, tx, s.ibrahim, s.booking)
+	if err != nil || !oi.bolehJamaah(s.istri) || !oi.bolehJamaah(s.ahmad) {
+		t.Fatalf("pemesan boleh atas semua jamaah: %v", err)
+	}
+
+	// Lepas tautan: Ahmad kehilangan akses.
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=NULL WHERE id=?`, s.ahmadAkun)
+	if _, _, err := ownedQ(ctx, tx, s.ahmadAkun, s.booking); !errors.Is(err, ErrNotFound) {
+		t.Errorf("setelah lepas tautan harus 404: %v", err)
+	}
+}
+
+func TestPeranJamaahPaxBatalDanDraft(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	s := siapkanPeran(t, tx)
+	ctx := context.Background()
+
+	testdb.Exec(t, tx, `UPDATE booking_pax SET pax_status='batal' WHERE booking_id=? AND jamaah_id=?`, s.booking, s.ahmad)
+	if _, _, err := ownedQ(ctx, tx, s.ahmadAkun, s.booking); !errors.Is(err, ErrNotFound) {
+		t.Errorf("pax Ahmad batal: booking tidak terlihat lagi: %v", err)
+	}
+	testdb.Exec(t, tx, `UPDATE booking_pax SET pax_status='aktif' WHERE booking_id=? AND jamaah_id=?`, s.booking, s.ahmad)
+	testdb.Exec(t, tx, `UPDATE bookings SET status='draft' WHERE id=?`, s.booking)
+	if items, _ := daftarOrder(ctx, tx, s.ahmadAkun, ""); len(items) != 0 {
+		t.Errorf("draft tidak terlihat: %+v", items)
+	}
+}
+
+func TestSusunPembuatKontak(t *testing.T) {
+	cases := []struct {
+		nama, hp, status string
+		want             pembuatBooking
+	}{
+		{"Ibrahim", "0812", "aktif", pembuatBooking{"Ibrahim", "agen", "0812"}},
+		{"Ibrahim", "0812", "nonaktif", pembuatBooking{"Ibrahim", "admin", "0899"}},
+		{"Budi", "0813", "tidak_aktif", pembuatBooking{"Budi", "admin", "0899"}},
+		{"", "", "", pembuatBooking{"Hana", "admin", "0899"}},
+	}
+	for _, c := range cases {
+		if got := susunPembuat(c.nama, c.hp, c.status, "Hana", "0899"); *got != c.want {
+			t.Errorf("%+v: dapat %+v", c, *got)
+		}
+	}
+}
+
+func TestPeranJamaahAkunTakTertautTakBerubah(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	s := siapkanPeran(t, tx)
+	ctx := context.Background()
 	lain := testdb.NewAkun(t, tx, s.brand, testdb.AkunOpts{Nama: "AkunBiasa"})
-	body, items := bodyPerjalanan(t, tx, lain)
-	if len(items) != 0 || body != `{"perjalanan":[]}` {
-		t.Errorf("akun tak tertaut: %s", body)
+	if items, err := daftarOrder(ctx, tx, lain, ""); err != nil || len(items) != 0 {
+		t.Errorf("akun tak tertaut: %+v %v", items, err)
 	}
-	if semua, err := muatAnggota(context.Background(), tx, lain); err != nil || len(semua) != 0 {
+	if _, _, err := ownedQ(ctx, tx, lain, s.booking); !errors.Is(err, ErrNotFound) {
+		t.Errorf("akun lain harus 404: %v", err)
+	}
+	if semua, err := muatAnggota(ctx, tx, lain); err != nil || len(semua) != 0 {
 		t.Errorf("anggota akun tak tertaut: %+v %v", semua, err)
 	}
-	_, itemsI := bodyPerjalanan(t, tx, s.ibrahim)
-	if len(itemsI) != 0 {
-		t.Errorf("pemilik tidak punya kartu peran: %+v", itemsI)
-	}
-	semuaI, _ := muatAnggota(context.Background(), tx, s.ibrahim)
+	semuaI, _ := muatAnggota(ctx, tx, s.ibrahim)
 	if len(semuaI) != 2 {
 		t.Fatalf("Ibrahim harus 2 jamaah: %+v", semuaI)
 	}
@@ -122,52 +172,37 @@ func TestPandanganJamaahAkunTakTertautTakBerubah(t *testing.T) {
 	}
 }
 
-func TestPandanganJamaahOwnedTetapPemilikSaja(t *testing.T) {
-	_, tx := testdb.Tx(t)
-	s := siapkanPeran(t, tx)
-	ctx := context.Background()
-	// owned() adalah gerbang Detail, Cancel, CreatePayment, dan Dokumen: Ahmad ditolak, Ibrahim lolos.
-	if _, _, err := ownedQ(ctx, tx, s.ahmadAkun, s.booking); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("Ahmad tidak boleh lolos owned: %v", err)
-	}
-	if o, _, err := ownedQ(ctx, tx, s.ibrahim, s.booking); err != nil || o == nil {
-		t.Fatalf("Ibrahim harus lolos: %v", err)
-	}
-}
-
-func TestPandanganJamaahDataJamaahTanpaDobel(t *testing.T) {
+func TestPeranJamaahDataDiriPenuh(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	s := siapkanPeran(t, tx)
 	ctx := context.Background()
 
 	semua, err := muatAnggota(ctx, tx, s.ahmadAkun)
 	if err != nil || len(semua) != 1 {
-		t.Fatalf("hanya baris Ahmad, istri tidak terlihat: %+v %v", semua, err)
+		t.Fatalf("hanya baris Ahmad di Data Jamaah: %+v %v", semua, err)
 	}
 	a := semua[0]
-	if a.ID != s.ahmad || a.Penuh || !a.DariPeran {
-		t.Fatalf("baris terbatas peran: %+v", a)
+	if a.ID != s.ahmad || !a.Penuh || !a.DariPeran {
+		t.Fatalf("baris Ahmad harus penuh: %+v", a)
 	}
-	if r := ringkasBooking(a); r.Kode != "" {
-		t.Errorf("kode booking bocor: %+v", r)
+	if r := ringkasBooking(a); r.Kode != s.kodeBooking {
+		t.Errorf("kode booking ikut tampil: %+v", r)
+	}
+	if penuh, err := aksesPenuhJamaah(ctx, tx, s.ahmadAkun, s.ahmad); err != nil || !penuh {
+		t.Errorf("akses penuh atas diri: %v %v", penuh, err)
+	}
+	if penuh, err := aksesPenuhJamaah(ctx, tx, s.ahmadAkun, s.istri); err != nil || penuh {
+		t.Errorf("istri tetap terbatas: %v %v", penuh, err)
 	}
 	if _, err := kelompokDari(ctx, tx, s.ahmadAkun, s.istri); !errors.Is(err, errJamaahTidakAda) {
-		t.Errorf("istri tidak boleh terjangkau: %v", err)
+		t.Errorf("istri tidak terjangkau di Data Jamaah: %v", err)
 	}
 	grup, err := kelompokDari(ctx, tx, s.ahmadAkun, s.ahmad)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := simpanPerubahanPelanggan(ctx, tx, s.ahmadAkun, grup, map[string]string{"kota": "Depok"}); !errors.Is(err, errAksesTerbatas) {
-		t.Fatalf("ubah data harus ditolak: %v", err)
-	}
-	d, err := (&JamaahAkun{}).bangunDetail(ctx, tx, s.ahmadAkun, grup)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, _ := json.Marshal(d)
-	if !d.AksesTerbatas || strings.Contains(string(b), s.kodeBooking) || strings.Contains(string(b), "IstriRahasia") {
-		t.Errorf("detail bocor: %s", b)
+	if _, err := simpanPerubahanPelanggan(ctx, tx, s.ahmadAkun, grup, map[string]string{"kota": "Depok"}); err != nil && !errors.Is(err, ErrTidakBerubah) {
+		t.Fatalf("Ahmad boleh mengisi data dirinya: %v", err)
 	}
 
 	// Booking sendiri Ahmad dengan jamaah tertaut yang sama: satu baris, tanpa dobel.
@@ -176,14 +211,6 @@ func TestPandanganJamaahDataJamaahTanpaDobel(t *testing.T) {
 	semua, err = muatAnggota(ctx, tx, s.ahmadAkun)
 	if err != nil || len(semua) != 1 || semua[0].BookingID != sendiri || semua[0].DariPeran {
 		t.Fatalf("satu baris dari booking sendiri: %+v %v", semua, err)
-	}
-	// Baris jamaah lain senama dari booking sendiri bergabung menjadi satu orang (sama-sama terbatas).
-	dup := testdb.NewJamaah(t, tx, s.brand, testdb.JamaahOpts{Nama: "Ahmad"})
-	sendiri2, _ := testdb.NewBookingPax(t, tx, s.jadwal, "baru", 1000, testdb.Pax{JamaahID: dup})
-	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, s.ahmadAkun, sendiri2)
-	semua, _ = muatAnggota(ctx, tx, s.ahmadAkun)
-	if n := len(kelompokOrang(semua)); n != 1 {
-		t.Errorf("harus tergabung satu orang, dapat %d: %+v", n, semua)
 	}
 }
 
@@ -196,20 +223,9 @@ func TestPandanganJamaahKlaimPembuatTidakGugur(t *testing.T) {
 	if err := shared.GugurkanKlaimPembuatBooking(ctx, tx, sendiri); err != nil {
 		t.Fatal(err)
 	}
-	klaim := func(id int64) sql.NullInt64 {
-		var v sql.NullInt64
-		_ = tx.QueryRow(`SELECT dibuat_oleh_akun_id FROM jamaah WHERE id=?`, id).Scan(&v)
-		return v
-	}
-	if v := klaim(s.ahmad); !v.Valid || v.Int64 != s.ibrahim {
+	var v sql.NullInt64
+	_ = tx.QueryRow(`SELECT dibuat_oleh_akun_id FROM jamaah WHERE id=?`, s.ahmad).Scan(&v)
+	if !v.Valid || v.Int64 != s.ibrahim {
 		t.Errorf("klaim Ibrahim atas Ahmad harus tetap: %+v", v)
-	}
-}
-
-func TestStatusPeranPemetaan(t *testing.T) {
-	for in, want := range map[string]string{"baru": "baru", "dp": "dp", "lunas": "lunas", "dokumen_lengkap": "lunas", "siap_berangkat": "lunas"} {
-		if got := statusPeran(in); got != want {
-			t.Errorf("statusPeran(%s) = %s, mau %s", in, got, want)
-		}
 	}
 }

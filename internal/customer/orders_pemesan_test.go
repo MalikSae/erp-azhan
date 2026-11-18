@@ -20,7 +20,7 @@ func TestScanOrderPemesanIkutDanJamaahPertama(t *testing.T) {
 	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, akun, id)
 	baca := func() *orderSummary {
 		t.Helper()
-		o, _, err := scanOrder(tx.QueryRowContext(ctx, orderSelect+` AND b.id = ? GROUP BY b.id`, akun, id))
+		o, _, err := scanOrder(tx.QueryRowContext(ctx, orderSelect+` AND b.id = ? GROUP BY b.id`, akun, akun, id))
 		if err != nil {
 			t.Fatal(err)
 		}

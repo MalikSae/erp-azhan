@@ -68,7 +68,34 @@ type orderSummary struct {
 	CanPay             bool       `json:"can_pay"`
 	CanCancel          bool       `json:"can_cancel"`
 	CreatedAt          time.Time  `json:"created_at"`
+	// Peran: pemesan (booking milik akun) | jamaah (booking orang lain yang memuat jamaah tertaut ke akun ini).
+	// Peran jamaah melihat booking utuh, boleh membayar, tetapi tidak boleh membatalkan; aksi per jamaah
+	// (dokumen, data diri, surat, perlengkapan) hanya untuk jamaah tertaut (bolehJamaah).
+	Peran string `json:"peran"`
+	// DibuatOleh: pembuat booking, hanya untuk peran jamaah. Kontak WhatsApp memakai agen pembuat; bila
+	// agen tidak aktif atau booking dibuat admin, memakai WhatsApp brand.
+	DibuatOleh *pembuatBooking `json:"dibuat_oleh,omitempty"`
+	// JamaahSaya: id jamaah tertaut ke akun, hanya untuk peran jamaah (klien menampilkan data dan dokumen dirinya).
+	JamaahSaya int64 `json:"jamaah_saya,omitempty"`
+
+	pemilikID sql.NullInt64
 }
+
+type pembuatBooking struct {
+	Nama     string `json:"nama"`
+	Kontak   string `json:"kontak"` // agen | admin
+	WhatsApp string `json:"whatsapp"`
+}
+
+// bolehJamaah: akun boleh bertindak atas jamaah ini di booking ini (pemesan: semua; peran jamaah: dirinya).
+func (o *orderSummary) bolehJamaah(jamaahID int64) bool {
+	return o.Peran == peranPemesan || jamaahID == o.JamaahSaya
+}
+
+const (
+	peranPemesan = "pemesan"
+	peranJamaah  = "jamaah"
+)
 
 const orderSelect = `
 	SELECT b.id, b.id_booking, b.status, b.schedule_id, s.jadwal_nama, DATE_FORMAT(s.berangkat_tanggal,'%Y-%m-%d'),
@@ -81,13 +108,19 @@ const orderSelect = `
 	       COALESCE(SUM(CASE WHEN p.status='pending' THEN p.jumlah END),0),
 	       COUNT(p.id),
 	       b.pemesan_ikut,
-	       COALESCE((SELECT j.nama_lengkap FROM jamaah j WHERE j.id = b.pic_jamaah_id), '')
+	       COALESCE((SELECT j.nama_lengkap FROM jamaah j WHERE j.id = b.pic_jamaah_id), ''),
+	       b.customer_account_id
 	FROM bookings b
 	JOIN schedules s ON s.id = b.schedule_id
 	LEFT JOIN brands br ON br.id = s.brand_id
 	LEFT JOIN booking_checkout c ON c.booking_id = b.id
 	LEFT JOIN payments p ON p.booking_id = b.id
-	WHERE b.customer_account_id = ? AND b.status <> 'draft'`
+	WHERE b.status <> 'draft' AND (b.customer_account_id = ? OR b.id IN (
+		SELECT bpj.booking_id FROM booking_pax bpj
+		JOIN customer_accounts caj ON caj.jamaah_id = bpj.jamaah_id
+		JOIN bookings bj ON bj.id = bpj.booking_id
+		JOIN schedules sj ON sj.id = bj.schedule_id
+		WHERE caj.id = ? AND caj.dihapus_at IS NULL AND bpj.pax_status = 'aktif' AND sj.brand_id = caj.brand_id))`
 
 func scanOrder(row interface{ Scan(...any) error }) (*orderSummary, int, error) {
 	var o orderSummary
@@ -100,7 +133,7 @@ func scanOrder(row interface{ Scan(...any) error }) (*orderSummary, int, error) 
 	if err := row.Scan(&o.ID, &o.BookingCode, &o.Status, &o.ScheduleID, &o.JadwalNama, &o.BerangkatTanggal,
 		&o.PulangTanggal, &asal, &tujuan, &o.BatasPelunasan, &o.JumlahJamaah,
 		&o.SeatCount, &o.TotalHarga, &blocked, &hold, &due, &dpPerPax, &o.FullPayment, &o.CreatedAt,
-		&o.Terbayar, &o.MenungguVerifikasi, &paymentCount, &ikut, &o.JamaahPertama); err != nil {
+		&o.Terbayar, &o.MenungguVerifikasi, &paymentCount, &ikut, &o.JamaahPertama, &o.pemilikID); err != nil {
 		return nil, 0, err
 	}
 	if ikut.Valid {
@@ -167,27 +200,97 @@ func maxFloat(a, b float64) float64 {
 // List GET /api/account/bookings?tab=
 func (o *Orders) List(w http.ResponseWriter, r *http.Request) {
 	acc := FromContext(r.Context())
-	rows, err := o.db.QueryContext(r.Context(), orderSelect+` GROUP BY b.id ORDER BY b.id DESC LIMIT 200`, acc.ID)
+	tab := strings.TrimSpace(r.URL.Query().Get("tab"))
+	items, err := daftarOrder(r.Context(), o.db, acc.ID, tab)
 	if err != nil {
 		log.Printf("[ERROR] account list bookings: %v", err)
 		writeError(w, http.StatusInternalServerError, "Gagal mengambil daftar booking.")
 		return
 	}
-	defer rows.Close()
-	tab := strings.TrimSpace(r.URL.Query().Get("tab"))
+	writeJSON(w, http.StatusOK, items)
+}
+
+// daftarOrder: booking milik akun dan booking orang lain yang memuat jamaah tertaut, terbaru dulu.
+func daftarOrder(ctx context.Context, q dbq, accountID int64, tab string) ([]*orderSummary, error) {
+	rows, err := q.QueryContext(ctx, orderSelect+` GROUP BY b.id ORDER BY b.id DESC LIMIT 200`, accountID, accountID)
+	if err != nil {
+		return nil, err
+	}
 	items := []*orderSummary{}
 	for rows.Next() {
 		it, _, err := scanOrder(rows)
 		if err != nil {
-			log.Printf("[ERROR] account scan booking: %v", err)
-			writeError(w, http.StatusInternalServerError, "Gagal membaca booking.")
-			return
+			rows.Close()
+			return nil, err
 		}
 		if tab == "" || tab == it.Tab {
 			items = append(items, it)
 		}
 	}
-	writeJSON(w, http.StatusOK, items)
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	jamaahSaya := int64(-1) // dibaca sekali untuk semua booking peran jamaah
+	for _, it := range items {
+		if err := tandaiPeranDengan(ctx, q, it, accountID, &jamaahSaya); err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
+}
+
+// tandaiPeran mengisi Peran; untuk peran jamaah juga jamaah tertaut, pembuat booking, dan menutup pembatalan.
+func tandaiPeran(ctx context.Context, q dbq, o *orderSummary, accountID int64) error {
+	jamaahSaya := int64(-1)
+	return tandaiPeranDengan(ctx, q, o, accountID, &jamaahSaya)
+}
+
+// tandaiPeranDengan: tandaiPeran dengan id jamaah tertaut yang disimpan di *jamaahSaya (-1 = belum dibaca).
+func tandaiPeranDengan(ctx context.Context, q dbq, o *orderSummary, accountID int64, jamaahSaya *int64) error {
+	if o.pemilikID.Valid && o.pemilikID.Int64 == accountID {
+		o.Peran = peranPemesan
+		return nil
+	}
+	o.Peran = peranJamaah
+	o.CanCancel = false
+	if *jamaahSaya < 0 {
+		id, _, err := jamaahTertaut(ctx, q, accountID)
+		if err != nil {
+			return err
+		}
+		*jamaahSaya = id
+	}
+	jid := *jamaahSaya
+	o.JamaahSaya = jid
+	var nama, hp, statusAgen, brandNama, brandWA string
+	err := q.QueryRowContext(ctx, `
+		SELECT COALESCE(ca.nama_lengkap,''), COALESCE(ca.no_hp,''), COALESCE(ca.status_agen,''),
+		       COALESCE(br.name,''), COALESCE(br.whatsapp_number,'')
+		FROM bookings b
+		JOIN schedules s ON s.id = b.schedule_id
+		LEFT JOIN brands br ON br.id = s.brand_id
+		LEFT JOIN customer_accounts ca ON ca.id = b.customer_account_id AND ca.dihapus_at IS NULL
+		WHERE b.id = ?`, o.ID).Scan(&nama, &hp, &statusAgen, &brandNama, &brandWA)
+	if err != nil {
+		return err
+	}
+	o.DibuatOleh = susunPembuat(nama, hp, statusAgen, brandNama, brandWA)
+	return nil
+}
+
+// susunPembuat: agen aktif dihubungi langsung; selain itu (agen nonaktif, akun biasa, atau booking admin)
+// kontaknya admin brand. Booking tanpa akun pembuat ditampilkan atas nama brand.
+func susunPembuat(nama, hp, statusAgen, brandNama, brandWA string) *pembuatBooking {
+	p := &pembuatBooking{Nama: strings.TrimSpace(nama), Kontak: "admin", WhatsApp: strings.TrimSpace(brandWA)}
+	if p.Nama == "" {
+		p.Nama = strings.TrimSpace(brandNama)
+	}
+	if statusAgen == "aktif" && strings.TrimSpace(hp) != "" {
+		p.Kontak, p.WhatsApp = "agen", strings.TrimSpace(hp)
+	}
+	return p
 }
 
 type paxView struct {
@@ -244,19 +347,26 @@ func (o *Orders) banks(ctx context.Context, brandID int64) ([]bankView, error) {
 	return out, rows.Err()
 }
 
-// owned memuat ringkasan pesanan milik akun; ErrNotFound bila bukan miliknya.
+// owned memuat ringkasan pesanan yang boleh diakses akun (pemesan, atau peran jamaah); ErrNotFound bila tidak.
+// Pemanggil yang bertindak atas jamaah tertentu wajib memeriksa bolehJamaah.
 func (o *Orders) owned(ctx context.Context, accountID, bookingID int64) (*orderSummary, int, error) {
 	return ownedQ(ctx, o.db, accountID, bookingID)
 }
 
-// ownedQ: isi owned() dengan pelaksana query yang bisa diganti transaksi (tes). Tetap pemilik-saja.
+// ownedQ: isi owned() dengan pelaksana query yang bisa diganti transaksi (tes).
 func ownedQ(ctx context.Context, q dbq, accountID, bookingID int64) (*orderSummary, int, error) {
-	row := q.QueryRowContext(ctx, orderSelect+` AND b.id = ? GROUP BY b.id`, accountID, bookingID)
+	row := q.QueryRowContext(ctx, orderSelect+` AND b.id = ? GROUP BY b.id`, accountID, accountID, bookingID)
 	it, n, err := scanOrder(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, 0, ErrNotFound
 	}
-	return it, n, err
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := tandaiPeran(ctx, q, it, accountID); err != nil {
+		return nil, 0, err
+	}
+	return it, n, nil
 }
 
 func bookingIDParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -392,8 +502,12 @@ func (o *Orders) ListPayments(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, _, err := o.owned(r.Context(), acc.ID, id); err != nil {
+	if _, _, err := o.owned(r.Context(), acc.ID, id); errors.Is(err, ErrNotFound) {
 		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
+		return
+	} else if err != nil {
+		log.Printf("[ERROR] account list payments: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil booking.")
 		return
 	}
 	payments, err := o.paymentRepo.ListByBookingID(r.Context(), id, nil)
