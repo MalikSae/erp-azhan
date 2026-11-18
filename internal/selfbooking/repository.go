@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/shared"
 )
@@ -38,23 +37,16 @@ func normalizeName(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), " "))
 }
 
-// inisiator menentukan siapa yang membuat booking. Pemesan selalu sebuah akun (accountID). Booking publik
-// (web, lewat link ref) dibuat akun biasa; booking portal agen diberi agenID = accountID: akun agen aktif
-// itu pemesan sekaligus agen pembuat booking, tanpa captcha. Agen penentu komisi bukan inisiator: komisi
-// mengikuti kunci jamaah (komisi.ProcessBookingLunas).
+// inisiator: pemesan booking, selalu sebuah akun. Mode agen atau akun biasa ditentukan status akun itu di
+// dalam transaksi (bacaPemesan), bukan oleh jalur yang dipanggil. Penerima komisi mengikuti kunci jamaah
+// (komisi.ProcessBookingLunas).
 type inisiator struct {
 	accountID int64
-	agenID    int64
 }
 
-// ProcessBooking membuat booking atas nama akun pelanggan yang sedang login.
+// ProcessBooking membuat booking atas nama akun pelanggan yang sedang login, untuk semua jalur.
 func (r *Repository) ProcessBooking(ctx context.Context, brandID, accountID int64, req BookingRequest) (*BookingResponse, error) {
 	return r.processBooking(ctx, brandID, req, inisiator{accountID: accountID})
-}
-
-// ProcessBookingAgen POST /api/portal/agen/bookings (portal agen).
-func (r *Repository) ProcessBookingAgen(ctx context.Context, brandID int64, req BookingRequest, agenID int64) (*BookingResponse, error) {
-	return r.processBooking(ctx, brandID, req, inisiator{accountID: agenID, agenID: agenID})
 }
 
 func (r *Repository) processBooking(ctx context.Context, brandID int64, req BookingRequest, ini inisiator) (*BookingResponse, error) {
@@ -76,14 +68,7 @@ func (r *Repository) processBooking(ctx context.Context, brandID int64, req Book
 
 func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req BookingRequest, ini inisiator) (*BookingResponse, error) {
 	var err error
-	modeAgen := ini.agenID > 0
-	if modeAgen {
-		if err := agen.ValidasiAgenAktif(ctx, tx, brandID, ini.agenID); err != nil {
-			return nil, ErrBukanAgenAktif
-		}
-	}
-	// Peringatan booking agen: jamaah yang sudah terkunci ke agen lain (komisi ke pemilik kunci).
-	var peringatan []string
+	asli := req // fingerprint idempotensi memakai request apa adanya, sebelum diisi server
 
 	// 1. Lock schedule
 	var scheduleStatus string
@@ -114,17 +99,23 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	if scheduleStatus != "published" {
 		return nil, ErrNotFound
 	}
-	if !modeAgen {
-		butuh := 1 // PIC
-		for _, a := range req.Anggota {
-			if a.PaxType == "reguler" {
-				butuh++
-			}
-		}
-		if err := cekBatasAkun(ctx, tx, ini.accountID, req.ScheduleID, butuh, batasAkunDefault); err != nil {
+	pem, err := bacaPemesan(ctx, tx, brandID, ini.accountID)
+	if err != nil {
+		return nil, err
+	}
+	ikut := !req.PemesanTidakIkut
+	if pem.agen && ikut {
+		if err := isiNIKPemesanAgen(ctx, tx, pem, &req); err != nil {
 			return nil, err
 		}
-	} else if err := cekBatasSeatAgen(ctx, tx, ini.agenID, req.ScheduleID, seatDibutuhkan(req)); err != nil {
+	}
+	// Batas menurut status akun: agen aktif memakai batas hold seat agen, akun lain batas akun.
+	if pem.agen {
+		err = cekBatasSeatAgen(ctx, tx, pem.id, req.ScheduleID, seatDibutuhkan(req))
+	} else {
+		err = cekBatasAkun(ctx, tx, pem.id, req.ScheduleID, seatDibutuhkan(req), batasAkunDefault)
+	}
+	if err != nil {
 		return nil, err
 	}
 
@@ -146,50 +137,34 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 
 	var picJamaahID int64
 
-	// 2. Penumpang pertama (PIC). Booking agen: dikenali dari NIK seperti penumpang lain; "Saya sendiri"
-	// menandai penumpang itu sebagai agen sendiri. Booking publik: pemesan yang ikut berangkat dicocokkan
-	// lewat NIK dan nama (resolvePIC); pemesan yang tidak ikut memesankan jamaah pertama.
-	if ini.accountID <= 0 {
+	// 2. Penumpang pertama (PIC). Pemesan yang ikut berangkat dicocokkan lewat NIK dan nama (resolvePIC;
+	// agen: NIK dari profil agen); pemesan yang tidak ikut memesankan jamaah pertama.
+	if pem.id <= 0 {
 		return nil, ErrAkunTidakValid
 	}
-	if modeAgen {
+	if req.PemesanTidakIkut {
 		var hp *string
 		if req.PIC.NoHP != "" {
 			hp = &req.PIC.NoHP
 		}
-		var terkunci bool
-		picJamaahID, terkunci, err = resolvePaxAgen(ctx, tx, brandID, ini.agenID, req.PIC.JamaahID, AnggotaInput{
-			PaxType: "reguler", NamaLengkap: req.PIC.NamaLengkap, NoHP: hp, JenisKelamin: req.PIC.JenisKelamin, NIK: req.PIC.NIK, Nomor: 1,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if req.PIC.SayaSendiri {
-			if err := pastikanSayaSendiri(ctx, tx, ini.agenID, picJamaahID); err != nil {
-				return nil, err
-			}
-		} else if terkunci {
-			peringatan = append(peringatan, fmt.Sprintf(pesanJamaahTerkunci, 1))
-		}
-	} else if req.PemesanTidakIkut {
-		// Pemesan tidak berangkat: PIC booking = jamaah pertama, diperlakukan seperti anggota.
-		var hp *string
-		if req.PIC.NoHP != "" {
-			hp = &req.PIC.NoHP
-		}
-		picJamaahID, err = resolveAnggotaPublik(ctx, tx, brandID, ini.accountID, AnggotaInput{
+		picJamaahID, err = resolvePax(ctx, tx, brandID, pem, req.PIC.JamaahID, AnggotaInput{
 			PaxType: "reguler", NamaLengkap: req.PIC.NamaLengkap, NoHP: hp, JenisKelamin: req.PIC.JenisKelamin, NIK: req.PIC.NIK, Nomor: 1,
 		})
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		if picJamaahID, err = resolvePIC(ctx, tx, brandID, ini.accountID, req.PIC); err != nil {
+		if picJamaahID, err = resolvePIC(ctx, tx, brandID, pem.id, req.PIC); err != nil {
 			return nil, err
 		}
-		// Pemesan ikut berangkat: bila jamaahnya (NIK cocok) sudah dikunci agen X dan akunnya belum punya pengikat, akun menjadi downline X.
-		if err := agen.IkatAkunDariJamaah(ctx, tx, ini.accountID, picJamaahID); err != nil {
-			return nil, err
+		if pem.agen {
+			diri, err := jamaahDiriAgen(ctx, tx, pem, picJamaahID)
+			if err != nil {
+				return nil, err
+			}
+			if !diri {
+				return nil, ErrSayaSendiriBukanAnda
+			}
 		}
 	}
 
@@ -229,18 +204,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	anggotaJamaahIDs := make([]int64, len(req.Anggota))
 	for i, a := range req.Anggota {
 		a.Nomor = i + 2
-		if modeAgen {
-			id, terkunci, err := resolvePaxAgen(ctx, tx, brandID, ini.agenID, a.JamaahID, a)
-			if err != nil {
-				return nil, err
-			}
-			if terkunci {
-				peringatan = append(peringatan, fmt.Sprintf(pesanJamaahTerkunci, a.Nomor))
-			}
-			anggotaJamaahIDs[i] = id
-			continue
-		}
-		id, err := resolveAnggotaPublik(ctx, tx, brandID, ini.accountID, a)
+		id, err := resolvePax(ctx, tx, brandID, pem, a.JamaahID, a)
 		if err != nil {
 			return nil, err
 		}
@@ -283,22 +247,10 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		}
 	}
 
-	// Kunci jamaah ke agen (spek 4.2, first-set-wins: hanya jamaah belum_ditentukan yang diikat). Portal agen:
-	// agen pembuat booking. Web publik: agen yang mengikat akun pemesan; cookie referral tidak dibaca di sini.
-	// Tanpa keduanya, jamaah tetap belum_ditentukan.
+	// Kunci jamaah lewat satu pintu (kunci.go); cookie referral tidak dibaca di sini.
 	semuaJamaah := append([]int64{picJamaahID}, anggotaJamaahIDs...)
-	if modeAgen {
-		if err := ikatJamaahAgen(ctx, tx, semuaJamaah, ini.agenID); err != nil {
-			return nil, err
-		}
-	} else {
-		agenAkun, err := agen.UplineAkun(ctx, tx, ini.accountID)
-		if err != nil {
-			return nil, err
-		}
-		if err := agen.IkatRombongan(ctx, tx, semuaJamaah, agenAkun, agen.SumberReferral); err != nil {
-			return nil, err
-		}
+	if err := kunciJamaahPemesan(ctx, tx, pem, picJamaahID, ikut, semuaJamaah); err != nil {
+		return nil, err
 	}
 
 	// 7. Generate booking code
@@ -317,7 +269,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, seat_hold_expires_at, customer_account_id, pemesan_ikut, dibuat_oleh_agen_akun_id)
 		VALUES (?, ?, ?, ?, 'baru', TRUE, ?, ?, ?, ?)
-	`, bookingCode, req.ScheduleID, picJamaahID, regulerPaxCount, seatHoldExpiresAt, nullableID(ini.accountID), pemesanIkut(modeAgen, req), nullableID(ini.agenID))
+	`, bookingCode, req.ScheduleID, picJamaahID, regulerPaxCount, seatHoldExpiresAt, nullableID(ini.accountID), ikut, agenPembuat(pem))
 	if err != nil {
 		return nil, fmt.Errorf("insert booking: %w", err)
 	}
@@ -351,9 +303,9 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		RoomType: &req.PIC.RoomType,
 		Harga:    picHarga,
 	})
-	var sayaSendiri any // komisi langsung atas diri agen sendiri (K13), hanya portal agen
-	if modeAgen && req.PIC.SayaSendiri {
-		sayaSendiri = ini.agenID
+	var sayaSendiri any // komisi langsung atas diri agen sendiri (K13), semua jalur
+	if pem.agen && ikut {
+		sayaSendiri = pem.id
 	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO booking_pax (booking_id, jamaah_id, pax_type, room_type, harga_pax, counts_for_seat, pax_status, saya_sendiri_akun_id)
@@ -482,7 +434,6 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 			IDJamaah: idJamaahPIC,
 		},
 		BankAccounts: bankAccounts,
-		Peringatan:   peringatan,
 	}
 	invoiceToken, err := newInvoiceToken()
 	if err != nil {
@@ -502,7 +453,7 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	var keyHash, fingerprint any
 	if req.RequestKey != "" {
 		keyHash = hashText(req.RequestKey)
-		fingerprint = requestFingerprint(req, ini)
+		fingerprint = requestFingerprint(asli, ini)
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO booking_checkout(booking_id,dp_per_pax,full_payment,due_at,original_expires_at,invoice_token,terms_version,accepted_at,request_key_hash,request_hash,response_json) VALUES(?,?,?,?,?,?,?,NOW(),?,?,?)`, bookingID, dpPerReguler, fullPayment, dueAt, seatHoldExpiresAt, invoiceToken, req.TermsVersion, keyHash, fingerprint, raw)
 	if err != nil {
@@ -630,12 +581,10 @@ func travelersUntukSimpan(req BookingRequest) []AnggotaInput {
 	return append([]AnggotaInput{pertama}, req.Anggota...)
 }
 
-// pemesanIkut: apakah pemilik akun yang memesan ikut berangkat. Disimpan di bookings.pemesan_ikut supaya
-// detail booking tidak perlu menebaknya. Booking agen: ikut hanya bila jamaah pertama "Saya sendiri".
-// Booking publik: ikut kecuali pemesan memilih memesankan untuk orang lain.
-func pemesanIkut(modeAgen bool, req BookingRequest) bool {
-	if modeAgen {
-		return req.PIC.SayaSendiri
+// agenPembuat: isi bookings.dibuat_oleh_agen_akun_id, akun pemesan bila agen aktif (jalur mana pun), selain itu NULL.
+func agenPembuat(p pemesan) any {
+	if p.agen {
+		return p.id
 	}
-	return !req.PemesanTidakIkut
+	return nil
 }

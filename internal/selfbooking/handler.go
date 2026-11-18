@@ -23,7 +23,7 @@ const (
 	// berbagi satu IP operator (CGNAT). Batas per IP tetap ada sebagai penahan banyak akun dari satu alamat.
 	bookingAccountAttemptLimit = 20  // percobaan POST booking per akun per jam
 	bookingIPAttemptLimit      = 120 // percobaan POST booking per IP per jam
-	bookingAccountSuccessLimit = 3  // booking berhasil per akun per 24 jam (ditegakkan juga di DB, lihat cekBatasAkun)
+	bookingAccountSuccessLimit = 3   // booking berhasil per akun per 24 jam (ditegakkan juga di DB, lihat cekBatasAkun)
 	// Validasi NIK/nomor anggota yang gagal (data milik jamaah lain) per akun per jendela; menahan
 	// penebakan NIK/nomor lewat pesan galat.
 	identitasGagalAccountLimit  = 5
@@ -46,7 +46,6 @@ type Handler struct {
 	bookingByIP      *windowLimiter
 	bookingAttempt   *windowLimiter // percobaan booking per akun per jam
 	bookingByAccount *windowLimiter
-	bookingByAgen    *windowLimiter
 	identitasGagal   *windowLimiter
 	// Email konfirmasi "Booking berhasil dibuat" (hanya booking mandiri pelanggan).
 	mail     mailer.Sender
@@ -65,7 +64,6 @@ func NewHandler(repo *Repository, m mailer.Sender) *Handler {
 		bookingByIP:      newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingAttempt:   newWindowLimiter(bookingAccountAttemptLimit, time.Hour),
 		bookingByAccount: newWindowLimiter(bookingAccountSuccessLimit, 24*time.Hour),
-		bookingByAgen:    newWindowLimiter(agenBookingLimit, time.Hour),
 		identitasGagal:   newWindowLimiter(identitasGagalAccountLimit, identitasGagalAccountWindow),
 	}
 }
@@ -74,9 +72,19 @@ func getClientIP(r *http.Request) string {
 	return shared.ClientIP(r)
 }
 
+// jalurBooking: pintu HTTP booking. Logika inti sama untuk semuanya; yang beda hanya captcha (web) dan
+// bawaan payload endpoint portal agen lama.
+type jalurBooking int
+
+const (
+	jalurWeb jalurBooking = iota
+	jalurApp
+	jalurPortalAgen
+)
+
 // CreateBooking POST /api/account/bookings (butuh sesi akun pelanggan).
 func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
-	h.buatBooking(w, r, true)
+	h.buatBooking(w, r, jalurWeb)
 }
 
 // CreateBookingApp POST /api/account/bookings-app: booking dari app Hana/Alsha (keputusan 14 November 2026).
@@ -84,14 +92,26 @@ func (h *Handler) CreateBooking(w http.ResponseWriter, r *http.Request) {
 // masuk, dan pembatas yang sama tetap berlaku: percobaan per akun dan per IP, booking harian per akun, dan hold
 // seat per akun.
 func (h *Handler) CreateBookingApp(w http.ResponseWriter, r *http.Request) {
-	h.buatBooking(w, r, false)
+	h.buatBooking(w, r, jalurApp)
 }
 
-func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptcha bool) {
+// CreateBookingAgen POST /api/portal/agen/bookings: alias tipis. Payload lama diterjemahkan (pic.saya_sendiri
+// menjadi pemesan_tidak_ikut=false; bawaan portal: pemesan tidak ikut), lalu diproses jalur inti. Bentuk
+// respons tetap.
+func (h *Handler) CreateBookingAgen(w http.ResponseWriter, r *http.Request) {
+	h.buatBooking(w, r, jalurPortalAgen)
+}
+
+func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalurBooking) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	account := customer.FromContext(r.Context())
 	if account == nil {
 		writeError(w, http.StatusUnauthorized, "Sesi berakhir. Masuk kembali.")
+		return
+	}
+	agenAktif := account.StatusAgen == "aktif"
+	if jalur == jalurPortalAgen && !agenAktif {
+		writeError(w, http.StatusForbidden, ErrBukanAgenAktif.Error())
 		return
 	}
 	// Batas percobaan per akun dulu, lalu per IP. Ditolak di batas IP: jatah akun dikembalikan.
@@ -112,20 +132,24 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
+	if jalur == jalurPortalAgen {
+		req.PemesanTidakIkut = !req.PIC.SayaSendiri
+	}
+	req.PIC.SayaSendiri = false
 	// Brand dan identitas pemesan berasal dari akun, bukan dari payload.
 	req.BrandID = account.BrandID
-	if strings.TrimSpace(req.PIC.NamaLengkap) == "" {
-		req.PIC.NamaLengkap = account.NamaLengkap
-	}
 	if req.PemesanTidakIkut {
 		// PIC = jamaah pertama yang diisi pemesan; kontak pemesan tetap di akun.
 		req.PIC.Email = nil
 	} else {
+		if strings.TrimSpace(req.PIC.NamaLengkap) == "" {
+			req.PIC.NamaLengkap = account.NamaLengkap
+		}
 		req.PIC.NoHP = account.NoHP
 		req.PIC.Email = &account.Email
 	}
 	// Gate 1: Captcha (web saja). Opsional: tanpa TURNSTILE_SECRET_KEY gate ini dilewati, lihat turnstile.go.
-	if pakaiCaptcha && !h.lolosCaptcha(w, r.Context(), req.CaptchaToken, clientIP) {
+	if jalur == jalurWeb && !h.lolosCaptcha(w, r.Context(), req.CaptchaToken, clientIP) {
 		return
 	}
 
@@ -141,13 +165,21 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 		return
 	}
 
+	// Gate 3b: jamaah_id (Jamaah Saya) hanya untuk agen aktif.
+	if !agenAktif && adaJamaahID(&req) {
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		return
+	}
+
 	// Gate 4: PIC
 	req.PIC.NamaLengkap = strings.TrimSpace(req.PIC.NamaLengkap)
 	req.PIC.NoHP = strings.TrimSpace(req.PIC.NoHP)
 	req.PIC.JenisKelamin = strings.TrimSpace(req.PIC.JenisKelamin)
 	req.PIC.RoomType = strings.TrimSpace(req.PIC.RoomType)
 
-	if req.PIC.NamaLengkap == "" || (req.PIC.NoHP == "" && !req.PemesanTidakIkut) || req.PIC.JenisKelamin == "" || req.PIC.RoomType == "" {
+	pintasPIC := agenAktif && req.PemesanTidakIkut && req.PIC.JamaahID != nil
+	if (!pintasPIC && (req.PIC.NamaLengkap == "" || req.PIC.JenisKelamin == "")) ||
+		(req.PIC.NoHP == "" && !req.PemesanTidakIkut) || req.PIC.RoomType == "" {
 		writeError(w, http.StatusBadRequest, "Data jamaah utama tidak lengkap.")
 		return
 	}
@@ -164,7 +196,8 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 		req.Anggota[i].JenisKelamin = strings.TrimSpace(a.JenisKelamin)
 		req.Anggota[i].PaxType = strings.TrimSpace(a.PaxType)
 
-		if req.Anggota[i].NamaLengkap == "" || req.Anggota[i].JenisKelamin == "" || req.Anggota[i].PaxType == "" {
+		pintas := agenAktif && a.JamaahID != nil
+		if (!pintas && (req.Anggota[i].NamaLengkap == "" || req.Anggota[i].JenisKelamin == "")) || req.Anggota[i].PaxType == "" {
 			writeError(w, http.StatusBadRequest, "Data anggota tidak lengkap.")
 			return
 		}
@@ -196,21 +229,22 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 	accountKey := strconv.FormatInt(account.ID, 10)
 	// Slot dipesan atomik sebelum transaksi booking: request paralel tidak bisa melampaui batas sebelum
 	// hasilnya tercatat. Slot booking dikembalikan bila booking tidak jadi dibuat (gagal atau jawaban ulang);
-	// slot identitas dikembalikan kecuali percobaan gagal karena NIK atas nama lain.
-	if !h.bookingByAccount.Take(accountKey) {
+	// slot identitas dikembalikan kecuali percobaan gagal karena identitas jamaah. Batas harian hanya untuk
+	// akun biasa: agen aktif dibatasi hold seat agen (cekBatasSeatAgen).
+	if !agenAktif && !h.bookingByAccount.Take(accountKey) {
 		writeErrorCode(w, http.StatusTooManyRequests, ErrBatasBookingHarian.Error(), KodeBatasBookingHarian)
 		return
 	}
 	bookingBaru := false
 	defer func() {
-		if !bookingBaru {
+		if !agenAktif && !bookingBaru {
 			h.bookingByAccount.Refund(accountKey)
 		}
 	}()
 	identitasSalah := false
 	if h.identitasGagal != nil {
 		if !h.identitasGagal.Take(accountKey) {
-			writeErrorCode(w, http.StatusTooManyRequests, "Terlalu banyak percobaan dengan data jamaah yang belum dapat diproses. Coba lagi dalam 10 menit atau hubungi kami via WhatsApp.", KodeIdentitasTerlaluSering)
+			writeErrorCode(w, http.StatusTooManyRequests, "Terlalu banyak percobaan. Coba lagi dalam 10 menit.", KodeIdentitasTerlaluSering)
 			return
 		}
 		defer func() {
@@ -221,7 +255,7 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 	}
 
 	// Process
-	if msg := validateCheckout(&req, false); msg != "" {
+	if msg := validateCheckout(&req, agenAktif); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -231,45 +265,77 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, pakaiCaptc
 	}
 	resp, err := book(r.Context(), req.BrandID, account.ID, req)
 	if err != nil {
-		if errors.Is(err, ErrQuoteChanged) || errors.Is(err, ErrRequestConflict) {
-			writeError(w, http.StatusConflict, err.Error())
-			return
-		}
-		if errors.Is(err, ErrBatasSeatAkun) {
-			writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasSeatAkun)
-			return
-		}
-		if errors.Is(err, ErrBatasBookingHarian) {
-			writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasBookingHarian)
-			return
-		}
-		if errors.Is(err, ErrNIKAtasNamaLain) {
+		if errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrJamaahBukanMilik) || errors.Is(err, ErrSayaSendiriBukanAnda) {
 			identitasSalah = true
 		}
-		if errors.Is(err, ErrSeatHabis) || errors.Is(err, ErrDuplicate) ||
-			errors.Is(err, ErrDuplicatePaxInBooking) ||
-			errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrAkunTidakValid) || errors.Is(err, ErrCutoffBooking) ||
-			errors.Is(err, ErrTanggalLahirTidakValid) || errors.Is(err, ErrUsiaInfant) || errors.Is(err, ErrInfantUnavailable) || errors.Is(err, ErrInvalidDP) {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusNotFound, "Jadwal atau brand tidak ditemukan.")
-			return
-		}
-		log.Printf("[ERROR] ProcessBooking: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		tulisGalatBooking(w, err, jalur == jalurPortalAgen)
 		return
 	}
 	if !resp.Replayed {
 		bookingBaru = true
+		if agenAktif {
+			log.Printf("[AUDIT] booking_agen agen_id=%d booking=%s", account.ID, resp.Booking.BookingCode)
+		}
 		// Email hanya untuk booking baru; jawaban ulang (retry idempoten) tidak mengirim ulang.
 		h.notifyBookingCreated(account, req.ScheduleID, resp)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// adaJamaahID: ada pax yang memilih jamaah lewat jamaah_id.
+func adaJamaahID(req *BookingRequest) bool {
+	if req.PIC.JamaahID != nil {
+		return true
+	}
+	for _, a := range req.Anggota {
+		if a.JamaahID != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// tulisGalatBooking memetakan galat booking ke jawaban HTTP, sama untuk semua jalur. Galat khusus agen hanya
+// muncul bila pemesannya agen aktif (repository yang menentukan).
+func tulisGalatBooking(w http.ResponseWriter, err error, portal bool) {
+	switch {
+	case errors.Is(err, ErrQuoteChanged), errors.Is(err, ErrRequestConflict):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, ErrBukanAgenAktif):
+		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, ErrBatasSeatAgen):
+		var be *BatasSeatAgenError
+		if errors.As(err, &be) {
+			// Sisa seat dikirim sebagai data juga, bukan hanya di dalam pesan, agar app bisa menampilkannya.
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{
+				"error": err.Error(), "code": KodeBatasSeatAgen,
+				"batas_per_jadwal": be.BatasPerJadwal, "batas_total": be.BatasTotal,
+				"sisa_per_jadwal": be.SisaPerJadwal, "sisa_total": be.SisaTotal,
+			})
+			return
+		}
+		writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasSeatAgen)
+	case errors.Is(err, ErrBatasSeatAkun):
+		writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasSeatAkun)
+	case errors.Is(err, ErrBatasBookingHarian):
+		writeErrorCode(w, http.StatusTooManyRequests, err.Error(), KodeBatasBookingHarian)
+	case errors.Is(err, ErrSeatHabis), errors.Is(err, ErrDuplicate), errors.Is(err, ErrDuplicatePaxInBooking),
+		errors.Is(err, ErrNIKAtasNamaLain), errors.Is(err, ErrJamaahBukanMilik), errors.Is(err, ErrSayaSendiriBukanAnda),
+		errors.Is(err, ErrNIKAgenBelumAda), errors.Is(err, ErrInputTidakValid),
+		errors.Is(err, ErrAkunTidakValid), errors.Is(err, ErrCutoffBooking),
+		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant), errors.Is(err, ErrInfantUnavailable), errors.Is(err, ErrInvalidDP):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, ErrNotFound):
+		if portal {
+			writeError(w, http.StatusNotFound, "Jadwal tidak ditemukan.")
+			return
+		}
+		writeError(w, http.StatusNotFound, "Jadwal atau brand tidak ditemukan.")
+	default:
+		log.Printf("[ERROR] ProcessBooking: %v", err)
+		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+	}
 }
 
 // lolosCaptcha memeriksa token captcha booking web dan menulis galat bila gagal.

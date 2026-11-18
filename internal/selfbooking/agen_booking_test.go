@@ -54,10 +54,17 @@ func kaitan(t *testing.T, tx *sql.Tx, id int64) (string, int64, string) {
 }
 
 func agenReq(sched int64, pic PICInput, anggota ...AnggotaInput) BookingRequest {
+	// Bawaan portal agen lama: pemesan tidak ikut berangkat.
+	return BookingRequest{ScheduleID: sched, PemesanTidakIkut: true, PIC: pic, Anggota: anggota}
+}
+
+// agenIkut: pemesan agen ikut berangkat; NIK jamaah pertama diisi server dari profil agen.
+func agenIkut(sched int64, pic PICInput, anggota ...AnggotaInput) BookingRequest {
 	return BookingRequest{ScheduleID: sched, PIC: pic, Anggota: anggota}
 }
 
-func inisiatorAgen(agenID int64) inisiator { return inisiator{accountID: agenID, agenID: agenID} }
+// inisiatorAgen: pemesan adalah akun itu; mode agen ditentukan status akunnya di database.
+func inisiatorAgen(agenID int64) inisiator { return inisiator{accountID: agenID} }
 
 // Portal agen: jamaah baru terikat ke agen pembuat booking, jamaah miliknya dipakai ulang
 // (booking ulang), agen bukan pax/PIC. Pemesan dan agen pembuat sama-sama akun agen.
@@ -75,9 +82,6 @@ func TestBookingAgenPortal(t *testing.T) {
 	resp, err := processBookingTx(ctx, tx, brand, req, inisiatorAgen(agenID))
 	if err != nil {
 		t.Fatalf("booking agen: %v", err)
-	}
-	if len(resp.Peringatan) != 0 {
-		t.Fatalf("peringatan = %v, want kosong", resp.Peringatan)
 	}
 	var bookingID, pic int64
 	var status string
@@ -114,9 +118,9 @@ func TestBookingAgenPortal(t *testing.T) {
 	}
 }
 
-// K16: jamaah yang sudah terkunci agen lain tidak lagi ditolak. Booking jalan dengan peringatan
-// generik, kunci tidak berubah, booking tercatat milik agen pembuat, komisi mengalir ke pemilik kunci.
-func TestBookingAgenJamaahTerkunciAgenLainJalanDenganPeringatan(t *testing.T) {
+// K16: jamaah yang sudah terkunci agen lain tidak ditolak dan tidak ada peringatan di respons. Booking jalan,
+// kunci tidak berubah, booking tercatat milik agen pembuat, komisi mengalir ke pemilik kunci.
+func TestBookingAgenJamaahTerkunciAgenLainTanpaPeringatan(t *testing.T) {
 	tx, sched, brand, agenY := setupAgenBooking(t)
 	ctx := context.Background()
 	agenX := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenX", StatusAgen: "aktif"})
@@ -128,13 +132,6 @@ func TestBookingAgenJamaahTerkunciAgenLainJalanDenganPeringatan(t *testing.T) {
 	resp, err := processBookingTx(ctx, tx, brand, req, inisiatorAgen(agenY))
 	if err != nil {
 		t.Fatalf("booking agen: %v", err)
-	}
-	if len(resp.Peringatan) != 1 || !strings.Contains(resp.Peringatan[0], "sudah terikat agen lain") ||
-		!strings.Contains(resp.Peringatan[0], "tidak menghasilkan komisi untuk Anda") {
-		t.Fatalf("peringatan = %v", resp.Peringatan)
-	}
-	if strings.Contains(resp.Peringatan[0], "AgenX") || strings.Contains(resp.Peringatan[0], "Terkunci") {
-		t.Fatalf("peringatan membuka data pemilik kunci atau jamaah: %q", resp.Peringatan[0])
 	}
 	if resp.Jamaah.ID != terkunci {
 		t.Fatalf("jamaah = %d, want jamaah terkunci %d (NIK dan nama cocok)", resp.Jamaah.ID, terkunci)
@@ -215,13 +212,10 @@ func TestBookingAgenSayaSendiriKomisiUntukUpline(t *testing.T) {
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nik, x) // NIK yang diisi X saat mendaftar agen (K24)
 	jamaahX := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Agen X", Direkrut: a, NIK: nik})
 
-	req := agenReq(sched, PICInput{NamaLengkap: "Agen X (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nik), SayaSendiri: true})
+	req := agenIkut(sched, PICInput{NamaLengkap: "Agen X (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nik)})
 	resp, err := processBookingTx(ctx, tx, brand, req, inisiatorAgen(x))
 	if err != nil {
 		t.Fatalf("booking: %v", err)
-	}
-	if len(resp.Peringatan) != 0 {
-		t.Fatalf("Saya sendiri tidak boleh diberi peringatan: %v", resp.Peringatan)
 	}
 	if resp.Jamaah.ID != jamaahX {
 		t.Fatalf("jamaah = %d, want %d", resp.Jamaah.ID, jamaahX)
@@ -266,24 +260,44 @@ func TestBookingAgenSayaSendiriDitolakBilaNIKBukanMilikAgen(t *testing.T) {
 	testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Jamaah W", Direkrut: x, NIK: nikW})
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nikUji(), z)
 
-	req := agenReq(sched, PICInput{NamaLengkap: "Jamaah W (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikW), SayaSendiri: true})
+	req := agenIkut(sched, PICInput{NamaLengkap: "Jamaah W (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikW)})
 	if _, err := processBookingTx(ctx, tx, brand, req, inisiatorAgen(z)); !errors.Is(err, ErrSayaSendiriBukanAnda) {
 		t.Fatalf("err = %v, want ErrSayaSendiriBukanAnda", err)
 	}
 
-	// Agen tanpa NIK tersimpan juga ditolak (tidak ada pembanding).
+	// Agen tanpa NIK tersimpan: ErrNIKAgenBelumAda.
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=NULL WHERE id=?`, z)
-	if _, err := processBookingTx(ctx, tx, brand, req, inisiatorAgen(z)); !errors.Is(err, ErrSayaSendiriBukanAnda) {
-		t.Fatalf("tanpa nik_agen: err = %v, want ErrSayaSendiriBukanAnda", err)
+	if _, err := processBookingTx(ctx, tx, brand, agenIkut(sched, PICInput{NamaLengkap: "Jamaah W (uji)", JenisKelamin: "L", RoomType: "Quad"}), inisiatorAgen(z)); !errors.Is(err, ErrNIKAgenBelumAda) {
+		t.Fatalf("tanpa nik_agen: err = %v, want ErrNIKAgenBelumAda", err)
 	}
 }
 
-func TestBookingAgenNonaktifDitolak(t *testing.T) {
+// Agen nonaktif atau pengajuan memesan sebagai akun biasa: tidak ada pembuat agen, kunci lewat upline akun,
+// batas akun 9/18 dan batas harian berlaku.
+func TestBookingAgenNonaktifDanPengajuanSepertiAkunBiasa(t *testing.T) {
+	for _, status := range []string{"nonaktif", "pengajuan"} {
+		t.Run(status, func(t *testing.T) { agenSepertiAkunBiasa(t, status) })
+	}
+}
+
+func agenSepertiAkunBiasa(t *testing.T, status string) {
 	tx, sched, brand, agenID := setupAgenBooking(t)
-	testdb.Exec(t, tx, `UPDATE customer_accounts SET status_agen='nonaktif' WHERE id=?`, agenID)
-	req := agenReq(sched, PICInput{NamaLengkap: "X", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikUji())})
-	if _, err := processBookingTx(context.Background(), tx, brand, req, inisiatorAgen(agenID)); !errors.Is(err, ErrBukanAgenAktif) {
-		t.Fatalf("err = %v, want ErrBukanAgenAktif", err)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET status_agen=? WHERE id=?`, status, agenID)
+	resp, err := processBookingTx(context.Background(), tx, brand, agenReq(sched, PICInput{NamaLengkap: "X", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikUji())}), inisiatorAgen(agenID))
+	if err != nil {
+		t.Fatalf("%s: %v", status, err)
+	}
+	var pembuat sql.NullInt64
+	if err := tx.QueryRow(`SELECT dibuat_oleh_agen_akun_id FROM bookings WHERE id=?`, resp.Booking.BookingID).Scan(&pembuat); err != nil || pembuat.Valid {
+		t.Fatalf("%s: pembuat agen = %v (err %v), want NULL", status, pembuat, err)
+	}
+	if st, _, _ := kaitan(t, tx, resp.Jamaah.ID); st != "belum_ditentukan" {
+		t.Fatalf("%s: jamaah dikunci ke pemesan: %s", status, st)
+	}
+	// Tanpa agen aktif, batas hold seat agen tidak dipakai: batas akun 9 per jadwal.
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET batas_seat_agen_per_jadwal=1, batas_seat_agen_total=1 WHERE id=?`, agenID)
+	if _, err := processBookingTx(context.Background(), tx, brand, agenReq(sched, PICInput{NamaLengkap: "Y", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikUji())}, AnggotaInput{PaxType: "reguler", NamaLengkap: "Z", JenisKelamin: "L", RoomType: quad(), NIK: nikp(nikUji())}), inisiatorAgen(agenID)); err != nil {
+		t.Fatalf("%s: batas akun biasa seharusnya lolos: %v", status, err)
 	}
 }
 
@@ -293,8 +307,8 @@ func TestValidasiPortalAgenWajibNIK(t *testing.T) {
 		total, dp := 1000.0, 0.0
 		return BookingRequest{
 			RequestKey: strings.Repeat("a", 32), TermsVersion: TermsVersion, TermsAccepted: true, ExpectedTotal: &total, ExpectedDP: &dp,
-			ScheduleID: 1,
-			PIC:        PICInput{NamaLengkap: "Agen Baru", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikUjiValid)},
+			ScheduleID: 1, PemesanTidakIkut: true,
+			PIC: PICInput{NamaLengkap: "Agen Baru", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikUjiValid)},
 		}
 	}
 	req := base()
@@ -305,6 +319,16 @@ func TestValidasiPortalAgenWajibNIK(t *testing.T) {
 	req.PIC.NIK = nil
 	if msg := validateCheckout(&req, true); !strings.Contains(msg, "NIK jamaah 1") {
 		t.Fatalf("PIC tanpa NIK: %q", msg)
+	}
+	// Agen aktif yang ikut berangkat: NIK jamaah pertama diisi server, jadi boleh kosong; bila diisi harus valid.
+	req = base()
+	req.PemesanTidakIkut, req.PIC.NIK = false, nil
+	if msg := validateCheckout(&req, true); msg != "" {
+		t.Fatalf("agen ikut tanpa NIK harus lolos: %q", msg)
+	}
+	req.PIC.NIK = nikp("123")
+	if msg := validateCheckout(&req, true); !strings.Contains(msg, "NIK jamaah 1") {
+		t.Fatalf("agen ikut NIK tidak valid: %q", msg)
 	}
 	req = base()
 	req.Anggota = []AnggotaInput{{PaxType: "reguler", NamaLengkap: "Anggota", JenisKelamin: "P", RoomType: quad()}}
@@ -405,7 +429,7 @@ func TestBookingAgenJamaahDiriDikunciKeUpline(t *testing.T) {
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nikX, x)
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nikTanpa, tanpa)
 
-	req := agenReq(sched, PICInput{NamaLengkap: "Agen X (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikX), SayaSendiri: true})
+	req := agenIkut(sched, PICInput{NamaLengkap: "Agen X (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikX)})
 	req.Anggota = []AnggotaInput{{PaxType: "reguler", NamaLengkap: "Keluarga X", JenisKelamin: "P", RoomType: quad(), NIK: nikp(nikUji())}}
 	resp, err := processBookingTx(ctx, tx, brand, req, inisiatorAgen(x))
 	if err != nil {
@@ -422,7 +446,7 @@ func TestBookingAgenJamaahDiriDikunciKeUpline(t *testing.T) {
 		t.Fatalf("jamaah keluarga X = %s/%d, want terikat_agen/%d", st, by, x)
 	}
 
-	req2 := agenReq(sched, PICInput{NamaLengkap: "Agen Tanpa (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikTanpa), SayaSendiri: true})
+	req2 := agenIkut(sched, PICInput{NamaLengkap: "Agen Tanpa (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikTanpa)})
 	resp2, err := processBookingTx(ctx, tx, brand, req2, inisiatorAgen(tanpa))
 	if err != nil {
 		t.Fatalf("booking tanpa upline: %v", err)

@@ -29,7 +29,6 @@ func newTestHandler(t *testing.T, siteverifyBody string, siteverifyStatus int) *
 		bookingByIP:      newWindowLimiter(bookingIPAttemptLimit, time.Hour),
 		bookingAttempt:   newWindowLimiter(bookingAccountAttemptLimit, time.Hour),
 		bookingByAccount: newWindowLimiter(bookingAccountSuccessLimit, 24*time.Hour),
-		bookingByAgen:    newWindowLimiter(agenBookingLimit, time.Hour),
 		identitasGagal:   newWindowLimiter(identitasGagalAccountLimit, identitasGagalAccountWindow),
 	}
 	if siteverifyBody != "" {

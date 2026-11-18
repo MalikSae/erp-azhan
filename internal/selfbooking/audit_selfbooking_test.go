@@ -18,7 +18,7 @@ func TestAuditSelfBookingDuplicateMember(t *testing.T) {
 	nikMember := nikUji()
 	member := testdb.NewJamaah(t, tx, brandID, testdb.JamaahOpts{Nama: "Audit shared member", Direkrut: agentID, NIK: nikMember})
 	for i := 0; i < 2; i++ {
-		req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Audit PIC", NoHP: nomorUji(800 + i), JenisKelamin: "L", RoomType: "Quad"}, Anggota: []AnggotaInput{{JamaahID: &member, NamaLengkap: "Audit shared member (uji)", JenisKelamin: "L", PaxType: "reguler", RoomType: quad(), NIK: &nikMember}}}
+		req := BookingRequest{ScheduleID: scheduleID, PemesanTidakIkut: true, PIC: PICInput{NamaLengkap: "Audit PIC", NoHP: nomorUji(800 + i), JenisKelamin: "L", RoomType: "Quad"}, Anggota: []AnggotaInput{{JamaahID: &member, NamaLengkap: "Audit shared member (uji)", JenisKelamin: "L", PaxType: "reguler", RoomType: quad(), NIK: &nikMember}}}
 		_, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 		if i == 0 && err != nil {
 			t.Fatal(err)
@@ -149,7 +149,7 @@ func TestAuditSelfBookingExistingAdultAsInfant(t *testing.T) {
 	member := testdb.NewJamaah(t, tx, brandID, testdb.JamaahOpts{Nama: "Audit adult", Direkrut: agentID})
 	testdb.Exec(t, tx, `UPDATE jamaah SET tanggal_lahir='1990-01-01' WHERE id=?`, member)
 	suppliedDOB := time.Now().AddDate(0, -6, 0).Format("2006-01-02")
-	req := BookingRequest{ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Audit infant PIC", NoHP: nomorUji(950), JenisKelamin: "L", RoomType: "Quad"}, Anggota: []AnggotaInput{{JamaahID: &member, NamaLengkap: "Audit adult (uji)", JenisKelamin: "L", PaxType: "infant", TanggalLahir: &suppliedDOB}}}
+	req := BookingRequest{ScheduleID: scheduleID, PemesanTidakIkut: true, PIC: PICInput{NamaLengkap: "Audit infant PIC", NoHP: nomorUji(950), JenisKelamin: "L", RoomType: "Quad"}, Anggota: []AnggotaInput{{JamaahID: &member, NamaLengkap: "Audit adult (uji)", JenisKelamin: "L", PaxType: "infant", TanggalLahir: &suppliedDOB}}}
 	if _, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID)); !errors.Is(err, ErrUsiaInfant) {
 		t.Fatalf("adult as infant: %v", err)
 	}

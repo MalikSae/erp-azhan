@@ -61,7 +61,7 @@ _Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti k
 
 **Override admin**: pemindahan kunci jamaah atau pemasangan upline akun oleh Admin Master (izin `agen.kaitan.edit`), lewat modal "Ganti agen" di detail Jamaah dan "Ganti upline" di detail Akun. Halaman terpisah `/komisi/ganti-kaitan` (layar C4) sudah dihapus.
 
-**Saya sendiri**: pilihan di form booking portal agen untuk jamaah pertama. Menandai booking pribadi agen; agen tidak mendapat komisi dari booking dirinya sendiri, komisinya mengalir ke upline agen.
+**Saya sendiri**: pemesan agen aktif yang ikut berangkat (`pemesan_tidak_ikut` salah), di jalur booking mana pun. Jamaah pertama = diri agen, NIK dari profil agen, ditandai `saya_sendiri_akun_id`. Agen tidak mendapat komisi dari booking dirinya sendiri, komisinya mengalir ke upline agen. Mode agen mengikuti status akun pemesan, bukan endpoint (ADR 0002).
 
 **Komisi langsung**: nominal flat per pax berangkat untuk agen pemilik kunci jamaah.
 

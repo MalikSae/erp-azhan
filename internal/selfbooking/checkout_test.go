@@ -10,7 +10,7 @@ import (
 
 func TestCheckoutReplayDoesNotReserveTwice(t *testing.T) {
 	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
-	req := BookingRequest{RequestKey: strings.Repeat("a", 48), TermsVersion: TermsVersion, TermsAccepted: true, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Retry PIC", NoHP: nomorUji(980), JenisKelamin: "L", RoomType: "Quad"}}
+	req := BookingRequest{RequestKey: strings.Repeat("a", 48), TermsVersion: TermsVersion, TermsAccepted: true, ScheduleID: scheduleID, PemesanTidakIkut: true, PIC: PICInput{NamaLengkap: "Retry PIC", NoHP: nomorUji(980), JenisKelamin: "L", RoomType: "Quad"}}
 	first, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +39,7 @@ func TestCheckoutRejectsChangedQuote(t *testing.T) {
 	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
 	oldPrice := 1.0
 	zero := 0.0
-	req := BookingRequest{ExpectedTotal: &oldPrice, ExpectedDP: &zero, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Quote PIC", NoHP: nomorUji(981), JenisKelamin: "L", RoomType: "Quad"}}
+	req := BookingRequest{ExpectedTotal: &oldPrice, ExpectedDP: &zero, ScheduleID: scheduleID, PemesanTidakIkut: true, PIC: PICInput{NamaLengkap: "Quote PIC", NoHP: nomorUji(981), JenisKelamin: "L", RoomType: "Quad"}}
 	if _, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID)); !errors.Is(err, ErrQuoteChanged) {
 		t.Fatalf("stale quote accepted: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestCheckoutRejectsChangedQuote(t *testing.T) {
 func TestCheckoutSnapshotsDP(t *testing.T) {
 	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
 	testdb.Exec(t, tx, `UPDATE schedules SET minimal_dp=1000000 WHERE id=?`, scheduleID)
-	req := BookingRequest{TermsVersion: TermsVersion, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Snapshot PIC", NoHP: nomorUji(982), JenisKelamin: "L", RoomType: "Quad"}}
+	req := BookingRequest{TermsVersion: TermsVersion, ScheduleID: scheduleID, PemesanTidakIkut: true, PIC: PICInput{NamaLengkap: "Snapshot PIC", NoHP: nomorUji(982), JenisKelamin: "L", RoomType: "Quad"}}
 	response, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 	if err != nil {
 		t.Fatal(err)
