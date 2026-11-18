@@ -41,7 +41,7 @@ func TestAuditAgenRepeatChangesAfterHistoricalPaxCancellation(t *testing.T) {
 	pax := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Audit Repeat", Direkrut: agent})
 	old, _ := testdb.NewBookingPax(t, tx, schedule, "dp", 20000000, testdb.Pax{JamaahID: pax})
 	lunas(t, tx, old)
-	current, _ := testdb.NewBookingPax(t, tx, schedule, "dp", 20000000, testdb.Pax{JamaahID: pax})
+	current, _ := testdb.NewBookingPax(t, tx, testdb.CloneSchedule(t, tx, schedule), "dp", 20000000, testdb.Pax{JamaahID: pax})
 	pemesan := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Audit Pemesan"})
 	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, pemesan, current)
 	lunas(t, tx, current)

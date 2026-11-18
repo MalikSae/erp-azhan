@@ -254,11 +254,18 @@ func TestNIKAgenUnikDanPeringatanAdmin(t *testing.T) {
 	z := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Zainab"})
 	y := testdb.NewAkun(t, f.tx, f.brandID, testdb.AkunOpts{Nama: "Yusuf"})
 	nikW := "9999999999990001"
-	testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Jamaah W", Direkrut: x, NIK: nikW})
 
+	// NIK yang sudah tercatat sebagai NIK jamaah di brand ini ditolak saat mengajukan (E3).
+	testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Jamaah Lain", Direkrut: x, NIK: "9999999999990002"})
+	tolakReq := ajuan
+	tolakReq.NIK = "9999999999990002"
+	mustErr(t, "NIK jamaah lain", ajukanTx(ctx, f.tx, y, tolakReq), ErrNIKAgenTidakBisaDipakai)
+
+	// Pengajuan lama (NIK baru tercatat sebagai jamaah sesudahnya) tetap memperingatkan admin.
 	req := ajuan
 	req.NIK = nikW
 	must(t, "ajukan Z", ajukanTx(ctx, f.tx, z, req))
+	testdb.NewJamaah(t, f.tx, f.brandID, testdb.JamaahOpts{Nama: "Jamaah W", Direkrut: x, NIK: nikW})
 	row := findPengajuan(t, f, z)
 	if row == nil || row.NIKMasked != "••••••••••••0001" {
 		t.Fatalf("nik_masked = %+v", row)

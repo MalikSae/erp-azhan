@@ -23,7 +23,7 @@ var (
 	ErrCatatanWajib            = errors.New("catatan wajib diisi untuk aksi ini")
 	ErrKeputusanTidakBisa      = errors.New("aksi ini tidak bisa dilakukan pada status pengajuan saat ini")
 	ErrNIKAgenTidakValid       = errors.New("NIK harus 16 digit angka")
-	ErrNIKAgenTidakBisaDipakai = errors.New("NIK ini tidak dapat dipakai untuk pendaftaran. Periksa kembali atau hubungi admin")
+	ErrNIKAgenTidakBisaDipakai = errors.New("NIK tidak dapat dipakai. Hubungi admin.")
 	ErrAlasanStatusWajib       = errors.New("alasan perubahan status wajib diisi (5 sampai 500 karakter)")
 	ErrStatusSama              = errors.New("status agen sudah seperti itu")
 	ErrBuktiBelumAda           = errors.New("bukti transfer belum diunggah, pilih bebaskan biaya, setujui bayar menyusul, atau minta unggah ulang")

@@ -96,25 +96,27 @@ func TestSkenarioAcuan(t *testing.T) {
 
 	// Skenario 4: agen X mendaftarkan dirinya lewat portal agen ("Saya sendiri"). Agen tidak mendapat komisi dari booking dirinya sendiri:
 	// komisi langsung ke upline X (A), bonus pembinaan ke upline A (U), sama dengan skenario 6.
-	b4, pax4 := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jamaahX})
+	schedB := testdb.CloneSchedule(t, tx, sched) // satu komisi per jamaah per keberangkatan (ADR 0004)
+	schedC := testdb.CloneSchedule(t, tx, sched)
+	b4, pax4 := testdb.NewBookingPax(t, tx, schedB, "dp", 1000, testdb.Pax{JamaahID: jamaahX})
 	testdb.Exec(t, tx, `UPDATE booking_pax SET saya_sendiri_akun_id=? WHERE id=?`, x, pax4[0])
 	lunas(t, tx, b4)
 	expect(t, "skenario 4", ledger(t, tx, b4, nama), "A:langsung:1000000", "U:pembinaan:300000")
 
 	// Skenario 5: jamaah Y booking ulang -> X komisi langsung, A bonus pembinaan, penuh.
-	b5, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jamaahY})
+	b5, _ := testdb.NewBookingPax(t, tx, schedB, "dp", 1000, testdb.Pax{JamaahID: jamaahY})
 	lunas(t, tx, b5)
 	expect(t, "skenario 5", ledger(t, tx, b5, nama), "AkunX:langsung:1000000", "A:pembinaan:300000")
 
 	// Skenario 6: agen X memesan untuk dirinya lewat web publik (tanpa "Saya sendiri"): dihitung booking ulang.
 	// Komisi langsung ke agen yang mengunci jamaah X (A), bonus pembinaan ke upline A (U).
-	b6, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jamaahX})
+	b6, _ := testdb.NewBookingPax(t, tx, schedC, "dp", 1000, testdb.Pax{JamaahID: jamaahX})
 	lunas(t, tx, b6)
 	expect(t, "skenario 6", ledger(t, tx, b6, nama), "A:langsung:1000000", "U:pembinaan:300000")
 
 	// Skenario 7: agen Y2 mendaftarkan jamaah yang terkunci ke X: komisi ke X (pemilik kunci), bukan Y2.
 	y2 := akun(testdb.AkunOpts{Nama: "AgenY2", StatusAgen: "aktif"})
-	b7, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: jamaahY})
+	b7, _ := testdb.NewBookingPax(t, tx, schedC, "dp", 1000, testdb.Pax{JamaahID: jamaahY})
 	testdb.Exec(t, tx, `UPDATE bookings SET dibuat_oleh_agen_akun_id=?, customer_account_id=? WHERE id=?`, y2, y2, b7)
 	lunas(t, tx, b7)
 	expect(t, "skenario 7", ledger(t, tx, b7, nama), "AkunX:langsung:1000000", "A:pembinaan:300000")
@@ -152,7 +154,7 @@ func TestBookingUlangDihitungSepertiBiasa(t *testing.T) {
 
 	b1, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: j})
 	lunas(t, tx, b1)
-	b2, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: j})
+	b2, _ := testdb.NewBookingPax(t, tx, testdb.CloneSchedule(t, tx, sched), "dp", 1000, testdb.Pax{JamaahID: j}) // keberangkatan lain (ADR 0004)
 	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, pelanggan, b2)
 	lunas(t, tx, b2)
 	// Cabang repeat dan cashback mati: booking kedua sama dengan booking pertama, tanpa cashback.
@@ -331,6 +333,7 @@ func TestBookingPribadiAgenKeUpline(t *testing.T) {
 
 	// Y mendaftar bersama Z. Y memilih "Isi baru" dengan NIK-nya sendiri, jadi jamaahnya terkunci ke Y; Z juga terkunci ke Y.
 	jamaahY := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "JamaahY", Direkrut: y, NIK: nikY})
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, jamaahY, y) // diri agen = jamaah tertaut (bukan NIK-sama)
 	jamaahZ := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Z", Direkrut: y})
 	b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 2000, testdb.Pax{JamaahID: jamaahY}, testdb.Pax{JamaahID: jamaahZ})
 	lunas(t, tx, b)
@@ -363,6 +366,7 @@ func TestBookingPribadiAgenRantaiDanTanpaUpline(t *testing.T) {
 	}
 	pribadi := func(agen int64, nik string) int64 {
 		j := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: fmt.Sprintf("diri-%d", agen), Direkrut: agen, NIK: nik})
+		testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, j, agen)
 		b, _ := testdb.NewBookingPax(t, tx, sched, "dp", 1000, testdb.Pax{JamaahID: j})
 		lunas(t, tx, b)
 		return b

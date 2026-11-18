@@ -49,9 +49,11 @@ func bacaPemesan(ctx context.Context, tx *sql.Tx, brandID, akunID int64) (pemesa
 	return p, nil
 }
 
-// jamaahDiriAgen: jamaah itu diri pemesan agen. Jamaah tertaut ke akunnya selalu diri. NIK sama dengan nik_agen
-// hanya berlaku bila jamaah tidak tertaut ke akun lain dan tidak dibuat akun lain: nik_agen tidak diverifikasi,
-// jadi NIK jamaah orang lain tidak boleh menjadikannya diri agen.
+// jamaahDiriAgen: jamaah itu diri pemesan agen. Jamaah tertaut ke akunnya selalu diri, sama dengan penentu di
+// komisi.loadPax (tertaut atau saya_sendiri_akun_id). NIK sama dengan nik_agen hanya berlaku bila jamaah tidak
+// tertaut ke akun lain dan tidak dibuat akun lain: nik_agen tidak diverifikasi, jadi NIK jamaah orang lain tidak
+// boleh menjadikannya diri agen. Cabang NIK hanya memilih pemilik kunci (upline, bukan agen); di komisi jamaah
+// itu terikat ke upline, sehingga penerimanya sama. Komisi tidak membaca NIK-sama (ADR 0004).
 func jamaahDiriAgen(ctx context.Context, tx *sql.Tx, p pemesan, jamaahID int64) (bool, error) {
 	if p.jamaahID > 0 && p.jamaahID == jamaahID {
 		return true, nil
