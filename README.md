@@ -121,10 +121,14 @@ Dokumentasi rancangan ada di `docs/spek/`. Audit yang masih dipakai sebagai acua
    - Database name: `erp_azhan_dev`
    - Charset: `utf8mb4`, Collation: `utf8mb4_unicode_ci`
 
-4. **Jalankan Migrasi Database:**
+4. **Jalankan Migrasi Database** (database baru, semua file berurutan):
    ```powershell
-   go run migrations/run.go
+   foreach ($f in (Get-ChildItem migrations\*.sql | Sort-Object Name)) {
+     go run -buildvcs=false migrations/run.go "migrations/$($f.Name)"
+     if ($LASTEXITCODE -ne 0) { break }
+   }
    ```
+   Database yang sudah berisi: lihat [Migrasi](#migrasi).
 
 5. **Jalankan Backend Server:**
    ```powershell
@@ -288,11 +292,23 @@ List kosong selalu mengembalikan array `[]`, bukan `null`.
 
 File di `migrations/` berurutan menurut nomor. Isi tiap file dijelaskan di komentar awalnya.
 
-Selalu jalankan seluruh migrasi secara berurutan setelah menarik perubahan terbaru:
+`migrations/run.go` menjalankan **satu file per perintah** dan tidak mencatat migrasi mana yang sudah diterapkan. Tanpa argumen, ia menjalankan `001_init.sql`, jadi jangan dipakai begitu saja.
+
+**Database baru:** jalankan semua file berurutan (loop di langkah 4 bagian Instalasi).
+
+**Database yang sudah berisi:** jalankan hanya file baru, satu per satu, berurutan. Setelah `git pull`, daftar file baru:
 
 ```powershell
-go run migrations/run.go
+git diff --name-only --diff-filter=A ORIG_HEAD HEAD -- migrations
 ```
+
+Lalu jalankan tiap file dari daftar itu:
+
+```powershell
+go run -buildvcs=false migrations/run.go migrations/NNN_nama_file.sql
+```
+
+Bila ragu apakah sebuah file sudah diterapkan (misalnya database dipakai bergantian dengan branch lain), periksa dulu tabel atau kolom yang dibuat di file itu. Jangan jalankan ulang file yang sudah diterapkan: sebagian berisi `DROP`, `ALTER`, atau `UPDATE` dan akan gagal atau mengubah data.
 
 ---
 
@@ -472,7 +488,7 @@ journalctl -u erp-azhan-api -n 100 --no-pager
 cd /www/wwwroot/erp-azhan
 git pull --ff-only origin main
 go mod download
-# Jalankan hanya migration baru yang belum pernah diterapkan.
+# Jalankan hanya migration baru yang belum pernah diterapkan (lihat bagian Migrasi).
 go test ./...
 go build -o bin/erp-azhan-api ./cmd/api
 sudo systemctl restart erp-azhan-api
