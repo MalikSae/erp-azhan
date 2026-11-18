@@ -46,7 +46,12 @@ type bookingRingkas struct {
 }
 
 func ringkasBooking(a anggotaJamaah) bookingRingkas {
-	return bookingRingkas{ID: a.BookingID, Kode: a.BookingKode, Paket: a.Paket, Berangkat: a.Berangkat, Status: a.StatusBooking}
+	kode, status := a.BookingKode, a.StatusBooking
+	if a.DariPeran {
+		kode = "" // peran jamaah tidak menerima kode booking mentah
+		status = statusPeran(status)
+	}
+	return bookingRingkas{ID: a.BookingID, Kode: kode, Paket: a.Paket, Berangkat: a.Berangkat, Status: status}
 }
 
 type jamaahBaris struct {

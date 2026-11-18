@@ -246,7 +246,12 @@ func (o *Orders) banks(ctx context.Context, brandID int64) ([]bankView, error) {
 
 // owned memuat ringkasan pesanan milik akun; ErrNotFound bila bukan miliknya.
 func (o *Orders) owned(ctx context.Context, accountID, bookingID int64) (*orderSummary, int, error) {
-	row := o.db.QueryRowContext(ctx, orderSelect+` AND b.id = ? GROUP BY b.id`, accountID, bookingID)
+	return ownedQ(ctx, o.db, accountID, bookingID)
+}
+
+// ownedQ: isi owned() dengan pelaksana query yang bisa diganti transaksi (tes). Tetap pemilik-saja.
+func ownedQ(ctx context.Context, q dbq, accountID, bookingID int64) (*orderSummary, int, error) {
+	row := q.QueryRowContext(ctx, orderSelect+` AND b.id = ? GROUP BY b.id`, accountID, bookingID)
 	it, n, err := scanOrder(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, 0, ErrNotFound

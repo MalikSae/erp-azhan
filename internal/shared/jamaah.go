@@ -161,6 +161,7 @@ func GugurkanKlaimPembuatBooking(ctx context.Context, tx *sql.Tx, bookingID int6
 		SET j.dibuat_oleh_akun_id = NULL
 		WHERE j.dibuat_oleh_akun_id IS NOT NULL
 		  AND NOT (b.customer_account_id <=> j.dibuat_oleh_akun_id)
+		  AND NOT EXISTS (SELECT 1 FROM customer_accounts ca WHERE ca.id = b.customer_account_id AND ca.jamaah_id = j.id)
 		  AND NOT EXISTS (
 		    SELECT 1 FROM payments p
 		    JOIN bookings b2 ON b2.id = p.booking_id
