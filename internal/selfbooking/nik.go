@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"erp-azhan/api/internal/agen"
 )
 
 var nikPattern = regexp.MustCompile(`^\d{16}$`)
@@ -17,71 +15,42 @@ var nikPattern = regexp.MustCompile(`^\d{16}$`)
 // ErrNIKAtasNamaLain: NIK sudah dimiliki jamaah lain di brand ini dengan nama berbeda.
 var ErrNIKAtasNamaLain = errors.New("NIK sudah terdaftar dengan nama yang berbeda")
 
-// ErrSayaSendiriBukanAnda: pilihan "Saya sendiri" dipakai untuk jamaah yang NIK-nya bukan NIK agen (K24).
-var ErrSayaSendiriBukanAnda = errors.New("NIK jamaah ini tidak sama dengan NIK Anda sebagai agen, jadi tidak bisa dipilih sebagai Saya sendiri")
+// ErrSayaSendiriBukanAnda: pemesan agen yang ikut berangkat memakai NIK selain NIK profil agennya.
+var ErrSayaSendiriBukanAnda = errors.New("NIK tidak sesuai profil agen")
 
-// ErrNIKAgenBelumAda: agen memilih "Saya sendiri" tetapi belum punya NIK tercatat (agen lama, sebelum NIK wajib).
-var ErrNIKAgenBelumAda = errors.New("NIK Anda sebagai agen belum tercatat, jadi Saya sendiri belum bisa dipakai. Pilih Isi baru atau hubungi admin untuk melengkapinya")
+// ErrNIKAgenBelumAda: pemesan agen ikut berangkat tetapi belum punya NIK tercatat.
+var ErrNIKAgenBelumAda = errors.New("Lengkapi NIK di profil agen.")
 
-// isiNIKSayaSendiri mengisi NIK jamaah pertama dari NIK agen bila memilih "Saya sendiri": NIK yang dikirim browser diabaikan,
-// jadi agen tidak perlu mengetik ulang dan NIK utuhnya tidak pernah dikirim ke browser. Pemeriksaan pastikanSayaSendiri tetap berlaku.
-func isiNIKSayaSendiri(ctx context.Context, q interface {
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}, agenID int64, req *BookingRequest) error {
-	if !req.PIC.SayaSendiri {
-		return nil
-	}
-	var nik sql.NullString
-	if err := q.QueryRowContext(ctx, `SELECT nik_agen FROM customer_accounts WHERE id = ?`, agenID).Scan(&nik); err != nil {
-		return fmt.Errorf("selfbooking: baca NIK agen: %w", err)
-	}
-	if !nik.Valid || nik.String == "" {
-		return ErrNIKAgenBelumAda
-	}
-	n := nik.String
-	req.PIC.NIK = &n
-	return nil
-}
+// ErrInputTidakValid: input yang hanya berlaku untuk agen aktif (jamaah_id) dikirim akun biasa.
+var ErrInputTidakValid = errors.New("data tidak valid")
 
-// pastikanSayaSendiri menolak "Saya sendiri" bila NIK jamaah pertama berbeda dari NIK yang agen isi saat mendaftar.
-// Tanpa pemeriksaan ini agen bisa mengetik NIK jamaah yang terkunci ke agen lain dan mengambil komisinya.
-func pastikanSayaSendiri(ctx context.Context, tx *sql.Tx, agenID, jamaahID int64) error {
-	var nikAgen, nikJamaah sql.NullString
-	if err := tx.QueryRowContext(ctx, `SELECT nik_agen FROM customer_accounts WHERE id = ?`, agenID).Scan(&nikAgen); err != nil {
-		return fmt.Errorf("selfbooking: baca NIK agen: %w", err)
+// resolvePax adalah satu pintu pencocokan NIK untuk PIC dan anggota semua pemesan. NIK sama dan nama sama
+// memakai ulang jamaah lama, NIK sama dengan nama berbeda ditolak generik, NIK baru membuat jamaah baru.
+// Bayi tanpa NIK dicocokkan lewat nama dan tanggal lahir.
+//
+// jamaahID (Jamaah Saya) hanya untuk pemesan agen aktif dan hanya jalan pintas: jamaah itu tetap harus cocok
+// dengan NIK dan nama yang dikirim, jadi id yang ditebak tidak membuka apa pun. Akun biasa: ErrInputTidakValid.
+func resolvePax(ctx context.Context, tx *sql.Tx, brandID int64, p pemesan, jamaahID *int64, a AnggotaInput) (int64, error) {
+	if jamaahID == nil || *jamaahID <= 0 {
+		return resolveAnggotaPublik(ctx, tx, brandID, p.id, a)
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT nik FROM jamaah WHERE id = ?`, jamaahID).Scan(&nikJamaah); err != nil {
-		return fmt.Errorf("selfbooking: baca NIK jamaah: %w", err)
+	if !p.agen {
+		return 0, ErrInputTidakValid
 	}
-	if !nikAgen.Valid || nikAgen.String == "" || nikAgen.String != nikJamaah.String {
-		return ErrSayaSendiriBukanAnda
+	var nik, nama sql.NullString
+	err := tx.QueryRowContext(ctx, `SELECT nik, nama_lengkap FROM jamaah WHERE id = ? AND brand_id = ? FOR UPDATE`,
+		*jamaahID, brandID).Scan(&nik, &nama)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrJamaahBukanMilik
 	}
-	return nil
-}
-
-// ikatJamaahAgen mengunci jamaah hasil booking portal agen. Jamaah yang NIK-nya sama dengan NIK agen adalah diri agen itu sendiri:
-// agen tidak memiliki dirinya, jadi pemilik kuncinya upline aktif agen (sama dengan penerima komisi langsungnya). Agen tanpa upline
-// aktif: jamaah itu tidak dikunci ke siapa pun. Jamaah lain dikunci ke agen seperti biasa. First-set wins berlaku di IkatJamaah.
-func ikatJamaahAgen(ctx context.Context, tx *sql.Tx, jamaahIDs []int64, agenID int64) error {
-	for _, id := range jamaahIDs {
-		var uplineAktif int64
-		var diri bool
-		if err := tx.QueryRowContext(ctx, `
-			SELECT COALESCE(u.id, 0), (a.nik_agen IS NOT NULL AND a.nik_agen = j.nik)
-			FROM customer_accounts a JOIN jamaah j ON j.id = ?
-			LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id AND u.status_agen = 'aktif'
-			WHERE a.id = ?`, id, agenID).Scan(&uplineAktif, &diri); err != nil {
-			return fmt.Errorf("selfbooking: baca diri agen: %w", err)
-		}
-		pemilik := agenID
-		if diri {
-			pemilik = uplineAktif
-		}
-		if err := agen.IkatJamaah(ctx, tx, id, pemilik, agen.SumberJalur1); err != nil {
-			return err
-		}
+	if err != nil {
+		return 0, fmt.Errorf("cek jamaah: %w", err)
 	}
-	return nil
+	// Jamaah ber-NIK: NIK harus sama. Jamaah tanpa NIK (bayi): cukup nama yang sama.
+	if (nik.String != "" && nikBersih(a.NIK) != nik.String) || normalizeName(a.NamaLengkap) != normalizeName(nama.String) {
+		return 0, ErrJamaahBukanMilik
+	}
+	return *jamaahID, nil
 }
 
 // nikBedaError: NIK sudah terdaftar dengan nama berbeda. Pesannya generik: menyebut nomor jamaah di

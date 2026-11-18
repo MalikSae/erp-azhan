@@ -37,7 +37,7 @@ func validateCheckout(req *BookingRequest, agent bool) string {
 	if req.ExpectedTotal == nil || req.ExpectedDP == nil || *req.ExpectedTotal <= 0 || *req.ExpectedDP < 0 {
 		return "ringkasan harga wajib dikonfirmasi"
 	}
-	if !(agent && req.PIC.JamaahID != nil) {
+	if !(agent && req.PemesanTidakIkut && req.PIC.JamaahID != nil) {
 		if len(strings.TrimSpace(req.PIC.NamaLengkap)) < 2 || len(req.PIC.NamaLengkap) > 255 {
 			return "nama lengkap harus 2–255 karakter"
 		}
@@ -53,8 +53,10 @@ func validateCheckout(req *BookingRequest, agent bool) string {
 			return "email tidak valid"
 		}
 	}
-	// NIK 16 digit wajib untuk semua pax reguler di semua jalur, termasuk portal agen (K14); bayi opsional.
-	if !nikValid(nikBersih(req.PIC.NIK)) {
+	// NIK 16 digit wajib untuk semua pax reguler di semua jalur; bayi opsional. Agen aktif yang ikut berangkat:
+	// NIK jamaah pertama diisi server dari profil agen, jadi boleh kosong.
+	nikPIC := nikBersih(req.PIC.NIK)
+	if !(agent && !req.PemesanTidakIkut && nikPIC == "") && !nikValid(nikPIC) {
 		return "NIK jamaah 1 harus 16 digit angka"
 	}
 	for i, p := range req.Anggota {
@@ -80,17 +82,13 @@ func hashText(value string) string {
 }
 func requestFingerprint(req BookingRequest, ini inisiator) string {
 	req.CaptchaToken = ""
-	// Store only a digest; never persist the submitted identity payload.
+	// Store only a digest; never persist the submitted identity payload. Kuncinya akun pemesan saja: jalur
+	// (web, app, portal agen) tidak ikut, jadi request_key yang sama lintas jalur adalah jawaban ulang.
 	data, _ := json.Marshal(struct {
 		Request BookingRequest
-		Actor   inisiatorFingerprint
-	}{req, inisiatorFingerprint{ini.accountID, ini.agenID}})
+		Akun    int64
+	}{req, ini.accountID})
 	return hashText(string(data))
-}
-
-type inisiatorFingerprint struct {
-	Jamaah int64
-	Agent  int64
 }
 
 func newInvoiceToken() (string, error) {

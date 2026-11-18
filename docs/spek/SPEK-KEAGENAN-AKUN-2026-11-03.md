@@ -54,7 +54,7 @@ Catatan istilah di kode: kode lama menyimpan status agen di tabel `jamaah` dan m
 | K13 | Agen tidak mendapat komisi dari booking dirinya sendiri (diubah 2026-11-09; semula "Saya sendiri" memberi komisi atas dirinya). Booking pribadi agen dikenali dari penanda "Saya sendiri" atau dari NIK jamaah yang sama dengan NIK agen (`nik_agen`) pada akun agen aktif atau nonaktif (pemohon yang belum disetujui atau ditolak belum agen), lewat jalur booking mana pun. Rantai bergeser satu tingkat ke atas: komisi langsung ke upline agen, bonus pembinaan ke upline dari upline itu. Agen tanpa upline: tidak ada komisi. Upline nonaktif: komisi langsung hangus, bonus pembinaan tetap ke upline di atasnya bila aktif (diperjelas 2026-11-10, sama dengan aturan agen nonaktif di bagian 5.1). Berlaku untuk booking yang lunas sesudah perubahan; komisi yang sudah tercatat tidak diubah. |
 | K14 | NIK 16 digit wajib untuk semua pax reguler di semua jalur, termasuk portal agen. Bayi opsional. |
 | K15 | Pemesan yang ikut berangkat (PIC) dicocokkan lewat NIK dan nama seperti jamaah lain. |
-| K16 | Agen yang memesan jamaah yang sudah terkunci agen lain: booking jalan dengan peringatan, komisi ke pemilik kunci. |
+| K16 | Agen yang memesan jamaah yang sudah terkunci agen lain: booking jalan tanpa peringatan di respons (diubah E1, ADR 0002), komisi ke pemilik kunci. |
 | K17 | Booking agen dan booking pelanggan memakai satu komponen form dan satu inti backend, di dua alamat. |
 | K18 | Pax bayi tidak menghasilkan komisi apa pun (langsung maupun pembinaan). |
 | K19 | Nominal komisi hanya dari snapshot jadwal. Kolom `ujroh_*` brand tidak dipakai. |

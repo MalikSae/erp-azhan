@@ -8,11 +8,10 @@ type PICInput struct {
 	JenisKelamin string  `json:"jenis_kelamin"` // "L" atau "P"
 	RoomType     string  `json:"room_type"`     // "Quad" | "Triple" | "Double"
 	NIK          *string `json:"nik,omitempty"` // 16 digit; wajib di booking publik
-	// JamaahID hanya dipakai booking agen (Jalur 1): memilih jamaah dari
-	// daftar "Jamaah Saya". Booking publik mengabaikannya.
+	// JamaahID: memilih jamaah dari daftar "Jamaah Saya"; hanya untuk pemesan agen aktif, akun lain ditolak.
 	JamaahID *int64 `json:"jamaah_id,omitempty"`
-	// SayaSendiri hanya dipakai booking agen: penumpang pertama adalah agen itu sendiri, sehingga pax ini
-	// menghasilkan komisi langsung untuk agen (K13) walau jamaahnya terkunci ke agen lain.
+	// SayaSendiri hanya dibaca endpoint portal agen (alias lama): true berarti pemesan_tidak_ikut=false.
+	// Jalur lain mengabaikannya.
 	SayaSendiri bool `json:"saya_sendiri,omitempty"`
 }
 
@@ -89,7 +88,4 @@ type BookingResponse struct {
 	Booking      BookingSummary    `json:"booking"`
 	Jamaah       JamaahInfo        `json:"jamaah"`
 	BankAccounts []BankAccountInfo `json:"bank_accounts"`
-	// Peringatan hanya untuk booking agen: jamaah yang sudah terkunci ke agen lain tetap dipesan, komisinya
-	// ke pemilik kunci. Isinya tidak membuka nama pemilik kunci maupun data jamaah.
-	Peringatan []string `json:"peringatan,omitempty"`
 }

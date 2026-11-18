@@ -69,7 +69,7 @@ func TestCekBatasSeatAgen(t *testing.T) {
 	}
 }
 
-// Booking portal agen lewat ProcessBookingAgen ikut ditolak saat batas tercapai.
+// Booking agen aktif (jalur mana pun) ditolak saat batas tercapai.
 func TestProcessBookingAgenMenolakLewatBatasSeat(t *testing.T) {
 	tx, scheduleID, brandID, agenID := setupAgenBooking(t)
 	ctx := context.Background()
@@ -84,10 +84,9 @@ func TestProcessBookingAgenMenolakLewatBatasSeat(t *testing.T) {
 }
 
 // Jawaban HTTP saat batas tercapai: 429 dengan kode stabil dan pesan berisi sisa seat.
-func TestWriteAgenBookingErrorBatasSeat(t *testing.T) {
-	h := &Handler{}
+func TestTulisGalatBookingBatasSeat(t *testing.T) {
 	rec := httptest.NewRecorder()
-	h.writeAgenBookingError(rec, &BatasSeatAgenError{BatasPerJadwal: 20, BatasTotal: 45, SisaPerJadwal: 3, SisaTotal: 10})
+	tulisGalatBooking(rec, &BatasSeatAgenError{BatasPerJadwal: 20, BatasTotal: 45, SisaPerJadwal: 3, SisaTotal: 10}, true)
 	if rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), KodeBatasSeatAgen) || !strings.Contains(rec.Body.String(), "menahan 3 seat") {
 		t.Fatalf("got %d %s", rec.Code, rec.Body.String())
 	}

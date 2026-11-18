@@ -14,7 +14,7 @@ import (
 func TestBookingMendesakTetapBolehDPDanTenggatHariIni(t *testing.T) {
 	tx, scheduleID, brandID, agentID := setupAgenBooking(t)
 	testdb.Exec(t, tx, `UPDATE schedules SET berangkat_tanggal=DATE_ADD(CURRENT_DATE,INTERVAL 30 DAY) WHERE id=?`, scheduleID)
-	req := BookingRequest{TermsVersion: TermsVersion, ScheduleID: scheduleID, PIC: PICInput{NamaLengkap: "Mendesak PIC", NoHP: nomorUji(984), JenisKelamin: "L", RoomType: "Quad"}}
+	req := BookingRequest{TermsVersion: TermsVersion, ScheduleID: scheduleID, PemesanTidakIkut: true, PIC: PICInput{NamaLengkap: "Mendesak PIC", NoHP: nomorUji(984), JenisKelamin: "L", RoomType: "Quad"}}
 	response, err := processBookingTx(context.Background(), tx, brandID, req, inisiatorAgen(agentID))
 	if err != nil {
 		t.Fatal(err)
