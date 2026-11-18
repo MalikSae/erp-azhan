@@ -167,6 +167,7 @@ func main() {
 
 	brandRepo := brand.NewRepository(db)
 	brandHandler := brand.NewHandler(brandRepo)
+	brandHandler.SetAktivasiJamaah(aktivasiCfg.Aktif)
 	suratHandler := surat.NewHandler(surat.NewRepository(db))
 	bankAccountRepo := bankaccount.NewRepository(db)
 	bankAccountHandler := bankaccount.NewHandler(bankAccountRepo)

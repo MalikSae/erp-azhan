@@ -22,11 +22,17 @@ var domainRegex = regexp.MustCompile(`(?i)^[a-z0-9.-]+$`)
 
 type Handler struct {
 	repo *Repository
+	// aktivasiJamaah: rute Aktivasi Akun Jamaah menyala (AKTIVASI_JAMAAH_AKTIF). Dikirim ke klien publik supaya
+	// tautan Aktivasi Akun hanya tampil bila bisa dipakai.
+	aktivasiJamaah bool
 }
 
 func NewHandler(repo *Repository) *Handler {
 	return &Handler{repo: repo}
 }
+
+// SetAktivasiJamaah mencatat apakah Aktivasi Akun Jamaah menyala (diisi main dari konfigurasi aktivasi).
+func (h *Handler) SetAktivasiJamaah(aktif bool) { h.aktivasiJamaah = aktif }
 
 func sanitizeString(s *string) *string {
 	if s == nil {
@@ -547,6 +553,8 @@ func (h *Handler) ResolveDomain(w http.ResponseWriter, r *http.Request) {
 		"batas_pelunasan_hari": b.BatasPelunasanHari,
 		"ketentuan_pembatalan": b.KetentuanPembatalan,
 		"social_media":         socialMedia,
+		// Aktivasi Akun Jamaah tersedia; false = klien menyembunyikan tautannya.
+		"aktivasi_jamaah": h.aktivasiJamaah,
 	}
 
 	writeJSON(w, http.StatusOK, resp)

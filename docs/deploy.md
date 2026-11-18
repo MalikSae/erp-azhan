@@ -8,7 +8,7 @@ Jamaah yang dibuatkan booking oleh orang lain (misalnya agen) mengaktifkan akunn
 
 | Variabel | Bawaan | Keterangan |
 |---|---|---|
-| `AKTIVASI_JAMAAH_AKTIF` | `false` | `true` atau `1` menyalakan rute. Selain itu rute menjawab 404. |
+| `AKTIVASI_JAMAAH_AKTIF` | `false` | `true` atau `1` menyalakan rute. Selain itu rute menjawab 404. Nilainya juga dikirim sebagai `aktivasi_jamaah` di `GET /api/public/brand`; app dan web menyembunyikan tautan Aktivasi Akun bila `false`. |
 | `AKTIVASI_PEPPER` | kosong | Wajib saat flag menyala, minimal 32 byte. Acak, simpan sebagai rahasia: `openssl rand -hex 32`. |
 
 Aturan saat start:
