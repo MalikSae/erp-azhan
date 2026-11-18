@@ -190,3 +190,56 @@ func TestPengumumanKeKotakMasuk(t *testing.T) {
 }
 
 var _ Querier = (*sql.Tx)(nil)
+
+func TestDokumenAkunTertaut(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	jadwal, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-03-01"})
+	ibrahim := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Ibrahim"})
+	tertaut := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Ahmad"})
+	lain := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Lain"})
+	j := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Ahmad"})
+	testdb.Exec(t, tx, `UPDATE jamaah SET dibuat_oleh_akun_id=? WHERE id=?`, ibrahim, j)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, j, tertaut)
+	b, _ := testdb.NewBookingPax(t, tx, jadwal, "dp", 1000000, testdb.Pax{JamaahID: j})
+	testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=? WHERE id=?`, ibrahim, b)
+
+	Dokumen(context.Background(), tx, j, "ktp", true)
+	if d := daftarJenis(t, tx, tertaut)[JenisDokumenDiverifikasi]; len(d) != 1 || d[0].Isi == "" {
+		t.Errorf("akun tertaut: %+v", d)
+	}
+	if d := daftarJenis(t, tx, ibrahim)[JenisDokumenDiverifikasi]; len(d) != 1 {
+		t.Errorf("pemilik tetap menerima satu: %+v", d)
+	}
+	if d := daftarJenis(t, tx, lain)[JenisDokumenDiverifikasi]; len(d) != 0 {
+		t.Errorf("akun tak tertaut tak berubah: %+v", d)
+	}
+
+	// Akun tertaut = pemilik: tidak dobel.
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=NULL WHERE id=?`, tertaut)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, j, ibrahim)
+	testdb.Exec(t, tx, `DELETE FROM notifikasi WHERE akun_id IN (?,?)`, ibrahim, tertaut)
+	Dokumen(context.Background(), tx, j, "paspor", false)
+	if d := daftarJenis(t, tx, ibrahim)[JenisDokumenDitolak]; len(d) != 1 {
+		t.Errorf("tidak boleh dobel: %+v", d)
+	}
+	if d := daftarJenis(t, tx, tertaut)[JenisDokumenDitolak]; len(d) != 0 {
+		t.Errorf("lepas tautan: %+v", d)
+	}
+
+	// Booking batal: akun tertaut tak menerima.
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=NULL WHERE id=?`, ibrahim)
+	testdb.Exec(t, tx, `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, j, tertaut)
+	testdb.Exec(t, tx, `UPDATE bookings SET status='batal' WHERE id=?`, b)
+	testdb.Exec(t, tx, `DELETE FROM notifikasi WHERE akun_id IN (?,?)`, ibrahim, tertaut)
+	Dokumen(context.Background(), tx, j, "ktp", true)
+	if d := daftarJenis(t, tx, tertaut)[JenisDokumenDiverifikasi]; len(d) != 0 {
+		t.Errorf("booking batal: %+v", d)
+	}
+
+	// Booking baru yang tahannya lewat: tak tampil di kartu, tak menerima.
+	testdb.Exec(t, tx, `UPDATE bookings SET status='baru', is_seat_blocked=1, seat_hold_expires_at=DATE_SUB(NOW(), INTERVAL 1 HOUR) WHERE id=?`, b)
+	Dokumen(context.Background(), tx, j, "ktp", true)
+	if d := daftarJenis(t, tx, tertaut)[JenisDokumenDiverifikasi]; len(d) != 0 {
+		t.Errorf("hold kedaluwarsa: %+v", d)
+	}
+}

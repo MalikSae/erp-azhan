@@ -93,7 +93,8 @@ func StatusBooking(ctx context.Context, q Querier, bookingID int64, dari, ke str
 }
 
 // Dokumen: dokumen jamaah diverifikasi atau ditolak. Penerima: akun pembuat data jamaah dan setiap akun
-// yang punya booking aktif berisi jamaah itu.
+// yang punya booking aktif berisi jamaah itu, serta akun tertaut ke jamaah itu (peran jamaah, ADR 0006) bila
+// jamaah itu punya booking aktif. UNION mencegah notifikasi ganda.
 func Dokumen(ctx context.Context, q Querier, jamaahID int64, jenisDok string, diverifikasi bool) {
 	jenis, judul := JenisDokumenDiverifikasi, "Dokumen diverifikasi"
 	if !diverifikasi {
@@ -110,10 +111,15 @@ func Dokumen(ctx context.Context, q Querier, jamaahID int64, jenisDok string, di
 			UNION
 			SELECT b.customer_account_id FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
 			WHERE bp.jamaah_id = ? AND bp.pax_status = 'aktif' AND b.status NOT IN ('draft','batal') AND b.customer_account_id IS NOT NULL
+			UNION
+			SELECT a2.id FROM customer_accounts a2 WHERE a2.jamaah_id = ? AND a2.dihapus_at IS NULL AND EXISTS (
+				SELECT 1 FROM booking_pax bp2 JOIN bookings b2 ON b2.id = bp2.booking_id
+				WHERE bp2.jamaah_id = a2.jamaah_id AND bp2.pax_status = 'aktif' AND b2.status NOT IN ('draft','batal')
+				  AND (b2.status <> 'baru' OR (b2.is_seat_blocked AND (b2.seat_hold_expires_at IS NULL OR b2.seat_hold_expires_at > NOW()))))
 		) x
 		JOIN jamaah j ON j.id = ?
 		JOIN customer_accounts a ON a.id = x.akun AND a.dihapus_at IS NULL`,
-		jenis, judul, label, RefJamaah, jamaahID, jamaahID, jamaahID)
+		jenis, judul, label, RefJamaah, jamaahID, jamaahID, jamaahID, jamaahID)
 	catat("dokumen", err)
 }
 

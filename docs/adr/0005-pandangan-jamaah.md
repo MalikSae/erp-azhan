@@ -28,7 +28,7 @@ Akun yang lahir dari aktivasi tertaut ke jamaah (`customer_accounts.jamaah_id`).
    `status`: `lunas` mencakup `dokumen_lengkap` dan `siap_berangkat`. `pax` hanya baris milik jamaah tertaut. Tidak ada: kode booking, pax lain, harga, total, DP, sisa, diskon, pembayaran, rekening, kantor. Akun tidak tertaut menerima `{"perjalanan": []}`.
 4. **Data Jamaah:** `muatAnggota` menambah baris dari booking tersebut (hanya pax miliknya), ditandai `DariPeran`. Baris booking sendiri didahulukan; satu jamaah satu baris. Akses terbatas (lihat): tanpa ubah data, `kode` booking pada `bookingRingkas` dikosongkan untuk baris peran.
 5. **Klaim pembuat:** `GugurkanKlaimPembuatBooking` tidak menggugurkan klaim bila pemesan adalah akun yang `jamaah_id`-nya jamaah itu.
-6. **Ditunda:** dokumen dan notifikasi dokumen (E4b), manasik, Jelajah Haramain, pengumuman, pengingat. Akses penuh menunggu keputusan faktor kedua.
+6. **Dokumen, surat, notifikasi dokumen:** dibuka sebagian, lihat ADR 0006 (unduh surat, berkas, dan unggah tetap ditunda). **Ditunda:** manasik, Jelajah Haramain, pengumuman, pengingat. Akses penuh menunggu keputusan faktor kedua.
 
 ## Konsekuensi
 
