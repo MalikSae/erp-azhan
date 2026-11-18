@@ -335,14 +335,14 @@ func TestDetailAkunJamaahTertautDanRiwayat(t *testing.T) {
 	// Akun lain memegang NIK jamaah tertaut sebagai NIK agen.
 	squat := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "Pemegang NIK", StatusAgen: "pengajuan"})
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET nik_agen=? WHERE id=?`, nik, squat)
-	must(t, "log tolak", catatLogAktivasi(ctx, tx, entriLogAktivasi{BrandID: brand, Aksi: "tolak", JamaahID: jamaah, AkunID: akun, Alasan: "upline_beda", KodeHash: strings.Repeat("a", 64)}))
+	must(t, "log aktivasi", catatLogAktivasi(ctx, tx, entriLogAktivasi{BrandID: brand, Aksi: "aktivasi", JamaahID: jamaah, AkunID: akun, KodeHash: strings.Repeat("a", 64)}))
 
 	d, err := getAkunDetail(ctx, tx, &brand, akun)
 	must(t, "detail", err)
 	if d.Jamaah == nil || !strings.HasPrefix(d.Jamaah.Nama, "Ahmad") || d.Jamaah.PemilikKunciID == nil || *d.Jamaah.PemilikKunciID != kunci || !strings.HasPrefix(*d.Jamaah.PemilikKunciNama, "Pemilik Kunci") {
 		t.Fatalf("jamaah tertaut = %+v", d.Jamaah)
 	}
-	if len(d.RiwayatAktivasi) != 1 || d.RiwayatAktivasi[0].Aksi != "tolak" || d.RiwayatAktivasi[0].Alasan != "upline_beda" {
+	if len(d.RiwayatAktivasi) != 1 || d.RiwayatAktivasi[0].Aksi != "aktivasi" {
 		t.Fatalf("riwayat = %+v", d.RiwayatAktivasi)
 	}
 	ds, err := getAkunDetail(ctx, tx, &brand, squat)

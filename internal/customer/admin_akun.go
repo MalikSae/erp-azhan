@@ -73,7 +73,7 @@ type JamaahRingkas struct {
 // LogAktivasi: satu baris riwayat aktivasi akun (tanpa kode, NIK, IP, atau perangkat). Alasan adalah sebab
 // singkat dari sistem; Catatan hanya terisi untuk aksi admin (alasan yang diketik admin).
 type LogAktivasi struct {
-	Aksi       string    `json:"aksi"` // aktivasi | tautan | tolak | lepas_admin
+	Aksi       string    `json:"aksi"` // aktivasi | lepas_admin
 	Alasan     string    `json:"alasan"`
 	Catatan    string    `json:"catatan"`
 	JamaahNama *string   `json:"jamaah_nama"`
@@ -410,7 +410,7 @@ func riwayatAktivasiAkun(ctx context.Context, q adminQuerier, akunID int64) ([]L
 		FROM jamaah_aktivasi_log l
 		LEFT JOIN jamaah j ON j.id = l.jamaah_id
 		LEFT JOIN admin_users au ON au.id = l.oleh_admin_id
-		WHERE l.akun_id = ? AND l.aksi IN ('aktivasi','tautan','tolak','lepas_admin')
+		WHERE l.akun_id = ? AND l.aksi IN ('aktivasi','lepas_admin')
 		ORDER BY l.id DESC LIMIT 50`, akunID)
 	if err != nil {
 		return nil, fmt.Errorf("customer: riwayat aktivasi akun: %w", err)

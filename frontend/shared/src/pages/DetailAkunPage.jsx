@@ -28,9 +28,6 @@ const KAITAN = {
   belum_ditentukan: { label: 'Belum ditentukan', variant: 'warning' },
 };
 
-// Sebab penolakan aktivasi yang dicatat sistem (jamaah_aktivasi_log.alasan).
-const ALASAN_AKTIVASI = { upline_beda: 'upline berbeda dari pemilik kunci' };
-
 
 const BULAN = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES'];
 
@@ -55,9 +52,8 @@ const TombolUbah = ({ onClick, children }) => (
 const judulAktivasi = (l) => {
   const nama = l.jamaah_nama || 'jamaah';
   if (l.aksi === 'aktivasi') return `Akun dibuat dari aktivasi jamaah ${nama}`;
-  if (l.aksi === 'tautan') return `Akun ditautkan ke jamaah ${nama}`;
   if (l.aksi === 'lepas_admin') return `Tautan ke jamaah ${nama} dilepas`;
-  return `Aktivasi ditolak: ${ALASAN_AKTIVASI[l.alasan] || l.alasan || 'tanpa sebab'}`;
+  return `Aktivasi jamaah ${nama}`;
 };
 
 // Detail satu akun pelanggan. showBrandColumn: Admin Master, boleh membuka layar Ganti Kaitan Agen.
