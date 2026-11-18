@@ -14,7 +14,7 @@ import (
 // Batas lapis depan di memori per IP (murah, tidak menggantikan penghitung atomik di database).
 const aktivasiDepanLimit = 60 // permintaan per 15 menit per IP
 
-// AktivasiHandler: dua pintu HTTP untuk Aktivasi. Flag AKTIVASI_JAMAAH_AKTIF mati = rute 404.
+// AktivasiHandler: pintu HTTP publik untuk Aktivasi. Flag AKTIVASI_JAMAAH_AKTIF mati = rute 404.
 type AktivasiHandler struct {
 	core  *Aktivasi
 	repo  *Repository
@@ -52,26 +52,10 @@ func (h *AktivasiHandler) Publik(w http.ResponseWriter, r *http.Request) {
 	h.jalankan(w, r, AktivasiInput{
 		BrandID: req.BrandID, KodeBooking: req.KodeBooking, NIK: req.NIK, Simpan: req.Simpan,
 		NoHP: req.NoHP, Email: req.Email, Password: req.Password, KodeAgen: req.KodeAgen, KodeReferral: req.KodeReferral,
-	}, nil)
+	})
 }
 
-// Akun POST /api/account/jamaah/tautkan: akun yang sudah masuk menautkan dirinya ke jamaah. Brand dari sesi.
-func (h *AktivasiHandler) Akun(w http.ResponseWriter, r *http.Request) {
-	if !h.cfg.Aktif {
-		http.NotFound(w, r)
-		return
-	}
-	acc := FromContext(r.Context())
-	var req aktivasiRequest
-	if !decode(w, r, &req) {
-		return
-	}
-	h.jalankan(w, r, AktivasiInput{
-		BrandID: acc.BrandID, KodeBooking: req.KodeBooking, NIK: req.NIK, Simpan: req.Simpan, AkunID: acc.ID,
-	}, acc)
-}
-
-func (h *AktivasiHandler) jalankan(w http.ResponseWriter, r *http.Request, in AktivasiInput, acc *Account) {
+func (h *AktivasiHandler) jalankan(w http.ResponseWriter, r *http.Request, in AktivasiInput) {
 	in.IP = NormalisasiIPAktivasi(shared.ClientIP(r))
 	if p := strings.TrimSpace(r.Header.Get("X-Perangkat-Id")); p != "" && len(p) <= 100 {
 		in.Perangkat = p
@@ -101,7 +85,7 @@ func (h *AktivasiHandler) jalankan(w http.ResponseWriter, r *http.Request, in Ak
 		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	case !in.Simpan:
 		writeJSON(w, http.StatusOK, hasil.Jamaah)
-	case acc == nil:
+	default:
 		akun, err := h.repo.GetByID(r.Context(), hasil.AkunID)
 		if err != nil {
 			log.Printf("[ERROR] customer aktivasi muat akun: %v", err)
@@ -109,14 +93,6 @@ func (h *AktivasiHandler) jalankan(w http.ResponseWriter, r *http.Request, in Ak
 			return
 		}
 		writeJSON(w, http.StatusCreated, authResponse{Account: akun, SessionToken: hasil.Token})
-	default:
-		akun, err := h.repo.GetByID(r.Context(), acc.ID)
-		if err != nil {
-			log.Printf("[ERROR] customer tautan muat akun: %v", err)
-			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"account": buildMeView(r.Context(), h.repo.db, akun)})
 	}
 }
 

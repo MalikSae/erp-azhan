@@ -73,12 +73,10 @@ func TestMapDuplicateJamaahTertaut(t *testing.T) {
 
 func TestAktivasiFlagMati404(t *testing.T) {
 	h := NewAktivasiHandler(&Aktivasi{}, nil, AktivasiConfig{})
-	for _, fn := range []http.HandlerFunc{h.Publik, h.Akun} {
-		rec := httptest.NewRecorder()
-		fn(rec, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`)))
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("flag mati: %d", rec.Code)
-		}
+	rec := httptest.NewRecorder()
+	h.Publik(rec, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("flag mati: %d", rec.Code)
 	}
 }
 
@@ -243,15 +241,12 @@ func ipBaru() string {
 	return fmt.Sprintf("198.51.%d.%d:4000", (n/250)%250, n%250+1)
 }
 
-func kirim(fn http.HandlerFunc, ip, perangkat string, body any, acc *Account) *httptest.ResponseRecorder {
+func kirim(fn http.HandlerFunc, ip, perangkat string, body any) *httptest.ResponseRecorder {
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
 	req.RemoteAddr = ip
 	if perangkat != "" {
 		req.Header.Set("X-Perangkat-Id", perangkat)
-	}
-	if acc != nil {
-		req = req.WithContext(ContextWithAccount(req.Context(), acc))
 	}
 	rec := httptest.NewRecorder()
 	fn(rec, req)
@@ -319,7 +314,7 @@ func TestAktivasiCekDanSimpanPublik(t *testing.T) {
 
 	body := f.cekBody(b)
 	body["kode_booking"] = strings.ToLower(b.kode)
-	rec := kirim(h.Publik, ipBaru(), "", body, nil)
+	rec := kirim(h.Publik, ipBaru(), "", body)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("cek: %d %s", rec.Code, rec.Body)
 	}
@@ -340,7 +335,7 @@ func TestAktivasiCekDanSimpanPublik(t *testing.T) {
 	sb := f.simpanBody(b)
 	sb["kode_referral"] = kodeLain
 	sb["kode_agen"] = "BUKAN1"
-	rec = kirim(h.Publik, ipBaru(), "", sb, nil)
+	rec = kirim(h.Publik, ipBaru(), "", sb)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("simpan: %d %s", rec.Code, rec.Body)
 	}
@@ -393,7 +388,7 @@ func TestAktivasiCekDanSimpanPublik(t *testing.T) {
 	}
 
 	// Aktivasi kedua untuk jamaah yang sama: galat generik.
-	rec = kirim(h.Publik, ipBaru(), "", f.simpanBody(b), nil)
+	rec = kirim(h.Publik, ipBaru(), "", f.simpanBody(b))
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), KodeGalatAktivasiGagal) {
 		t.Fatalf("aktivasi kedua: %d %s", rec.Code, rec.Body)
 	}
@@ -406,7 +401,7 @@ func TestAktivasiValidasiIsianTanpaMenyentuhPenghitung(t *testing.T) {
 	b := f.booking("dp", 0, false)
 	body := f.simpanBody(b)
 	body["email"] = "bukan-email"
-	rec := kirim(h.Publik, ipBaru(), "", body, nil)
+	rec := kirim(h.Publik, ipBaru(), "", body)
 	if rec.Code != http.StatusBadRequest || strings.Contains(rec.Body.String(), KodeGalatAktivasiGagal) {
 		t.Fatalf("email salah: %d %s", rec.Code, rec.Body)
 	}
@@ -422,7 +417,6 @@ func TestAktivasiSemuaSebabGagalSama(t *testing.T) {
 	a, jeda := f.core()
 	h := f.handler(a)
 	K := f.agen("aktif")
-	Z := f.agen("aktif")
 
 	ok := f.booking("dp", K, false)
 	batal := f.booking("batal", K, false)
@@ -433,40 +427,29 @@ func TestAktivasiSemuaSebabGagalSama(t *testing.T) {
 	akunLama := f.akunBiasa(0)
 	testdb.Exec(t, mustTx(t, f), `UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, tertaut.jamaahID, akunLama)
 	commitLast(t, f)
-	bentrokB := f.booking("dp", K, false)
-	akunBentrok := f.akunBiasa(Z)
 
 	type kasus struct {
 		nama, alasan string
 		fn           http.HandlerFunc
 		body         map[string]any
-		acc          *Account
 		logAda       bool
 	}
 	nikLain := f.nikBaru()
-	akunObj := func(id int64) *Account {
-		acc, err := NewRepository(f.db).GetByID(context.Background(), id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return acc
-	}
 	kasuss := []kasus{
-		{"kode salah", "", h.Publik, map[string]any{"brand_id": f.brand, "kode_booking": "QQQQQ9", "nik": ok.nik}, nil, false},
-		{"NIK salah", "nik_salah", h.Publik, map[string]any{"brand_id": f.brand, "kode_booking": ok.kode, "nik": nikLain}, nil, true},
-		{"NIK jamaah lain", "bukan_peserta", h.Publik, map[string]any{"brand_id": f.brand, "kode_booking": ok.kode, "nik": bayi.nik}, nil, true},
-		{"booking batal", "booking_batal", h.Publik, f.cekBody(batal), nil, true},
-		{"bayi", "bayi", h.Publik, f.cekBody(bayi), nil, true},
-		{"brand lain", "", h.Publik, map[string]any{"brand_id": f.brand + 1000, "kode_booking": ok.kode, "nik": ok.nik}, nil, false},
-		{"sudah tertaut", "sudah_tertaut", h.Publik, f.cekBody(tertaut), nil, true},
-		{"format NIK salah", "", h.Publik, map[string]any{"brand_id": f.brand, "kode_booking": ok.kode, "nik": "123"}, nil, false},
-		{"upline bentrok (akun masuk, simpan)", "upline_beda", h.Akun, map[string]any{"kode_booking": bentrokB.kode, "nik": bentrokB.nik, "simpan": true}, akunObj(akunBentrok), true},
+		{"kode salah", "", h.Publik, map[string]any{"brand_id": f.brand, "kode_booking": "QQQQQ9", "nik": ok.nik}, false},
+		{"NIK salah", "nik_salah", h.Publik, map[string]any{"brand_id": f.brand, "kode_booking": ok.kode, "nik": nikLain}, true},
+		{"NIK jamaah lain", "bukan_peserta", h.Publik, map[string]any{"brand_id": f.brand, "kode_booking": ok.kode, "nik": bayi.nik}, true},
+		{"booking batal", "booking_batal", h.Publik, f.cekBody(batal), true},
+		{"bayi", "bayi", h.Publik, f.cekBody(bayi), true},
+		{"brand lain", "", h.Publik, map[string]any{"brand_id": f.brand + 1000, "kode_booking": ok.kode, "nik": ok.nik}, false},
+		{"sudah tertaut", "sudah_tertaut", h.Publik, f.cekBody(tertaut), true},
+		{"format NIK salah", "", h.Publik, map[string]any{"brand_id": f.brand, "kode_booking": ok.kode, "nik": "123"}, false},
 	}
 	var pertama *httptest.ResponseRecorder
 	for _, c := range kasuss {
 		kodeUji, _ := c.body["kode_booking"].(string)
 		sebelum, _ := f.logKode(a, strings.ToUpper(kodeUji))
-		rec := kirim(c.fn, ipBaru(), "", c.body, c.acc)
+		rec := kirim(c.fn, ipBaru(), "", c.body)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("%s: status %d %s", c.nama, rec.Code, rec.Body)
 		}
@@ -492,12 +475,6 @@ func TestAktivasiSemuaSebabGagalSama(t *testing.T) {
 	}
 	if int(atomic.LoadInt32(jeda)) != len(kasuss) {
 		t.Fatalf("jeda acak terpanggil %d kali, mau %d", *jeda, len(kasuss))
-	}
-	// Akun upline bentrok tidak berubah.
-	var jid sql.NullInt64
-	_ = f.db.QueryRow(`SELECT jamaah_id FROM customer_accounts WHERE id=?`, akunBentrok).Scan(&jid)
-	if jid.Valid {
-		t.Fatal("akun upline bentrok tertaut")
 	}
 }
 
@@ -532,11 +509,11 @@ func TestAktivasiBatasIPDanRetryAfter(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		body := f.cekBody(b)
 		body["nik"] = f.nikBaru()
-		if rec := kirim(h.Publik, ip, "", body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ip, "", body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("percobaan %d: %d %s", i+1, rec.Code, rec.Body)
 		}
 	}
-	rec := kirim(h.Publik, ip, "", f.cekBody(b), nil)
+	rec := kirim(h.Publik, ip, "", f.cekBody(b))
 	if rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), KodeGalatAktivasiTerlaluSering) {
 		t.Fatalf("percobaan ke-6: %d %s", rec.Code, rec.Body)
 	}
@@ -544,7 +521,7 @@ func TestAktivasiBatasIPDanRetryAfter(t *testing.T) {
 		t.Fatalf("Retry-After = %q", rec.Header().Get("Retry-After"))
 	}
 	// IP lain tidak ikut terkunci dan data benar tetap lolos.
-	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b), nil); rec.Code != http.StatusOK {
+	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b)); rec.Code != http.StatusOK {
 		t.Fatalf("IP lain: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -557,35 +534,15 @@ func TestAktivasiBatasPerangkat(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		body := f.cekBody(b)
 		body["nik"] = f.nikBaru()
-		if rec := kirim(h.Publik, ipBaru(), "dev-uji-1", body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ipBaru(), "dev-uji-1", body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("percobaan %d: %d", i+1, rec.Code)
 		}
 	}
-	if rec := kirim(h.Publik, ipBaru(), "dev-uji-1", f.cekBody(b), nil); rec.Code != http.StatusTooManyRequests {
+	if rec := kirim(h.Publik, ipBaru(), "dev-uji-1", f.cekBody(b)); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("perangkat ke-6: %d %s", rec.Code, rec.Body)
 	}
-	if rec := kirim(h.Publik, ipBaru(), "dev-uji-2", f.cekBody(b), nil); rec.Code != http.StatusOK {
+	if rec := kirim(h.Publik, ipBaru(), "dev-uji-2", f.cekBody(b)); rec.Code != http.StatusOK {
 		t.Fatalf("perangkat lain: %d", rec.Code)
-	}
-}
-
-func TestAktivasiBatasAkun(t *testing.T) {
-	f := newFxAkt(t)
-	a, _ := f.core()
-	h := f.handler(a)
-	b := f.booking("dp", 0, false)
-	acc, err := NewRepository(f.db).GetByID(context.Background(), f.akunBiasa(0))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 5; i++ {
-		body := map[string]any{"kode_booking": b.kode, "nik": f.nikBaru()}
-		if rec := kirim(h.Akun, ipBaru(), "", body, acc); rec.Code != http.StatusBadRequest {
-			t.Fatalf("percobaan %d: %d %s", i+1, rec.Code, rec.Body)
-		}
-	}
-	if rec := kirim(h.Akun, ipBaru(), "", map[string]any{"kode_booking": b.kode, "nik": b.nik}, acc); rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("akun ke-6: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -615,16 +572,16 @@ func TestAktivasiBatasIPv6SeBlok64(t *testing.T) {
 		body := f.cekBody(b)
 		body["nik"] = f.nikBaru()
 		ip := fmt.Sprintf("[2001:db8:77:9::%x]:5000", i+1)
-		if rec := kirim(h.Publik, ip, "", body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ip, "", body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("percobaan %d: %d %s", i+1, rec.Code, rec.Body)
 		}
 	}
 	body := f.cekBody(b)
 	body["nik"] = f.nikBaru()
-	if rec := kirim(h.Publik, "[2001:db8:77:9::ffff]:5000", "", body, nil); rec.Code != http.StatusTooManyRequests {
+	if rec := kirim(h.Publik, "[2001:db8:77:9::ffff]:5000", "", body); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("alamat lain di blok /64 yang sama lolos: %d %s", rec.Code, rec.Body)
 	}
-	if rec := kirim(h.Publik, "[2001:db8:77:a::1]:5000", "", f.cekBody(b), nil); rec.Code != http.StatusOK {
+	if rec := kirim(h.Publik, "[2001:db8:77:a::1]:5000", "", f.cekBody(b)); rec.Code != http.StatusOK {
 		t.Fatalf("blok lain: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -639,13 +596,13 @@ func TestAktivasiBatasPasanganPengamanUtama(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		body := f.cekBody(b)
 		body["nik"] = salah
-		if rec := kirim(h.Publik, ipBaru(), fmt.Sprint("dev-p-", i), body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ipBaru(), fmt.Sprint("dev-p-", i), body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("pasangan percobaan %d: %d %s", i+1, rec.Code, rec.Body)
 		}
 	}
 	body := f.cekBody(b)
 	body["nik"] = salah
-	rec := kirim(h.Publik, ipBaru(), "dev-p-baru", body, nil)
+	rec := kirim(h.Publik, ipBaru(), "dev-p-baru", body)
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("pasangan ke-6: %d %s", rec.Code, rec.Body)
 	}
@@ -653,17 +610,17 @@ func TestAktivasiBatasPasanganPengamanUtama(t *testing.T) {
 		t.Fatalf("Retry-After = %q", rec.Header().Get("Retry-After"))
 	}
 	// Pemilik kode yang benar tidak ikut terkunci oleh tebakan pihak lain pada kodenya.
-	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b), nil); rec.Code != http.StatusOK {
+	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b)); rec.Code != http.StatusOK {
 		t.Fatalf("pasangan benar ikut terkunci: %d %s", rec.Code, rec.Body)
 	}
 	// NIK korban dengan kode acak dari banyak IP: pasangan korban tidak terkunci.
 	for i := 0; i < 15; i++ {
 		body := map[string]any{"brand_id": f.brand, "kode_booking": fmt.Sprintf("ZQ%04d", 100+i), "nik": b.nik}
-		if rec := kirim(h.Publik, ipBaru(), "", body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ipBaru(), "", body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("NIK percobaan %d: %d %s", i+1, rec.Code, rec.Body)
 		}
 	}
-	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b), nil); rec.Code != http.StatusOK {
+	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b)); rec.Code != http.StatusOK {
 		t.Fatalf("NIK korban terkunci oleh kode acak: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -677,11 +634,11 @@ func TestAktivasiBatasKodeHarianDanResetAdmin(t *testing.T) {
 	for i := 0; i < batasKode24.batas; i++ {
 		body := f.cekBody(b)
 		body["nik"] = f.nikBaru()
-		if rec := kirim(h.Publik, ipBaru(), fmt.Sprint("dev-k-", i), body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ipBaru(), fmt.Sprint("dev-k-", i), body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("kode percobaan %d: %d %s", i+1, rec.Code, rec.Body)
 		}
 	}
-	rec := kirim(h.Publik, ipBaru(), "dev-k-baru", f.cekBody(b), nil)
+	rec := kirim(h.Publik, ipBaru(), "dev-k-baru", f.cekBody(b))
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("kode terkunci: %d %s", rec.Code, rec.Body)
 	}
@@ -716,7 +673,7 @@ func TestAktivasiBatasKodeHarianDanResetAdmin(t *testing.T) {
 	if rec := reset(map[string]any{"kode_booking": b.kode}); rec.Code != http.StatusOK {
 		t.Fatalf("reset: %d %s", rec.Code, rec.Body)
 	}
-	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b), nil); rec.Code != http.StatusOK {
+	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b)); rec.Code != http.StatusOK {
 		t.Fatalf("setelah reset: %d %s", rec.Code, rec.Body)
 	}
 	var n int
@@ -733,11 +690,11 @@ func TestAktivasiBatasNIKHarianDanResetAdmin(t *testing.T) {
 	b := f.booking("dp", 0, false)
 	for i := 0; i < batasNIK24.batas; i++ {
 		body := map[string]any{"brand_id": f.brand, "kode_booking": fmt.Sprintf("ZN%04d", i), "nik": b.nik}
-		if rec := kirim(h.Publik, ipBaru(), "", body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ipBaru(), "", body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("NIK percobaan %d: %d %s", i+1, rec.Code, rec.Body)
 		}
 	}
-	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b), nil); rec.Code != http.StatusTooManyRequests {
+	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b)); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("NIK terkunci: %d %s", rec.Code, rec.Body)
 	}
 	raw, _ := json.Marshal(map[string]any{"nik": b.nik})
@@ -746,7 +703,7 @@ func TestAktivasiBatasNIKHarianDanResetAdmin(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("reset NIK: %d %s", w.Code, w.Body)
 	}
-	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b), nil); rec.Code != http.StatusOK {
+	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b)); rec.Code != http.StatusOK {
 		t.Fatalf("setelah reset NIK: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -758,12 +715,12 @@ func TestAktivasiKodeTidakAdaSamaDenganKodeAda(t *testing.T) {
 	h := f.handler(a)
 	for i := 0; i < batasKode24.batas; i++ {
 		body := map[string]any{"brand_id": f.brand, "kode_booking": "ZK0001", "nik": f.nikBaru()}
-		if rec := kirim(h.Publik, ipBaru(), "", body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ipBaru(), "", body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("percobaan %d: %d %s", i+1, rec.Code, rec.Body)
 		}
 	}
 	body := map[string]any{"brand_id": f.brand, "kode_booking": "ZK0001", "nik": f.nikBaru()}
-	rec := kirim(h.Publik, ipBaru(), "", body, nil)
+	rec := kirim(h.Publik, ipBaru(), "", body)
 	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "900" {
 		t.Fatalf("kode tidak ada: %d Retry-After=%q", rec.Code, rec.Header().Get("Retry-After"))
 	}
@@ -776,11 +733,11 @@ func TestAktivasiKodeAcakTidakMengunciKodeOrang(t *testing.T) {
 	b := f.booking("dp", 0, false)
 	for i := 0; i < 60; i++ {
 		body := map[string]any{"brand_id": f.brand, "kode_booking": fmt.Sprintf("YX%04d", i), "nik": f.nikBaru()}
-		if rec := kirim(h.Publik, ipBaru(), "", body, nil); rec.Code != http.StatusBadRequest {
+		if rec := kirim(h.Publik, ipBaru(), "", body); rec.Code != http.StatusBadRequest {
 			t.Fatalf("tebakan %d: %d", i, rec.Code)
 		}
 	}
-	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b), nil); rec.Code != http.StatusOK {
+	if rec := kirim(h.Publik, ipBaru(), "", f.cekBody(b)); rec.Code != http.StatusOK {
 		t.Fatalf("kode orang terkunci oleh tebakan acak: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -809,36 +766,6 @@ func TestAktivasiAlarmBrandTidakMemperketatIP(t *testing.T) {
 	}
 }
 
-// Pemilik kunci tidak bisa menautkan akunnya ke jamaah milik pelanggannya.
-func TestAktivasiPemilikKunciTidakBisaMenautkanJamaahOrang(t *testing.T) {
-	f := newFxAkt(t)
-	a, _ := f.core()
-	h := f.handler(a)
-	K := f.agen("aktif")
-	b := f.booking("dp", K, false)
-	acc, err := NewRepository(f.db).GetByID(context.Background(), K)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec := kirim(h.Akun, ipBaru(), "", map[string]any{"kode_booking": b.kode, "nik": b.nik, "simpan": true}, acc)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), KodeGalatAktivasiGagal) {
-		t.Fatalf("pemilik kunci menautkan jamaah orang: %d %s", rec.Code, rec.Body)
-	}
-	var jid sql.NullInt64
-	if err := f.db.QueryRow(`SELECT jamaah_id FROM customer_accounts WHERE id=?`, K).Scan(&jid); err != nil || jid.Valid {
-		t.Fatalf("jamaah_id akun pemilik kunci = %v (err %v)", jid, err)
-	}
-	var n int
-	_ = f.db.QueryRow(`SELECT COUNT(*) FROM jamaah_aktivasi_log WHERE jamaah_id=? AND aksi='tolak' AND alasan='upline_beda'`, b.jamaahID).Scan(&n)
-	if n != 1 {
-		t.Fatalf("log tolak upline_beda = %d", n)
-	}
-	// Jamaah yang asli tetap bisa aktivasi.
-	if rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b), nil); rec.Code != http.StatusCreated {
-		t.Fatalf("aktivasi jamaah asli: %d %s", rec.Code, rec.Body)
-	}
-}
-
 func TestAktivasiSlotDikembalikanSaatSukses(t *testing.T) {
 	f := newFxAkt(t)
 	a, jeda := f.core()
@@ -846,7 +773,7 @@ func TestAktivasiSlotDikembalikanSaatSukses(t *testing.T) {
 	b := f.booking("dp", 0, false)
 	ip := "203.0.113.77:1"
 	for i := 0; i < 8; i++ {
-		if rec := kirim(h.Publik, ip, "dev-ok", f.cekBody(b), nil); rec.Code != http.StatusOK {
+		if rec := kirim(h.Publik, ip, "dev-ok", f.cekBody(b)); rec.Code != http.StatusOK {
 			t.Fatalf("cek %d: %d %s", i+1, rec.Code, rec.Body)
 		}
 	}
@@ -875,7 +802,7 @@ func TestAktivasiKodeAgen(t *testing.T) {
 		b := f.booking("dp", 0, false)
 		sb := f.simpanBody(b)
 		sb["kode_agen"] = kodeA
-		rec := kirim(h.Publik, ipBaru(), "", sb, nil)
+		rec := kirim(h.Publik, ipBaru(), "", sb)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
@@ -890,7 +817,7 @@ func TestAktivasiKodeAgen(t *testing.T) {
 		b := f.booking("dp", 0, false)
 		sb := f.simpanBody(b)
 		sb["kode_agen"] = "ZZZZZZ"
-		rec := kirim(h.Publik, ipBaru(), "", sb, nil)
+		rec := kirim(h.Publik, ipBaru(), "", sb)
 		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), KodeGalatKodeAgenTidakAda) {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
@@ -902,7 +829,7 @@ func TestAktivasiKodeAgen(t *testing.T) {
 		b := f.booking("dp", 0, true)
 		sb := f.simpanBody(b)
 		sb["kode_referral"] = kodeA
-		rec := kirim(h.Publik, ipBaru(), "", sb, nil)
+		rec := kirim(h.Publik, ipBaru(), "", sb)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
@@ -919,7 +846,7 @@ func TestAktivasiKodeAgen(t *testing.T) {
 		sb := f.simpanBody(b)
 		sb["kode_agen"] = "ZZZZZZ"
 		sb["kode_referral"] = kodeA
-		rec := kirim(h.Publik, ipBaru(), "", sb, nil)
+		rec := kirim(h.Publik, ipBaru(), "", sb)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
@@ -931,7 +858,7 @@ func TestAktivasiKodeAgen(t *testing.T) {
 	t.Run("pemilik kunci nonaktif tetap mengikat", func(t *testing.T) {
 		N := f.agen("nonaktif")
 		b := f.booking("lunas", N, false)
-		rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b), nil)
+		rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b))
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
@@ -953,13 +880,13 @@ func TestAktivasiEmailDanWAGandaTanpaAkunYatim(t *testing.T) {
 
 	sb := f.simpanBody(b)
 	sb["email"] = email
-	rec := kirim(h.Publik, ipBaru(), "", sb, nil)
+	rec := kirim(h.Publik, ipBaru(), "", sb)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("email ganda: %d %s", rec.Code, rec.Body)
 	}
 	sb = f.simpanBody(b)
 	sb["no_hp"] = hp
-	rec = kirim(h.Publik, ipBaru(), "", sb, nil)
+	rec = kirim(h.Publik, ipBaru(), "", sb)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("WA ganda: %d %s", rec.Code, rec.Body)
 	}
@@ -972,137 +899,78 @@ func TestAktivasiEmailDanWAGandaTanpaAkunYatim(t *testing.T) {
 		}
 	}
 	// Setelah 409 jamaah tetap bisa aktivasi dengan data lain (slot dikembalikan).
-	if rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b), nil); rec.Code != http.StatusCreated {
+	if rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b)); rec.Code != http.StatusCreated {
 		t.Fatalf("ulang: %d %s", rec.Code, rec.Body)
 	}
 }
 
-// ---- tautan akun yang sudah ada ----
+// ---- upline akun baru dan akun yang sudah ada ----
 
-func TestAktivasiTautanAkunYangAda(t *testing.T) {
+func TestAktivasiAkunBaruUplineDariKunci(t *testing.T) {
 	f := newFxAkt(t)
 	a, _ := f.core()
 	h := f.handler(a)
 	K := f.agen("aktif")
-	Z := f.agen("aktif")
-	repo := NewRepository(f.db)
-	muat := func(id int64) *Account {
-		acc, err := repo.GetByID(context.Background(), id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return acc
-	}
-	tautkan := func(akun int64, b bk) *httptest.ResponseRecorder {
-		return kirim(h.Akun, ipBaru(), "", map[string]any{"kode_booking": b.kode, "nik": b.nik, "simpan": true}, muat(akun))
-	}
-	direkrutAkun := func(id int64) sql.NullInt64 {
-		var d sql.NullInt64
-		_ = f.db.QueryRow(`SELECT direkrut_oleh_akun_id FROM customer_accounts WHERE id=?`, id).Scan(&d)
-		return d
-	}
+	Kn := f.agen("nonaktif")
 	tertautKe := func(id int64) sql.NullInt64 {
 		var d sql.NullInt64
 		_ = f.db.QueryRow(`SELECT jamaah_id FROM customer_accounts WHERE id=?`, id).Scan(&d)
 		return d
 	}
 
-	t.Run("direkrut kosong diisi pemilik kunci", func(t *testing.T) {
+	t.Run("upline akun baru = pemilik kunci, tercatat, pemilik kunci diberi tahu", func(t *testing.T) {
 		b := f.booking("dp", K, false)
-		akun := f.akunBiasa(0)
-		rec := tautkan(akun, b)
-		if rec.Code != http.StatusOK {
+		rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b))
+		if rec.Code != http.StatusCreated {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
-		if d := direkrutAkun(akun); d.Int64 != K || tertautKe(akun).Int64 != b.jamaahID {
-			t.Fatalf("direkrut=%v tertaut=%v", d, tertautKe(akun))
+		akun, d := f.akunDariJamaah(b.jamaahID)
+		if akun == 0 || d.Int64 != K {
+			t.Fatalf("akun=%d direkrut=%v", akun, d)
 		}
 		var n int
 		_ = f.db.QueryRow(`SELECT COUNT(*) FROM akun_kaitan_log WHERE akun_id=? AND alasan='aktivasi akun'`, akun).Scan(&n)
 		if n != 1 {
 			t.Fatalf("log kaitan = %d", n)
 		}
-		var out struct {
-			Account struct {
-				ID int64 `json:"id"`
-			} `json:"account"`
-		}
-		_ = json.Unmarshal(rec.Body.Bytes(), &out)
-		if out.Account.ID != akun {
-			t.Fatalf("respons = %s", rec.Body)
-		}
-		var notif int
 		_ = f.db.QueryRow(`SELECT COUNT(*) FROM notifikasi WHERE akun_id=? AND jenis='jamaah_aktivasi' AND kunci=?`, K, fmt.Sprint("aktivasi:", b.jamaahID)).Scan(&n)
-		_ = notif
 		if n != 1 {
 			t.Fatalf("notifikasi pemilik kunci = %d", n)
 		}
 	})
-	t.Run("direkrut sama dengan pemilik kunci hanya tautan", func(t *testing.T) {
-		b := f.booking("dp", K, false)
-		akun := f.akunBiasa(K)
-		if rec := tautkan(akun, b); rec.Code != http.StatusOK {
+	t.Run("pemilik kunci nonaktif tetap mengikat", func(t *testing.T) {
+		b := f.booking("dp", Kn, false)
+		if rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b)); rec.Code != http.StatusCreated {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
-		var n int
-		_ = f.db.QueryRow(`SELECT COUNT(*) FROM akun_kaitan_log WHERE akun_id=?`, akun).Scan(&n)
-		if n != 0 || tertautKe(akun).Int64 != b.jamaahID {
-			t.Fatalf("log=%d tertaut=%v", n, tertautKe(akun))
+		if _, d := f.akunDariJamaah(b.jamaahID); d.Int64 != Kn {
+			t.Fatalf("direkrut=%v", d)
 		}
 	})
-	t.Run("upline berbeda ditolak dan dicatat upline_beda", func(t *testing.T) {
+	t.Run("akun yang sudah terdaftar tidak bisa didaftarkan sebagai jamaah", func(t *testing.T) {
 		b := f.booking("dp", K, false)
-		akun := f.akunBiasa(Z)
-		rec := tautkan(akun, b)
-		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), KodeGalatAktivasiGagal) {
-			t.Fatalf("%d %s", rec.Code, rec.Body)
+		lama := f.akunBiasa(0)
+		var email, hp string
+		if err := f.db.QueryRow(`SELECT email, no_hp FROM customer_accounts WHERE id=?`, lama).Scan(&email, &hp); err != nil {
+			t.Fatal(err)
 		}
-		if tertautKe(akun).Valid || direkrutAkun(akun).Int64 != Z {
-			t.Fatal("akun berubah")
+		body := f.simpanBody(b)
+		body["email"] = email
+		if rec := kirim(h.Publik, ipBaru(), "", body); rec.Code != http.StatusConflict {
+			t.Fatalf("email sama: %d %s", rec.Code, rec.Body)
 		}
-		_, alasan := f.logKode(a, b.kode)
-		if len(alasan) != 1 || alasan[0] != "upline_beda" {
-			t.Fatalf("log = %v", alasan)
+		body = f.simpanBody(b)
+		body["no_hp"] = hp
+		if rec := kirim(h.Publik, ipBaru(), "", body); rec.Code != http.StatusConflict {
+			t.Fatalf("WA sama: %d %s", rec.Code, rec.Body)
 		}
-	})
-	t.Run("akun agen aktif: upline berbeda ditolak, sama hanya tautan", func(t *testing.T) {
-		b := f.booking("dp", K, false)
-		var agenBeda, agenSama int64
-		f.tx(func(tx *sql.Tx) {
-			agenBeda = testdb.NewAkun(t, tx, f.brand, testdb.AkunOpts{Nama: "AgenBeda", StatusAgen: "aktif", Direkrut: Z, Upline: Z})
-			agenSama = testdb.NewAkun(t, tx, f.brand, testdb.AkunOpts{Nama: "AgenSama", StatusAgen: "aktif", Direkrut: K, Upline: K})
-		})
-		f.akun = append(f.akun, agenBeda, agenSama)
-		if rec := tautkan(agenBeda, b); rec.Code != http.StatusBadRequest {
-			t.Fatalf("beda: %d %s", rec.Code, rec.Body)
+		var d sql.NullInt64
+		_ = f.db.QueryRow(`SELECT direkrut_oleh_akun_id FROM customer_accounts WHERE id=?`, lama).Scan(&d)
+		if tertautKe(lama).Valid || d.Valid {
+			t.Fatalf("akun lama berubah: tertaut=%v direkrut=%v", tertautKe(lama), d)
 		}
-		if rec := tautkan(agenSama, b); rec.Code != http.StatusOK {
-			t.Fatalf("sama: %d %s", rec.Code, rec.Body)
-		}
-	})
-	t.Run("akun yang sudah tertaut ditolak", func(t *testing.T) {
-		b1 := f.booking("dp", K, false)
-		b2 := f.booking("dp", K, false)
-		akun := f.akunBiasa(0)
-		if rec := tautkan(akun, b1); rec.Code != http.StatusOK {
-			t.Fatalf("pertama: %d %s", rec.Code, rec.Body)
-		}
-		if rec := tautkan(akun, b2); rec.Code != http.StatusBadRequest {
-			t.Fatalf("kedua: %d %s", rec.Code, rec.Body)
-		}
-		if tertautKe(akun).Int64 != b1.jamaahID {
-			t.Fatal("tautan berpindah")
-		}
-	})
-	t.Run("cek akun masuk tidak mengubah apa pun", func(t *testing.T) {
-		b := f.booking("dp", K, false)
-		akun := f.akunBiasa(0)
-		rec := kirim(h.Akun, ipBaru(), "", map[string]any{"kode_booking": b.kode, "nik": b.nik}, muat(akun))
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "nama_lengkap") {
-			t.Fatalf("%d %s", rec.Code, rec.Body)
-		}
-		if tertautKe(akun).Valid {
-			t.Fatal("cek menautkan akun")
+		if id, _ := f.akunDariJamaah(b.jamaahID); id != 0 {
+			t.Fatal("jamaah tertaut walau pendaftaran ditolak")
 		}
 	})
 }
@@ -1112,7 +980,7 @@ func TestAktivasiHapusAkunMelepasJamaah(t *testing.T) {
 	a, _ := f.core()
 	h := f.handler(a)
 	b := f.booking("dp", 0, false)
-	rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b), nil)
+	rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
@@ -1126,7 +994,7 @@ func TestAktivasiHapusAkunMelepasJamaah(t *testing.T) {
 	if id, _ := f.akunDariJamaah(b.jamaahID); id != 0 {
 		t.Fatal("jamaah masih tertaut setelah akun dihapus")
 	}
-	rec = kirim(h.Publik, ipBaru(), "", f.simpanBody(b), nil)
+	rec = kirim(h.Publik, ipBaru(), "", f.simpanBody(b))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("akun lain setelah hapus: %d %s", rec.Code, rec.Body)
 	}
@@ -1140,8 +1008,8 @@ func TestAktivasiLogTanpaDataMentah(t *testing.T) {
 	ip := "203.0.113.88:9"
 	body := f.cekBody(b)
 	body["nik"] = f.nikBaru()
-	kirim(h.Publik, ip, "dev-log", body, nil)
-	if rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b), nil); rec.Code != http.StatusCreated {
+	kirim(h.Publik, ip, "dev-log", body)
+	if rec := kirim(h.Publik, ipBaru(), "", f.simpanBody(b)); rec.Code != http.StatusCreated {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 	rows, err := f.db.Query(`SELECT COALESCE(kode_hash,''), COALESCE(nik_hash,''), COALESCE(ip_hash,''), COALESCE(device_hash,''), alasan, catatan
@@ -1203,37 +1071,6 @@ func TestAktivasiRaceDuaAktivasiParalelSatuJamaah(t *testing.T) {
 	_ = f.db.QueryRow(`SELECT COUNT(*) FROM customer_accounts WHERE jamaah_id=?`, b.jamaahID).Scan(&akun)
 	if sukses != 1 || gagal != n-1 || akun != 1 {
 		t.Fatalf("sukses=%d gagal=%d akun=%d, mau 1, %d, 1", sukses, gagal, akun, n-1)
-	}
-}
-
-func TestAktivasiRaceDuaTautanParalelDuaAkun(t *testing.T) {
-	f := newFxAkt(t)
-	a, _ := f.core()
-	K := f.agen("aktif")
-	b := f.booking("dp", K, false)
-	a1, a2 := f.akunBiasa(0), f.akunBiasa(0)
-	var sukses, gagal int32
-	var wg sync.WaitGroup
-	for i, id := range []int64{a1, a2, a1, a2} {
-		wg.Add(1)
-		go func(i int, id int64) {
-			defer wg.Done()
-			_, err := a.Jalankan(context.Background(), AktivasiInput{BrandID: f.brand, KodeBooking: b.kode, NIK: b.nik, Simpan: true, AkunID: id, IP: fmt.Sprint("10.2.0.", i)})
-			switch {
-			case err == nil:
-				atomic.AddInt32(&sukses, 1)
-			case errors.Is(err, ErrAktivasiGagal):
-				atomic.AddInt32(&gagal, 1)
-			default:
-				t.Errorf("galat tak terduga: %v", err)
-			}
-		}(i, id)
-	}
-	wg.Wait()
-	var n int
-	_ = f.db.QueryRow(`SELECT COUNT(*) FROM customer_accounts WHERE jamaah_id=?`, b.jamaahID).Scan(&n)
-	if sukses != 1 || gagal != 3 || n != 1 {
-		t.Fatalf("sukses=%d gagal=%d tertaut=%d", sukses, gagal, n)
 	}
 }
 
