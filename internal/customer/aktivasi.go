@@ -20,8 +20,9 @@ import (
 )
 
 // Aktivasi akun jamaah (keputusan 18 November 2026): jamaah yang dibuatkan booking oleh orang lain (mis. agen)
-// mengaktifkan akunnya sendiri dengan kode booking dan NIK. Satu fungsi inti (Aktivasi.Jalankan) dipakai dua pintu
-// HTTP: publik (akun belum ada) dan akun masuk (menautkan akun yang sudah ada). Tanpa Google, captcha, atau OTP.
+// mengaktifkan akunnya sendiri dengan kode booking dan NIK. Satu fungsi inti (Aktivasi.Jalankan) di belakang satu
+// pintu HTTP publik yang selalu membuat akun baru. Orang yang sudah punya akun tidak bisa menautkannya ke jamaah.
+// Tanpa Google, captcha, atau OTP.
 // Semua sebab gagal menghasilkan satu galat yang sama; sebab sebenarnya hanya masuk jamaah_aktivasi_log.
 
 const (
@@ -82,11 +83,9 @@ type AktivasiInput struct {
 	KodeBooking string
 	NIK         string
 	Simpan      bool
-	// Hanya jalur publik (AkunID = 0) saat simpan.
+	// Hanya dipakai saat simpan.
 	NoHP, Email, Password  string
 	KodeAgen, KodeReferral string
-	// AkunID > 0: jalur akun masuk (brand dari sesi). 0: jalur publik.
-	AkunID int64
 	// IP dan Perangkat (header X-Perangkat-Id, boleh kosong) hanya dipakai untuk penghitung, di-hash.
 	IP, Perangkat string
 }
@@ -98,7 +97,7 @@ type DataJamaahAktivasi struct {
 	TanggalLahir string `json:"tanggal_lahir"`
 }
 
-// AktivasiHasil: hasil cek atau simpan. AkunID dan Token terisi hanya saat simpan; Token hanya di jalur publik.
+// AktivasiHasil: hasil cek atau simpan. AkunID dan Token terisi hanya saat simpan.
 type AktivasiHasil struct {
 	Jamaah DataJamaahAktivasi
 	AkunID int64
@@ -170,7 +169,7 @@ func (p *percobaan) ambil(ctx context.Context, b jenisBatas, kunci string) error
 	if urutan == b.batas+1 {
 		switch b.jenis {
 		case batasKode24.jenis:
-			p.catat(ctx, "kode_dikunci", b.jenis, 0, 0)
+			p.catat(ctx, "kode_dikunci", b.jenis, 0)
 			log.Printf("[WARN] aktivasi: brand %d, satu kode booking melewati %d percobaan per hari", p.in.BrandID, b.batas)
 		case batasNIK24.jenis:
 			log.Printf("[WARN] aktivasi: brand %d, satu NIK melewati %d percobaan per hari", p.in.BrandID, b.batas)
@@ -190,13 +189,13 @@ func (p *percobaan) kembalikanSemua(ctx context.Context) {
 	}
 }
 
-func (p *percobaan) catat(ctx context.Context, aksi, alasan string, jamaahID, akunID int64) {
+func (p *percobaan) catat(ctx context.Context, aksi, alasan string, jamaahID int64) {
 	// kode_dikunci ditulis sekali per jendela dan tidak ikut batas tulis log kegagalan.
 	if aksi != "kode_dikunci" && !bolehTulisLogGagal(ctx, p.a.db, p.kodeH) {
 		return
 	}
 	err := catatLogAktivasi(ctx, p.a.db, entriLogAktivasi{
-		BrandID: p.in.BrandID, Aksi: aksi, JamaahID: jamaahID, AkunID: akunID,
+		BrandID: p.in.BrandID, Aksi: aksi, JamaahID: jamaahID,
 		KodeHash: p.kodeH, NIKHash: p.nikH, IPHash: p.ipH, DeviceHash: p.devH, Alasan: alasan,
 	})
 	if err != nil {
@@ -208,7 +207,7 @@ func (p *percobaan) catat(ctx context.Context, aksi, alasan string, jamaahID, ak
 // setelah jeda acak.
 func (p *percobaan) gagal(ctx context.Context, aksi, alasan string, jamaahID int64) error {
 	if p.kodeAda {
-		p.catat(ctx, aksi, alasan, jamaahID, p.in.AkunID)
+		p.catat(ctx, aksi, alasan, jamaahID)
 	}
 	if _, urutan, _, _, err := p.a.batas.ambil(ctx, batasBrand, p.a.batas.hash("brand", p.in.BrandID, "")); err == nil && urutan == batasBrand.batas {
 		log.Printf("[WARN] aktivasi: brand %d melewati %d percobaan gagal per jam", p.in.BrandID, batasBrand.batas)
@@ -217,7 +216,7 @@ func (p *percobaan) gagal(ctx context.Context, aksi, alasan string, jamaahID int
 	return ErrAktivasiGagal
 }
 
-// Jalankan memeriksa kode booking + NIK dan, bila Simpan, membuat atau menautkan akun. Mengembalikan ErrAktivasiGagal
+// Jalankan memeriksa kode booking + NIK dan, bila Simpan, membuat akun baru tertaut ke jamaah. Mengembalikan ErrAktivasiGagal
 // (satu galat untuk semua sebab), *ErrAktivasiTerlaluSering, *ErrAktivasiInput, ErrKodeAgenTidakAda, ErrEmailTaken,
 // ErrPhoneTaken, atau galat sistem.
 func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHasil, error) {
@@ -225,7 +224,7 @@ func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHas
 		return nil, errPepperPendek
 	}
 	in.Email, in.NoHP = strings.TrimSpace(in.Email), strings.TrimSpace(in.NoHP)
-	if in.Simpan && in.AkunID == 0 {
+	if in.Simpan {
 		if msg := validasiSimpanAktivasi(in); msg != "" {
 			return nil, &ErrAktivasiInput{Pesan: msg}
 		}
@@ -242,7 +241,7 @@ func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHas
 		p.devH = b.hash("dev", 0, in.Perangkat)
 	}
 
-	if in.Simpan && in.AkunID == 0 {
+	if in.Simpan {
 		if err := p.ambil(ctx, batasSimpanIP, b.hash("simpan_ip", 0, in.IP)); err != nil {
 			return nil, err
 		}
@@ -252,11 +251,6 @@ func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHas
 	}
 	if p.devH != "" {
 		if err := p.ambil(ctx, batasPerangkat, p.devH); err != nil {
-			return nil, err
-		}
-	}
-	if in.AkunID > 0 {
-		if err := p.ambil(ctx, batasAkun, b.hash("akun", in.BrandID, fmt.Sprint(in.AkunID))); err != nil {
 			return nil, err
 		}
 	}
@@ -281,7 +275,7 @@ func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHas
 	}
 	p.kodeAda = ada
 
-	k, alasan, err := a.cariKandidat(ctx, a.db, in.BrandID, p.kode, nik, in.AkunID)
+	k, alasan, err := a.cariKandidat(ctx, a.db, in.BrandID, p.kode, nik)
 	if err != nil {
 		return nil, err
 	}
@@ -294,23 +288,19 @@ func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHas
 		return hasil, nil
 	}
 
-	var hash string
 	var kodeAgenID int64
-	if in.AkunID == 0 {
-		if k.Kaitan != "terikat_agen" {
-			if kodeAgenID, err = a.uplineDariKode(ctx, in); err != nil {
-				p.kembalikanSemua(ctx)
-				return nil, err
-			}
-		}
-		h, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcryptCost)
-		if err != nil {
+	if k.Kaitan != "terikat_agen" {
+		if kodeAgenID, err = a.uplineDariKode(ctx, in); err != nil {
 			p.kembalikanSemua(ctx)
-			return nil, fmt.Errorf("aktivasi: hash password: %w", err)
+			return nil, err
 		}
-		hash = string(h)
 	}
-	akunID, err := a.simpanTx(ctx, in, k, p.kode, nik, hash, kodeAgenID, p)
+	h, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcryptCost)
+	if err != nil {
+		p.kembalikanSemua(ctx)
+		return nil, fmt.Errorf("aktivasi: hash password: %w", err)
+	}
+	akunID, err := a.simpanTx(ctx, in, k, p.kode, nik, string(h), kodeAgenID, p)
 	var ga *galatAlasan
 	if errors.As(err, &ga) {
 		return nil, p.gagal(ctx, ga.aksi, ga.alasan, ga.jamaahID)
@@ -321,17 +311,15 @@ func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHas
 	}
 	p.kembalikanSemua(ctx)
 	hasil.AkunID = akunID
-	if in.AkunID == 0 {
-		token, err := a.repo.CreateSession(ctx, akunID)
-		if err != nil {
-			return nil, err
-		}
-		hasil.Token = token
+	token, err := a.repo.CreateSession(ctx, akunID)
+	if err != nil {
+		return nil, err
 	}
+	hasil.Token = token
 	return hasil, nil
 }
 
-// validasiSimpanAktivasi memeriksa isian akun baru (jalur publik); "" bila valid.
+// validasiSimpanAktivasi memeriksa isian akun baru; "" bila valid.
 func validasiSimpanAktivasi(in AktivasiInput) string {
 	if !ValidEmail(in.Email) {
 		return "format email tidak valid"
@@ -379,22 +367,8 @@ func (a *Aktivasi) kodeAda(ctx context.Context, brandID int64, kode string) (boo
 }
 
 // cariKandidat: kode booking dan NIK cocok pada jamaah yang sama, pax aktif non-bayi di booking baru/dp/lunas, brand
-// sama, dan jamaah belum tertaut ke akun mana pun. Jalur akun: akun itu sendiri juga harus belum tertaut. Mengembalikan
-// nil dan sebab internal bila tidak memenuhi.
-func (a *Aktivasi) cariKandidat(ctx context.Context, q dbq, brandID int64, kode, nik string, akunID int64) (*kandidat, string, error) {
-	if akunID > 0 {
-		var jamaah sql.NullInt64
-		err := q.QueryRowContext(ctx, `SELECT jamaah_id FROM customer_accounts WHERE id = ? AND brand_id = ? AND dihapus_at IS NULL`, akunID, brandID).Scan(&jamaah)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, "akun_tidak_ada", nil
-		}
-		if err != nil {
-			return nil, "", fmt.Errorf("aktivasi: baca akun: %w", err)
-		}
-		if jamaah.Valid {
-			return nil, "akun_tertaut", nil
-		}
-	}
+// sama, dan jamaah belum tertaut ke akun mana pun. Mengembalikan nil dan sebab internal bila tidak memenuhi.
+func (a *Aktivasi) cariKandidat(ctx context.Context, q dbq, brandID int64, kode, nik string) (*kandidat, string, error) {
 	var k kandidat
 	var jk, lahir sql.NullString
 	var kunci sql.NullInt64
@@ -461,8 +435,8 @@ func (a *Aktivasi) alasanGagal(ctx context.Context, q dbq, brandID int64, kode, 
 	return "sudah_tertaut", nil
 }
 
-// simpanTx membuat atau menautkan akun dalam satu transaksi: kunci booking dan jamaah, ulang kelayakan, buat/tautkan
-// akun, isi upline dari kunci jamaah, tulis log, notifikasi ke pemilik kunci. Mengembalikan *galatAlasan untuk sebab
+// simpanTx membuat akun baru dalam satu transaksi: kunci booking dan jamaah, ulang kelayakan, buat akun tertaut ke
+// jamaah, isi upline dari kunci jamaah, tulis log, notifikasi ke pemilik kunci. Mengembalikan *galatAlasan untuk sebab
 // gagal yang dihitung sebagai percobaan.
 func (a *Aktivasi) simpanTx(ctx context.Context, in AktivasiInput, k *kandidat, kode, nik, hash string, kodeAgenID int64, p *percobaan) (int64, error) {
 	tx, err := a.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
@@ -483,7 +457,7 @@ func (a *Aktivasi) simpanTx(ctx context.Context, in AktivasiInput, k *kandidat, 
 	if err := tx.QueryRowContext(ctx, `SELECT id FROM jamaah WHERE id = ? FOR UPDATE`, k.JamaahID).Scan(&x); err != nil {
 		return 0, fmt.Errorf("aktivasi: kunci jamaah: %w", err)
 	}
-	k2, alasan, err := a.cariKandidat(ctx, tx, in.BrandID, kode, nik, in.AkunID)
+	k2, alasan, err := a.cariKandidat(ctx, tx, in.BrandID, kode, nik)
 	if err != nil {
 		return 0, err
 	}
@@ -494,49 +468,27 @@ func (a *Aktivasi) simpanTx(ctx context.Context, in AktivasiInput, k *kandidat, 
 		return 0, &galatAlasan{aksi: "cek_gagal", alasan: alasan, jamaahID: k.JamaahID}
 	}
 
-	var akunID int64
-	aksi := "tautan"
-	if in.AkunID == 0 {
-		aksi = "aktivasi"
-		nama := k.Nama
-		if utf8.RuneCountInString(nama) > 100 {
-			nama = string([]rune(nama)[:100])
-		}
-		akunID, err = a.repo.CreateTx(ctx, tx, in.BrandID, nama, in.Email, in.NoHP, hash, kodeAgenID, k.JamaahID, Biodata{JenisKelamin: k.JK, TanggalLahir: k.Lahir})
-		if errors.Is(err, ErrJamaahTertaut) {
-			return 0, &galatAlasan{aksi: "cek_gagal", alasan: "sudah_tertaut", jamaahID: k.JamaahID}
-		}
-		if err != nil {
-			return 0, err
-		}
-	} else {
-		akunID = in.AkunID
-		res, err := tx.ExecContext(ctx,
-			`UPDATE customer_accounts SET jamaah_id = ? WHERE id = ? AND brand_id = ? AND jamaah_id IS NULL AND dihapus_at IS NULL`,
-			k.JamaahID, akunID, in.BrandID)
-		if err != nil {
-			if err = mapDuplicate(err, "tautkan jamaah"); errors.Is(err, ErrJamaahTertaut) {
-				return 0, &galatAlasan{aksi: "cek_gagal", alasan: "sudah_tertaut", jamaahID: k.JamaahID}
-			}
-			return 0, err
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return 0, &galatAlasan{aksi: "cek_gagal", alasan: "akun_tertaut", jamaahID: k.JamaahID}
-		}
+	nama := k.Nama
+	if utf8.RuneCountInString(nama) > 100 {
+		nama = string([]rune(nama)[:100])
+	}
+	akunID, err := a.repo.CreateTx(ctx, tx, in.BrandID, nama, in.Email, in.NoHP, hash, kodeAgenID, k.JamaahID, Biodata{JenisKelamin: k.JK, TanggalLahir: k.Lahir})
+	if errors.Is(err, ErrJamaahTertaut) {
+		return 0, &galatAlasan{aksi: "cek_gagal", alasan: "sudah_tertaut", jamaahID: k.JamaahID}
+	}
+	if err != nil {
+		return 0, err
 	}
 	if err := agen.IkatAkunDariKunciTx(ctx, tx, akunID, k.JamaahID); err != nil {
-		if errors.Is(err, agen.ErrUplineBentrok) {
-			return 0, &galatAlasan{aksi: "tolak", alasan: "upline_beda", jamaahID: k.JamaahID}
-		}
 		return 0, err
 	}
 	if err := catatLogAktivasi(ctx, tx, entriLogAktivasi{
-		BrandID: in.BrandID, Aksi: aksi, JamaahID: k.JamaahID, AkunID: akunID,
+		BrandID: in.BrandID, Aksi: "aktivasi", JamaahID: k.JamaahID, AkunID: akunID,
 		KodeHash: p.kodeH, NIKHash: p.nikH, IPHash: p.ipH, DeviceHash: p.devH,
 	}); err != nil {
 		return 0, err
 	}
-	if k.Kaitan == "terikat_agen" && k.Kunci > 0 && k.Kunci != akunID {
+	if k.Kaitan == "terikat_agen" && k.Kunci > 0 {
 		notifikasi.JamaahAktivasi(ctx, tx, k.Kunci, k.JamaahID, k.Nama)
 	}
 	if err := tx.Commit(); err != nil {
