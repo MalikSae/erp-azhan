@@ -142,6 +142,44 @@ func IkatAkunDariJamaah(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64)
 	return nil
 }
 
+// AlasanIkatAkunDariKunci: alasan di log kaitan akun saat aktivasi akun jamaah mengisi upline.
+const AlasanIkatAkunDariKunci = "aktivasi akun"
+
+// IkatAkunDariKunciTx memberi upline kepada akun BARU hasil aktivasi akun jamaah: upline akun adalah pemilik kunci
+// jamaah yang ditautkan. Berlaku hanya bila jamaah terikat_agen dan pemilik kunci berstatus agen aktif atau nonaktif
+// di brand yang sama (nonaktif tetap mengikat); selain itu tidak ada yang diubah. Hanya direkrut_oleh_akun_id yang
+// diisi; upline_akun_id disalin saat pengajuan agen disetujui. Pengikatan dicatat di akun_kaitan_log (oleh sistem).
+//
+// Tidak dipakai untuk akun yang sudah ada: akun terdaftar tanpa upline tetap tanpa upline, hanya pusat yang
+// mengubahnya (Ganti Upline). Dipanggil di dalam transaksi aktivasi.
+func IkatAkunDariKunciTx(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64) error {
+	if akunID <= 0 || jamaahID <= 0 {
+		return nil
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE customer_accounts c
+		JOIN jamaah j ON j.id = ? AND j.kaitan_status = 'terikat_agen'
+		JOIN customer_accounts a ON a.id = j.direkrut_oleh_akun_id AND a.brand_id = c.brand_id AND a.status_agen IN ('aktif','nonaktif')
+		SET c.direkrut_oleh_akun_id = a.id
+		WHERE c.id = ? AND c.direkrut_oleh_akun_id IS NULL`, jamaahID, akunID)
+	if err != nil {
+		return fmt.Errorf("agen: ikat akun dari kunci: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("agen: ikat akun dari kunci, jumlah baris: %w", err)
+	}
+	if n == 0 {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO akun_kaitan_log (akun_id, direkrut_oleh_akun_id_lama, direkrut_oleh_akun_id_baru, upline_diubah, diganti_oleh, alasan)
+		SELECT c.id, NULL, c.direkrut_oleh_akun_id, FALSE, NULL, ? FROM customer_accounts c WHERE c.id = ?`, AlasanIkatAkunDariKunci, akunID); err != nil {
+		return fmt.Errorf("agen: log ikat akun dari kunci: %w", err)
+	}
+	return nil
+}
+
 // IkatRombongan mengikat semua jamaah yang masih 'belum_ditentukan' ke akun
 // agen (auto-bind multi-pax). Jamaah yang sudah terikat tidak diubah. Prioritas
 // penentu agen ditetapkan pemanggil: portal agen memakai agen pembuat booking,

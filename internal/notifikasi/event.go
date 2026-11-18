@@ -181,3 +181,9 @@ func KomisiBatal(ctx context.Context, q Querier, bookingID int64) {
 		GROUP BY t.akun_penerima_id, t.booking_pax_id`, JenisKomisiBatal, "Rp", RefDompet, bookingID)
 	catat("komisi batal", err)
 }
+
+// JamaahAktivasi: jamaah milik agen (pemilik kunci) mengaktifkan akunnya.
+func JamaahAktivasi(ctx context.Context, q Execer, pemilikAkunID, jamaahID int64, nama string) {
+	KirimAman(ctx, q, pemilikAkunID, Notif{Jenis: JenisJamaahAktivasi, Judul: "Akun jamaah aktif", RefTipe: RefAgen,
+		Isi: "Jamaah " + nama + " sudah mengaktifkan akun.", Kunci: "aktivasi:" + strconv.FormatInt(jamaahID, 10)})
+}

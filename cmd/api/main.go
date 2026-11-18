@@ -76,6 +76,11 @@ func main() {
 	if err := shared.ValidateCaptchaConfig(); err != nil {
 		log.Fatalf("[ERROR] konfigurasi captcha: %v", err)
 	}
+	// Aktivasi akun jamaah: bawaan mati (rute 404). Bila menyala, pepper minimal 32 byte (fail closed).
+	aktivasiCfg, err := customer.KonfigAktivasiDariEnv()
+	if err != nil {
+		log.Fatalf("[ERROR] konfigurasi aktivasi akun jamaah: %v", err)
+	}
 	if !shared.IsProduction() {
 		log.Printf("[WARN] APP_ENV=%q (bukan production): origin CORS pengembangan aktif. Server publik WAJIB APP_ENV=production.", shared.AppEnv())
 	}
@@ -184,6 +189,7 @@ func main() {
 
 	if db != nil {
 		go runSeatHoldExpiry(crmDealRepo)
+		go runAktivasiCleanup(db)
 		go notifikasi.JalankanPengingat(context.Background(), db, time.Minute)
 		if v := strings.ToLower(strings.TrimSpace(os.Getenv("PELUNASAN_AUTO_BATAL"))); v == "false" || v == "0" || v == "off" {
 			log.Printf("[INFO] pembatalan otomatis lewat batas pelunasan DIMATIKAN (PELUNASAN_AUTO_BATAL=%s)", v)
@@ -205,6 +211,7 @@ func main() {
 	customerRepo := customer.NewRepository(db)
 	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
 	jamaahAkunHandler := customer.NewJamaahAkun(db, customerRepo, mailer.NewFromEnv())
+	aktivasiHandler := customer.NewAktivasiHandler(customer.NewAktivasi(db, customerRepo, aktivasiCfg.Pepper), customerRepo, aktivasiCfg)
 	pengumumanHandler := pengumuman.NewHandler(db)
 	manasikHandler := manasik.NewHandler(db)
 	bannerHandler := banner.NewHandler(db)
@@ -260,6 +267,7 @@ func main() {
 		r.Post("/register", customerHandler.Register)
 		r.Post("/register-agen", customerHandler.RegisterAgen)
 		r.Post("/register-app", customerHandler.RegisterApp)
+		r.Post("/aktivasi", aktivasiHandler.Publik)
 		r.Post("/login", customerHandler.Login)
 		r.Post("/google", customerHandler.LoginGoogle)
 		r.Post("/google/daftar", customerHandler.DaftarGoogle)
@@ -587,7 +595,12 @@ func main() {
 		r.Route("/akun", func(r chi.Router) {
 			r.Use(identity.RequirePermission("akun.view"))
 			r.Get("/", adminAkunHandler.List)
+			r.Get("/agen-dari-tautan", adminAkunHandler.AgenDariTautan)
 			r.Get("/{id}", adminAkunHandler.Detail)
+			r.With(identity.RequirePermission("akun.edit")).Post("/{id}/lepas-tautan", adminAkunHandler.LepasTautan)
+			r.With(identity.RequirePermission("akun.edit")).Post("/aktivasi/reset-hitung", aktivasiHandler.ResetHitung)
+			// Izin menurut status akun diperiksa di handler (sama seperti ubah NIK agen).
+			r.Post("/{id}/kosongkan-nik-agen", adminAkunHandler.KosongkanNIKAgen)
 			r.With(identity.RequirePermission("akun.edit")).Put("/{id}", adminAkunHandler.UbahProfil)
 			// Izin NIK agen (agen.approve atau agen.kaitan.edit) diperiksa di handler menurut status akun.
 			r.Put("/{id}/nik-agen", adminAkunHandler.UbahNIK)
@@ -779,6 +792,27 @@ func runSeatHoldExpiry(repo *crmdeal.Repository) {
 	defer ticker.Stop()
 	for range ticker.C {
 		release()
+	}
+}
+
+// runAktivasiCleanup membuang penghitung percobaan dan log aktivasi akun jamaah yang sudah lewat masa simpan.
+// Jalan sekali saat start lalu tiap 6 jam, juga saat flag aktivasi mati (tabel tetap bisa terisi dari aksi admin).
+func runAktivasiCleanup(db *sql.DB) {
+	jalan := func() {
+		h, err := customer.BersihkanAktivasi(context.Background(), db)
+		if err != nil {
+			log.Printf("[WARN] Gagal membersihkan data aktivasi akun jamaah: %v", err)
+			return
+		}
+		if h.Hitung+h.LogGagal+h.LogJejak > 0 {
+			log.Printf("[INFO] Pembersihan aktivasi akun jamaah: penghitung=%d log_gagal=%d log_jejak=%d", h.Hitung, h.LogGagal, h.LogJejak)
+		}
+	}
+	jalan()
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		jalan()
 	}
 }
 
