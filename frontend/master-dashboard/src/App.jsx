@@ -83,8 +83,8 @@ function AppRoutes() {
           <Route path="/manasik/:id/ubah" element={<RequireAccess perm="manasik.edit"><ManasikFormPage /></RequireAccess>} />
 
           {/* Jamaah & Booking (halaman bersama) */}
-          <Route path="/akun" element={<RequireAccess perm="akun.view"><DaftarAkunPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
-          <Route path="/akun/:id" element={<RequireAccess perm="akun.view"><DetailAkunPage showBrandColumn={showBrandColumn} izin={{ ubahProfil: hasPermission('akun.edit'), gantiUpline: hasPermission('agen.kaitan.edit'), lihatAgen: hasPermission('agen.view'), setujuiAgen: hasPermission('agen.approve'), lihatBooking: hasPermission('booking.view') }} /></RequireAccess>} />
+          <Route path="/akun" element={<RequireAccess perm="akun.view"><DaftarAkunPage showBrandColumn={showBrandColumn} bolehResetHitung={hasPermission('akun.edit')} bolehLihatJamaah={hasPermission('jamaah.view')} /></RequireAccess>} />
+          <Route path="/akun/:id" element={<RequireAccess perm="akun.view"><DetailAkunPage showBrandColumn={showBrandColumn} izin={{ ubahProfil: hasPermission('akun.edit'), gantiUpline: hasPermission('agen.kaitan.edit'), lihatAgen: hasPermission('agen.view'), setujuiAgen: hasPermission('agen.approve'), lihatBooking: hasPermission('booking.view'), lihatJamaah: hasPermission('jamaah.view') }} /></RequireAccess>} />
           <Route path="/jamaah" element={<RequireAccess perm="jamaah.view"><KelolaJamaahPage tab="daftar" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/new" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/jamaah/:id" element={<RequireAccess perm="jamaah.view"><JamaahDetailPage showBrandColumn={showBrandColumn} bolehLihatPerubahan={hasPermission('jamaah.perubahan.approve')} bolehGantiAgen={hasPermission('agen.kaitan.edit')} /></RequireAccess>} />
@@ -113,6 +113,7 @@ function AppRoutes() {
           <Route path="/haramain/:id/ubah" element={<RequireAccess perm="haramain.manage"><HaramainFormPage /></RequireAccess>} />
           <Route path="/jamaah/perubahan" element={<RequireAccess perm="jamaah.perubahan.approve"><KelolaJamaahPage tab="persetujuan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/pengajuan" element={<RequireAccess perm="agen.approve"><KelolaAgenPage tab="pengajuan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
+          <Route path="/agen/dari-tautan" element={<RequireAccess perm="akun.view"><KelolaAgenPage tab="tautan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen" element={<RequireAccess perm="agen.view"><KelolaAgenPage tab="semua" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/komisi" element={<RequireAccess perm="komisi.view"><KelolaKomisiPage tab="riwayat" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/:id" element={<RequireAccess perm="agen.view"><HalamanAgenPage showBrandColumn={showBrandColumn} /></RequireAccess>} />

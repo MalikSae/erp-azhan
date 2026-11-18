@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listAkunPelanggan } from '../api/akun';
 import { listBrandOptions } from '../api/brands';
+import { ResetHitungModal } from '../components/AktivasiAkunModal';
 import Alert from '../components/ui/Alert';
 import Badge, { toneFromClass } from '../components/ui/Badge';
 import BrandLabel from '../components/ui/BrandLabel';
+import Button from '../components/ui/Button';
 import CustomDropdown from '../components/ui/CustomDropdown';
 import DataTable from '../components/ui/DataTable';
 import PageHeader from '../components/ui/PageHeader';
@@ -39,6 +41,7 @@ export const StatusAkun = ({ status }) => {
 const COLUMNS_BASE = [
   { header: 'Akun', key: 'nama_lengkap' },
   { header: 'Upline', key: 'upline_nama' },
+  { header: 'Jamaah Tertaut', key: 'jamaah_nama' },
   { header: 'Booking', key: 'jumlah_booking' },
   { header: 'Agen', key: 'agen' },
 ];
@@ -57,8 +60,9 @@ const TandaAgen = ({ row }) => {
 };
 
 // Daftar akun (baca saja). Paging dan pencarian dari server. Admin brand hanya melihat brand-nya;
-// Admin Master (showBrandColumn) lintas brand dengan filter brand.
-export default function DaftarAkunPage({ showBrandColumn = false }) {
+// Admin Master (showBrandColumn) lintas brand dengan filter brand. bolehResetHitung (akun.edit) menampilkan
+// Reset Batas Aktivasi; Admin Master harus memilih brand dulu.
+export default function DaftarAkunPage({ showBrandColumn = false, bolehResetHitung = false, bolehLihatJamaah = false }) {
   const navigate = useNavigate();
   const [brands, setBrands] = useState([]);
   const [brandId, setBrandId] = useState('');
@@ -70,6 +74,8 @@ export default function DaftarAkunPage({ showBrandColumn = false }) {
   const [hasil, setHasil] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [resetBuka, setResetBuka] = useState(false);
+  const [pesan, setPesan] = useState('');
 
   useEffect(() => {
     if (showBrandColumn) listBrandOptions().then((b) => setBrands(b || [])).catch(() => {});
@@ -109,6 +115,12 @@ export default function DaftarAkunPage({ showBrandColumn = false }) {
     }
     if (key === 'brand_name') return <BrandLabel name={row.brand_name} />;
     if (key === 'upline_nama') return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.upline_nama || '-'}</span>;
+    if (key === 'jamaah_nama') {
+      if (!row.jamaah_id) return <span className="text-sm text-neutral-400">-</span>;
+      return bolehLihatJamaah
+        ? <Link to={`/jamaah/${row.jamaah_id}`} onClick={(e) => e.stopPropagation()} className="text-sm font-body text-neutral-700 whitespace-nowrap hover:text-primary-600 transition-colors">{row.jamaah_nama}</Link>
+        : <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.jamaah_nama}</span>;
+    }
     if (key === 'jumlah_booking') return <span className="text-sm font-body text-neutral-700 whitespace-nowrap">{row.jumlah_booking > 0 ? `${row.jumlah_booking} booking` : '-'}</span>;
     if (key === 'agen') return <TandaAgen row={row} />;
     return row[key] ?? '-';
@@ -116,7 +128,12 @@ export default function DaftarAkunPage({ showBrandColumn = false }) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Akun" />
+      <PageHeader title="Akun">
+        {bolehResetHitung && (
+          <Button variant="secondary" onClick={() => setResetBuka(true)} disabled={showBrandColumn && !brandId} title={showBrandColumn && !brandId ? 'Pilih brand dulu' : undefined}>Reset Batas Aktivasi</Button>
+        )}
+      </PageHeader>
+      {pesan && <Alert variant="success" message={pesan} onClose={() => setPesan('')} />}
       {error && <Alert variant="error" message={error} />}
       <DataTable
         columns={columns}
@@ -141,6 +158,12 @@ export default function DaftarAkunPage({ showBrandColumn = false }) {
             )}
           </div>
         )}
+      />
+      <ResetHitungModal
+        brandId={showBrandColumn ? brandId : undefined}
+        isOpen={resetBuka}
+        onClose={() => setResetBuka(false)}
+        onSaved={() => { setResetBuka(false); setPesan('Hitungan direset.'); }}
       />
     </div>
   );
