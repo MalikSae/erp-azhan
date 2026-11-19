@@ -393,24 +393,30 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	}
 
 	// 12. Bank Accounts
-	var bankAccounts []BankAccountInfo
+	bankAccounts := []BankAccountInfo{}
 	rows, err := tx.QueryContext(ctx, `SELECT id, bank_name, logo_url, account_number, account_holder, instructions FROM bank_accounts WHERE brand_id=? AND is_active=TRUE`, brandID)
-	if err == nil {
-		for rows.Next() {
-			var b BankAccountInfo
-			var logo, inst sql.NullString
-			if err := rows.Scan(&b.ID, &b.BankName, &logo, &b.AccountNumber, &b.AccountHolder, &inst); err == nil {
-				if logo.Valid && logo.String != "" {
-					b.LogoURL = &logo.String
-				}
-				if inst.Valid && inst.String != "" {
-					b.Instructions = &inst.String
-				}
-				bankAccounts = append(bankAccounts, b)
-			}
-		}
-		rows.Close()
+	if err != nil {
+		return nil, err
 	}
+	defer rows.Close()
+	for rows.Next() {
+		var b BankAccountInfo
+		var logo, inst sql.NullString
+		if err := rows.Scan(&b.ID, &b.BankName, &logo, &b.AccountNumber, &b.AccountHolder, &inst); err != nil {
+			return nil, err
+		}
+		if logo.Valid && logo.String != "" {
+			b.LogoURL = &logo.String
+		}
+		if inst.Valid && inst.String != "" {
+			b.Instructions = &inst.String
+		}
+		bankAccounts = append(bankAccounts, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
 
 	// 13. Simpan jamaah rombongan ke akun pemesan sebagai bahan prefill checkout berikutnya.
 	if ini.accountID > 0 {
