@@ -29,6 +29,11 @@ type AnggotaInput struct {
 }
 
 // BookingRequest adalah payload untuk POST /api/public/book.
+// tipeKamarValid: tipe kamar yang diterima booking.
+func tipeKamarValid(t string) bool {
+	return t == "Quad" || t == "Triple" || t == "Double"
+}
+
 type BookingRequest struct {
 	RequestKey    string   `json:"request_key"`
 	TermsVersion  string   `json:"terms_version"`
