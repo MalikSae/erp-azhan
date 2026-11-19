@@ -300,7 +300,7 @@ func adaJamaahID(req *BookingRequest) bool {
 // muncul bila pemesannya agen aktif (repository yang menentukan).
 func tulisGalatBooking(w http.ResponseWriter, err error, portal bool) {
 	switch {
-	case errors.Is(err, ErrQuoteChanged), errors.Is(err, ErrRequestConflict):
+	case errors.Is(err, ErrQuoteChanged), errors.Is(err, ErrRequestConflict), errors.Is(err, ErrBookingKedaluwarsa):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrBukanAgenAktif):
 		writeError(w, http.StatusForbidden, err.Error())

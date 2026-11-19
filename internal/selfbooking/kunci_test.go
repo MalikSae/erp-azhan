@@ -585,3 +585,30 @@ func TestAgenTanpaNIKAgenLewatBookingApp(t *testing.T) {
 		t.Fatalf("handler: %d %s, want 400 Lengkapi NIK di profil agen.", rec.Code, rec.Body.String())
 	}
 }
+
+// Jawaban ulang hanya untuk booking yang masih hidup: booking batal atau holdnya dilepas ditolak (409 lewat handler).
+func TestJawabanUlangBookingMati(t *testing.T) {
+	for _, kasus := range []struct {
+		nama, sql string
+	}{
+		{"batal", `UPDATE bookings SET status='batal' WHERE id=?`},
+		{"hold dilepas", `UPDATE bookings SET is_seat_blocked=FALSE WHERE id=?`},
+	} {
+		t.Run(kasus.nama, func(t *testing.T) {
+			tx, sched, brand, _ := setupAgenBooking(t)
+			ctx := context.Background()
+			akun, nik := akunPemesanUji(t, tx, brand, false, 0)
+			testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "AkunBiasa", NIK: nik})
+			req := BookingRequest{RequestKey: strings.Repeat("c", 40), TermsVersion: TermsVersion, TermsAccepted: true, ScheduleID: sched,
+				PIC: PICInput{NamaLengkap: "AkunBiasa (uji)", NoHP: nomorUji(78), JenisKelamin: "L", RoomType: "Quad", NIK: &nik}}
+			r1, err := processBookingTx(ctx, tx, brand, req, inisiator{accountID: akun})
+			if err != nil {
+				t.Fatal(err)
+			}
+			testdb.Exec(t, tx, kasus.sql, r1.Booking.BookingID)
+			if _, err := processBookingTx(ctx, tx, brand, req, inisiator{accountID: akun}); !errors.Is(err, ErrBookingKedaluwarsa) {
+				t.Fatalf("retry booking mati: %v, want ErrBookingKedaluwarsa", err)
+			}
+		})
+	}
+}
