@@ -612,3 +612,16 @@ func TestJawabanUlangBookingMati(t *testing.T) {
 		})
 	}
 }
+
+func TestTipeKamarValid(t *testing.T) {
+	for _, ok := range []string{"Quad", "Triple", "Double"} {
+		if !tipeKamarValid(ok) {
+			t.Fatalf("%s harus valid", ok)
+		}
+	}
+	for _, bad := range []string{"", "quad", "Single", "Quad "} {
+		if tipeKamarValid(bad) {
+			t.Fatalf("%q harus ditolak", bad)
+		}
+	}
+}
