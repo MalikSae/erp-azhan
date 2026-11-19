@@ -13,7 +13,7 @@ func TestPengajuanMemuatBiodata(t *testing.T) {
 	ctx := context.Background()
 	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
 	akun := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "CalonAgenBio"})
-	req := AjukanRequest{NIK: "9999999999990701", Domisili: "Kota Bandung", JenisKelamin: "P", TanggalLahir: "1992-03-15", SetujuSyaratKetentuan: true}
+	req := AjukanRequest{NIK: "9999999999990701", Domisili: "Kota Bandung", JenisKelamin: "P", TanggalLahir: "1992-03-15", SetujuSyaratKetentuan: true, SetujuMoU: true}
 	if err := ajukanTx(ctx, tx, akun, req); err != nil {
 		t.Fatal(err)
 	}
