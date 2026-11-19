@@ -82,7 +82,9 @@ type StatusPortal struct {
 	BiayaPendaftaranAgen float64 `json:"biaya_pendaftaran_agen"`
 	NoWAAdminTravel      *string `json:"no_wa_admin_travel"`
 	// AkunJamaah: akun punya booking minimal DP; pengajuannya disetujui otomatis tanpa biaya (keputusan 14 November 2026).
-	AkunJamaah bool        `json:"akun_jamaah"`
+	AkunJamaah bool `json:"akun_jamaah"`
+	// AkunTertaut: akun tertaut ke jamaah (hasil aktivasi); pengajuan memakai NIK jamaah itu, form tidak meminta NIK.
+	AkunTertaut bool        `json:"akun_tertaut"`
 	Pembayaran *Pembayaran `json:"pembayaran"` // siklus terakhir, nil jika belum pernah
 }
 

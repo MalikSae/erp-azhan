@@ -92,7 +92,8 @@ func writeErrorCode(w http.ResponseWriter, status int, msg, code string) {
 }
 
 // pilihKodeAgen memilih kode agen untuk akun baru di app (dipakai register-app dan google/daftar).
-// Kode ketik kosong tidak dihitung. Kode ketik dihitung per IP sampai terbukti valid; di atas batas dijawab 429.
+// Kode ketik kosong tidak dihitung. Setiap kode ketik dihitung per IP, valid atau tidak (tanpa refund, agar kode
+// tidak bisa ditebak lewat jawaban valid); di atas batas dijawab 429.
 // Mengembalikan ok=false bila jawaban galat sudah ditulis.
 func (h *Handler) pilihKodeAgen(w http.ResponseWriter, r *http.Request, ip string, brandID int64, ketik, otomatis string) (string, bool) {
 	hitung := strings.TrimSpace(ketik) != ""
@@ -112,9 +113,6 @@ func (h *Handler) pilihKodeAgen(w http.ResponseWriter, r *http.Request, ip strin
 	if !ok {
 		writeErrorCode(w, http.StatusBadRequest, "Kode agen tidak ditemukan.", KodeGalatKodeAgenTidakAda)
 		return "", false
-	}
-	if hitung {
-		h.kodeAgenGagal.Refund(ip)
 	}
 	return kode, true
 }
@@ -316,14 +314,10 @@ func (h *Handler) daftar(w http.ResponseWriter, r *http.Request, mode modeDaftar
 		return
 	}
 	acc, err := h.repo.Create(r.Context(), req.BrandID, req.NamaLengkap, req.Email, req.NoHP, string(hash), kodeAgen, bio)
-	if errors.Is(err, ErrEmailTaken) {
-		// Status 409 dipertahankan untuk kontrak frontend; pesan tidak menegaskan data akun lain.
-		// Penebakan email tetap dibatasi captcha + registerIPLimit.
-		writeError(w, http.StatusConflict, "Pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, masuk atau gunakan Lupa kata sandi.")
-		return
-	}
-	if errors.Is(err, ErrPhoneTaken) {
-		writeError(w, http.StatusConflict, "Nomor WhatsApp sudah terdaftar. Gunakan nomor WhatsApp lain.")
+	if errors.Is(err, ErrEmailTaken) || errors.Is(err, ErrPhoneTaken) {
+		// Status 409 dipertahankan untuk kontrak frontend; satu pesan untuk email dan nomor WhatsApp agar
+		// tidak menegaskan data akun lain. Penebakan tetap dibatasi registerIPLimit.
+		writeError(w, http.StatusConflict, "Pendaftaran tidak dapat diproses. Bila Anda sudah punya akun, masuk atau gunakan Lupa kata sandi.")
 		return
 	}
 	if err != nil {
