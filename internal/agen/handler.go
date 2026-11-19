@@ -76,11 +76,13 @@ var (
 
 // GetStatus GET /api/portal/agen
 func (h *Handler) GetStatus(w http.ResponseWriter, r *http.Request) {
-	s, err := h.repo.GetStatusPortal(r.Context(), identity.GetCustomerAccountID(r.Context()))
+	akunID := identity.GetCustomerAccountID(r.Context())
+	s, err := h.repo.GetStatusPortal(r.Context(), akunID)
 	if err != nil {
 		handleError(w, err)
 		return
 	}
+	s.AkunTertaut = h.akunTertaut(r.Context(), akunID)
 	writeJSON(w, http.StatusOK, s)
 }
 
@@ -96,6 +98,7 @@ func (h *Handler) akunTertaut(ctx context.Context, akunID int64) bool {
 // Ajukan POST /api/portal/agen/pengajuan — screen A1a.
 func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 	var req AjukanRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
