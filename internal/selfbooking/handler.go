@@ -187,7 +187,7 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 	}
 
 	// Gate 5: Room Type
-	if req.PIC.RoomType != "Quad" && req.PIC.RoomType != "Triple" && req.PIC.RoomType != "Double" {
+	if !tipeKamarValid(req.PIC.RoomType) {
 		writeError(w, http.StatusBadRequest, "Tipe kamar PIC tidak valid.")
 		return
 	}
@@ -205,7 +205,7 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 		}
 
 		if req.Anggota[i].PaxType == "reguler" {
-			if a.RoomType == nil || (*a.RoomType != "Quad" && *a.RoomType != "Triple" && *a.RoomType != "Double") {
+			if a.RoomType == nil || !tipeKamarValid(*a.RoomType) {
 				writeError(w, http.StatusBadRequest, "Tipe kamar reguler tidak valid.")
 				return
 			}
