@@ -101,7 +101,7 @@ func (h *Handler) cekKonfirmasiHapus(w http.ResponseWriter, r *http.Request, acc
 	if req.IDToken == "" {
 		return h.cekPasswordSaatIni(w, acc, req.PasswordSaatIni)
 	}
-	p, ok := h.verifikasiGoogle(w, r, req.IDToken)
+	p, ok := h.verifikasiGoogleStatus(w, r, req.IDToken, http.StatusBadRequest)
 	if !ok {
 		return false
 	}
