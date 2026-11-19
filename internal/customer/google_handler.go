@@ -82,6 +82,12 @@ type googleLengkapi struct {
 }
 
 func (h *Handler) verifikasiGoogle(w http.ResponseWriter, r *http.Request, idToken string) (*ProfilGoogle, bool) {
+	return h.verifikasiGoogleStatus(w, r, idToken, http.StatusUnauthorized)
+}
+
+// verifikasiGoogleStatus: statusGagal dipakai bila token ditolak. Endpoint yang sudah memakai sesi (hapus akun)
+// harus memakai 400: 401 dari endpoint bersesi membuat app mengira sesinya berakhir lalu mengeluarkan pengguna.
+func (h *Handler) verifikasiGoogleStatus(w http.ResponseWriter, r *http.Request, idToken string, statusGagal int) (*ProfilGoogle, bool) {
 	if strings.TrimSpace(idToken) == "" {
 		writeError(w, http.StatusBadRequest, "Id_token wajib diisi.")
 		return nil, false
@@ -95,7 +101,7 @@ func (h *Handler) verifikasiGoogle(w http.ResponseWriter, r *http.Request, idTok
 		if !errors.Is(err, ErrTokenGoogle) {
 			log.Printf("[ERROR] customer google verifikasi: %v", err)
 		}
-		writeError(w, http.StatusUnauthorized, "Masuk dengan Google gagal, coba lagi.")
+		writeError(w, statusGagal, "Masuk dengan Google gagal, coba lagi.")
 		return nil, false
 	}
 	return p, true
