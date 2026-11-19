@@ -112,16 +112,20 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 
 	// Akun tertaut ke jamaah memakai NIK jamaahnya (isian diabaikan, app tidak mengirim NIK); akun lain wajib mengisi.
 	akunID := identity.GetCustomerAccountID(r.Context())
-	tertaut, err := h.akunTertaut(r.Context(), akunID)
-	if err != nil {
-		handleError(w, err)
-		return
-	}
-	if req.NIK != "" || !tertaut {
-		if !nikAgenPattern.MatchString(req.NIK) {
+	if req.NIK == "" {
+		// Tanpa NIK: hanya akun tertaut yang boleh.
+		tertaut, err := h.akunTertaut(r.Context(), akunID)
+		if err != nil {
+			handleError(w, err)
+			return
+		}
+		if !tertaut {
 			writeError(w, http.StatusBadRequest, ErrNIKAgenTidakValid.Error())
 			return
 		}
+	} else if !nikAgenPattern.MatchString(req.NIK) {
+		writeError(w, http.StatusBadRequest, ErrNIKAgenTidakValid.Error())
+		return
 	}
 	if n := utf8.RuneCountInString(req.Domisili); n < 2 || n > 100 {
 		writeError(w, http.StatusBadRequest, "Domisili wajib diisi (2–100 karakter).")
@@ -162,7 +166,7 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan. Coba lagi besok.")
 		return
 	}
-	err = h.repo.Ajukan(r.Context(), akunID, req)
+	err := h.repo.Ajukan(r.Context(), akunID, req)
 	if !errors.Is(err, ErrNIKAgenTidakBisaDipakai) {
 		// Hanya NIK bentrok yang dihitung.
 		h.nikGagalAkun.Refund(kunciAkun)
