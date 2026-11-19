@@ -14,6 +14,8 @@ import (
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/mailer"
 	"erp-azhan/api/internal/shared"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 // Batas endpoint publik. Setiap booking menahan kursi 24 jam, jadi pembuatan
@@ -302,6 +304,8 @@ func tulisGalatBooking(w http.ResponseWriter, err error, portal bool) {
 	switch {
 	case errors.Is(err, ErrQuoteChanged), errors.Is(err, ErrRequestConflict), errors.Is(err, ErrBookingKedaluwarsa):
 		writeError(w, http.StatusConflict, err.Error())
+	case adalahBentrokTransaksi(err):
+		writeError(w, http.StatusConflict, "Booking bentrok dengan permintaan lain. Coba lagi.")
 	case errors.Is(err, ErrBukanAgenAktif):
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrBatasSeatAgen):
@@ -336,6 +340,13 @@ func tulisGalatBooking(w http.ResponseWriter, err error, portal bool) {
 		log.Printf("[ERROR] ProcessBooking: %v", err)
 		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
+}
+
+// adalahBentrokTransaksi mengenali deadlock (1213) dan lock wait timeout (1205) MySQL. Transaksi sudah di-rollback,
+// jadi aman diulang. Level SERIALIZABLE membuat bentrok ini mungkin saat banyak booking ke jadwal yang sama.
+func adalahBentrokTransaksi(err error) bool {
+	var me *mysql.MySQLError
+	return errors.As(err, &me) && (me.Number == 1213 || me.Number == 1205)
 }
 
 // lolosCaptcha memeriksa token captcha booking web dan menulis galat bila gagal.
