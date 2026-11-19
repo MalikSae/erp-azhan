@@ -17,6 +17,7 @@ import (
 const TermsVersion = "booking-2026-11-17"
 
 var ErrQuoteChanged = errors.New("harga atau DP berubah; muat ulang paket dan periksa kembali ringkasan sebelum booking")
+var ErrBookingKedaluwarsa = errors.New("booking sebelumnya sudah batal atau kedaluwarsa; buat booking baru")
 var ErrRequestConflict = errors.New("kunci booking telah digunakan untuk data berbeda; mulai booking baru")
 var phonePattern = regexp.MustCompile(`^\+?[0-9 () .-]+$`)
 var phoneNonDigits = regexp.MustCompile(`\D`)
@@ -118,6 +119,20 @@ func replayCheckout(ctx context.Context, tx *sql.Tx, req BookingRequest, ini ini
 	}
 	if err = json.Unmarshal(raw, &stored); err != nil {
 		return nil, err
+	}
+	// Jawaban ulang hanya untuk booking yang masih hidup: booking batal atau yang holdnya sudah dilepas
+	// tidak boleh dijawab seolah berhasil, karena seatnya sudah tidak ditahan.
+	var status string
+	var seatTerkunci bool
+	err = tx.QueryRowContext(ctx, `SELECT status, is_seat_blocked FROM bookings WHERE id=?`, stored.Response.Booking.BookingID).Scan(&status, &seatTerkunci)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrBookingKedaluwarsa
+	}
+	if err != nil {
+		return nil, err
+	}
+	if status == "batal" || (status == "baru" && !seatTerkunci) {
+		return nil, ErrBookingKedaluwarsa
 	}
 	stored.Response.Replayed = true
 	return &stored.Response, nil
