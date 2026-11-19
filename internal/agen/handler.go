@@ -82,17 +82,21 @@ func (h *Handler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
-	s.AkunTertaut = h.akunTertaut(r.Context(), akunID)
+	tertaut, err := h.akunTertaut(r.Context(), akunID)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	s.AkunTertaut = tertaut
 	writeJSON(w, http.StatusOK, s)
 }
 
-// akunTertaut: akun tertaut ke jamaah (customer_accounts.jamaah_id). Galat baca dianggap tidak tertaut.
-func (h *Handler) akunTertaut(ctx context.Context, akunID int64) bool {
+// akunTertaut: akun tertaut ke jamaah (customer_accounts.jamaah_id). Galat baca dikembalikan, bukan dianggap
+// "tidak tertaut", supaya gangguan DB tidak berubah jadi pesan NIK wajib.
+func (h *Handler) akunTertaut(ctx context.Context, akunID int64) (bool, error) {
 	var ada bool
-	if err := h.repo.db.QueryRowContext(ctx, `SELECT jamaah_id IS NOT NULL FROM customer_accounts WHERE id = ?`, akunID).Scan(&ada); err != nil {
-		return false
-	}
-	return ada
+	err := h.repo.db.QueryRowContext(ctx, `SELECT jamaah_id IS NOT NULL FROM customer_accounts WHERE id = ?`, akunID).Scan(&ada)
+	return ada, err
 }
 
 // Ajukan POST /api/portal/agen/pengajuan — screen A1a.
@@ -108,7 +112,12 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 
 	// Akun tertaut ke jamaah memakai NIK jamaahnya (isian diabaikan, app tidak mengirim NIK); akun lain wajib mengisi.
 	akunID := identity.GetCustomerAccountID(r.Context())
-	if req.NIK != "" || !h.akunTertaut(r.Context(), akunID) {
+	tertaut, err := h.akunTertaut(r.Context(), akunID)
+	if err != nil {
+		handleError(w, err)
+		return
+	}
+	if req.NIK != "" || !tertaut {
 		if !nikAgenPattern.MatchString(req.NIK) {
 			writeError(w, http.StatusBadRequest, ErrNIKAgenTidakValid.Error())
 			return
@@ -153,7 +162,7 @@ func (h *Handler) Ajukan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "Terlalu banyak percobaan. Coba lagi besok.")
 		return
 	}
-	err := h.repo.Ajukan(r.Context(), akunID, req)
+	err = h.repo.Ajukan(r.Context(), akunID, req)
 	if !errors.Is(err, ErrNIKAgenTidakBisaDipakai) {
 		// Hanya NIK bentrok yang dihitung.
 		h.nikGagalAkun.Refund(kunciAkun)
