@@ -231,7 +231,7 @@ export default function DetailAkunPage({ showBrandColumn = false, izin = {} }) {
               <dd className="mt-0.5">{(() => { const k = KAITAN[akun.jamaah.kaitan_status]; return k ? <Badge variant={k.variant}>{k.label}</Badge> : <span className="text-sm text-neutral-400">-</span>; })()}</dd>
             </div>
             <div className="min-w-0">
-              <dt className="text-xs font-body text-neutral-500">Perekrut</dt>
+              <dt className="text-xs font-body text-neutral-500">Agen</dt>
               <dd className="mt-0.5 truncate text-sm font-body font-medium text-neutral-900">
                 {akun.jamaah.pemilik_kunci_akun_id
                   ? (izin.lihatAgen ? <Link to={`/agen/${akun.jamaah.pemilik_kunci_akun_id}`} className={tautan}>{akun.jamaah.pemilik_kunci_nama}</Link> : akun.jamaah.pemilik_kunci_nama)

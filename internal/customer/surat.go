@@ -89,6 +89,15 @@ func kunciKurang(d *dataJamaah) []string {
 	return k
 }
 
+// teksKurang: "Tempat dan tanggal lahir belum diisi." Tempat dan tanggal lahir digabung bila hanya keduanya yang kurang.
+func teksKurang(kurang []string) string {
+	t := gabungDan(kurang)
+	if len(kurang) == 2 && kurang[0] == "tempat lahir" && kurang[1] == "tanggal lahir" {
+		t = "tempat dan tanggal lahir"
+	}
+	return strings.ToUpper(t[:1]) + t[1:] + " belum diisi."
+}
+
 func gabungDan(s []string) string {
 	switch len(s) {
 	case 0:
@@ -120,15 +129,15 @@ func evaluasiSurat(o *orderSummary, d *dataJamaah, pengaturanLengkap bool, nomor
 		switch kurang := kurangData(d); {
 		case d.AksesTerbatas:
 			// Kedua jenis surat memuat tempat dan tanggal lahir serta kota jamaah.
-			it.Alasan = "Data jamaah ini sudah terdaftar. Hubungi kami untuk surat ini."
+			it.Alasan = "Hubungi kami untuk surat ini."
 		case o.Tab == "batal":
 			it.Alasan = "Booking tidak aktif."
 		case !dpTerpenuhi(o):
-			it.Alasan = "Tersedia setelah DP terkonfirmasi."
+			it.Alasan = "Tersedia setelah DP diverifikasi."
 		case !pengaturanLengkap:
 			it.Alasan = "Surat belum tersedia. Hubungi kami."
 		case len(kurang) > 0:
-			it.Alasan = "Lengkapi " + gabungDan(kurang) + " terlebih dahulu."
+			it.Alasan = teksKurang(kurang)
 			it.Kurang = kunciKurang(d)
 		default:
 			it.Bisa = true
