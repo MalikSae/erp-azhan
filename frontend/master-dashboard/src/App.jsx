@@ -113,7 +113,6 @@ function AppRoutes() {
           <Route path="/haramain/:id/ubah" element={<RequireAccess perm="haramain.manage"><HaramainFormPage /></RequireAccess>} />
           <Route path="/jamaah/perubahan" element={<RequireAccess perm="jamaah.perubahan.approve"><KelolaJamaahPage tab="persetujuan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/pengajuan" element={<RequireAccess perm="agen.approve"><KelolaAgenPage tab="pengajuan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
-          <Route path="/agen/dari-tautan" element={<RequireAccess perm="akun.view"><KelolaAgenPage tab="tautan" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen" element={<RequireAccess perm="agen.view"><KelolaAgenPage tab="semua" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/komisi" element={<RequireAccess perm="komisi.view"><KelolaKomisiPage tab="riwayat" showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/agen/:id" element={<RequireAccess perm="agen.view"><HalamanAgenPage showBrandColumn={showBrandColumn} /></RequireAccess>} />

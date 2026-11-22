@@ -86,8 +86,6 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
 
   // Menu Komisi membuka tab pertama yang boleh dilihat pengguna.
   const alamatKomisi = bolehCairkan ? '/komisi' : '/agen/komisi';
-  // Menu Agen membuka tab Dari Tautan bila pengguna hanya punya akun.view.
-  const alamatAgen = hasPermission('agen.view') ? '/agen' : '/agen/dari-tautan';
   // Jumlah baris antrean pengajuan agen, tampil di menu Agen (antreannya di tab Pengajuan).
   const menungguPengajuanAgen = useJumlahPengajuanAgen(hasPermission('agen.approve'));
 
@@ -120,7 +118,7 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
         // Satu menu per benda. `cocok` menentukan kapan menu aktif, karena alamat lama dipertahankan:
         // /agen/komisi milik menu Komisi.
         { name: 'Akun', path: '/akun', icon: UserRound, perm: 'akun.view', cocok: (p) => p === '/akun' || p.startsWith('/akun/') },
-        { name: 'Agen', path: alamatAgen, icon: UserCheck, permAny: ['agen.view', 'akun.view'], cocok: (p) => p === '/agen' || (p.startsWith('/agen/') && !p.startsWith('/agen/komisi')) },
+        { name: 'Agen', path: '/agen', icon: UserCheck, perm: 'agen.view', cocok: (p) => p === '/agen' || (p.startsWith('/agen/') && !p.startsWith('/agen/komisi')) },
         { name: 'Komisi', path: alamatKomisi, icon: Wallet, permAny: ['agen.payout.approve', 'komisi.view'], cocok: (p) => p === '/komisi' || p.startsWith('/agen/komisi') },
       ],
     },
