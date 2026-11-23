@@ -52,10 +52,17 @@ func TestRegisterAgenTanpaCaptchaDanTanpaEmail(t *testing.T) {
 	if emailSama.Code != http.StatusConflict || hpSama.Code != http.StatusConflict {
 		t.Fatalf("duplikat harus 409: email %d, nomor %d", emailSama.Code, hpSama.Code)
 	}
-	if !strings.Contains(hpSama.Body.String(), "Nomor WhatsApp sudah terdaftar. Gunakan nomor WhatsApp lain.") {
-		t.Fatalf("nomor sama harus memberi pesan ringkas: %q", hpSama.Body)
+	// Sejak 5d4f5dc email dan nomor duplikat memakai satu pesan samar, agar jawaban tidak menegaskan
+	// email atau nomor mana yang sudah terdaftar.
+	if hpSama.Body.String() != emailSama.Body.String() {
+		t.Fatalf("pesan duplikat nomor dan email harus sama: nomor %q, email %q", hpSama.Body, emailSama.Body)
 	}
-	if strings.Contains(emailSama.Body.String(), "WhatsApp") || !strings.Contains(emailSama.Body.String(), "Lupa kata sandi") {
-		t.Fatalf("email sama harus memakai pesan email: %q", emailSama.Body)
+	for _, b := range []string{hpSama.Body.String(), emailSama.Body.String()} {
+		if !strings.Contains(b, "Pendaftaran tidak dapat diproses.") || !strings.Contains(b, "Lupa kata sandi") {
+			t.Fatalf("duplikat harus memakai pesan samar: %q", b)
+		}
+		if strings.Contains(b, "WhatsApp") || strings.Contains(b, "terdaftar") || strings.Contains(b, "email") {
+			t.Fatalf("pesan duplikat tidak boleh menyebut data yang sudah terdaftar: %q", b)
+		}
 	}
 }
