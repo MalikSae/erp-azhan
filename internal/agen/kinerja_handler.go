@@ -319,3 +319,37 @@ func (h *Handler) DetailBinaanPortal(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, d)
 }
+
+// RincianBonusPortal GET /api/portal/agen/binaan/{akunID}/bonus?status=&offset=&limit=: Rincian Bonus berhalaman.
+func (h *Handler) RincianBonusPortal(w http.ResponseWriter, r *http.Request) {
+	binaanID, err := strconv.ParseInt(chi.URLParam(r, "akunID"), 10, 64)
+	if err != nil || binaanID <= 0 {
+		writeError(w, http.StatusNotFound, "Agen tidak ditemukan.")
+		return
+	}
+	angka := func(nama string, bawaan int) (int, bool) {
+		v := r.URL.Query().Get(nama)
+		if v == "" {
+			return bawaan, true
+		}
+		n, err := strconv.Atoi(v)
+		return n, err == nil && n >= 0
+	}
+	offset, ok1 := angka("offset", 0)
+	limit, ok2 := angka("limit", MaksHalamanRincian)
+	if !ok1 || !ok2 || limit == 0 || limit > MaksHalamanRincian {
+		writeError(w, http.StatusBadRequest, "parameter offset dan limit tidak valid")
+		return
+	}
+	hal, err := h.repo.RincianBonusBinaan(r.Context(), identity.GetCustomerAccountID(r.Context()), binaanID, r.URL.Query().Get("status"), offset, limit)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		writeError(w, http.StatusNotFound, "Agen tidak ditemukan.")
+	case errors.Is(err, ErrStatusBonus):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		handleKinerjaError(w, err)
+	default:
+		writeJSON(w, http.StatusOK, hal)
+	}
+}

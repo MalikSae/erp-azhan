@@ -40,8 +40,28 @@ type RincianBonus struct {
 	DibatalkanAt  *string `json:"dibatalkan_at"`  // YYYY-MM-DD, hanya untuk baris batal
 }
 
-// maksRincianBonus: batas baris rincian per agen binaan (terbaru dulu).
-const maksRincianBonus = 100
+// rincianRingkas: baris rincian terbaru di Detail Agen; selebihnya lewat Rincian Bonus berhalaman.
+const rincianRingkas = 5
+
+// MaksHalamanRincian: batas baris per halaman Rincian Bonus.
+const MaksHalamanRincian = 50
+
+// ErrStatusBonus: filter status Rincian Bonus bukan semua, tertahan, tersedia, atau batal.
+var ErrStatusBonus = errors.New("status tidak valid")
+
+// JumlahRincian: banyak baris rincian per status, untuk angka di chip filter.
+type JumlahRincian struct {
+	Semua    int `json:"semua"`
+	Tertahan int `json:"tertahan"`
+	Tersedia int `json:"tersedia"`
+	Batal    int `json:"batal"`
+}
+
+// HalamanRincian: satu halaman Rincian Bonus menurut filter, ditambah jumlah per status (tanpa filter).
+type HalamanRincian struct {
+	Items  []RincianBonus `json:"items"`
+	Jumlah JumlahRincian  `json:"jumlah"`
+}
 
 // namaTersamar menyisakan dua huruf pertama tiap kata: cukup untuk mencocokkan catatan, tidak cukup untuk mengenali
 // atau menghubungi jamaah milik agen lain.
@@ -57,16 +77,17 @@ func namaTersamar(nama string) string {
 }
 
 type DetailAgenBinaan struct {
-	AkunID      int64          `json:"akun_id"`
-	Nama        string         `json:"nama"`
-	Kota        *string        `json:"kota"`
-	Bergabung   *string        `json:"bergabung"` // YYYY-MM-DD, tanggal disetujui sebagai agen
-	Status      string         `json:"status"`    // aktif | rintisan | nonaktif
-	Jamaah      JamaahBinaan   `json:"jamaah"`
-	PaketAktif  int            `json:"paket_aktif"`
-	Bonus       BonusBinaan    `json:"bonus"`
-	Rincian     []RincianBonus `json:"rincian"`
-	WhatsAppURL string         `json:"whatsapp_url"` // kosong bila agen tidak punya nomor
+	AkunID        int64          `json:"akun_id"`
+	Nama          string         `json:"nama"`
+	Kota          *string        `json:"kota"`
+	Bergabung     *string        `json:"bergabung"` // YYYY-MM-DD, tanggal disetujui sebagai agen
+	Status        string         `json:"status"`    // aktif | rintisan | nonaktif
+	Jamaah        JamaahBinaan   `json:"jamaah"`
+	PaketAktif    int            `json:"paket_aktif"`
+	Bonus         BonusBinaan    `json:"bonus"`
+	Rincian       []RincianBonus `json:"rincian"`        // paling banyak rincianRingkas baris terbaru
+	JumlahRincian int            `json:"jumlah_rincian"` // semua baris rincian, termasuk yang batal
+	WhatsAppURL   string         `json:"whatsapp_url"`   // kosong bila agen tidak punya nomor
 }
 
 func detailAgenBinaan(ctx context.Context, q querier, akunID, binaanID int64, now time.Time) (*DetailAgenBinaan, error) {
@@ -120,39 +141,95 @@ func detailAgenBinaan(ctx context.Context, q querier, akunID, binaanID int64, no
 	}
 	d.Bonus.Total = d.Bonus.Tertahan + d.Bonus.Tersedia
 
+	h, err := listRincianBonus(ctx, q, akunID, binaanID, "", 0, rincianRingkas)
+	if err != nil {
+		return nil, err
+	}
+	d.Rincian, d.JumlahRincian = h.Items, h.Jumlah.Semua
+	return d, nil
+}
+
+// sqlRincianDari: bonus pembinaan akun (parameter 1) dari jamaah agen binaan (parameter 3); parameter 2 = jenis pembinaan.
+const sqlRincianDari = `
+	FROM transaksi_komisi tk
+	JOIN jamaah j ON j.id = tk.jamaah_sumber_id
+	JOIN bookings b ON b.id = tk.booking_id
+	JOIN schedules s ON s.id = b.schedule_id
+	WHERE tk.akun_penerima_id = ? AND tk.jenis = ? AND j.direkrut_oleh_akun_id = ?`
+
+var (
+	sqlBonusTersedia = "tk.dibatalkan_at IS NULL AND " + komisi.SQLTersediaMulai + " <= CURRENT_DATE"
+	sqlBonusTertahan = "tk.dibatalkan_at IS NULL AND " + komisi.SQLTersediaMulai + " > CURRENT_DATE"
+)
+
+// sqlStatusBonus: syarat tambahan untuk filter status; "" atau "semua" tanpa syarat.
+func sqlStatusBonus(status string) (string, error) {
+	switch status {
+	case "", "semua":
+		return "", nil
+	case "batal":
+		return " AND tk.dibatalkan_at IS NOT NULL", nil
+	case "tersedia":
+		return " AND " + sqlBonusTersedia, nil
+	case "tertahan":
+		return " AND " + sqlBonusTertahan, nil
+	}
+	return "", ErrStatusBonus
+}
+
+// listRincianBonus: satu halaman bonus pembinaan dari agen binaan (terbaru dulu), baris batal ikut. Akses sudah dicek pemanggil.
+func listRincianBonus(ctx context.Context, q querier, akunID, binaanID int64, status string, offset, limit int) (*HalamanRincian, error) {
+	syarat, err := sqlStatusBonus(status)
+	if err != nil {
+		return nil, err
+	}
+	h := &HalamanRincian{Items: []RincianBonus{}}
+	if err := q.QueryRowContext(ctx, `
+		SELECT COUNT(*), COALESCE(SUM(`+sqlBonusTertahan+`), 0), COALESCE(SUM(`+sqlBonusTersedia+`), 0), COALESCE(SUM(tk.dibatalkan_at IS NOT NULL), 0)`+
+		sqlRincianDari, akunID, komisi.JenisPembinaan, binaanID).Scan(&h.Jumlah.Semua, &h.Jumlah.Tertahan, &h.Jumlah.Tersedia, &h.Jumlah.Batal); err != nil {
+		return nil, fmt.Errorf("agen: jumlah rincian bonus: %w", err)
+	}
 	rows, err := q.QueryContext(ctx, `
 		SELECT tk.id, j.nama_lengkap, s.jadwal_nama, DATE_FORMAT(tk.created_at, '%Y-%m-%d'), tk.nominal,
-		       COALESCE(DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d'), ''), DATE_FORMAT(tk.dibatalkan_at, '%Y-%m-%d')
-		FROM transaksi_komisi tk
-		JOIN jamaah j ON j.id = tk.jamaah_sumber_id
-		JOIN bookings b ON b.id = tk.booking_id
-		JOIN schedules s ON s.id = b.schedule_id
-		WHERE tk.akun_penerima_id = ? AND tk.jenis = ? AND j.direkrut_oleh_akun_id = ?
+		       COALESCE(DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d'), ''), DATE_FORMAT(tk.dibatalkan_at, '%Y-%m-%d')`+
+		sqlRincianDari+syarat+`
 		ORDER BY tk.created_at DESC, tk.id DESC
-		LIMIT ?`, akunID, komisi.JenisPembinaan, binaanID, maksRincianBonus)
+		LIMIT ? OFFSET ?`, akunID, komisi.JenisPembinaan, binaanID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("agen: detail binaan rincian: %w", err)
+		return nil, fmt.Errorf("agen: rincian bonus: %w", err)
 	}
 	defer rows.Close()
-	d.Rincian = []RincianBonus{}
-	hariIniNyata := time.Now().In(zonaWIB).Format("2006-01-02") // sama dengan CURRENT_DATE pada hitungan bonus di atas
+	hariIni := time.Now().In(zonaWIB).Format("2006-01-02") // sama dengan CURRENT_DATE pada filter dan jumlah di atas
 	for rows.Next() {
 		var it RincianBonus
 		var nama, berangkat string
 		if err := rows.Scan(&it.ID, &nama, &it.Paket, &it.Tanggal, &it.Nominal, &berangkat, &it.DibatalkanAt); err != nil {
-			return nil, fmt.Errorf("agen: detail binaan rincian: %w", err)
+			return nil, fmt.Errorf("agen: rincian bonus: %w", err)
 		}
 		it.Jamaah = namaTersamar(nama)
-		it.TersediaMulai, it.Status = tersediaMulai(berangkat, hariIniNyata)
+		it.TersediaMulai, it.Status = tersediaMulai(berangkat, hariIni)
 		if it.DibatalkanAt != nil {
 			it.Status = "batal"
 		}
-		d.Rincian = append(d.Rincian, it)
+		h.Items = append(h.Items, it)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("agen: detail binaan rincian: %w", err)
+	return h, rows.Err()
+}
+
+// RincianBonusBinaan: halaman Rincian Bonus untuk upline langsung agen binaan; agen lain mendapat ErrNotFound.
+func (r *Repository) RincianBonusBinaan(ctx context.Context, akunID, binaanID int64, status string, offset, limit int) (*HalamanRincian, error) {
+	if _, err := requireAgenAktif(ctx, r.db, akunID); err != nil {
+		return nil, err
 	}
-	return d, nil
+	var ada int
+	err := r.db.QueryRowContext(ctx, `SELECT 1 FROM customer_accounts WHERE id = ? AND upline_akun_id = ? AND status_agen IN ('aktif', 'nonaktif')`, binaanID, akunID).Scan(&ada)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("agen: rincian bonus akses: %w", err)
+	}
+	return listRincianBonus(ctx, r.db, akunID, binaanID, status, offset, limit)
 }
 
 func (r *Repository) DetailAgenBinaan(ctx context.Context, akunID, binaanID int64, now time.Time) (*DetailAgenBinaan, error) {

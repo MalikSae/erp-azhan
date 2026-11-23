@@ -70,8 +70,8 @@ func TestDetailAgenBinaan(t *testing.T) {
 	}
 
 	// Rincian: tiga baris terbaru dulu, baris batal tetap ada, nama jamaah tersamar.
-	if len(d.Rincian) != 3 {
-		t.Fatalf("rincian: %+v", d.Rincian)
+	if len(d.Rincian) != 3 || d.JumlahRincian != 3 {
+		t.Fatalf("rincian: %d baris, jumlah %d: %+v", len(d.Rincian), d.JumlahRincian, d.Rincian)
 	}
 	wantRincian := []struct {
 		nominal float64
@@ -85,6 +85,36 @@ func TestDetailAgenBinaan(t *testing.T) {
 		if !strings.HasPrefix(r.Jamaah, "Ja*") || strings.Contains(r.Jamaah, "JamaahBinaan") || r.Paket == "" || r.Tanggal == "" {
 			t.Errorf("rincian[%d] identitas: %+v", i, r)
 		}
+	}
+
+	// Halaman Rincian Bonus: filter per status, jumlah per status tanpa filter, offset dan limit.
+	for _, c := range []struct {
+		status string
+		want   []float64
+	}{
+		{"", []float64{70000, 150000, 100000}},
+		{"batal", []float64{70000}},
+		{"tersedia", []float64{150000}},
+		{"tertahan", []float64{100000}},
+	} {
+		h, err := listRincianBonus(ctx, tx, upline, binaan, c.status, 0, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.Jumlah != (JumlahRincian{Semua: 3, Tertahan: 1, Tersedia: 1, Batal: 1}) || len(h.Items) != len(c.want) {
+			t.Fatalf("status %q: jumlah %+v, %d baris", c.status, h.Jumlah, len(h.Items))
+		}
+		for i, w := range c.want {
+			if h.Items[i].Nominal != w {
+				t.Errorf("status %q baris %d = %.0f, mau %.0f", c.status, i, h.Items[i].Nominal, w)
+			}
+		}
+	}
+	if h, _ := listRincianBonus(ctx, tx, upline, binaan, "", 1, 1); len(h.Items) != 1 || h.Items[0].Nominal != 150000 {
+		t.Errorf("offset 1 limit 1: %+v", h.Items)
+	}
+	if _, err := listRincianBonus(ctx, tx, upline, binaan, "lunas", 0, 50); !errors.Is(err, ErrStatusBonus) {
+		t.Errorf("status tidak dikenal: %v", err)
 	}
 
 	// Bukan upline langsung: upline lain dan kakek (dua tingkat) tidak melihat apa pun.
