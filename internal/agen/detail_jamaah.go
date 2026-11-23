@@ -10,6 +10,7 @@ import (
 
 	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/shared"
+	"erp-azhan/api/internal/tahapan"
 )
 
 // Detail satu jamaah untuk agen perekrutnya (follow-up pembayaran dan kelengkapan). Hanya status dan hitungan:
@@ -32,11 +33,6 @@ type KelengkapanJamaah struct {
 	Dokumen HitunganJamaah `json:"dokumen"`
 }
 
-type TahapanJamaah struct {
-	Visa         bool `json:"visa"`
-	Manasik      bool `json:"manasik"`
-	Perlengkapan bool `json:"perlengkapan"`
-}
 
 type KomisiJamaah struct {
 	Nominal       float64 `json:"nominal"`
@@ -57,7 +53,8 @@ type DetailJamaahAgen struct {
 	Status       string             `json:"status"`    // dp | lunas | berangkat
 	Pembayaran   *PembayaranJamaah  `json:"pembayaran"`
 	Kelengkapan  *KelengkapanJamaah `json:"kelengkapan"`
-	Tahapan      TahapanJamaah      `json:"tahapan"`
+	Tahapan      []tahapan.Tahap    `json:"tahapan"` // lima tahap umroh, sama dengan yang dilihat jamaah
+	Manasik      bool               `json:"manasik"`
 	Komisi       *KomisiJamaah      `json:"komisi"`
 	BonusUpline  *KomisiJamaah      `json:"bonus_upline"`  // bonus pembinaan upline dari jamaah ini; nil bila tidak ada
 	BisaLengkapi bool               `json:"bisa_lengkapi"` // agen pembuat data jamaah ini: boleh membuka halaman lengkapi data
@@ -120,7 +117,13 @@ func detailJamaahAgen(ctx context.Context, q querier, akunID, bookingID, jamaahI
 		d.Jenis = "wisata"
 	}
 	d.NIKTersamar = nikTersamar(nik)
-	d.Tahapan = TahapanJamaah{Visa: progVisa, Manasik: progManasik, Perlengkapan: perlStatus == "sudah_diberikan"}
+	d.Manasik = progManasik
+	if d.Tahapan, err = tahapan.UntukJamaah(ctx, q, bookingID, jamaahID); err != nil {
+		return nil, err
+	}
+	if d.Tahapan == nil {
+		d.Tahapan = []tahapan.Tahap{}
+	}
 	d.BisaLengkapi = dibuatOleh.Valid && dibuatOleh.Int64 == akunID
 	if noHP != "" {
 		d.WhatsAppURL = "https://wa.me/" + noHP
