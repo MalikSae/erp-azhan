@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-const TermsVersion = "booking-2026-11-17"
+const TermsVersion = "booking-2026-11-23"
 
 var ErrQuoteChanged = errors.New("harga atau DP berubah; muat ulang paket dan periksa kembali ringkasan sebelum booking")
 var ErrBookingKedaluwarsa = errors.New("booking sebelumnya sudah batal atau kedaluwarsa; buat booking baru")
