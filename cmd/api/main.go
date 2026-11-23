@@ -299,6 +299,7 @@ func main() {
 			r.Get("/komisi", agenHandler.RiwayatKomisiPortal)
 			r.Get("/mutasi", agenHandler.MutasiPortal)
 			r.Get("/data-jamaah", agenHandler.DataJamaahPortal)
+			r.Get("/data-jamaah/{bookingID}/{jamaahID}", agenHandler.DetailJamaahPortal)
 			r.Get("/binaan", agenHandler.AgenBinaanPortal)
 			r.Get("/pencairan", agenHandler.GetPencairan)
 			r.Post("/pencairan", agenHandler.AjukanPencairan)
