@@ -69,6 +69,24 @@ func TestDetailAgenBinaan(t *testing.T) {
 		t.Errorf("whatsapp: %q", d.WhatsAppURL)
 	}
 
+	// Rincian: tiga baris terbaru dulu, baris batal tetap ada, nama jamaah tersamar.
+	if len(d.Rincian) != 3 {
+		t.Fatalf("rincian: %+v", d.Rincian)
+	}
+	wantRincian := []struct {
+		nominal float64
+		status  string
+	}{{70000, "batal"}, {150000, "tersedia"}, {100000, "tertahan"}}
+	for i, w := range wantRincian {
+		r := d.Rincian[i]
+		if r.Nominal != w.nominal || r.Status != w.status || (w.status == "batal") != (r.DibatalkanAt != nil) {
+			t.Errorf("rincian[%d] = %+v, mau %.0f %s", i, r, w.nominal, w.status)
+		}
+		if !strings.HasPrefix(r.Jamaah, "Ja*") || strings.Contains(r.Jamaah, "JamaahBinaan") || r.Paket == "" || r.Tanggal == "" {
+			t.Errorf("rincian[%d] identitas: %+v", i, r)
+		}
+	}
+
 	// Bukan upline langsung: upline lain dan kakek (dua tingkat) tidak melihat apa pun.
 	if _, err := detailAgenBinaan(ctx, tx, uplineLain, binaan, now); !errors.Is(err, ErrNotFound) {
 		t.Errorf("upline lain: %v", err)
@@ -84,5 +102,18 @@ func TestDetailAgenBinaan(t *testing.T) {
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET status_agen = 'nonaktif' WHERE id = ?`, binaan)
 	if d, err := detailAgenBinaan(ctx, tx, upline, binaan, later); err != nil || d.Status != "nonaktif" {
 		t.Errorf("nonaktif: err=%v %+v", err, d)
+	}
+}
+
+func TestNamaTersamar(t *testing.T) {
+	for nama, want := range map[string]string{
+		"Siti Aminah": "Si** Am****",
+		"Al":          "Al",
+		"  Budi   S ": "Bu** S",
+		"Émile Zola":  "Ém*** Zo**",
+	} {
+		if got := namaTersamar(nama); got != want {
+			t.Errorf("namaTersamar(%q) = %q, mau %q", nama, got, want)
+		}
 	}
 }

@@ -59,6 +59,7 @@ type DetailJamaahAgen struct {
 	Kelengkapan  *KelengkapanJamaah `json:"kelengkapan"`
 	Tahapan      TahapanJamaah      `json:"tahapan"`
 	Komisi       *KomisiJamaah      `json:"komisi"`
+	BonusUpline  *KomisiJamaah      `json:"bonus_upline"`  // bonus pembinaan upline dari jamaah ini; nil bila tidak ada
 	BisaLengkapi bool               `json:"bisa_lengkapi"` // agen pembuat data jamaah ini: boleh membuka halaman lengkapi data
 	WhatsAppURL  string             `json:"whatsapp_url"`  // kosong bila jamaah tidak punya nomor
 }
@@ -154,32 +155,52 @@ func detailJamaahAgen(ctx context.Context, q querier, akunID, bookingID, jamaahI
 		}
 	}
 
+	var err2 error
+	if d.Komisi, err2 = komisiJamaah(ctx, q, "tk.akun_penerima_id = ?", akunID, bookingID, jamaahID, d.Berangkat, hariIni); err2 != nil {
+		return nil, err2
+	}
+	// Bonus pembinaan yang diterima upline dari jamaah ini: catatan yang sama dengan Rincian Bonus di sisi upline.
+	if d.BonusUpline, err2 = komisiJamaah(ctx, q, "tk.jenis = '"+komisi.JenisPembinaan+"' AND tk.akun_penerima_id <> ?", akunID, bookingID, jamaahID, d.Berangkat, hariIni); err2 != nil {
+		return nil, err2
+	}
+	return d, nil
+}
+
+// komisiJamaah menjumlah komisi (tanpa cashback) satu jamaah di satu booking menurut syarat penerima. nil bila tidak
+// ada baris. Status: batal bila semua barisnya dibatalkan, tersedia bila tanggal berangkat + hari tahan sudah lewat.
+func komisiJamaah(ctx context.Context, q querier, syaratPenerima string, akunID, bookingID, jamaahID int64, berangkat, hariIni string) (*KomisiJamaah, error) {
 	var aktif float64
 	var batal, baris int
 	if err := q.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN tk.dibatalkan_at IS NULL AND tk.jenis <> 'cashback' THEN tk.nominal END), 0),
-		       COALESCE(SUM(CASE WHEN tk.dibatalkan_at IS NOT NULL AND tk.jenis <> 'cashback' THEN 1 END), 0),
-		       COUNT(CASE WHEN tk.jenis <> 'cashback' THEN 1 END)
+		SELECT COALESCE(SUM(CASE WHEN tk.dibatalkan_at IS NULL THEN tk.nominal END), 0),
+		       COALESCE(SUM(tk.dibatalkan_at IS NOT NULL), 0), COUNT(*)
 		FROM transaksi_komisi tk
-		WHERE tk.akun_penerima_id = ? AND tk.booking_id = ? AND tk.jamaah_sumber_id = ?`, akunID, bookingID, jamaahID).
+		WHERE tk.jenis <> 'cashback' AND `+syaratPenerima+` AND tk.booking_id = ? AND tk.jamaah_sumber_id = ?`, akunID, bookingID, jamaahID).
 		Scan(&aktif, &batal, &baris); err != nil {
 		return nil, fmt.Errorf("agen: detail jamaah komisi: %w", err)
 	}
-	if baris > 0 {
-		k := &KomisiJamaah{Nominal: aktif, Status: "tertahan"}
-		if tgl, err := time.ParseInLocation("2006-01-02", d.Berangkat, zonaWIB); err == nil {
-			mulai := tgl.AddDate(0, 0, komisi.HariTahanSetelahBerangkat)
-			k.TersediaMulai = mulai.Format("2006-01-02")
-			if k.TersediaMulai <= hariIni {
-				k.Status = "tersedia"
-			}
-		}
-		if aktif == 0 && batal > 0 {
-			k.Status = "batal"
-		}
-		d.Komisi = k
+	if baris == 0 {
+		return nil, nil
 	}
-	return d, nil
+	k := &KomisiJamaah{Nominal: aktif, Status: "tertahan"}
+	k.TersediaMulai, k.Status = tersediaMulai(berangkat, hariIni)
+	if aktif == 0 && batal > 0 {
+		k.Status = "batal"
+	}
+	return k, nil
+}
+
+// tersediaMulai: tanggal komisi menjadi tersedia (berangkat + hari tahan) dan statusnya hari ini.
+func tersediaMulai(berangkat, hariIni string) (mulai, status string) {
+	tgl, err := time.ParseInLocation("2006-01-02", berangkat, zonaWIB)
+	if err != nil {
+		return "", "tertahan"
+	}
+	mulai = tgl.AddDate(0, 0, komisi.HariTahanSetelahBerangkat).Format("2006-01-02")
+	if mulai <= hariIni {
+		return mulai, "tersedia"
+	}
+	return mulai, "tertahan"
 }
 
 func (r *Repository) DetailJamaahAgen(ctx context.Context, akunID, bookingID, jamaahID int64, now time.Time) (*DetailJamaahAgen, error) {

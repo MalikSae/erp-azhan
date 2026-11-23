@@ -27,10 +27,16 @@ func TestDetailJamaahAgen(t *testing.T) {
 	testdb.Exec(t, tx, `INSERT INTO dokumen_jamaah (jamaah_id, jenis, status) VALUES (?, 'paspor', 'approved'), (?, 'kk', 'approved')`, j1, j1)
 	testdb.Exec(t, tx, `INSERT INTO transaksi_komisi (brand_id, akun_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal)
 		VALUES (?,?,?,?,?,'langsung',500000)`, brand, agen, j1, b1, pax1[0])
+	// Bonus pembinaan upline dari jamaah ini (penerima akun lain): tampil sebagai bonus_upline, bukan komisi agen.
+	testdb.Exec(t, tx, `INSERT INTO transaksi_komisi (brand_id, akun_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal)
+		VALUES (?,?,?,?,?,'pembinaan',100000)`, brand, agenLain, j1, b1, pax1[0])
 
 	d, err := detailJamaahAgen(ctx, tx, agen, b1, j1, now)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if d.BonusUpline == nil || d.BonusUpline.Nominal != 100000 || d.BonusUpline.Status != "tertahan" {
+		t.Errorf("bonus upline: %+v", d.BonusUpline)
 	}
 	if d.Status != "dp" || !strings.HasPrefix(d.Nama, "JamaahDetailQzp") || d.Jenis != "umroh" {
 		t.Errorf("dasar: %+v", d)

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"erp-azhan/api/internal/komisi"
@@ -26,16 +27,46 @@ type BonusBinaan struct {
 	Tersedia float64 `json:"tersedia"`
 }
 
+// RincianBonus: satu baris bonus pembinaan upline, catatan yang sama dengan yang dilihat agen binaan di Detail Jamaah
+// miliknya (bonus_upline). Baris batal tetap ikut supaya yang hilang dari total bisa dilacak.
+type RincianBonus struct {
+	ID            int64   `json:"id"`
+	Jamaah        string  `json:"jamaah"` // nama tersamar, mis. "Si** Am****"
+	Paket         string  `json:"paket"`
+	Tanggal       string  `json:"tanggal"` // YYYY-MM-DD, tanggal bonus tercatat
+	Nominal       float64 `json:"nominal"`
+	Status        string  `json:"status"`         // tertahan | tersedia | batal
+	TersediaMulai string  `json:"tersedia_mulai"` // YYYY-MM-DD
+	DibatalkanAt  *string `json:"dibatalkan_at"`  // YYYY-MM-DD, hanya untuk baris batal
+}
+
+// maksRincianBonus: batas baris rincian per agen binaan (terbaru dulu).
+const maksRincianBonus = 100
+
+// namaTersamar menyisakan dua huruf pertama tiap kata: cukup untuk mencocokkan catatan, tidak cukup untuk mengenali
+// atau menghubungi jamaah milik agen lain.
+func namaTersamar(nama string) string {
+	kata := strings.Fields(nama)
+	for i, k := range kata {
+		r := []rune(k)
+		if len(r) > 2 {
+			kata[i] = string(r[:2]) + strings.Repeat("*", len(r)-2)
+		}
+	}
+	return strings.Join(kata, " ")
+}
+
 type DetailAgenBinaan struct {
-	AkunID      int64        `json:"akun_id"`
-	Nama        string       `json:"nama"`
-	Kota        *string      `json:"kota"`
-	Bergabung   *string      `json:"bergabung"` // YYYY-MM-DD, tanggal disetujui sebagai agen
-	Status      string       `json:"status"`    // aktif | rintisan | nonaktif
-	Jamaah      JamaahBinaan `json:"jamaah"`
-	PaketAktif  int          `json:"paket_aktif"`
-	Bonus       BonusBinaan  `json:"bonus"`
-	WhatsAppURL string       `json:"whatsapp_url"` // kosong bila agen tidak punya nomor
+	AkunID      int64          `json:"akun_id"`
+	Nama        string         `json:"nama"`
+	Kota        *string        `json:"kota"`
+	Bergabung   *string        `json:"bergabung"` // YYYY-MM-DD, tanggal disetujui sebagai agen
+	Status      string         `json:"status"`    // aktif | rintisan | nonaktif
+	Jamaah      JamaahBinaan   `json:"jamaah"`
+	PaketAktif  int            `json:"paket_aktif"`
+	Bonus       BonusBinaan    `json:"bonus"`
+	Rincian     []RincianBonus `json:"rincian"`
+	WhatsAppURL string         `json:"whatsapp_url"` // kosong bila agen tidak punya nomor
 }
 
 func detailAgenBinaan(ctx context.Context, q querier, akunID, binaanID int64, now time.Time) (*DetailAgenBinaan, error) {
@@ -88,6 +119,39 @@ func detailAgenBinaan(ctx context.Context, q querier, akunID, binaanID int64, no
 		return nil, fmt.Errorf("agen: detail binaan bonus: %w", err)
 	}
 	d.Bonus.Total = d.Bonus.Tertahan + d.Bonus.Tersedia
+
+	rows, err := q.QueryContext(ctx, `
+		SELECT tk.id, j.nama_lengkap, s.jadwal_nama, DATE_FORMAT(tk.created_at, '%Y-%m-%d'), tk.nominal,
+		       COALESCE(DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d'), ''), DATE_FORMAT(tk.dibatalkan_at, '%Y-%m-%d')
+		FROM transaksi_komisi tk
+		JOIN jamaah j ON j.id = tk.jamaah_sumber_id
+		JOIN bookings b ON b.id = tk.booking_id
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE tk.akun_penerima_id = ? AND tk.jenis = ? AND j.direkrut_oleh_akun_id = ?
+		ORDER BY tk.created_at DESC, tk.id DESC
+		LIMIT ?`, akunID, komisi.JenisPembinaan, binaanID, maksRincianBonus)
+	if err != nil {
+		return nil, fmt.Errorf("agen: detail binaan rincian: %w", err)
+	}
+	defer rows.Close()
+	d.Rincian = []RincianBonus{}
+	hariIniNyata := time.Now().In(zonaWIB).Format("2006-01-02") // sama dengan CURRENT_DATE pada hitungan bonus di atas
+	for rows.Next() {
+		var it RincianBonus
+		var nama, berangkat string
+		if err := rows.Scan(&it.ID, &nama, &it.Paket, &it.Tanggal, &it.Nominal, &berangkat, &it.DibatalkanAt); err != nil {
+			return nil, fmt.Errorf("agen: detail binaan rincian: %w", err)
+		}
+		it.Jamaah = namaTersamar(nama)
+		it.TersediaMulai, it.Status = tersediaMulai(berangkat, hariIniNyata)
+		if it.DibatalkanAt != nil {
+			it.Status = "batal"
+		}
+		d.Rincian = append(d.Rincian, it)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("agen: detail binaan rincian: %w", err)
+	}
 	return d, nil
 }
 
