@@ -193,3 +193,51 @@ func JamaahAktivasi(ctx context.Context, q Execer, pemilikAkunID, jamaahID int64
 	KirimAman(ctx, q, pemilikAkunID, Notif{Jenis: JenisJamaahAktivasi, Judul: "Akun jamaah aktif", RefTipe: RefAgen,
 		Isi: "Jamaah " + nama + " sudah mengaktifkan akun.", Kunci: "aktivasi:" + strconv.FormatInt(jamaahID, 10)})
 }
+
+var labelTahap = map[string]string{
+	"perlengkapan": "Perlengkapan",
+	"siskopatuh":   "SISKOPATUH",
+	"visa":         "Visa",
+	"tiket":        "Tiket",
+}
+
+// Tahapan: satu tahap umroh selesai (bukan paspor: verifikasi paspor sudah memberi notifikasi Dokumen). paxID > 0 untuk
+// tahap per jamaah (perlengkapan, SISKOPATUH, visa); 0 untuk tahap per booking (tiket). Penerima: pemilik booking dan
+// akun yang tertaut ke jamaah terkait (peran jamaah). Kunci per tahap per pax (atau per booking untuk tiket), jadi
+// mencabut lalu mencentang lagi tidak mengirim notifikasi kedua. Booking draft dan batal tidak diberi notifikasi (tidak
+// tampil di portal), sama dengan notifikasi Dokumen.
+func Tahapan(ctx context.Context, q Querier, bookingID, paxID int64, kunci string) {
+	label := labelTahap[kunci]
+	if label == "" {
+		return
+	}
+	k := "tahap:" + kunci + ":"
+	if paxID > 0 {
+		k += strconv.FormatInt(paxID, 10)
+	} else {
+		k += "b" + strconv.FormatInt(bookingID, 10)
+	}
+	_, err := q.ExecContext(ctx, `INSERT IGNORE INTO notifikasi (akun_id, jenis, judul, isi, ref_tipe, ref_id, kunci)
+		SELECT x.akun, ?, ?, LEFT(CONCAT_WS(' · ', x.nama, s.jadwal_nama), 300), ?, b.id, ?
+		FROM (
+			SELECT b0.customer_account_id AS akun, IF(? > 0, j0.nama_lengkap, NULL) AS nama
+			FROM bookings b0
+			LEFT JOIN booking_pax bp0 ON bp0.id = ? AND bp0.booking_id = b0.id
+			LEFT JOIN jamaah j0 ON j0.id = bp0.jamaah_id
+			WHERE b0.id = ? AND b0.customer_account_id IS NOT NULL
+			UNION
+			SELECT a1.id, IF(? > 0, j1.nama_lengkap, NULL)
+			FROM booking_pax bp1
+			JOIN jamaah j1 ON j1.id = bp1.jamaah_id
+			JOIN customer_accounts a1 ON a1.jamaah_id = bp1.jamaah_id
+			WHERE bp1.booking_id = ? AND bp1.pax_status = 'aktif' AND (? = 0 OR bp1.id = ?)
+		) x
+		JOIN bookings b ON b.id = ? AND b.status NOT IN ('draft', 'batal')
+		JOIN schedules s ON s.id = b.schedule_id
+		JOIN customer_accounts a ON a.id = x.akun AND a.dihapus_at IS NULL`,
+		JenisTahapan, label+" selesai", RefBooking, k,
+		paxID, paxID, bookingID,
+		paxID, bookingID, paxID, paxID,
+		bookingID)
+	catat("tahapan", err)
+}

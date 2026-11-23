@@ -4,6 +4,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+
+	"erp-azhan/api/internal/tahapan"
 )
 
 // Progres persiapan keberangkatan di portal pelanggan. Semua dihitung dari data yang sudah ada (dokumen jamaah dan penanda
@@ -20,6 +22,8 @@ type progressPax struct {
 	Siskopatuh       bool   `json:"siskopatuh"`
 	Manasik          bool   `json:"manasik"`
 	VaksinMeningitis bool   `json:"vaksin_meningitis"`
+	// Tahapan umroh untuk jamaah (perlengkapan, paspor, SISKOPATUH, visa, tiket), urut tampil; lihat paket tahapan.
+	Tahapan []tahapan.Tahap `json:"tahapan"`
 }
 
 type progressHeader struct {
@@ -93,6 +97,17 @@ func (o *Orders) Progress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	daftarTahap, err := tahapan.MuatBooking(r.Context(), o.db, id)
+	if err != nil {
+		log.Printf("[ERROR] account progress tahapan: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil progres.")
+		return
+	}
+	tahapPax := make(map[int64][]tahapan.Tahap, len(daftarTahap))
+	for _, t := range daftarTahap {
+		tahapPax[t.PaxID] = t.Tahapan
+	}
+
 	pax := []progressPax{}
 	semuaLengkap := true
 	for _, p := range b.Pax {
@@ -103,6 +118,10 @@ func (o *Orders) Progress(w http.ResponseWriter, r *http.Request) {
 		item := progressPax{
 			JamaahID: p.JamaahID, Nama: p.NamaJamaah, PaxType: p.PaxType,
 			Visa: p.ProgressVisa, Siskopatuh: p.ProgressSiskopatuh, Manasik: p.ProgressManasik, VaksinMeningitis: p.ProgressVaksinMeningitis,
+			Tahapan: tahapPax[p.ID],
+		}
+		if item.Tahapan == nil {
+			item.Tahapan = []tahapan.Tahap{}
 		}
 		item.hitungDokumenLengkap(disetujui[p.JamaahID])
 		if !item.DokumenLengkap {

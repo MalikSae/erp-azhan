@@ -51,8 +51,15 @@ func TestDetailJamaahAgen(t *testing.T) {
 		d.Kelengkapan.Dokumen.Terisi != 1 || d.Kelengkapan.Dokumen.Total != 3 {
 		t.Errorf("kelengkapan (kk bukan dokumen wajib): %+v", d.Kelengkapan)
 	}
-	if !d.Tahapan.Visa || d.Tahapan.Manasik || d.Tahapan.Perlengkapan {
-		t.Errorf("tahapan: %+v", d.Tahapan)
+	// Lima tahap yang sama dengan yang dilihat jamaah: paspor disetujui, visa dicentang, sisanya diproses.
+	wantTahap := []string{"perlengkapan:diproses", "paspor:selesai", "siskopatuh:diproses", "visa:selesai", "tiket:diproses"}
+	if len(d.Tahapan) != len(wantTahap) || d.Manasik {
+		t.Fatalf("tahapan: %+v manasik=%v", d.Tahapan, d.Manasik)
+	}
+	for i, w := range wantTahap {
+		if got := d.Tahapan[i].Kunci + ":" + d.Tahapan[i].Status; got != w {
+			t.Errorf("tahap %d = %s, mau %s", i, got, w)
+		}
 	}
 	if d.Komisi == nil || d.Komisi.Nominal != 500000 || d.Komisi.Status != "tertahan" {
 		t.Errorf("komisi: %+v", d.Komisi)

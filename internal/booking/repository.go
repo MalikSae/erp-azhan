@@ -14,6 +14,7 @@ import (
 
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/komisi"
+	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/payment"
 	"erp-azhan/api/internal/shared"
 )
@@ -2192,27 +2193,43 @@ func (r *Repository) UpdateProgress(ctx context.Context, bookingID int64, brandI
 		return nil, ErrBookingBatal
 	}
 
-	var headerSetClauses []string
-	var headerArgs []interface{}
-
-	for key, val := range updates {
-		colName, ok := AllowedHeaderProgressFields[key]
-		if !ok {
-			return nil, bizErr("item progress '%s' tidak valid atau gunakan endpoint progress per-pax untuk item ini", key)
-		}
-		headerSetClauses = append(headerSetClauses, fmt.Sprintf("%s = ?", colName))
-		headerArgs = append(headerArgs, val)
-	}
-
-	if len(headerSetClauses) > 0 {
-		headerArgs = append(headerArgs, bookingID)
-		qHeader := fmt.Sprintf("UPDATE bookings SET %s WHERE id = ? AND status <> 'batal'", strings.Join(headerSetClauses, ", "))
-		if _, err := r.db.ExecContext(ctx, qHeader, headerArgs...); err != nil {
-			return nil, fmt.Errorf("booking.UpdateProgress: %w", err)
-		}
+	if err := simpanProgressBooking(ctx, r.db, bookingID, existing.ProgressTiket, updates); err != nil {
+		return nil, err
 	}
 
 	return r.GetByID(ctx, bookingID, brandID)
+}
+
+// simpanProgressBooking menyimpan penanda progres per booking (tiket, hotel, land arrangement). Tiket juga menyimpan
+// tanggal selesai tahap Tiket (tetap saat dicentang ulang, kosong saat dicabut) dan memberi notifikasi saat pertama kali
+// selesai. tiketLama: nilai progress_tiket sebelum diubah.
+func simpanProgressBooking(ctx context.Context, q notifikasi.Querier, bookingID int64, tiketLama bool, updates map[string]bool) error {
+	var setClauses []string
+	var args []interface{}
+	for key, val := range updates {
+		colName, ok := AllowedHeaderProgressFields[key]
+		if !ok {
+			return bizErr("item progress '%s' tidak valid atau gunakan endpoint progress per-pax untuk item ini", key)
+		}
+		setClauses = append(setClauses, fmt.Sprintf("%s = ?", colName))
+		args = append(args, val)
+		if key == "tiket" {
+			setClauses = append(setClauses, "progress_tiket_at = IF(?, COALESCE(progress_tiket_at, NOW()), NULL)")
+			args = append(args, val)
+		}
+	}
+	if len(setClauses) == 0 {
+		return nil
+	}
+	args = append(args, bookingID)
+	qHeader := fmt.Sprintf("UPDATE bookings SET %s WHERE id = ? AND status <> 'batal'", strings.Join(setClauses, ", "))
+	if _, err := q.ExecContext(ctx, qHeader, args...); err != nil {
+		return fmt.Errorf("booking.UpdateProgress: %w", err)
+	}
+	if updates["tiket"] && !tiketLama {
+		notifikasi.Tahapan(ctx, q, bookingID, 0, "tiket")
+	}
+	return nil
 }
 
 // UpdatePaxProgress melakukan update terhadap kolom progress individual pax (visa, siskopatuh, manasik, vaksin_meningitis).
@@ -2231,33 +2248,47 @@ func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, pax
 		return nil, ErrBookingBatal
 	}
 
-	// Verify pax existence & status
-	var paxType, paxStatus string
-	err = r.db.QueryRowContext(ctx, `SELECT pax_type, pax_status FROM booking_pax WHERE id = ? AND booking_id = ?`, paxID, bookingID).Scan(&paxType, &paxStatus)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("booking.UpdatePaxProgress verify pax: %w", err)
+	if err := simpanProgressPax(ctx, r.db, bookingID, paxID, adminID, updates); err != nil {
+		return nil, err
 	}
 
+	return r.GetByID(ctx, bookingID, brandID)
+}
+
+// simpanProgressPax menyimpan penanda progres satu pax aktif (visa, SISKOPATUH, manasik, vaksin). Visa dan SISKOPATUH juga
+// menyimpan tanggal selesai tahap (tetap saat dicentang ulang, kosong saat dicabut) dan memberi notifikasi saat pertama
+// kali selesai.
+func simpanProgressPax(ctx context.Context, q notifikasi.Querier, bookingID, paxID, adminID int64, updates map[string]bool) error {
+	var paxType, paxStatus string
+	var visaLama, siskoLama bool
+	err := q.QueryRowContext(ctx, `SELECT pax_type, pax_status, progress_visa, progress_siskopatuh FROM booking_pax WHERE id = ? AND booking_id = ?`, paxID, bookingID).
+		Scan(&paxType, &paxStatus, &visaLama, &siskoLama)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("booking.UpdatePaxProgress verify pax: %w", err)
+	}
 	if paxStatus != "aktif" {
-		return nil, ErrPaxBatal
+		return ErrPaxBatal
 	}
 
 	var setClauses []string
 	var args []interface{}
-
 	for key, val := range updates {
 		colName, ok := AllowedPaxProgressFields[key]
 		if !ok {
-			return nil, bizErr("item progress pax '%s' tidak valid", key)
+			return bizErr("item progress pax '%s' tidak valid", key)
 		}
 		if key == "manasik" && paxType == "infant" {
-			return nil, ErrManasikInfant
+			return ErrManasikInfant
 		}
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", colName))
 		args = append(args, val)
+		if key == "visa" || key == "siskopatuh" {
+			setClauses = append(setClauses, fmt.Sprintf("%s_at = IF(?, COALESCE(%s_at, NOW()), NULL)", colName, colName))
+			args = append(args, val)
+		}
 		if key == "manasik" {
 			var oleh any
 			if adminID > 0 {
@@ -2267,16 +2298,21 @@ func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, pax
 			args = append(args, oleh)
 		}
 	}
-
-	if len(setClauses) > 0 {
-		args = append(args, paxID, bookingID)
-		q := fmt.Sprintf("UPDATE booking_pax SET %s WHERE id = ? AND booking_id = ?", strings.Join(setClauses, ", "))
-		if _, err := r.db.ExecContext(ctx, q, args...); err != nil {
-			return nil, fmt.Errorf("booking.UpdatePaxProgress update: %w", err)
-		}
+	if len(setClauses) == 0 {
+		return nil
 	}
-
-	return r.GetByID(ctx, bookingID, brandID)
+	args = append(args, paxID, bookingID)
+	qUpdate := fmt.Sprintf("UPDATE booking_pax SET %s WHERE id = ? AND booking_id = ?", strings.Join(setClauses, ", "))
+	if _, err := q.ExecContext(ctx, qUpdate, args...); err != nil {
+		return fmt.Errorf("booking.UpdatePaxProgress update: %w", err)
+	}
+	if updates["visa"] && !visaLama {
+		notifikasi.Tahapan(ctx, q, bookingID, paxID, "visa")
+	}
+	if updates["siskopatuh"] && !siskoLama {
+		notifikasi.Tahapan(ctx, q, bookingID, paxID, "siskopatuh")
+	}
+	return nil
 }
 
 // checkPasporUploaded memeriksa apakah jamaah memiliki dokumen paspor yang sudah diupload.
@@ -2601,6 +2637,8 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 	if _, err := tx.ExecContext(ctx, qUpdatePax, adminID, adminID, paxID); err != nil {
 		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan update pax: %w", err)
 	}
+	// Di transaksi yang sama: notifikasi ikut batal bila serah terima gagal di-commit.
+	notifikasi.Tahapan(ctx, tx, bookingID, paxID, "perlengkapan")
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan commit: %w", err)

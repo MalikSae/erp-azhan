@@ -42,6 +42,7 @@ const (
 	JenisPencairanDitolak    = "pencairan_ditolak"
 	JenisAgenBinaan          = "agen_binaan"
 	JenisPengumuman          = "pengumuman"
+	JenisTahapan             = "tahapan"
 )
 
 // Tujuan layar app saat notifikasi ditap.
