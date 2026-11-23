@@ -9,6 +9,7 @@ import (
 
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/media"
+	"erp-azhan/api/internal/shared"
 )
 
 // Dokumen jamaah di portal pelanggan: pemesan melihat kelengkapan dokumen tiap jamaah di bookingnya
@@ -25,12 +26,7 @@ var labelDokumen = map[string]string{
 }
 
 // dokumenWajib: reguler paspor, KTP, pas foto; infant paspor, akta lahir, pas foto. Selebihnya tambahan (opsional).
-func dokumenWajib(paxType string) []string {
-	if paxType == "infant" {
-		return []string{"paspor", "akte_lahir", "pas_foto"}
-	}
-	return []string{"paspor", "ktp", "pas_foto"}
-}
+func dokumenWajib(paxType string) []string { return shared.DokumenWajibJamaah(paxType) }
 
 func dokumenTambahan(paxType string) []string {
 	if paxType == "infant" {

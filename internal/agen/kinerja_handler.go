@@ -13,6 +13,8 @@ import (
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/shared"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // errFilterKomisi: parameter angka pada filter komisi bukan bilangan bulat tak negatif.
@@ -277,4 +279,24 @@ func (h *Handler) RiwayatKomisiAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, halaman)
+}
+
+// DetailJamaahPortal GET /api/portal/agen/data-jamaah/{bookingID}/{jamaahID}: status satu jamaah untuk agen perekrutnya.
+func (h *Handler) DetailJamaahPortal(w http.ResponseWriter, r *http.Request) {
+	bookingID, err1 := strconv.ParseInt(chi.URLParam(r, "bookingID"), 10, 64)
+	jamaahID, err2 := strconv.ParseInt(chi.URLParam(r, "jamaahID"), 10, 64)
+	if err1 != nil || err2 != nil || bookingID <= 0 || jamaahID <= 0 {
+		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan.")
+		return
+	}
+	d, err := h.repo.DetailJamaahAgen(r.Context(), identity.GetCustomerAccountID(r.Context()), bookingID, jamaahID, time.Now())
+	if errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan.")
+		return
+	}
+	if err != nil {
+		handleKinerjaError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
 }

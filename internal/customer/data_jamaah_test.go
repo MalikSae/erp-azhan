@@ -1,6 +1,11 @@
 package customer
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"erp-azhan/api/internal/shared"
+)
 
 func TestKelengkapanDataJamaah(t *testing.T) {
 	d := dataJamaah{PaxType: "reguler", TempatLahir: "Depok", TanggalLahir: "1990-01-01", NoHP: "0812"}
@@ -80,5 +85,16 @@ func TestHitungDokumenLengkap(t *testing.T) {
 	kosong.hitungDokumenLengkap(nil)
 	if kosong.DokumenLengkap {
 		t.Fatal("tanpa dokumen tidak boleh lengkap")
+	}
+}
+
+// Daftar data wajib di customer harus sama dengan aturan bersama yang dipakai portal agen (shared.KunciDataWajibJamaah).
+func TestDataWajibSamaDenganShared(t *testing.T) {
+	var kunci []string
+	for _, f := range dataWajibJamaah {
+		kunci = append(kunci, f.key)
+	}
+	if strings.Join(kunci, ",") != strings.Join(shared.KunciDataWajibJamaah, ",") {
+		t.Fatalf("customer %v, shared %v", kunci, shared.KunciDataWajibJamaah)
 	}
 }

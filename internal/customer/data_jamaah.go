@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"erp-azhan/api/internal/shared"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -95,7 +97,7 @@ func (d *dataJamaah) hitungKelengkapan() {
 	d.Kurang = []string{}
 	d.Total, d.Terisi = 0, 0
 	for _, f := range dataWajibJamaah {
-		if d.PaxType == "infant" && (strings.HasPrefix(f.key, "emergency_") || f.key == "no_hp") {
+		if !shared.DataWajibBerlaku(d.PaxType, f.key) {
 			continue
 		}
 		d.Total++
