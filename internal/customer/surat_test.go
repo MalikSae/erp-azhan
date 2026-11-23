@@ -50,7 +50,7 @@ func TestEvaluasiSurat_BayiTidakMendapatSurat(t *testing.T) {
 
 func TestEvaluasiSurat_SyaratUnduh(t *testing.T) {
 	sebelumDP := &orderSummary{Tab: "sebagian", MinimalDP: 10000000, Terbayar: 7500000}
-	if it := evaluasiSurat(sebelumDP, dataLengkap(), true, nil)[0]; it.Bisa || it.Alasan != "Tersedia setelah DP terkonfirmasi." {
+	if it := evaluasiSurat(sebelumDP, dataLengkap(), true, nil)[0]; it.Bisa || it.Alasan != "Tersedia setelah DP diverifikasi." {
 		t.Errorf("sebelum DP: %+v", it)
 	}
 	if it := evaluasiSurat(pesananDP(), dataLengkap(), false, nil)[0]; it.Bisa || it.Alasan != "Surat belum tersedia. Hubungi kami." {
@@ -58,7 +58,7 @@ func TestEvaluasiSurat_SyaratUnduh(t *testing.T) {
 	}
 	kurang := dataLengkap()
 	kurang.TempatLahir, kurang.TanggalLahir = "", ""
-	if it := evaluasiSurat(pesananDP(), kurang, true, nil)[0]; it.Bisa || it.Alasan != "Lengkapi tempat lahir dan tanggal lahir terlebih dahulu." || len(it.Kurang) != 2 || it.Kurang[0] != "tempat_lahir" || it.Kurang[1] != "tanggal_lahir" {
+	if it := evaluasiSurat(pesananDP(), kurang, true, nil)[0]; it.Bisa || it.Alasan != "Tempat dan tanggal lahir belum diisi." || len(it.Kurang) != 2 || it.Kurang[0] != "tempat_lahir" || it.Kurang[1] != "tanggal_lahir" {
 		t.Errorf("data kurang: %+v", it)
 	}
 	batal := &orderSummary{Tab: "batal", MinimalDP: 10000000, Terbayar: 10500000}
@@ -83,5 +83,20 @@ func TestDPTerpenuhi(t *testing.T) {
 	}
 	if !dpTerpenuhi(&orderSummary{Tab: "sebagian", MinimalDP: 10000000, Terbayar: 10000000}) {
 		t.Error("tepat DP minimal")
+	}
+}
+
+func TestTeksKurang(t *testing.T) {
+	kasus := map[string][]string{
+		"Tempat dan tanggal lahir belum diisi.":             {"tempat lahir", "tanggal lahir"},
+		"Tempat lahir belum diisi.":                         {"tempat lahir"},
+		"Tanggal lahir belum diisi.":                        {"tanggal lahir"},
+		"Nama, tempat lahir dan tanggal lahir belum diisi.": {"nama", "tempat lahir", "tanggal lahir"},
+		"Nama dan tanggal lahir belum diisi.":               {"nama", "tanggal lahir"},
+	}
+	for mau, in := range kasus {
+		if got := teksKurang(in); got != mau {
+			t.Errorf("teksKurang(%v) = %q, mau %q", in, got, mau)
+		}
 	}
 }
