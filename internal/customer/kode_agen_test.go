@@ -267,22 +267,27 @@ func TestKodeAgenGagalDibatasiPerIP(t *testing.T) {
 	// Batas pendaftaran umum dilonggarkan agar yang diuji hanya pembatas kode agen.
 	h.regIP = shared.NewWindowLimiter(1000, time.Hour)
 
-	// Kode valid dan kode kosong tidak menghitung: lebih dari batas tetap lolos.
+	// Kode kosong tidak menghitung: lebih dari batas tetap lolos.
 	for i := 0; i < kodeAgenGagalLimit+2; i++ {
-		k := fmt.Sprintf("valid%d", i)
-		if rec := post(h.RegisterApp, f.body(k, map[string]any{"kode_agen": f.kode("A")}), ""); rec.Code != http.StatusCreated {
-			t.Fatalf("valid %d: %d %s", i, rec.Code, rec.Body)
-		}
-		if got, _ := f.upline(t, k); got != a {
-			t.Fatalf("valid %d: upline = %d, want %d", i, got, a)
-		}
-		k = fmt.Sprintf("kosong%d", i)
+		k := fmt.Sprintf("kosong%d", i)
 		if rec := post(h.RegisterApp, f.body(k, map[string]any{"kode_agen": ""}), ""); rec.Code != http.StatusCreated {
 			t.Fatalf("kosong %d: %d %s", i, rec.Code, rec.Body)
 		}
 	}
 
+	// Setiap kode ketik menghitung, valid atau tidak (tanpa refund sejak 5d4f5dc, agar jawaban valid tidak
+	// bisa dipakai menebak kode). Valid dan salah diselang-seling sampai batas.
 	for i := 0; i < kodeAgenGagalLimit; i++ {
+		if i%2 == 0 {
+			k := fmt.Sprintf("valid%d", i)
+			if rec := post(h.RegisterApp, f.body(k, map[string]any{"kode_agen": f.kode("A")}), ""); rec.Code != http.StatusCreated {
+				t.Fatalf("valid %d: %d %s", i, rec.Code, rec.Body)
+			}
+			if got, _ := f.upline(t, k); got != a {
+				t.Fatalf("valid %d: upline = %d, want %d", i, got, a)
+			}
+			continue
+		}
 		rec := post(h.RegisterApp, f.body(fmt.Sprintf("gagal%d", i), map[string]any{"kode_agen": fmt.Sprintf("TEBAK%d", i)}), "")
 		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"KODE_AGEN_TIDAK_ADA"`) {
 			t.Fatalf("gagal %d: %d %s", i, rec.Code, rec.Body)

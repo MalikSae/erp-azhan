@@ -200,8 +200,12 @@ func TestRegisterNomorWhatsAppUnik(t *testing.T) {
 		t.Fatalf("akun pertama: %d %s", rec.Code, rec.Body)
 	}
 	rec = post(h.Register, map[string]any{"brand_id": brandID, "nama_lengkap": "Akun Dua", "email": emailB, "no_hp": hpB, "password": "rahasia-123"}, "")
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Nomor WhatsApp sudah terdaftar") {
-		t.Fatalf("nomor sama beda format harus 409 dengan pesan nomor, dapat %d %s", rec.Code, rec.Body)
+	// Pesan samar (5d4f5dc): 409 tanpa menegaskan nomor sudah terdaftar.
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Pendaftaran tidak dapat diproses.") {
+		t.Fatalf("nomor sama beda format harus 409 dengan pesan samar, dapat %d %s", rec.Code, rec.Body)
+	}
+	if b := rec.Body.String(); strings.Contains(b, "WhatsApp") || strings.Contains(b, "terdaftar") {
+		t.Fatalf("pesan duplikat tidak boleh menyebut nomor terdaftar: %s", b)
 	}
 	var n int
 	_ = db.QueryRow(`SELECT COUNT(*) FROM customer_accounts WHERE email_normal=?`, emailB).Scan(&n)
