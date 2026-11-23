@@ -300,3 +300,22 @@ func (h *Handler) DetailJamaahPortal(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, d)
 }
+
+// DetailBinaanPortal GET /api/portal/agen/binaan/{akunID}: kinerja satu agen binaan dan bonus pembinaan upline darinya.
+func (h *Handler) DetailBinaanPortal(w http.ResponseWriter, r *http.Request) {
+	binaanID, err := strconv.ParseInt(chi.URLParam(r, "akunID"), 10, 64)
+	if err != nil || binaanID <= 0 {
+		writeError(w, http.StatusNotFound, "Agen tidak ditemukan.")
+		return
+	}
+	d, err := h.repo.DetailAgenBinaan(r.Context(), identity.GetCustomerAccountID(r.Context()), binaanID, time.Now())
+	if errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Agen tidak ditemukan.")
+		return
+	}
+	if err != nil {
+		handleKinerjaError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
+}
