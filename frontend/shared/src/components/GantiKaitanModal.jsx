@@ -174,7 +174,7 @@ export const GantiAgenJamaahModal = ({ jamaah, isOpen, onClose, onSaved }) => {
 
   const agenSekarang = info?.kaitan_status === 'terikat_agen'
     ? (info.agen_nama || `Agen #${info.agen_id}`)
-    : info?.kaitan_status === 'tanpa_agen' ? 'Tanpa agen' : 'Belum ditentukan';
+    : 'Tanpa agen';
 
   return (
     <Modal

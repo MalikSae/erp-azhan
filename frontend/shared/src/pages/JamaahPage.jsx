@@ -175,7 +175,7 @@ export const JamaahPage = ({ showBrandColumn = false, subnav }) => {
     if (key === "direkrut_oleh_nama") {
       return terikatAgen(row)
         ? <span className="text-sm font-body font-medium text-neutral-800 whitespace-nowrap">{row.direkrut_oleh_nama}</span>
-        : <span className="text-sm font-body text-neutral-400 whitespace-nowrap">{row.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}</span>;
+        : <span className="text-sm font-body text-neutral-400 whitespace-nowrap">Tanpa agen</span>;
     }
 
     if (key === "pct_data") return <ProgressCell value={row.pct_data} title="Kelengkapan Data Profil" />;

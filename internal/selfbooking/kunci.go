@@ -98,8 +98,9 @@ func isiNIKPemesanAgen(ctx context.Context, tx *sql.Tx, p pemesan, req *BookingR
 	return nil
 }
 
-// kunciJamaahPemesan adalah satu-satunya pintu kunci jamaah booking self-service (first-set wins lewat
-// agen.IkatJamaah; hanya jamaah belum_ditentukan yang terikat, yang sudah terikat tidak pernah berpindah).
+// kunciJamaahPemesan adalah satu-satunya pintu kunci jamaah booking self-service (lewat agen.IkatJamaah: hanya
+// jamaah baru yang terikat, jamaah lama tidak pernah berpindah). Mengembalikan agen yang membawa booking ini, untuk
+// dicatat sebagai klaim (agen.CatatKlaimAgen) setelah pax tersimpan; 0 bila tidak ada.
 //
 // Pemesan agen aktif: pemilik kunci = pemesan. Jamaah diri pemesan dikunci ke upline_akun_id pemesan, aktif atau
 // nonaktif. Pemesan bukan agen: akun yang ikut berangkat lebih dulu mengikuti pemilik kunci jamaahnya
@@ -107,31 +108,31 @@ func isiNIKPemesanAgen(ctx context.Context, tx *sql.Tx, p pemesan, req *BookingR
 //
 // Awas: upline punya dua kolom (direkrut_oleh_akun_id dan upline_akun_id). Cabang agen membaca upline_akun_id,
 // cabang akun biasa membaca direkrut_oleh_akun_id lewat UplineAkun; keduanya satu konsep.
-func kunciJamaahPemesan(ctx context.Context, tx *sql.Tx, p pemesan, picJamaahID int64, pemesanIkut bool, jamaahIDs []int64) error {
+func kunciJamaahPemesan(ctx context.Context, tx *sql.Tx, p pemesan, picJamaahID int64, pemesanIkut bool, jamaahIDs []int64) (int64, error) {
 	if p.agen {
 		for _, id := range jamaahIDs {
 			pemilik := p.id
 			diri, err := jamaahDiriAgen(ctx, tx, p, id)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			if diri {
 				pemilik = p.uplineID
 			}
-			if err := agen.IkatJamaah(ctx, tx, id, pemilik, agen.SumberJalur1); err != nil {
-				return err
+			if err := agen.IkatJamaah(ctx, tx, id, pemilik, agen.SumberJalur1, 0); err != nil {
+				return 0, err
 			}
 		}
-		return nil
+		return p.id, nil
 	}
 	if pemesanIkut {
 		if err := agen.IkatAkunDariJamaah(ctx, tx, p.id, picJamaahID); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	upline, err := agen.UplineAkun(ctx, tx, p.id)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return agen.IkatRombongan(ctx, tx, jamaahIDs, upline, agen.SumberReferral)
+	return upline, agen.IkatRombongan(ctx, tx, jamaahIDs, upline, agen.SumberReferral, 0)
 }

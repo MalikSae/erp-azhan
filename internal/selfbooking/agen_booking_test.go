@@ -291,8 +291,8 @@ func agenSepertiAkunBiasa(t *testing.T, status string) {
 	if err := tx.QueryRow(`SELECT dibuat_oleh_agen_akun_id FROM bookings WHERE id=?`, resp.Booking.BookingID).Scan(&pembuat); err != nil || pembuat.Valid {
 		t.Fatalf("%s: pembuat agen = %v (err %v), want NULL", status, pembuat, err)
 	}
-	if st, _, _ := kaitan(t, tx, resp.Jamaah.ID); st != "belum_ditentukan" {
-		t.Fatalf("%s: jamaah dikunci ke pemesan: %s", status, st)
+	if st, by, _ := kaitan(t, tx, resp.Jamaah.ID); st != "tanpa_agen" || by != 0 {
+		t.Fatalf("%s: jamaah dikunci ke pemesan: %s/%d", status, st, by)
 	}
 	// Tanpa agen aktif, batas hold seat agen tidak dipakai: batas akun 9 per jadwal.
 	testdb.Exec(t, tx, `UPDATE customer_accounts SET batas_seat_agen_per_jadwal=1, batas_seat_agen_total=1 WHERE id=?`, agenID)
@@ -344,7 +344,7 @@ func TestValidasiPortalAgenWajibNIK(t *testing.T) {
 }
 
 // Booking publik: akun yang terikat ke agen (saat dibuat) menentukan agen penjaga jamaah baru. Jamaah yang sudah
-// terkunci agen lain tidak berubah. Akun tanpa agen membuat jamaah tetap belum_ditentukan.
+// terkunci agen lain tidak berubah. Akun tanpa agen membuat jamaah tetap tanpa_agen.
 func TestBookingPublikMengikutiUplineAkun(t *testing.T) {
 	tx, sched, brand, _ := setupAgenBooking(t)
 	ctx := context.Background()
@@ -393,7 +393,7 @@ func TestBookingPublikMengikutiUplineAkun(t *testing.T) {
 		t.Fatalf("kunci seumur hidup berubah: %s/%d, want tetap W (%d)", st, by, w)
 	}
 
-	// Akun tanpa agen: jamaah barunya tetap belum_ditentukan.
+	// Akun tanpa agen: jamaah barunya tetap tanpa_agen dengan kaitan_sumber kosong (masih jamaah baru).
 	req2 := BookingRequest{
 		ScheduleID: sched,
 		PIC:        PICInput{NamaLengkap: "PIC Tanpa Agen", JenisKelamin: "P", RoomType: "Quad", NIK: nikp(nikUji())},
@@ -402,8 +402,8 @@ func TestBookingPublikMengikutiUplineAkun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("booking tanpa agen: %v", err)
 	}
-	if st, _, _ := kaitan(t, tx, resp2.Jamaah.ID); st != "belum_ditentukan" {
-		t.Fatalf("jamaah akun tanpa agen = %s, want belum_ditentukan", st)
+	if st, by, sumber := kaitan(t, tx, resp2.Jamaah.ID); st != "tanpa_agen" || by != 0 || sumber != "" {
+		t.Fatalf("jamaah akun tanpa agen = %s/%d/%s, want tanpa_agen tanpa sumber", st, by, sumber)
 	}
 	var pembuat sql.NullInt64
 	var pemilik sql.NullInt64
@@ -451,8 +451,8 @@ func TestBookingAgenJamaahDiriDikunciKeUpline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("booking tanpa upline: %v", err)
 	}
-	if st, _, _ := kaitan(t, tx, resp2.Jamaah.ID); st != "belum_ditentukan" {
-		t.Fatalf("jamaah diri agen tanpa upline = %s, want belum_ditentukan", st)
+	if st, by, _ := kaitan(t, tx, resp2.Jamaah.ID); st != "tanpa_agen" || by != 0 {
+		t.Fatalf("jamaah diri agen tanpa upline = %s/%d, want tanpa_agen", st, by)
 	}
 }
 

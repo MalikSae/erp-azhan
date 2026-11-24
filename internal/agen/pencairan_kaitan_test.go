@@ -151,7 +151,7 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 	utsman := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Utsman"})
 	companion := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Companion"})
 	must(t, "jalur 3", TetapkanKaitanJalur3(ctx, tx, utsman, "agen", nuh))
-	must(t, "ikut PIC", IkatJamaah(ctx, tx, companion, nuh, SumberIkutPIC))
+	must(t, "ikut PIC", IkatJamaah(ctx, tx, companion, nuh, SumberIkutPIC, 0))
 	if st, _, sumber := kaitanSumber(t, tx, utsman); st != "terikat_agen" || sumber != SumberJalur3 {
 		t.Fatalf("utsman = %s/%s", st, sumber)
 	}
@@ -206,7 +206,7 @@ func TestLangkah15dan16GantiKaitan(t *testing.T) {
 
 	// Override berlaku untuk semua kaitan_sumber: referral (jalur 2) dan ikut PIC ikut bisa diganti.
 	referral := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Referral"})
-	must(t, "referral", IkatJamaah(ctx, tx, referral, nuh, SumberReferral))
+	must(t, "referral", IkatJamaah(ctx, tx, referral, nuh, SumberReferral, 0))
 	must(t, "jalur 2", ganti(referral, "tanpa_agen", 0))
 	must(t, "ikut PIC", ganti(companion, "tanpa_agen", 0))
 

@@ -73,8 +73,8 @@ func TestKunciJamaahDanUplineAkun(t *testing.T) {
 	lain := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenLain", StatusAgen: "aktif"})
 	nuh := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Nuh"})
 
-	must(t, "ikat ke Adam", IkatJamaah(ctx, tx, nuh, adam, SumberReferral))
-	must(t, "coba rebut", IkatJamaah(ctx, tx, nuh, lain, SumberReferral)) // tidak boleh menimpa
+	must(t, "ikat ke Adam", IkatJamaah(ctx, tx, nuh, adam, SumberReferral, 0))
+	must(t, "coba rebut", IkatJamaah(ctx, tx, nuh, lain, SumberReferral, 0)) // tidak boleh menimpa
 	if st, by := kaitanOf(t, tx, nuh); st != "terikat_agen" || by != adam {
 		t.Fatalf("Nuh = %s/%d, want terikat_agen/%d (first-set wins)", st, by, adam)
 	}
@@ -91,7 +91,7 @@ func TestKunciJamaahDanUplineAkun(t *testing.T) {
 
 	// 'tanpa_agen' tidak pernah diikat otomatis.
 	yusuf := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Yusuf", TanpaAgen: true})
-	must(t, "ikat tanpa_agen", IkatJamaah(ctx, tx, yusuf, adam, SumberReferral))
+	must(t, "ikat tanpa_agen", IkatJamaah(ctx, tx, yusuf, adam, SumberReferral, 0))
 	if st, _ := kaitanOf(t, tx, yusuf); st != "tanpa_agen" {
 		t.Fatalf("Yusuf tanpa_agen berubah menjadi %s", st)
 	}
@@ -108,7 +108,7 @@ func TestIkatRombongan(t *testing.T) {
 	baru1 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru1"})
 	baru2 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru2"})
 	milikY := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "MilikY", Direkrut: y})
-	must(t, "rombongan", IkatRombongan(ctx, tx, []int64{baru1, baru2, milikY}, x, SumberJalur1))
+	must(t, "rombongan", IkatRombongan(ctx, tx, []int64{baru1, baru2, milikY}, x, SumberJalur1, 0))
 	for _, j := range []int64{baru1, baru2} {
 		if _, by := kaitanOf(t, tx, j); by != x {
 			t.Fatalf("pax baru terikat ke %d, want %d", by, x)
@@ -120,9 +120,10 @@ func TestIkatRombongan(t *testing.T) {
 
 	// Tanpa agen: tidak ada yang diikat.
 	baru3 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru3"})
-	must(t, "rombongan kosong", IkatRombongan(ctx, tx, []int64{baru3}, 0, SumberReferral))
-	if st, _ := kaitanOf(t, tx, baru3); st != "belum_ditentukan" {
-		t.Fatalf("Baru3 = %s, want belum_ditentukan", st)
+	must(t, "rombongan kosong", IkatRombongan(ctx, tx, []int64{baru3}, 0, SumberReferral, 0))
+	// Migrasi 158: jamaah baru tanpa agen kini berstatus tanpa_agen (bekas belum_ditentukan).
+	if st, by := kaitanOf(t, tx, baru3); st != "tanpa_agen" || by != 0 {
+		t.Fatalf("Baru3 = %s/%d, want tanpa_agen/0", st, by)
 	}
 }
 

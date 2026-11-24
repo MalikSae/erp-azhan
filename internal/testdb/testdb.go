@@ -223,30 +223,31 @@ func NewAkun(t *testing.T, tx *sql.Tx, brandID int64, o AkunOpts) int64 {
 	return id
 }
 
-// JamaahOpts mengatur jamaah fixture. Direkrut (id akun agen) 0 = belum ditentukan.
+// JamaahOpts mengatur jamaah fixture. Bawaan (Direkrut 0, TanpaAgen false) = jamaah baru: tanpa_agen dengan
+// kaitan_sumber kosong, jadi masih terikat otomatis ke agen yang membawanya (keputusan 2026-11-24).
 type JamaahOpts struct {
 	Nama      string
 	Direkrut  int64 // akun agen pemilik kunci
-	TanpaAgen bool
+	TanpaAgen bool  // tanpa_agen yang ditetapkan admin (kaitan_sumber jalur3): tidak terikat otomatis
 	NIK       string
 }
 
 func NewJamaah(t *testing.T, tx *sql.Tx, brandID int64, o JamaahOpts) int64 {
 	t.Helper()
-	kaitan := "belum_ditentukan"
-	var direkrut, nik any
+	kaitan := "tanpa_agen"
+	var direkrut, nik, sumber any
 	if o.Direkrut > 0 {
 		direkrut, kaitan = o.Direkrut, "terikat_agen"
 	} else if o.TanpaAgen {
-		kaitan = "tanpa_agen"
+		sumber = "jalur3"
 	}
 	if o.NIK != "" {
 		nik = o.NIK
 	}
 	u := uniq()
 	res := mustExec(t, tx, `INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap,
-		nik, direkrut_oleh_akun_id, kaitan_status) VALUES (?,?,?,?,?,?,?)`,
-		brandID, "TST-"+u, "T"+u, o.Nama+" (uji)", nik, direkrut, kaitan)
+		nik, direkrut_oleh_akun_id, kaitan_status, kaitan_sumber) VALUES (?,?,?,?,?,?,?,?)`,
+		brandID, "TST-"+u, "T"+u, o.Nama+" (uji)", nik, direkrut, kaitan, sumber)
 	id, _ := res.LastInsertId()
 	return id
 }

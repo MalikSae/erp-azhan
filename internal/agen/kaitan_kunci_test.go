@@ -79,7 +79,7 @@ func TestIkatAkunDariKunciTx(t *testing.T) {
 			t.Fatalf("direkrut=%v log=%d", d, n)
 		}
 	})
-	t.Run("tanpa_agen dan belum_ditentukan: tidak ada upline", func(t *testing.T) {
+	t.Run("tanpa_agen admin dan jamaah baru: tidak ada upline", func(t *testing.T) {
 		akun := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "A6"})
 		for _, o := range []testdb.JamaahOpts{{Nama: "J6a", TanpaAgen: true}, {Nama: "J6b"}} {
 			j := testdb.NewJamaah(t, tx, brand, o)

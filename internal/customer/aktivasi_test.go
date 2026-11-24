@@ -798,7 +798,7 @@ func TestAktivasiKodeAgen(t *testing.T) {
 	var kodeA string
 	_ = f.db.QueryRow(`SELECT kode_referral FROM customer_accounts WHERE id=?`, A).Scan(&kodeA)
 
-	t.Run("belum_ditentukan memakai kode ketik, kaitan jamaah tidak berubah", func(t *testing.T) {
+	t.Run("tanpa agen memakai kode ketik, kaitan jamaah tidak berubah", func(t *testing.T) {
 		b := f.booking("dp", 0, false)
 		sb := f.simpanBody(b)
 		sb["kode_agen"] = kodeA
@@ -809,7 +809,7 @@ func TestAktivasiKodeAgen(t *testing.T) {
 		_, direkrut := f.akunDariJamaah(b.jamaahID)
 		var kaitan string
 		_ = f.db.QueryRow(`SELECT kaitan_status FROM jamaah WHERE id=?`, b.jamaahID).Scan(&kaitan)
-		if direkrut.Int64 != A || kaitan != "belum_ditentukan" {
+		if direkrut.Int64 != A || kaitan != "tanpa_agen" {
 			t.Fatalf("direkrut=%v kaitan=%s", direkrut, kaitan)
 		}
 	})

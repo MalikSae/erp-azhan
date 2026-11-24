@@ -117,7 +117,7 @@ func TestAkunJamaahSempit(t *testing.T) {
 	}
 }
 
-// tanpa_agen dan belum_ditentukan tetap lewat persetujuan admin, walau booking dp.
+// tanpa_agen (pilihan admin maupun jamaah baru, bekas belum_ditentukan) tetap lewat persetujuan admin, walau booking dp.
 func TestAkunJamaahTanpaAgenDanBelumDitentukan(t *testing.T) {
 	for _, o := range []testdb.JamaahOpts{{TanpaAgen: true}, {}} {
 		t.Run(fmt.Sprintf("tanpa_agen-%v", o.TanpaAgen), func(t *testing.T) { tanpaAgenDanBelumDitentukan(t, o) })
