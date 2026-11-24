@@ -137,7 +137,7 @@ const PROGRESS_HEADER_MANUAL_ITEMS = [
   { key: 'land_arrangement', label: 'Land Arrangement' },
 ];
 
-export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = true, bolehGantiAgen = false }) => {
+export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = true, bolehGantiAgen = false, bolehLihatAkun = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -902,17 +902,18 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
               <Field label="Nama Paket">{booking.jadwal_nama || "-"}</Field>
               <Field label="Tanggal Keberangkatan">{formatTanggal(booking.berangkat_tanggal)}</Field>
               {booking.pemesan && (
-                <Field label="Pemesan (akun situs)">
-                  {booking.pemesan.nama_lengkap}
-                  {booking.pemesan.ikut_berangkat === false && <span className="text-neutral-500"> · tidak ikut berangkat</span>}
-                  <span className="block text-xs text-neutral-500">
-                    {[booking.pemesan.no_hp, booking.pemesan.email].filter(Boolean).join(" · ")}
-                  </span>
-                </Field>
-              )}
-              {agenKomisi?.dibuat_oleh && (
-                <Field label="Dibuat oleh">
-                  <AgenNama agen={agenKomisi.dibuat_oleh} bolehLihat={bolehLihatAgen} denganKode />
+                <Field label="Pemesan">
+                  {bolehLihatAkun && booking.pemesan.id ? (
+                    <Link to={`/akun/${booking.pemesan.id}`} className={LINK_TEKS}>{booking.pemesan.nama_lengkap}</Link>
+                  ) : (
+                    booking.pemesan.nama_lengkap
+                  )}
+                  {booking.pemesan.kode_referral && (
+                    <span className="font-mono text-xs text-neutral-500"> ({booking.pemesan.kode_referral})</span>
+                  )}
+                  {booking.pemesan.no_hp && (
+                    <span className="block text-xs text-neutral-500">{booking.pemesan.no_hp}</span>
+                  )}
                 </Field>
               )}
               {agenKomisi?.klaim && (

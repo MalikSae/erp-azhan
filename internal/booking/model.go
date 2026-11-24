@@ -46,10 +46,13 @@ type BookingPax struct {
 // Pemesan adalah pemilik akun yang membuat booking. Ikut dibaca dari bookings.pemesan_ikut:
 // false = memesankan untuk orang lain, nil = tidak tercatat (booking sebelum migrasi 134).
 type Pemesan struct {
-	Nama  string `json:"nama_lengkap"`
-	NoHP  string `json:"no_hp"`
-	Email string `json:"email"`
-	Ikut  *bool  `json:"ikut_berangkat"`
+	ID int64 `json:"id"`
+	// KodeReferral terisi bila pemesan agen (aktif atau nonaktif).
+	KodeReferral *string `json:"kode_referral"`
+	Nama         string  `json:"nama_lengkap"`
+	NoHP         string  `json:"no_hp"`
+	Email        string  `json:"email"`
+	Ikut         *bool   `json:"ikut_berangkat"`
 }
 
 type Booking struct {

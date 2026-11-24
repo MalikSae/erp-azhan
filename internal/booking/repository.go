@@ -417,9 +417,9 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 	var pm Pemesan
 	var ikut sql.NullBool
 	err = r.db.QueryRowContext(ctx, `
-		SELECT a.nama_lengkap, a.no_hp, a.email, b.pemesan_ikut
+		SELECT a.id, IF(a.status_agen IN ('aktif','nonaktif'), a.kode_referral, NULL), a.nama_lengkap, a.no_hp, a.email, b.pemesan_ikut
 		FROM bookings b JOIN customer_accounts a ON a.id=b.customer_account_id
-		WHERE b.id=?`, id).Scan(&pm.Nama, &pm.NoHP, &pm.Email, &ikut)
+		WHERE b.id=?`, id).Scan(&pm.ID, &pm.KodeReferral, &pm.Nama, &pm.NoHP, &pm.Email, &ikut)
 	if err == nil {
 		if ikut.Valid {
 			pm.Ikut = &ikut.Bool
