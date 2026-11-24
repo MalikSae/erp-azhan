@@ -39,11 +39,13 @@ import Input from "../components/ui/Input";
 import FormField from "../components/ui/FormField";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import CurrencyInput from "../components/ui/CurrencyInput";
-import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
 import KreditCashbackPanel from "../components/KreditCashbackPanel";
-import { KOMISI_REPEAT_CASHBACK_AKTIF, JENIS_KOMISI } from "../utils/agen";
+import { KOMISI_REPEAT_CASHBACK_AKTIF } from "../utils/agen";
 import { GantiAgenJamaahModal } from "../components/GantiKaitanModal";
+import AgenNama, { LINK_TEKS } from "../components/booking/AgenNama";
+import KomisiBookingCard from "../components/booking/KomisiBookingCard";
+import TahapanUmrohCard from "../components/booking/TahapanUmrohCard";
 import RefundPanel from "../components/RefundPanel";
 import VoidPaymentModal from "../components/VoidPaymentModal";
 import { ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
@@ -105,60 +107,6 @@ const STATUS_BOOKING_BADGE = {
   lunas: { label: 'Lunas', variant: 'success' },
   batal: { label: 'Batal', variant: 'danger' },
 };
-
-// Status rincian komisi booking (GET /bookings/{id}/agen-komisi).
-const STATUS_KOMISI_BADGE = {
-  estimasi: { label: 'Estimasi', variant: 'warning' },
-  tercatat: { label: 'Tercatat', variant: 'success' },
-  batal: { label: 'Batal', variant: 'danger' },
-};
-
-const JENIS_KOMISI_SINGKAT = { langsung: 'Langsung', pembinaan: 'Pembinaan' };
-
-const LINK_TEKS = "font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900";
-
-// Nama agen (tautan ke Detail Agen bila boleh) dengan kode referral.
-const AgenNama = ({ agen, bolehLihat, denganKode = false, className = "" }) => (
-  <span className={className}>
-    {bolehLihat ? (
-      <Link to={`/agen/${agen.id}`} className={LINK_TEKS}>{agen.nama_lengkap}</Link>
-    ) : (
-      <span className="font-medium text-neutral-900">{agen.nama_lengkap}</span>
-    )}
-    {denganKode && agen.kode_referral && (
-      <span className="font-mono text-xs text-neutral-500"> ({agen.kode_referral})</span>
-    )}
-  </span>
-);
-
-// Status tahap yang diisi di tempat lain, dengan label yang menyebut keadaannya (bukan "Diproses").
-// Perlengkapan diserahkan di Distribusi Perlengkapan; tidak berlaku untuk infant ("-").
-const StatusPerlengkapan = ({ tahap }) => {
-  if (!tahap) return <span className="text-xs text-neutral-400">-</span>;
-  return tahap.status === 'selesai'
-    ? <DotText tone="success">Diserahkan</DotText>
-    : <DotText tone="neutral">Belum diserahkan</DotText>;
-};
-
-// Paspor dari dokumen jamaah: disetujui, ditolak, terunggah menunggu dicek, atau belum diunggah.
-const StatusPaspor = ({ tahap, terunggah }) => {
-  if (tahap?.status === 'selesai') return <DotText tone="success">Disetujui</DotText>;
-  if (tahap?.status === 'perbaiki') return <DotText tone="danger">Ditolak</DotText>;
-  if (terunggah) return <DotText tone="warning">Perlu dicek</DotText>;
-  return <DotText tone="neutral">Belum diunggah</DotText>;
-};
-
-const CentangTahap = ({ checked, onChange, label }) => (
-  <div className="flex justify-center">
-    <input
-      type="checkbox"
-      className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
-      checked={checked}
-      onChange={onChange}
-      aria-label={label}
-    />
-  </div>
-);
 
 export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = true, bolehGantiAgen = false, bolehLihatAkun = false }) => {
   const { id } = useParams();
@@ -783,7 +731,6 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
 
   const agenPax = new Map((agenKomisi?.pax || []).map((p) => [Number(p.booking_pax_id), p]));
   const rincianKomisi = agenKomisi?.komisi || [];
-  const lihatNominal = Boolean(agenKomisi?.lihat_nominal);
   const adaAgen = Boolean(
     agenKomisi?.dibuat_oleh || agenKomisi?.klaim || (agenKomisi?.pax || []).some((p) => p.agen)
   );
@@ -981,7 +928,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
                         )}
                         {pa.dikaitkan_admin_at && (
                           <div className="mt-0.5 text-xs text-neutral-500 whitespace-nowrap">
-                            Dikaitkan admin, {formatTanggal(pa.dikaitkan_admin_at.split(" ")[0])}
+                            Dikaitkan oleh admin, {formatTanggal(pa.dikaitkan_admin_at.split(" ")[0])}
                           </div>
                         )}
                       </div>
@@ -1023,149 +970,15 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
 
           {/* Section: Komisi — rincian per penerima; nominal hanya untuk izin komisi.view */}
           {agenKomisi && (rincianKomisi.length > 0 || adaAgen) && (
-            <TableCard
-              title="Komisi"
-              aside={lihatNominal && booking.id_booking ? (
-                <Link
-                  to={`/agen/komisi?cari=${encodeURIComponent(booking.id_booking)}`}
-                  className={`text-xs font-body ${LINK_TEKS}`}
-                >
-                  Riwayat komisi
-                </Link>
-              ) : null}
-            >
-              {rincianKomisi.length === 0 ? (
-                <EmptyState variant="section" message="Belum ada komisi." />
-              ) : (
-                <>
-                  <div className="overflow-x-auto">
-                  <Table
-                    columns={[
-                      { header: "Penerima", key: "penerima" },
-                      { header: "Jamaah", key: "jamaah" },
-                      { header: "Jenis", key: "jenis" },
-                      { header: "Status", key: "status" },
-                      ...(lihatNominal ? [{ header: "Nominal", key: "nominal", align: "right" }] : []),
-                    ]}
-                    data={rincianKomisi}
-                    renderCell={(k, key) => {
-                      const batal = k.status === "batal";
-                      const coret = batal ? "line-through text-neutral-400" : "";
-                      if (key === "penerima") {
-                        return (
-                          <span className={`text-sm font-body whitespace-nowrap ${coret}`}>
-                            {batal ? k.penerima.nama_lengkap : <AgenNama agen={k.penerima} bolehLihat={bolehLihatAgen} />}
-                          </span>
-                        );
-                      }
-                      if (key === "jamaah") {
-                        return <span className={`text-sm font-body text-neutral-800 whitespace-nowrap ${coret}`}>{k.nama_jamaah || "-"}</span>;
-                      }
-                      if (key === "jenis") {
-                        return (
-                          <span className={`text-sm font-body text-neutral-600 whitespace-nowrap ${coret}`}>
-                            {JENIS_KOMISI_SINGKAT[k.jenis] || JENIS_KOMISI[k.jenis] || k.jenis}
-                          </span>
-                        );
-                      }
-                      if (key === "status") {
-                        const s = STATUS_KOMISI_BADGE[k.status];
-                        return <Badge variant={s?.variant || "neutral"}>{s?.label || k.status}</Badge>;
-                      }
-                      if (key === "nominal") {
-                        return (
-                          <span className={`text-sm font-body font-medium text-neutral-900 tabular-nums whitespace-nowrap ${coret}`}>
-                            {k.nominal == null ? "-" : formatRupiah(k.nominal)}
-                          </span>
-                        );
-                      }
-                      return k[key];
-                    }}
-                  />
-                  </div>
-                  {lihatNominal && agenKomisi.total != null && (
-                    <div className="px-4 py-3 border-t border-neutral-200 flex justify-between text-sm font-body">
-                      <span className="text-neutral-500">Total</span>
-                      <span className="font-semibold text-neutral-900 tabular-nums">{formatRupiah(agenKomisi.total)}</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </TableCard>
+            <KomisiBookingCard agenKomisi={agenKomisi} kodeBooking={booking.id_booking} bolehLihatAgen={bolehLihatAgen} />
           )}
 
-          {/* Section: Tahapan Umroh — urutan dan status sama dengan yang dilihat jamaah dan agen */}
-          <TableCard
-            title="Tahapan Umroh"
-            aside={booking.siap_berangkat
-              ? <DotText tone="success">Siap Berangkat</DotText>
-              : <DotText tone="warning">Persiapan Berjalan</DotText>}
-          >
-            {activePaxList.length === 0 ? (
-              <EmptyState variant="section" message="Tidak ada jamaah aktif." />
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm font-body text-neutral-700 border-collapse">
-                    <thead className="bg-neutral-50 text-neutral-500 font-body text-xs font-medium border-b border-neutral-200">
-                      <tr>
-                        <th className="py-2.5 px-4">Nama Jamaah</th>
-                        <th className="py-2.5 px-3 text-center">Perlengkapan</th>
-                        <th className="py-2.5 px-3 text-center">Paspor</th>
-                        <th className="py-2.5 px-3 text-center">SISKOPATUH</th>
-                        <th className="py-2.5 px-3 text-center">Visa</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100">
-                      {activePaxList.map((pax) => {
-                        const tahap = Object.fromEntries((pax.tahapan || []).map((t) => [t.kunci, t]));
-                        return (
-                          <tr key={pax.id} className="hover:bg-neutral-50/70 transition-colors">
-                            <td className="py-3 px-4">
-                              <span className="font-heading font-semibold text-neutral-900 block">
-                                {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
-                              </span>
-                              {pax.pax_type === 'infant' && (
-                                <span className="block text-xs text-neutral-400 font-body">Infant</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-3 text-center">
-                              <StatusPerlengkapan tahap={tahap.perlengkapan} />
-                            </td>
-                            <td className="py-3 px-3 text-center">
-                              <StatusPaspor tahap={tahap.paspor} terunggah={Boolean(pax.progress_paspor)} />
-                            </td>
-                            <td className="py-3 px-3 text-center">
-                              <CentangTahap
-                                checked={Boolean(pax.progress_siskopatuh)}
-                                onChange={() => handleTogglePaxProgress(pax.id, 'siskopatuh', Boolean(pax.progress_siskopatuh))}
-                                label="SISKOPATUH"
-                              />
-                            </td>
-                            <td className="py-3 px-3 text-center">
-                              <CentangTahap
-                                checked={Boolean(pax.progress_visa)}
-                                onChange={() => handleTogglePaxProgress(pax.id, 'visa', Boolean(pax.progress_visa))}
-                                label="Visa"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-neutral-200">
-                  <span className="text-sm font-medium font-body text-neutral-800">Tiket PP</span>
-                  <Toggle
-                    id="toggle-tiket-detail"
-                    checked={Boolean(booking.progress_tiket)}
-                    onChange={() => handleToggleProgress('tiket', Boolean(booking.progress_tiket))}
-                  />
-                </div>
-              </>
-            )}
-          </TableCard>
+          <TahapanUmrohCard
+            booking={booking}
+            paxList={activePaxList}
+            onTogglePax={handleTogglePaxProgress}
+            onToggleTiket={(nilai) => handleToggleProgress('tiket', nilai)}
+          />
 
           {/* Section: Distribusi Perlengkapan */}
           <TableCard
