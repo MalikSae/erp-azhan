@@ -38,7 +38,9 @@ _Hindari_: agen pengikat, perekrut, pengajak sebagai istilah tersendiri.
 **Booking**: pemesanan satu jadwal untuk satu atau beberapa pax. Ada dua jalur: didaftarkan agen di portal agen, atau mandiri di web publik lewat link ref.
 
 **Pax**: satu kursi dalam booking (`booking_pax`). Jenis: reguler atau bayi (infant).
-**Pax DP+**: pax aktif di booking berstatus dp atau lunas. Satuan KPI marketing di Dashboard Utama (keputusan 12 November 2026): pax per channel dan grafik Pax DP+. Pax per channel membagi pax DP+ menjadi "dari agen" (jamaah terikat agen) dan "tanpa agen" (tanpa agen atau belum ditentukan, keadaan normal jamaah web tanpa referral). Seat terisi hanya menghitung pax DP+ reguler, karena infant tidak memakai seat.
+**Pax DP+**: pax aktif di booking berstatus dp atau lunas. Satuan KPI marketing di Dashboard Utama (keputusan 12 November 2026): pax per channel dan grafik Pax DP+. Pax per channel membagi pax DP+ menjadi "dari agen" (jamaah terikat agen) dan "tanpa agen" (`tanpa_agen`, keadaan normal jamaah web tanpa referral). Seat terisi hanya menghitung pax DP+ reguler, karena infant tidak memakai seat.
+**Tahapan umroh**: status pekerjaan travel per jamaah yang dilihat jamaah, agen, dan admin (Detail Booking), urut Perlengkapan, Paspor, SISKOPATUH, Visa, Tiket (internal/tahapan). Perlengkapan tidak berlaku untuk infant; paspor selesai saat dokumen disetujui. Vaksin, hotel, land arrangement, dan manasik bukan tahapan (keputusan 24 November 2026).
+**Siap berangkat**: semua tahapan umroh setiap pax aktif selesai, termasuk tiket booking.
 
 **Kuota seat**: jumlah seat yang dijual untuk satu jadwal (`schedules.seat_total`). Padanan "block seat" atau allotment yang travel pesan dari maskapai.
 
@@ -65,15 +67,17 @@ _Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti k
 
 **Pengikatan akun**: pencatatan upline akun saat akun dibuat, dari cookie referral. Setelah akun ada, cookie diabaikan. Akun tanpa agen tetap tanpa agen kecuali admin memasangkannya.
 
-**Kunci (kaitan)**: ikatan jamaah ke agen yang pertama membawanya. Seumur hidup. Hanya override admin yang memindahkan. Pemilik kunci menerima komisi atas jamaah itu siapa pun yang memesan. Pengecualian (keputusan 12 November 2026): saat admin mengganti upline sebuah akun, jamaah yang booking pertamanya dibuat akun itu dan masih terikat ke upline lama ikut pindah ke upline baru (atau jadi tanpa agen bila upline dilepas). Komisi yang sudah tercatat tetap milik agen lama; kaitan yang dipilih admin per jamaah (jalur3) tidak ikut.
+**Kunci (kaitan)**: ikatan jamaah ke agen yang pertama membawanya. Seumur hidup. Hanya override admin yang memindahkan. Status `jamaah.kaitan_status`: `terikat_agen` atau `tanpa_agen` (`belum_ditentukan` digabung ke `tanpa_agen`, migrasi 158). Hanya jamaah baru yang terikat otomatis: `tanpa_agen`, kaitan belum pernah ditetapkan, dan belum ikut booking non-draft lain. Jamaah `tanpa_agen` lama hanya dikaitkan admin; pengaitan itu berlaku ke depan untuk komisi (booking yang sudah pernah lunas sebelumnya tetap tanpa komisi). (Keputusan 24 November 2026.) Pemilik kunci menerima komisi atas jamaah itu siapa pun yang memesan. Pengecualian (keputusan 12 November 2026): saat admin mengganti upline sebuah akun, jamaah yang booking pertamanya dibuat akun itu dan masih terikat ke upline lama ikut pindah ke upline baru (atau jadi tanpa agen bila upline dilepas). Komisi yang sudah tercatat tetap milik agen lama; kaitan yang dipilih admin per jamaah (jalur3) tidak ikut.
+
+**Klaim agen**: agen yang membawa booking berisi jamaah `tanpa_agen` lama, yang tidak terikat otomatis (`bookings.agen_klaim_akun_id`): akun agen yang memesan di portal agen, upline akun pemesan web, atau kode referral deal CRM. Booking admin tidak mencatat klaim, begitu pula pax diri agen. Tampil sebagai "Referral" di Detail Booking dengan tautan "Kaitkan ke agen"; admin yang memutuskan.
 
 **Override admin**: pemindahan kunci jamaah atau pemasangan upline akun oleh Admin Master (izin `agen.kaitan.edit`), lewat modal "Ganti agen" di detail Jamaah dan "Ganti upline" di detail Akun. Halaman terpisah `/komisi/ganti-kaitan` (layar C4) sudah dihapus.
 
 **Saya sendiri**: pemesan agen aktif yang ikut berangkat (`pemesan_tidak_ikut` salah), di jalur booking mana pun. Jamaah pertama = diri agen, NIK dari profil agen, ditandai `saya_sendiri_akun_id`. Agen tidak mendapat komisi dari booking dirinya sendiri, komisinya mengalir ke upline agen. Mode agen mengikuti status akun pemesan, bukan endpoint (ADR 0002).
 
-**Diri agen**: pax yang ditandai `saya_sendiri_akun_id` atau jamaahnya tertaut ke akun agen. NIK sama dengan `nik_agen` bukan penentu lagi (ADR 0004). Komisi langsungnya ke pemilik kunci jamaah bila jamaah terikat ke agen lain, selain itu ke upline akun; `tanpa_agen` tanpa komisi. Pendaftaran Ahmad oleh Ibrahim tetap ke Ibrahim walau Ahmad menjadi agen.
+**Diri agen**: pax yang ditandai `saya_sendiri_akun_id` atau jamaahnya tertaut ke akun agen. NIK sama dengan `nik_agen` bukan penentu lagi (ADR 0004). Komisi langsungnya ke pemilik kunci jamaah bila jamaah terikat ke agen lain, selain itu ke upline akun, termasuk bila jamaahnya `tanpa_agen`. Pax bukan diri yang `tanpa_agen` tanpa komisi. Pendaftaran Ahmad oleh Ibrahim tetap ke Ibrahim walau Ahmad menjadi agen.
 
-**Akun jamaah**: akun yang bebas biaya agen dan aktif otomatis saat mengajukan: punya booking sendiri dp/lunas, atau tertaut ke jamaah `terikat_agen` yang upline akunnya sama dengan pemilik kunci dan memuat booking dp/lunas. Jamaah `tanpa_agen` dan `belum_ditentukan` lewat persetujuan admin. `nik_agen` akun tertaut = NIK jamaah tertaut.
+**Akun jamaah**: akun yang bebas biaya agen dan aktif otomatis saat mengajukan: punya booking sendiri dp/lunas, atau tertaut ke jamaah `terikat_agen` yang upline akunnya sama dengan pemilik kunci dan memuat booking dp/lunas. Jamaah `tanpa_agen` lewat persetujuan admin. `nik_agen` akun tertaut = NIK jamaah tertaut.
 
 **Komisi langsung**: nominal flat per pax berangkat untuk agen pemilik kunci jamaah.
 
