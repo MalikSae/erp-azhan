@@ -787,7 +787,7 @@ func TestAktivasiSlotDikembalikanSaatSukses(t *testing.T) {
 	}
 }
 
-// ---- kode agen ----
+// ---- kode agen (diabaikan sejak 2026-11-24) ----
 
 func TestAktivasiKodeAgen(t *testing.T) {
 	f := newFxAkt(t)
@@ -798,48 +798,39 @@ func TestAktivasiKodeAgen(t *testing.T) {
 	var kodeA string
 	_ = f.db.QueryRow(`SELECT kode_referral FROM customer_accounts WHERE id=?`, A).Scan(&kodeA)
 
-	t.Run("belum_ditentukan memakai kode ketik, kaitan jamaah tidak berubah", func(t *testing.T) {
-		b := f.booking("dp", 0, false)
-		sb := f.simpanBody(b)
-		sb["kode_agen"] = kodeA
+	// Keputusan 2026-11-24: aktivasi tidak menerima kode agen maupun kode referral. Akun dari jamaah tanpa agen
+	// lahir tanpa upline; hanya admin yang mengaitkannya. Kode yang tetap dikirim klien lama diabaikan tanpa galat.
+	tanpaUpline := func(t *testing.T, b bk, sb map[string]any) {
+		t.Helper()
 		rec := kirim(h.Publik, ipBaru(), "", sb)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("%d %s", rec.Code, rec.Body)
 		}
-		_, direkrut := f.akunDariJamaah(b.jamaahID)
-		var kaitan string
-		_ = f.db.QueryRow(`SELECT kaitan_status FROM jamaah WHERE id=?`, b.jamaahID).Scan(&kaitan)
-		if direkrut.Int64 != A || kaitan != "belum_ditentukan" {
-			t.Fatalf("direkrut=%v kaitan=%s", direkrut, kaitan)
-		}
-	})
-	t.Run("kode ketik tidak valid ditolak dan tidak membuat akun", func(t *testing.T) {
-		b := f.booking("dp", 0, false)
-		sb := f.simpanBody(b)
-		sb["kode_agen"] = "ZZZZZZ"
-		rec := kirim(h.Publik, ipBaru(), "", sb)
-		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), KodeGalatKodeAgenTidakAda) {
-			t.Fatalf("%d %s", rec.Code, rec.Body)
-		}
-		if id, _ := f.akunDariJamaah(b.jamaahID); id != 0 {
-			t.Fatal("akun terbentuk")
-		}
-	})
-	t.Run("tanpa_agen: kode referral berlaku, jamaah tidak diikat", func(t *testing.T) {
-		b := f.booking("dp", 0, true)
-		sb := f.simpanBody(b)
-		sb["kode_referral"] = kodeA
-		rec := kirim(h.Publik, ipBaru(), "", sb)
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("%d %s", rec.Code, rec.Body)
-		}
-		_, direkrut := f.akunDariJamaah(b.jamaahID)
+		id, direkrut := f.akunDariJamaah(b.jamaahID)
 		var kaitan string
 		var dir sql.NullInt64
 		_ = f.db.QueryRow(`SELECT kaitan_status, direkrut_oleh_akun_id FROM jamaah WHERE id=?`, b.jamaahID).Scan(&kaitan, &dir)
-		if direkrut.Int64 != A || kaitan != "tanpa_agen" || dir.Valid {
-			t.Fatalf("direkrut=%v kaitan=%s jamaah.direkrut=%v", direkrut, kaitan, dir)
+		if id == 0 || direkrut.Valid || kaitan != "tanpa_agen" || dir.Valid {
+			t.Fatalf("akun=%d direkrut=%v kaitan=%s jamaah.direkrut=%v", id, direkrut, kaitan, dir)
 		}
+	}
+	t.Run("tanpa agen: kode ketik diabaikan, akun tanpa upline", func(t *testing.T) {
+		b := f.booking("dp", 0, false)
+		sb := f.simpanBody(b)
+		sb["kode_agen"] = kodeA
+		tanpaUpline(t, b, sb)
+	})
+	t.Run("tanpa agen: kode ketik tidak valid juga diabaikan tanpa galat", func(t *testing.T) {
+		b := f.booking("dp", 0, false)
+		sb := f.simpanBody(b)
+		sb["kode_agen"] = "ZZZZZZ"
+		tanpaUpline(t, b, sb)
+	})
+	t.Run("tanpa agen pilihan admin: kode referral diabaikan", func(t *testing.T) {
+		b := f.booking("dp", 0, true)
+		sb := f.simpanBody(b)
+		sb["kode_referral"] = kodeA
+		tanpaUpline(t, b, sb)
 	})
 	t.Run("terikat_agen: kode diabaikan penuh, tanpa galat kode agen", func(t *testing.T) {
 		b := f.booking("dp", K, false)

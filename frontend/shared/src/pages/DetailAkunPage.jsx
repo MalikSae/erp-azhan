@@ -25,7 +25,6 @@ const KOLOM = { nama_lengkap: 'Nama', no_hp: 'WhatsApp', domisili: 'Domisili', n
 const KAITAN = {
   terikat_agen: { label: 'Terikat agen', variant: 'success' },
   tanpa_agen: { label: 'Tanpa agen', variant: 'neutral' },
-  belum_ditentukan: { label: 'Belum ditentukan', variant: 'warning' },
 };
 
 

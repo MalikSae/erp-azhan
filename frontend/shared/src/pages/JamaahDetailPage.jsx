@@ -459,7 +459,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
                     </Link>
                   ) : (
                     <span className="text-sm font-medium text-neutral-700">
-                      {jamaah.kaitan_status === "tanpa_agen" ? "Tanpa agen" : "Belum ditentukan"}
+                      Tanpa agen
                     </span>
                   )}
                   {bolehGantiAgen && (

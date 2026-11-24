@@ -18,6 +18,12 @@ export const getBooking = async (id) => {
   return data;
 };
 
+// Agen per pax, agen pembuat/klaim, dan rincian komisi booking.
+export const getBookingAgenKomisi = async (id) => {
+  const { data } = await api.get(`/api/admin/bookings/${id}/agen-komisi`);
+  return data;
+};
+
 export const createBooking = async (payload) => {
   const { data } = await api.post('/api/admin/bookings', payload);
   return data;

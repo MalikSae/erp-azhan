@@ -41,8 +41,9 @@ export default function RiwayatKomisiPage({ showBrandColumn = false, judul = 'Ri
   const [brands, setBrands] = useState([]);
   const [hasil, setHasil] = useState({ items: [], ringkasan: { jumlah: 0, total: 0, matang: 0, belum_matang: 0 } });
   const [page, setPage] = useState(1);
-  const [input, setInput] = useState('');
-  const [q, setQ] = useState('');
+  // ?cari= mengisi pencarian awal (tautan dari Detail Booking).
+  const [input, setInput] = useState(() => params.get('cari') || '');
+  const [q, setQ] = useState(() => (params.get('cari') || '').trim());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 

@@ -2,8 +2,8 @@
 //
 // Keputusan 12 November 2026 (lihat GLOSSARY "Pax DP+"):
 //   - Pax dihitung dari booking berstatus dp atau lunas (pax DP+), dikelompokkan menurut tanggal pax dibuat.
-//   - "Dari agen" = jamaah berstatus terikat_agen. "Tanpa agen" = tanpa_agen dan belum_ditentukan,
-//     karena jamaah web tanpa agen memang tetap belum_ditentukan. Kelompok mengikuti kaitan jamaah saat ini.
+//   - "Dari agen" = jamaah berstatus terikat_agen. "Tanpa agen" = tanpa_agen (migrasi 158 menggabungkan belum_ditentukan).
+//     Kelompok mengikuti kaitan jamaah saat ini.
 //   - Seat terisi hanya menghitung pax reguler (infant tidak memakai seat).
 //   - 10 agen terbaik memakai PaxClosing yang sama dengan menu Agen (ledger komisi, saat lunas).
 package analitik

@@ -115,8 +115,9 @@ export const GantiUplineModal = ({ akun, isOpen, onClose, onSaved }) => {
 
 // ─── Agen tempat jamaah terikat ─────────────────────────────────────────────
 // jamaah: { id, id_jamaah, brand_id }. Status kaitan (agen sekarang, komisi tercatat,
-// booking belum lunas) dimuat saat modal dibuka.
-export const GantiAgenJamaahModal = ({ jamaah, isOpen, onClose, onSaved }) => {
+// booking belum lunas) dimuat saat modal dibuka. agenAwal (opsional, {id, nama_lengkap,
+// kode_referral}) mengisi pilihan agen awal, mis. agen klaim booking.
+export const GantiAgenJamaahModal = ({ jamaah, isOpen, onClose, onSaved, agenAwal }) => {
   const [info, setInfo] = useState(null);
   const [memuat, setMemuat] = useState(false);
   const [kaitan, setKaitan] = useState(EMPTY_KAITAN);
@@ -127,7 +128,7 @@ export const GantiAgenJamaahModal = ({ jamaah, isOpen, onClose, onSaved }) => {
 
   useEffect(() => {
     if (!isOpen || !jamaah) return;
-    setKaitan(EMPTY_KAITAN);
+    setKaitan(agenAwal?.id ? { mode: 'agen', agen: agenAwal } : EMPTY_KAITAN);
     setAlasan('');
     setPindahkanKomisi(false);
     setError('');
@@ -141,7 +142,7 @@ export const GantiAgenJamaahModal = ({ jamaah, isOpen, onClose, onSaved }) => {
       })
       .catch(() => setError('Data kaitan jamaah gagal dimuat.'))
       .finally(() => setMemuat(false));
-  }, [isOpen, jamaah]);
+  }, [isOpen, jamaah, agenAwal]);
 
   if (!jamaah) return null;
   const punyaKomisi = Boolean(info?.punya_komisi);
@@ -174,13 +175,13 @@ export const GantiAgenJamaahModal = ({ jamaah, isOpen, onClose, onSaved }) => {
 
   const agenSekarang = info?.kaitan_status === 'terikat_agen'
     ? (info.agen_nama || `Agen #${info.agen_id}`)
-    : info?.kaitan_status === 'tanpa_agen' ? 'Tanpa agen' : 'Belum ditentukan';
+    : 'Tanpa agen';
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={() => !saving && onClose()}
-      title="Ganti agen"
+      title={info && info.kaitan_status !== 'terikat_agen' ? 'Kaitkan ke agen' : 'Ganti agen'}
       footer={(
         <>
           <Button variant="secondary" onClick={onClose} disabled={saving}>Batal</Button>
@@ -192,6 +193,7 @@ export const GantiAgenJamaahModal = ({ jamaah, isOpen, onClose, onSaved }) => {
         {memuat && <p className="text-sm font-body text-neutral-500">Memuat data kaitan…</p>}
         {info && (
           <Ringkasan>
+            {jamaah.nama_lengkap && <Baris label="Jamaah">{jamaah.nama_lengkap}</Baris>}
             <Baris label="Terikat ke">{agenSekarang}</Baris>
             <Baris label="Komisi tercatat">{punyaKomisi ? 'Ada' : 'Belum ada'}</Baris>
             <Baris label="Booking belum lunas">{info.booking_belum_lunas}</Baris>

@@ -15,7 +15,6 @@ import (
 
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/notifikasi"
-	"erp-azhan/api/internal/shared"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -41,8 +40,6 @@ const (
 var (
 	// ErrAktivasiGagal: kode booking dan NIK tidak cocok, atau aktivasi tidak bisa dilanjutkan (satu pesan untuk semua sebab).
 	ErrAktivasiGagal = errors.New("aktivasi gagal")
-	// ErrKodeAgenTidakAda: kode agen yang diketik tidak valid (hanya untuk jamaah yang belum terikat agen).
-	ErrKodeAgenTidakAda = errors.New("kode agen tidak ditemukan")
 
 	errPepperPendek = errors.New("aktivasi: pepper kurang dari 32 byte")
 	polaKodeBooking = regexp.MustCompile(`^[A-Z0-9]{1,8}$`)
@@ -84,8 +81,7 @@ type AktivasiInput struct {
 	NIK         string
 	Simpan      bool
 	// Hanya dipakai saat simpan.
-	NoHP, Email, Password  string
-	KodeAgen, KodeReferral string
+	NoHP, Email, Password string
 	// IP dan Perangkat (header X-Perangkat-Id, boleh kosong) hanya dipakai untuk penghitung, di-hash.
 	IP, Perangkat string
 }
@@ -105,10 +101,9 @@ type AktivasiHasil struct {
 }
 
 type Aktivasi struct {
-	db            *sql.DB
-	repo          *Repository
-	batas         *pembatas
-	kodeAgenGagal *shared.WindowLimiter
+	db    *sql.DB
+	repo  *Repository
+	batas *pembatas
 	// jedaGagal: jeda acak 150-400 ms di jalur gagal supaya waktu respons tidak membedakan sebab.
 	jedaGagal func()
 }
@@ -116,8 +111,7 @@ type Aktivasi struct {
 func NewAktivasi(db *sql.DB, repo *Repository, pepper []byte) *Aktivasi {
 	return &Aktivasi{
 		db: db, repo: repo,
-		batas:         &pembatas{db: db, pepper: pepper, now: time.Now},
-		kodeAgenGagal: shared.NewWindowLimiter(kodeAgenGagalLimit, time.Hour),
+		batas: &pembatas{db: db, pepper: pepper, now: time.Now},
 		jedaGagal: func() {
 			time.Sleep(150*time.Millisecond + time.Duration(rand.Int64N(int64(250*time.Millisecond))))
 		},
@@ -217,7 +211,7 @@ func (p *percobaan) gagal(ctx context.Context, aksi, alasan string, jamaahID int
 }
 
 // Jalankan memeriksa kode booking + NIK dan, bila Simpan, membuat akun baru tertaut ke jamaah. Mengembalikan ErrAktivasiGagal
-// (satu galat untuk semua sebab), *ErrAktivasiTerlaluSering, *ErrAktivasiInput, ErrKodeAgenTidakAda, ErrEmailTaken,
+// (satu galat untuk semua sebab), *ErrAktivasiTerlaluSering, *ErrAktivasiInput, ErrEmailTaken,
 // ErrPhoneTaken, atau galat sistem.
 func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHasil, error) {
 	if len(a.batas.pepper) < MinPepperAktivasi {
@@ -288,19 +282,12 @@ func (a *Aktivasi) Jalankan(ctx context.Context, in AktivasiInput) (*AktivasiHas
 		return hasil, nil
 	}
 
-	var kodeAgenID int64
-	if k.Kaitan != "terikat_agen" {
-		if kodeAgenID, err = a.uplineDariKode(ctx, in); err != nil {
-			p.kembalikanSemua(ctx)
-			return nil, err
-		}
-	}
 	h, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcryptCost)
 	if err != nil {
 		p.kembalikanSemua(ctx)
 		return nil, fmt.Errorf("aktivasi: hash password: %w", err)
 	}
-	akunID, err := a.simpanTx(ctx, in, k, p.kode, nik, string(h), kodeAgenID, p)
+	akunID, err := a.simpanTx(ctx, in, k, p.kode, nik, string(h), p)
 	var ga *galatAlasan
 	if errors.As(err, &ga) {
 		return nil, p.gagal(ctx, ga.aksi, ga.alasan, ga.jamaahID)
@@ -331,27 +318,6 @@ func validasiSimpanAktivasi(in AktivasiInput) string {
 		return msg
 	}
 	return ""
-}
-
-// uplineDariKode: untuk jamaah yang belum terikat agen, kode agen berlaku seperti daftar biasa untuk upline akun.
-// Kode ketik menang atas kode referral (cookie); kode ketik yang tidak valid ditolak, kode referral yang tidak valid diabaikan.
-func (a *Aktivasi) uplineDariKode(ctx context.Context, in AktivasiInput) (int64, error) {
-	if ketik := strings.TrimSpace(in.KodeAgen); ketik != "" {
-		if !a.kodeAgenGagal.Take(in.IP) {
-			return 0, &ErrAktivasiTerlaluSering{Tunggu: time.Hour}
-		}
-		id, err := agen.ResolveKodeReferral(ctx, a.db, in.BrandID, ketik)
-		if err != nil {
-			a.kodeAgenGagal.Refund(in.IP)
-			return 0, err
-		}
-		if id == 0 {
-			return 0, ErrKodeAgenTidakAda
-		}
-		a.kodeAgenGagal.Refund(in.IP)
-		return id, nil
-	}
-	return agen.ResolveKodeReferral(ctx, a.db, in.BrandID, in.KodeReferral)
 }
 
 // kodeAda: kode booking ada di brand ini (status apa pun). Hanya menentukan apakah kegagalan ditulis ke log.
@@ -438,7 +404,10 @@ func (a *Aktivasi) alasanGagal(ctx context.Context, q dbq, brandID int64, kode, 
 // simpanTx membuat akun baru dalam satu transaksi: kunci booking dan jamaah, ulang kelayakan, buat akun tertaut ke
 // jamaah, isi upline dari kunci jamaah, tulis log, notifikasi ke pemilik kunci. Mengembalikan *galatAlasan untuk sebab
 // gagal yang dihitung sebagai percobaan.
-func (a *Aktivasi) simpanTx(ctx context.Context, in AktivasiInput, k *kandidat, kode, nik, hash string, kodeAgenID int64, p *percobaan) (int64, error) {
+// simpanTx membuat akun dari jamaah tertaut. Akun lahir tanpa upline (keputusan 2026-11-24: aktivasi tidak menerima
+// kode agen maupun kode referral; akun tanpa agen hanya dikaitkan admin). Bila jamaah terikat agen, upline akun
+// mengikuti pemilik kunci jamaah lewat IkatAkunDariKunciTx.
+func (a *Aktivasi) simpanTx(ctx context.Context, in AktivasiInput, k *kandidat, kode, nik, hash string, p *percobaan) (int64, error) {
 	tx, err := a.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return 0, fmt.Errorf("aktivasi: mulai transaksi: %w", err)
@@ -472,7 +441,7 @@ func (a *Aktivasi) simpanTx(ctx context.Context, in AktivasiInput, k *kandidat, 
 	if utf8.RuneCountInString(nama) > 100 {
 		nama = string([]rune(nama)[:100])
 	}
-	akunID, err := a.repo.CreateTx(ctx, tx, in.BrandID, nama, in.Email, in.NoHP, hash, kodeAgenID, k.JamaahID, Biodata{JenisKelamin: k.JK, TanggalLahir: k.Lahir})
+	akunID, err := a.repo.CreateTx(ctx, tx, in.BrandID, nama, in.Email, in.NoHP, hash, 0, k.JamaahID, Biodata{JenisKelamin: k.JK, TanggalLahir: k.Lahir})
 	if errors.Is(err, ErrJamaahTertaut) {
 		return 0, &galatAlasan{aksi: "cek_gagal", alasan: "sudah_tertaut", jamaahID: k.JamaahID}
 	}

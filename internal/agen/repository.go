@@ -246,7 +246,7 @@ func nikAgenPengajuan(ctx context.Context, tx *sql.Tx, akunID, brandID int64, is
 //     pemilik kunci itu (direkrut_oleh_akun_id; upline_akun_id bila sudah terisi), dan ada booking dp atau lunas
 //     yang memuat jamaah itu (pax aktif, bukan bayi).
 //
-// Jamaah tanpa_agen dan belum_ditentukan tidak termasuk: akunnya lewat persetujuan admin.
+// Jamaah tanpa_agen tidak termasuk: akunnya lewat persetujuan admin.
 func akunJamaah(ctx context.Context, q querier, akunID int64) (bool, error) {
 	var ada bool
 	if err := q.QueryRowContext(ctx, `

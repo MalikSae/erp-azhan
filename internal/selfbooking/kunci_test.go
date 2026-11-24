@@ -517,7 +517,7 @@ func TestGalatBatasMengikutiStatusPemesan(t *testing.T) {
 	}
 }
 
-// nik_agen tidak diverifikasi: agen A ber-nik_agen = NIK jamaah belum_ditentukan buatan pelanggan B memesan
+// nik_agen tidak diverifikasi: agen A ber-nik_agen = NIK jamaah baru tanpa agen buatan pelanggan B memesan
 // dengan ikut berangkat. Jamaah B tidak terkunci, saya_sendiri_akun_id tidak terisi, booking ditolak.
 func TestNIKAgenMilikOrangLainBukanDiriAgen(t *testing.T) {
 	tx, sched, brand, _ := setupAgenBooking(t)
@@ -534,8 +534,8 @@ func TestNIKAgenMilikOrangLainBukanDiriAgen(t *testing.T) {
 	if _, err := processBookingTx(ctx, tx, brand, req, inisiator{accountID: a}); !errors.Is(err, ErrSayaSendiriBukanAnda) {
 		t.Fatalf("err = %v, want ErrSayaSendiriBukanAnda", err)
 	}
-	if st, by, _ := kaitan(t, tx, korban); st != "belum_ditentukan" || by != 0 {
-		t.Fatalf("jamaah korban %s/%d, want belum_ditentukan tanpa pemilik", st, by)
+	if st, by, sumber := kaitan(t, tx, korban); st != "tanpa_agen" || by != 0 || sumber != "" {
+		t.Fatalf("jamaah korban %s/%d/%s, want tanpa_agen tanpa pemilik dan sumber", st, by, sumber)
 	}
 	var n int
 	tx.QueryRow(`SELECT COUNT(*) FROM booking_pax WHERE jamaah_id=? OR saya_sendiri_akun_id=?`, korban, a).Scan(&n)

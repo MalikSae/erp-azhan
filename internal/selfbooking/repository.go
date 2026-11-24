@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/shared"
 )
@@ -249,7 +250,8 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 
 	// Kunci jamaah lewat satu pintu (kunci.go); cookie referral tidak dibaca di sini.
 	semuaJamaah := append([]int64{picJamaahID}, anggotaJamaahIDs...)
-	if err := kunciJamaahPemesan(ctx, tx, pem, picJamaahID, ikut, semuaJamaah); err != nil {
+	agenKlaim, err := kunciJamaahPemesan(ctx, tx, pem, picJamaahID, ikut, semuaJamaah)
+	if err != nil {
 		return nil, err
 	}
 
@@ -454,6 +456,10 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 		Response BookingResponse
 	}{*response})
 	if err != nil {
+		return nil, err
+	}
+	// Jamaah lama tanpa agen tidak terikat otomatis: agen yang membawanya dicatat untuk diputuskan admin.
+	if err := agen.CatatKlaimAgen(ctx, tx, bookingID, agenKlaim); err != nil {
 		return nil, err
 	}
 	// Jamaah yang dipakai ulang dari pihak lain: klaim pembuat yang belum pernah membayar gugur.

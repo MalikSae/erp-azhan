@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 const (
@@ -18,6 +19,12 @@ const (
 // penuh, spek 5.1). Logikanya sengaja dipertahankan di bawah flag ini. Berupa variabel agar test dapat
 // menyalakannya; jangan diubah di kode produksi. Bila dinyalakan lagi, penerima cashback adalah akun pemesan booking.
 var KomisiRepeatCashbackAktif = false
+
+// querier: *sql.Tx atau *sql.DB, untuk pemeriksaan yang juga dipakai ringkasan Detail Booking.
+type querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
 
 // paxKomisi adalah satu pax aktif beserta data kaitan agennya.
 type paxKomisi struct {
@@ -36,10 +43,11 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	var brandID, jadwalID int64
 	var langsung, pembinaan sql.NullFloat64
 	var akunPemesan sql.NullInt64
+	var lunasSebelumnya sql.NullTime
 	err := tx.QueryRowContext(ctx, `
-		SELECT s.brand_id, b.schedule_id, b.snapshot_komisi_langsung, b.snapshot_bonus_pembinaan, b.customer_account_id
+		SELECT s.brand_id, b.schedule_id, b.snapshot_komisi_langsung, b.snapshot_bonus_pembinaan, b.customer_account_id, b.pertama_lunas_at
 		FROM bookings b JOIN schedules s ON s.id = b.schedule_id
-		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&brandID, &jadwalID, &langsung, &pembinaan, &akunPemesan)
+		WHERE b.id = ? FOR UPDATE`, bookingID).Scan(&brandID, &jadwalID, &langsung, &pembinaan, &akunPemesan, &lunasSebelumnya)
 	if err != nil {
 		return fmt.Errorf("komisi: baca booking %d: %w", bookingID, err)
 	}
@@ -59,10 +67,21 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	}
 
 	for _, p := range paxes {
-		// Tanpa agen (belum_ditentukan / tanpa_agen): tidak ada komisi apa pun,
+		// Tanpa agen: tidak ada komisi apa pun,
 		// termasuk cashback (agen-azhan.md §6 langkah 11).
 		if !p.penerimaLangsungID.Valid {
 			continue
+		}
+		// Pengaitan admin berlaku ke depan (keputusan 2026-11-24): booking yang sudah pernah lunas sebelum jamaah
+		// tanpa agen dikaitkan tetap tanpa komisi, juga saat turun lalu lunas lagi.
+		if lunasSebelumnya.Valid {
+			setelah, err := dikaitkanSetelah(ctx, tx, p.jamaahID, lunasSebelumnya.Time)
+			if err != nil {
+				return err
+			}
+			if setelah {
+				continue
+			}
 		}
 		repeat := false
 		if KomisiRepeatCashbackAktif {
@@ -120,9 +139,21 @@ func ProcessBookingLunas(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	return nil
 }
 
+// dikaitkanSetelah: jamaah tanpa agen dikaitkan ke agen oleh admin setelah waktu t.
+func dikaitkanSetelah(ctx context.Context, tx querier, jamaahID int64, t time.Time) (bool, error) {
+	var ada bool
+	err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM jamaah_kaitan_log WHERE jamaah_id = ? AND kaitan_status_lama = 'tanpa_agen'
+		               AND kaitan_status_baru = 'terikat_agen' AND diganti_at > ?)`, jamaahID, t).Scan(&ada)
+	if err != nil {
+		return false, fmt.Errorf("komisi: cek waktu pengaitan: %w", err)
+	}
+	return ada, nil
+}
+
 // sudahDibayarKeberangkatan: komisi aktif jenis itu untuk jamaah yang sama di booking lain pada jadwal yang sama
 // (mis. booking sebelumnya batal setelah lunas; komisi lunas tidak ditarik saat batal).
-func sudahDibayarKeberangkatan(ctx context.Context, tx *sql.Tx, jamaahID, jadwalID, bookingID int64, jenis string) (bool, error) {
+func sudahDibayarKeberangkatan(ctx context.Context, tx querier, jamaahID, jadwalID, bookingID int64, jenis string) (bool, error) {
 	var ada bool
 	err := tx.QueryRowContext(ctx, `
 		SELECT EXISTS (
@@ -141,11 +172,25 @@ func positive(v sql.NullFloat64) bool { return v.Valid && v.Float64 > 0 }
 // (booking_pax.saya_sendiri_akun_id) atau jamaahnya tertaut ke akun (customer_accounts.jamaah_id), jalur booking apa pun.
 // NIK yang sama dengan nik_agen bukan lagi penentu (docs/adr/0004-diri-agen-dan-akun-jamaah.md). Penerima komisi langsung untuk pax diri:
 //   - jamaah terikat_agen dengan pemilik kunci bukan akun itu sendiri: pemilik kunci (jamaah.direkrut_oleh_akun_id);
-//   - selain itu, akun agen aktif atau nonaktif: upline agen (upline_akun_id). belum_ditentukan ikut cabang ini;
-//   - tanpa_agen: tidak ada komisi.
+//   - selain itu, akun agen aktif atau nonaktif: upline agen (upline_akun_id), termasuk jamaah diri yang tanpa_agen
+//     (sejak migrasi 158 status itu juga mencakup bekas belum_ditentukan);
+//   - pax bukan diri yang tanpa_agen: tidak ada komisi.
 //
 // Bonus pembinaan ke upline penerima (satu tingkat). Penerima nonaktif: komisi langsung hangus, tanpa backfill saat
 // diaktifkan lagi; bonus pembinaan tetap ke upline aktif di atasnya. Pax bukan diri: pemilik kunci jamaah.
+
+// joinPenerimaSQL menurunkan penerima komisi per pax (alias bp = booking_pax, j = jamaah): diri = akun milik pax,
+// a = penerima komisi langsung menurut kaitan saat ini, u = upline a (penerima bonus pembinaan). Satu sumber untuk
+// pencatatan komisi (loadPax) dan ringkasan Detail Booking (RingkasanBooking).
+const joinPenerimaSQL = `
+		LEFT JOIN customer_accounts diri ON diri.id = COALESCE(bp.saya_sendiri_akun_id,
+		     (SELECT ca.id FROM customer_accounts ca WHERE ca.jamaah_id = j.id LIMIT 1))
+		LEFT JOIN customer_accounts a ON a.id = CASE
+		     WHEN diri.id IS NULL THEN IF(j.kaitan_status = 'tanpa_agen', NULL, j.direkrut_oleh_akun_id)
+		     WHEN j.kaitan_status = 'terikat_agen' AND j.direkrut_oleh_akun_id <> diri.id THEN j.direkrut_oleh_akun_id
+		     WHEN diri.status_agen IN ('aktif','nonaktif') THEN diri.upline_akun_id
+		     ELSE NULL END
+		LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id`
 
 // loadPax mengunci baris jamaah pax (FOR SHARE) agar kaitan agen yang dibaca
 // tetap berlaku sampai komisi tercatat: Ganti Kaitan Agen (C4) yang datang
@@ -158,15 +203,7 @@ func loadPax(ctx context.Context, tx *sql.Tx, bookingID int64) ([]paxKomisi, err
 		       COALESCE(u.status_agen = 'aktif', FALSE)
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
-		LEFT JOIN customer_accounts diri ON diri.id = COALESCE(bp.saya_sendiri_akun_id,
-		     (SELECT ca.id FROM customer_accounts ca WHERE ca.jamaah_id = j.id LIMIT 1))
-		LEFT JOIN customer_accounts a ON a.id = CASE
-		     WHEN j.kaitan_status = 'tanpa_agen' THEN NULL
-		     WHEN diri.id IS NULL THEN j.direkrut_oleh_akun_id
-		     WHEN j.kaitan_status = 'terikat_agen' AND j.direkrut_oleh_akun_id <> diri.id THEN j.direkrut_oleh_akun_id
-		     WHEN diri.status_agen IN ('aktif','nonaktif') THEN diri.upline_akun_id
-		     ELSE NULL END
-		LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id
+		`+joinPenerimaSQL+`
 		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
 		ORDER BY bp.id
 		FOR SHARE OF j`, bookingID)

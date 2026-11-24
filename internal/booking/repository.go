@@ -17,6 +17,7 @@ import (
 	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/payment"
 	"erp-azhan/api/internal/shared"
+	"erp-azhan/api/internal/tahapan"
 )
 
 const idBookingCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -274,14 +275,14 @@ func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64, 
 			items[i].ProgressPaspor = withPaspor[*items[i].JamaahID]
 		}
 		b := &items[i]
-		b.SiapBerangkat = b.PaxCount > 0 && b.ProgressTiket && b.ProgressHotel && b.ProgressLandArrangement && !belumLengkap[b.ID]
+		b.SiapBerangkat = b.PaxCount > 0 && b.ProgressTiket && !belumLengkap[b.ID]
 	}
 	return items, nil
 }
 
-// paxBelumLengkapSet mengembalikan booking yang punya minimal satu pax aktif dengan progress belum lengkap.
-// Aturannya sama dengan computeSiapBerangkat: paspor terunggah, visa, siskopatuh, vaksin meningitis, dan
-// manasik (manasik tidak berlaku untuk infant).
+// paxBelumLengkapSet mengembalikan booking yang punya minimal satu pax aktif dengan tahapan belum selesai.
+// Aturannya sama dengan terapkanTahapan (internal/tahapan): perlengkapan diserahkan (tidak berlaku untuk infant),
+// paspor disetujui, SISKOPATUH, dan visa. Tiket dicek per booking oleh pemanggil.
 func paxBelumLengkapSet(ctx context.Context, q interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }, bookingIDs []int64) (map[int64]bool, error) {
@@ -301,10 +302,9 @@ func paxBelumLengkapSet(ctx context.Context, q interface {
 			WHERE bp.pax_status = 'aktif' AND bp.booking_id IN (?` + strings.Repeat(",?", len(part)-1) + `)
 			AND NOT (
 				COALESCE(bp.progress_visa, FALSE) AND COALESCE(bp.progress_siskopatuh, FALSE)
-				AND COALESCE(bp.progress_vaksin_meningitis, FALSE)
-				AND (bp.pax_type = 'infant' OR COALESCE(bp.progress_manasik, FALSE))
+				AND (bp.pax_type = 'infant' OR bp.perlengkapan_status = 'sudah_diberikan')
 				AND EXISTS (SELECT 1 FROM dokumen_jamaah d WHERE d.jamaah_id = bp.jamaah_id
-					AND d.jenis = 'paspor' AND d.file_url IS NOT NULL AND d.file_url != '')
+					AND d.jenis = 'paspor' AND d.status = 'approved')
 			)`
 		rows, err := q.QueryContext(ctx, query, args...)
 		if err != nil {
@@ -406,7 +406,11 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 		return nil, err
 	}
 	b.Pax = paxList
-	computeSiapBerangkat(b)
+	tahap, err := tahapan.MuatBooking(ctx, r.db, id)
+	if err != nil {
+		return nil, fmt.Errorf("booking.GetByID tahapan: %w", err)
+	}
+	terapkanTahapan(b, tahap)
 
 	discounts, err := r.ListDiscounts(ctx, id)
 	if err != nil {
@@ -417,9 +421,9 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 	var pm Pemesan
 	var ikut sql.NullBool
 	err = r.db.QueryRowContext(ctx, `
-		SELECT a.nama_lengkap, a.no_hp, a.email, b.pemesan_ikut
+		SELECT a.id, IF(a.status_agen IN ('aktif','nonaktif'), a.kode_referral, NULL), a.nama_lengkap, a.no_hp, a.email, b.pemesan_ikut
 		FROM bookings b JOIN customer_accounts a ON a.id=b.customer_account_id
-		WHERE b.id=?`, id).Scan(&pm.Nama, &pm.NoHP, &pm.Email, &ikut)
+		WHERE b.id=?`, id).Scan(&pm.ID, &pm.KodeReferral, &pm.Nama, &pm.NoHP, &pm.Email, &ikut)
 	if err == nil {
 		if ikut.Valid {
 			pm.Ikut = &ikut.Bool
@@ -2329,27 +2333,28 @@ func (r *Repository) checkPasporUploaded(ctx context.Context, jamaahID int64) (b
 	return count > 0, nil
 }
 
-func computeSiapBerangkat(b *Booking) {
-	headerLengkap := b.ProgressTiket && b.ProgressHotel && b.ProgressLandArrangement
-	activePaxCount := 0
-	allPaxLengkap := true
-
-	for _, p := range b.Pax {
-		if p.PaxStatus != "aktif" {
+// terapkanTahapan memasang tahapan umroh per pax (sama dengan yang dilihat jamaah dan agen) dan menghitung siap
+// berangkat: ada pax aktif dan semua tahap setiap pax selesai, termasuk tiket. Keputusan 2026-11-24: vaksin, hotel,
+// land arrangement, dan manasik tidak lagi menentukan siap berangkat.
+func terapkanTahapan(b *Booking, semua []tahapan.Pax) {
+	perPax := make(map[int64][]tahapan.Tahap, len(semua))
+	for _, p := range semua {
+		perPax[p.PaxID] = p.Tahapan
+	}
+	siap := len(semua) > 0
+	for i := range b.Pax {
+		t, ada := perPax[b.Pax[i].ID]
+		if !ada {
 			continue
 		}
-		activePaxCount++
-		manasikReq := true
-		if p.PaxType != "infant" {
-			manasikReq = p.ProgressManasik
-		}
-		paxLengkap := p.ProgressPaspor && p.ProgressVisa && p.ProgressSiskopatuh && p.ProgressVaksinMeningitis && manasikReq
-		if !paxLengkap {
-			allPaxLengkap = false
+		b.Pax[i].Tahapan = t
+		for _, x := range t {
+			if x.Status != tahapan.Selesai {
+				siap = false
+			}
 		}
 	}
-
-	b.SiapBerangkat = (activePaxCount > 0) && headerLengkap && allPaxLengkap
+	b.SiapBerangkat = siap
 }
 
 // ─── Internal scan helper ─────────────────────────────────────────────────────
@@ -2422,7 +2427,6 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 	if createdBy.Valid {
 		b.CreatedBy = &createdBy.Int64
 	}
-	computeSiapBerangkat(&b)
 	b.Pax = make([]BookingPax, 0)
 	return &b, nil
 }

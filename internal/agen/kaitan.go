@@ -10,9 +10,10 @@ import (
 )
 
 // Kunci (kaitan) jamaah ke akun agen dan pengikatan akun ke agen (docs/spek/SPEK-KEAGENAN-AKUN-2026-11-03.md bagian 4).
-// Aturan inti: first-set wins — hanya jamaah berstatus 'belum_ditentukan'
-// yang boleh diikat; 'terikat_agen' dan 'tanpa_agen' tidak pernah diubah di
-// sini (ganti hanya lewat C4 Admin Master).
+// Aturan inti (keputusan 2026-11-24): hanya jamaah baru yang terikat otomatis, yaitu jamaah 'tanpa_agen' yang
+// kaitannya belum pernah ditetapkan (kaitan_sumber kosong) dan belum pernah ikut booking lain. Jamaah lain tidak
+// pernah diubah di sini; 'tanpa_agen' lama hanya dikaitkan admin (Ganti Agen), dan agen yang membawanya dicatat
+// sebagai klaim di booking (CatatKlaimAgen).
 
 var ErrAgenTidakValid = errors.New("agen tidak ditemukan atau tidak aktif di brand ini")
 
@@ -67,17 +68,44 @@ func ValidasiAgenAktif(ctx context.Context, q querier, brandID, agenAkunID int64
 	return nil
 }
 
-// IkatJamaah mengikat jamaah ke akun agen bila masih 'belum_ditentukan'
-// (first-set wins, kunci seumur hidup). sumber: salah satu konstanta Sumber*.
-func IkatJamaah(ctx context.Context, tx *sql.Tx, jamaahID, agenAkunID int64, sumber string) error {
+// IkatJamaah mengikat jamaah baru ke akun agen (kunci seumur hidup). bookingID: booking yang sedang dibuat
+// (0 bila pax-nya belum disimpan); pax di booking itu tidak dihitung sebagai booking lain. Draft tidak dihitung
+// (draft belum mengikat siapa pun).
+// sumber: salah satu konstanta Sumber*.
+func IkatJamaah(ctx context.Context, tx *sql.Tx, jamaahID, agenAkunID int64, sumber string, bookingID int64) error {
 	if jamaahID <= 0 || agenAkunID <= 0 {
 		return nil
 	}
 	_, err := tx.ExecContext(ctx, `
-		UPDATE jamaah SET direkrut_oleh_akun_id = ?, kaitan_status = 'terikat_agen', kaitan_sumber = ?
-		WHERE id = ? AND kaitan_status = 'belum_ditentukan'`, agenAkunID, sumber, jamaahID)
+		UPDATE jamaah j SET j.direkrut_oleh_akun_id = ?, j.kaitan_status = 'terikat_agen', j.kaitan_sumber = ?
+		WHERE j.id = ? AND j.kaitan_status = 'tanpa_agen' AND j.kaitan_sumber IS NULL
+		  AND NOT EXISTS (SELECT 1 FROM booking_pax bp JOIN bookings ob ON ob.id = bp.booking_id
+		                  WHERE bp.jamaah_id = j.id AND bp.booking_id <> ? AND ob.status <> 'draft')`,
+		agenAkunID, sumber, jamaahID, bookingID)
 	if err != nil {
 		return fmt.Errorf("agen: ikat jamaah: %w", err)
+	}
+	return nil
+}
+
+// CatatKlaimAgen mencatat agen yang membawa booking ini bila masih ada pax aktif tanpa agen (jamaah lama yang
+// tidak terikat otomatis). Admin melihatnya di Detail Booking lalu memutuskan lewat Ganti Agen. Klaim pertama
+// tidak ditimpa. Pax diri agen tidak dihitung: komisinya mengikuti upline agen itu, bukan kaitan.
+func CatatKlaimAgen(ctx context.Context, tx *sql.Tx, bookingID, agenAkunID int64) error {
+	if bookingID <= 0 || agenAkunID <= 0 {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `
+		UPDATE bookings b SET b.agen_klaim_akun_id = ?
+		WHERE b.id = ? AND b.agen_klaim_akun_id IS NULL
+		  AND EXISTS (SELECT 1 FROM booking_pax bp JOIN jamaah j ON j.id = bp.jamaah_id
+		              WHERE bp.booking_id = b.id AND bp.pax_status = 'aktif' AND j.kaitan_status = 'tanpa_agen'
+		                AND NOT EXISTS (SELECT 1 FROM customer_accounts diri
+		                                WHERE diri.status_agen IN ('aktif','nonaktif')
+		                                  AND (diri.id = bp.saya_sendiri_akun_id OR diri.jamaah_id = j.id)))`,
+		agenAkunID, bookingID)
+	if err != nil {
+		return fmt.Errorf("agen: catat klaim agen: %w", err)
 	}
 	return nil
 }
@@ -86,7 +114,7 @@ func IkatJamaah(ctx context.Context, tx *sql.Tx, jamaahID, agenAkunID int64, sum
 // pengikatan jamaah saat akun itu booking di web. Upline yang sedang nonaktif tetap dikembalikan
 // (keputusan 11 November 2026): jamaah tetap terikat ke upline itu, komisi langsungnya hangus saat lunas,
 // dan bonus pembinaan tetap mengalir ke upline di atasnya yang aktif (spek 5.1). Tanpa ini, jamaah
-// dari akun yang upline-nya nonaktif sementara tetap belum_ditentukan dan bisa diikat agen lain.
+// dari akun yang upline-nya nonaktif sementara tetap tanpa agen.
 // 0 bila akun tidak punya upline.
 func UplineAkun(ctx context.Context, q querier, akunID int64) (int64, error) {
 	var id int64
@@ -180,23 +208,21 @@ func IkatAkunDariKunciTx(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64
 	return nil
 }
 
-// IkatRombongan mengikat semua jamaah yang masih 'belum_ditentukan' ke akun
-// agen (auto-bind multi-pax). Jamaah yang sudah terikat tidak diubah. Prioritas
-// penentu agen ditetapkan pemanggil: portal agen memakai agen pembuat booking,
-// web publik memakai upline akun pemesan (UplineAkun), cookie
-// tidak dibaca saat booking. agenAkunID <= 0: tidak ada yang diikat.
-func IkatRombongan(ctx context.Context, tx *sql.Tx, jamaahIDs []int64, agenAkunID int64, sumber string) error {
+// IkatRombongan mengikat jamaah baru ke akun agen (auto-bind multi-pax) lewat IkatJamaah. Prioritas penentu
+// agen ditetapkan pemanggil: portal agen memakai agen pembuat booking, web publik memakai upline akun pemesan
+// (UplineAkun), cookie tidak dibaca saat booking. agenAkunID <= 0: tidak ada yang diikat.
+func IkatRombongan(ctx context.Context, tx *sql.Tx, jamaahIDs []int64, agenAkunID int64, sumber string, bookingID int64) error {
 	for _, id := range jamaahIDs {
-		if err := IkatJamaah(ctx, tx, id, agenAkunID, sumber); err != nil {
+		if err := IkatJamaah(ctx, tx, id, agenAkunID, sumber, bookingID); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// IkatRombonganBooking menjalankan pengikatan untuk booking yang sudah
-// tersimpan (booking admin & finalisasi draft, tanpa akun pemesan): semua pax
-// yang belum terikat ikut agen pemilik kunci PIC.
+// IkatRombonganBooking menjalankan pengikatan untuk booking yang sudah tersimpan (booking admin & finalisasi
+// draft, tanpa akun pemesan): pax baru ikut agen pemilik kunci PIC. Tidak mencatat klaim: booking admin tidak
+// dibawa agen atau kode referral, jadi pax tanpa agen lainnya tetap diputuskan admin lewat Ganti Agen.
 func IkatRombonganBooking(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	var direkrut sql.NullInt64
 	err := tx.QueryRowContext(ctx, `
@@ -225,7 +251,7 @@ func IkatRombonganBooking(ctx context.Context, tx *sql.Tx, bookingID int64) erro
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	return IkatRombongan(ctx, tx, ids, direkrut.Int64, SumberIkutPIC)
+	return IkatRombongan(ctx, tx, ids, direkrut.Int64, SumberIkutPIC, bookingID)
 }
 
 // TetapkanKaitanJalur3 menyimpan pilihan eksplisit Admin untuk jamaah baru

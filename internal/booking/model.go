@@ -1,6 +1,10 @@
 package booking
 
-import "time"
+import (
+	"time"
+
+	"erp-azhan/api/internal/tahapan"
+)
 
 // ─── Response structs ─────────────────────────────────────────────────────────
 
@@ -32,24 +36,29 @@ type BookingPax struct {
 	PerlengkapanStatus       string  `json:"perlengkapan_status"`
 	PerlengkapanTanggal      *string `json:"perlengkapan_tanggal"`
 	// Log pengajuan dan penerimaan perlengkapan (migrasi 141), waktu "YYYY-MM-DD HH:MM" WIB server.
-	PerlengkapanMetode         *string   `json:"perlengkapan_metode"`
-	PerlengkapanDiajukanAt     *string   `json:"perlengkapan_diajukan_at"`
-	PerlengkapanDiserahkanAt   *string   `json:"perlengkapan_diserahkan_at"`
-	PerlengkapanDiserahkanNama *string   `json:"perlengkapan_diserahkan_nama"`
-	PerlengkapanDiterimaAt     *string   `json:"perlengkapan_diterima_at"`
-	PerlengkapanDiterimaOleh   *string   `json:"perlengkapan_diterima_oleh"`
-	CreatedAt                  time.Time `json:"created_at"`
-	UpdatedAt                  time.Time `json:"updated_at"`
+	PerlengkapanMetode         *string `json:"perlengkapan_metode"`
+	PerlengkapanDiajukanAt     *string `json:"perlengkapan_diajukan_at"`
+	PerlengkapanDiserahkanAt   *string `json:"perlengkapan_diserahkan_at"`
+	PerlengkapanDiserahkanNama *string `json:"perlengkapan_diserahkan_nama"`
+	PerlengkapanDiterimaAt     *string `json:"perlengkapan_diterima_at"`
+	PerlengkapanDiterimaOleh   *string `json:"perlengkapan_diterima_oleh"`
+	// Tahapan umroh pax ini (urutan dan status sama dengan yang dilihat jamaah); diisi di detail booking.
+	Tahapan   []tahapan.Tahap `json:"tahapan,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
 }
 
 // Booking adalah response lengkap admin — JOIN nama jamaah + jadwal_nama schedule + primary pax.
 // Pemesan adalah pemilik akun yang membuat booking. Ikut dibaca dari bookings.pemesan_ikut:
 // false = memesankan untuk orang lain, nil = tidak tercatat (booking sebelum migrasi 134).
 type Pemesan struct {
-	Nama  string `json:"nama_lengkap"`
-	NoHP  string `json:"no_hp"`
-	Email string `json:"email"`
-	Ikut  *bool  `json:"ikut_berangkat"`
+	ID int64 `json:"id"`
+	// KodeReferral terisi bila pemesan agen (aktif atau nonaktif).
+	KodeReferral *string `json:"kode_referral"`
+	Nama         string  `json:"nama_lengkap"`
+	NoHP         string  `json:"no_hp"`
+	Email        string  `json:"email"`
+	Ikut         *bool   `json:"ikut_berangkat"`
 }
 
 type Booking struct {

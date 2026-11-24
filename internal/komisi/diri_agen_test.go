@@ -82,25 +82,22 @@ func TestDiriPemilikKunciNonaktifHangus(t *testing.T) {
 	expect(t, "pemilik kunci nonaktif", ledger(t, f.tx, b, f.nama), "Atas:pembinaan:300000")
 }
 
-// Diri agen dengan jamaah tanpa_agen tidak berkomisi, lewat tautan maupun saya_sendiri.
-func TestDiriTanpaAgenTidakBerkomisi(t *testing.T) {
-	f := newFxDiri(t)
-	u := f.akun(t, "U", "aktif", 0, 0)
-	y := f.akun(t, "Y", "aktif", u, u)
-	expect(t, "tertaut tanpa_agen", f.lunas(t, testdb.JamaahOpts{Nama: "JT", TanpaAgen: true}, y, 0))
-	expect(t, "saya sendiri tanpa_agen", f.lunas(t, testdb.JamaahOpts{Nama: "JS", TanpaAgen: true}, 0, y))
-}
-
-// belum_ditentukan: diri agen mengikuti upline_akun_id agen (perilaku saat ini, ditandai di tes).
-func TestDiriBelumDitentukanMengikutiUplineAkun(t *testing.T) {
+// Diri agen dengan jamaah tanpa_agen: komisi langsung ke upline_akun_id agen, lewat tautan maupun saya_sendiri,
+// baik jamaah baru (kaitan_sumber kosong, bekas belum_ditentukan) maupun tanpa_agen pilihan admin (keputusan
+// 2026-11-24 butir 5: dulu tanpa_agen pilihan admin tidak berkomisi). Pax bukan diri yang tanpa_agen tidak berkomisi.
+func TestDiriTanpaAgenMengikutiUplineAkun(t *testing.T) {
 	f := newFxDiri(t)
 	atas := f.akun(t, "Atas", "aktif", 0, 0)
 	u := f.akun(t, "U", "aktif", atas, atas)
 	y := f.akun(t, "Y", "aktif", u, u)
-	expect(t, "saya sendiri belum_ditentukan", f.lunas(t, testdb.JamaahOpts{Nama: "JB"}, 0, y),
+	expect(t, "tertaut tanpa_agen admin", f.lunas(t, testdb.JamaahOpts{Nama: "JT", TanpaAgen: true}, y, 0),
 		"U:langsung:1000000", "Atas:pembinaan:300000")
-	// Tanpa tautan dan tanpa saya_sendiri, belum_ditentukan tidak berkomisi.
-	expect(t, "bukan diri, belum_ditentukan", f.lunas(t, testdb.JamaahOpts{Nama: "JC"}, 0, 0))
+	expect(t, "saya sendiri tanpa_agen admin", f.lunas(t, testdb.JamaahOpts{Nama: "JS", TanpaAgen: true}, 0, y),
+		"U:langsung:1000000", "Atas:pembinaan:300000")
+	expect(t, "saya sendiri jamaah baru", f.lunas(t, testdb.JamaahOpts{Nama: "JB"}, 0, y),
+		"U:langsung:1000000", "Atas:pembinaan:300000")
+	expect(t, "bukan diri, jamaah baru", f.lunas(t, testdb.JamaahOpts{Nama: "JC"}, 0, 0))
+	expect(t, "bukan diri, tanpa_agen admin", f.lunas(t, testdb.JamaahOpts{Nama: "JD", TanpaAgen: true}, 0, 0))
 }
 
 // NIK sama dengan nik_agen tanpa tautan atau saya_sendiri bukan diri agen (booking admin/CRM): komisi ke pemilik kunci jamaah.

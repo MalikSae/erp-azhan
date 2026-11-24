@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { 
   getBooking, 
   updateBookingStatus, 
@@ -13,7 +13,8 @@ import {
   updateBookingProgress,
   updatePaxProgress,
   cancelBookingPax,
-  updatePaxRoomType
+  updatePaxRoomType,
+  getBookingAgenKomisi
 } from "../api/bookings";
 import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengkapan";
 import { getJamaah } from "../api/jamaah";
@@ -38,13 +39,16 @@ import Input from "../components/ui/Input";
 import FormField from "../components/ui/FormField";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import CurrencyInput from "../components/ui/CurrencyInput";
-import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
 import KreditCashbackPanel from "../components/KreditCashbackPanel";
 import { KOMISI_REPEAT_CASHBACK_AKTIF } from "../utils/agen";
+import { GantiAgenJamaahModal } from "../components/GantiKaitanModal";
+import AgenNama, { LINK_TEKS } from "../components/booking/AgenNama";
+import KomisiBookingCard from "../components/booking/KomisiBookingCard";
+import TahapanUmrohCard from "../components/booking/TahapanUmrohCard";
 import RefundPanel from "../components/RefundPanel";
 import VoidPaymentModal from "../components/VoidPaymentModal";
-import { CheckCircle, ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
+import { ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -104,15 +108,26 @@ const STATUS_BOOKING_BADGE = {
   batal: { label: 'Batal', variant: 'danger' },
 };
 
-const PROGRESS_HEADER_MANUAL_ITEMS = [
-  { key: 'tiket', label: 'Tiket PP' },
-  { key: 'hotel', label: 'Hotel' },
-  { key: 'land_arrangement', label: 'Land Arrangement' },
-];
-
-export const BookingDetailPage = ({ showBrandColumn = false }) => {
+export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = true, bolehGantiAgen = false, bolehLihatAkun = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  // Agen per pax, pembuat/klaim, dan rincian komisi. null = belum atau gagal dimuat.
+  const [agenKomisi, setAgenKomisi] = useState(null);
+  // Jamaah yang sedang dikaitkan ke agen klaim (objek jamaah lengkap) atau null.
+  const [kaitkanJamaah, setKaitkanJamaah] = useState(null);
+  const [kaitkanMemuat, setKaitkanMemuat] = useState(false);
+
+  // Respons booking lain (pindah halaman sebelum respons tiba) diabaikan; gagal muat ulang mempertahankan data terakhir.
+  const idAktif = useRef(id);
+  idAktif.current = id;
+  useEffect(() => { setAgenKomisi(null); }, [id]);
+  const fetchAgenKomisi = () => {
+    const diminta = id;
+    return getBookingAgenKomisi(diminta)
+      .then((data) => { if (idAktif.current === diminta) setAgenKomisi(data); })
+      .catch(() => {});
+  };
 
   const [booking, setBooking] = useState(null);
   const [jamaah, setJamaah] = useState(null);
@@ -194,6 +209,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [paymentsGagal, setPaymentsGagal] = useState(null);
 
   const fetchAll = async () => {
+    fetchAgenKomisi();
     try {
       setLoading(true);
       // Pembayaran dimuat terpisah: gagal memuatnya (mis. tanpa izin payment.view) tidak boleh
@@ -542,77 +558,31 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
     }
   };
 
-  // ─── Progress Keberangkatan Handler ──────────────────────────────────────────
+  // ─── Tahapan Umroh Handler ───────────────────────────────────────────────────
+  // Siap berangkat dan tahapan dihitung server; respons menggantikan nilai optimistis.
   const handleToggleProgress = async (key, currentValue) => {
     const newValue = !currentValue;
-
-    // Optimistic Update
-    setBooking((prev) => {
-      if (!prev) return prev;
-      const progressField = `progress_${key}`;
-      const updated = { ...prev, [progressField]: newValue };
-
-      const headerLengkap = Boolean(updated.progress_tiket) && Boolean(updated.progress_hotel) && Boolean(updated.progress_land_arrangement);
-      let activePaxCount = 0;
-      let allPaxLengkap = true;
-      (updated.pax || []).forEach((p) => {
-        if (p.pax_status !== 'aktif') return;
-        activePaxCount++;
-        const manasikReq = p.pax_type === 'infant' ? true : Boolean(p.progress_manasik);
-        const pLengkap = Boolean(p.progress_paspor) && Boolean(p.progress_visa) && Boolean(p.progress_siskopatuh) && Boolean(p.progress_vaksin_meningitis) && manasikReq;
-        if (!pLengkap) allPaxLengkap = false;
-      });
-
-      updated.siap_berangkat = (activePaxCount > 0) && headerLengkap && allPaxLengkap;
-      return updated;
-    });
-
+    setBooking((prev) => (prev ? { ...prev, [`progress_${key}`]: newValue } : prev));
     try {
       const res = await updateBookingProgress(id, { [key]: newValue });
       setBooking(res);
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal memperbarui progress paket");
+      setError(err.response?.data?.error || "Gagal memperbarui tahapan.");
       fetchAll();
     }
   };
 
   const handleTogglePaxProgress = async (paxId, key, currentValue) => {
     const newValue = !currentValue;
-    const progressField = `progress_${key}`;
-
-    // Optimistic Update
-    setBooking((prev) => {
-      if (!prev) return prev;
-      const updatedPax = (prev.pax || []).map((p) => {
-        if (p.id === paxId) {
-          return { ...p, [progressField]: newValue };
-        }
-        return p;
-      });
-
-      const headerLengkap = Boolean(prev.progress_tiket) && Boolean(prev.progress_hotel) && Boolean(prev.progress_land_arrangement);
-      let activePaxCount = 0;
-      let allPaxLengkap = true;
-      updatedPax.forEach((p) => {
-        if (p.pax_status !== 'aktif') return;
-        activePaxCount++;
-        const manasikReq = p.pax_type === 'infant' ? true : Boolean(p.progress_manasik);
-        const pLengkap = Boolean(p.progress_paspor) && Boolean(p.progress_visa) && Boolean(p.progress_siskopatuh) && Boolean(p.progress_vaksin_meningitis) && manasikReq;
-        if (!pLengkap) allPaxLengkap = false;
-      });
-
-      return {
-        ...prev,
-        pax: updatedPax,
-        siap_berangkat: (activePaxCount > 0) && headerLengkap && allPaxLengkap
-      };
-    });
-
+    setBooking((prev) => (prev ? {
+      ...prev,
+      pax: (prev.pax || []).map((p) => (p.id === paxId ? { ...p, [`progress_${key}`]: newValue } : p)),
+    } : prev));
     try {
       const res = await updatePaxProgress(id, paxId, { [key]: newValue });
       setBooking(res);
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal memperbarui checklist pax");
+      setError(err.response?.data?.error || "Gagal memperbarui tahapan.");
       fetchAll();
     }
   };
@@ -759,6 +729,28 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const regularActiveCount = activePaxList.filter((p) => p.pax_type !== 'infant').length;
   const infantActiveCount = activePaxList.filter((p) => p.pax_type === 'infant').length;
 
+  const agenPax = new Map((agenKomisi?.pax || []).map((p) => [Number(p.booking_pax_id), p]));
+  const rincianKomisi = agenKomisi?.komisi || [];
+  const adaAgen = Boolean(
+    agenKomisi?.dibuat_oleh || agenKomisi?.klaim || (agenKomisi?.pax || []).some((p) => p.agen)
+  );
+  // Pax aktif pertama yang tanpa agen dan tanpa penerima komisi (pax diri agen sudah ke upline): target "Kaitkan ke agen".
+  const paxTanpaAgen = activePaxList
+    .map((p) => agenPax.get(Number(p.id)))
+    .find((p) => p && p.kaitan_status !== 'terikat_agen' && !p.agen);
+
+  const bukaKaitkan = async () => {
+    if (!paxTanpaAgen) return;
+    setKaitkanMemuat(true);
+    try {
+      setKaitkanJamaah(await getJamaah(paxTanpaAgen.jamaah_id));
+    } catch {
+      setError("Data jamaah gagal dimuat.");
+    } finally {
+      setKaitkanMemuat(false);
+    }
+  };
+
   return (
     <div className="w-full space-y-6">
       {error && <Alert variant="error">{error}</Alert>}
@@ -834,12 +826,33 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               <Field label="Nama Paket">{booking.jadwal_nama || "-"}</Field>
               <Field label="Tanggal Keberangkatan">{formatTanggal(booking.berangkat_tanggal)}</Field>
               {booking.pemesan && (
-                <Field label="Pemesan (akun situs)">
-                  {booking.pemesan.nama_lengkap}
-                  {booking.pemesan.ikut_berangkat === false && <span className="text-neutral-500"> · tidak ikut berangkat</span>}
-                  <span className="block text-xs text-neutral-500">
-                    {[booking.pemesan.no_hp, booking.pemesan.email].filter(Boolean).join(" · ")}
-                  </span>
+                <Field label="Pemesan">
+                  {bolehLihatAkun && booking.pemesan.id ? (
+                    <Link to={`/akun/${booking.pemesan.id}`} className={LINK_TEKS}>{booking.pemesan.nama_lengkap}</Link>
+                  ) : (
+                    booking.pemesan.nama_lengkap
+                  )}
+                  {booking.pemesan.kode_referral && (
+                    <span className="font-mono text-xs text-neutral-500"> ({booking.pemesan.kode_referral})</span>
+                  )}
+                  {booking.pemesan.no_hp && (
+                    <span className="block text-xs text-neutral-500">{booking.pemesan.no_hp}</span>
+                  )}
+                </Field>
+              )}
+              {agenKomisi?.klaim && (
+                <Field label="Referral">
+                  <AgenNama agen={agenKomisi.klaim} bolehLihat={bolehLihatAgen} denganKode />
+                  {bolehGantiAgen && paxTanpaAgen && (
+                    <button
+                      type="button"
+                      onClick={bukaKaitkan}
+                      disabled={kaitkanMemuat}
+                      className={`block mt-0.5 text-xs ${LINK_TEKS} disabled:opacity-60`}
+                    >
+                      Kaitkan ke agen
+                    </button>
+                  )}
                 </Field>
               )}
             </div>
@@ -864,6 +877,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               <Table
                 columns={[
                   { header: "Nama Jamaah", key: "nama" },
+                  ...(agenKomisi ? [{ header: "Agen", key: "agen" }] : []),
                   { header: "Kamar", key: "kamar" },
                   { header: "Harga", key: "harga" },
                   { header: "Aksi", key: "aksi", align: "right" },
@@ -893,6 +907,28 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                               pax.pax_type === 'infant' ? "Infant (Bayi < 2 thn)" : null,
                               isBatal ? "Batal" : null,
                             ].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (key === "agen") {
+                    const pa = agenPax.get(Number(pax.id));
+                    if (!pa) return <span className="text-sm text-neutral-400">-</span>;
+                    return (
+                      <div className={`min-w-0 text-sm font-body ${isBatal ? "opacity-60" : ""}`}>
+                        {pa.agen ? (
+                          <AgenNama agen={pa.agen} bolehLihat={bolehLihatAgen} className="whitespace-nowrap" />
+                        ) : (
+                          <span className="text-neutral-400 whitespace-nowrap">Tanpa agen</span>
+                        )}
+                        {pa.upline_berubah && (
+                          <div className="mt-1"><Badge variant="warning">Upline berubah</Badge></div>
+                        )}
+                        {pa.dikaitkan_admin_at && (
+                          <div className="mt-0.5 text-xs text-neutral-500 whitespace-nowrap">
+                            Dikaitkan oleh admin, {formatTanggal(pa.dikaitkan_admin_at.split(" ")[0])}
                           </div>
                         )}
                       </div>
@@ -932,119 +968,17 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
             )}
           </TableCard>
 
-          {/* Section: Checklist Dokumen & Kesiapan Jamaah */}
-          <TableCard
-            title="Kesiapan Dokumen & Operasional"
-          >
-            {activePaxList.length === 0 ? (
-              <EmptyState variant="section" message="Tidak ada jamaah aktif." />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm font-body text-neutral-700 border-collapse">
-                  <thead className="bg-neutral-50 text-neutral-500 font-body text-xs font-medium border-b border-neutral-200">
-                    <tr className="border-b border-neutral-200">
-                      <th className="py-2.5 px-4" rowSpan={2}>Nama Jamaah</th>
-                      <th className="py-2 px-3 text-center border-x border-neutral-200" colSpan={2}>
-                        Dokumen Jamaah
-                      </th>
-                      <th className="py-2 px-3 text-center" colSpan={3}>
-                        Operasional Travel
-                      </th>
-                    </tr>
-                    <tr className="text-xs text-neutral-500">
-                      <th className="py-2 px-3 text-center border-l border-neutral-200">Paspor</th>
-                      <th className="py-2 px-3 text-center border-r border-neutral-200">Vaksin</th>
-                      <th className="py-2 px-3 text-center">Visa</th>
-                      <th className="py-2 px-3 text-center">Siskopatuh</th>
-                      <th className="py-2 px-3 text-center">Manasik</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-100">
-                    {activePaxList.map((pax) => {
-                      const isPic = Number(pax.jamaah_id) === Number(booking.pic_jamaah_id);
-                      return (
-                        <tr key={pax.id} className="hover:bg-neutral-50/70 transition-colors">
-                          <td className="py-3 px-4">
-                            <div>
-                              <span className="font-heading font-semibold text-neutral-900 block">
-                                {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
-                              </span>
-                              {pax.pax_type === 'infant' && (
-                                <span className="block text-xs text-neutral-400 font-body">
-                                  Infant (Bayi &lt; 2 thn)
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              {pax.progress_paspor ? (
-                                <span title="Paspor sudah diunggah" className="text-success-600 inline-flex items-center gap-1 text-xs font-medium">
-                                  <CheckCircle size={16} />
-                                </span>
-                              ) : (
-                                <span title="Paspor belum diunggah" className="text-neutral-400 inline-flex items-center gap-1 text-xs font-medium">
-                                  <X size={16} />
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
-                                checked={Boolean(pax.progress_vaksin_meningitis)}
-                                onChange={() => handleTogglePaxProgress(pax.id, 'vaksin_meningitis', Boolean(pax.progress_vaksin_meningitis))}
-                                title="Tandai Vaksin Meningitis Selesai"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
-                                checked={Boolean(pax.progress_visa)}
-                                onChange={() => handleTogglePaxProgress(pax.id, 'visa', Boolean(pax.progress_visa))}
-                                title="Tandai Visa Selesai"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
-                                checked={Boolean(pax.progress_siskopatuh)}
-                                onChange={() => handleTogglePaxProgress(pax.id, 'siskopatuh', Boolean(pax.progress_siskopatuh))}
-                                title="Tandai Siskopatuh Selesai"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            {pax.pax_type === 'infant' ? (
-                              <span className="text-xs text-neutral-400 font-semibold font-body">N/A</span>
-                            ) : (
-                              <div className="flex justify-center">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
-                                  checked={Boolean(pax.progress_manasik)}
-                                  onChange={() => handleTogglePaxProgress(pax.id, 'manasik', Boolean(pax.progress_manasik))}
-                                  title="Tandai Manasik Selesai"
-                                />
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </TableCard>
+          {/* Section: Komisi — rincian per penerima; nominal hanya untuk izin komisi.view */}
+          {agenKomisi && (rincianKomisi.length > 0 || adaAgen) && (
+            <KomisiBookingCard agenKomisi={agenKomisi} kodeBooking={booking.id_booking} bolehLihatAgen={bolehLihatAgen} />
+          )}
+
+          <TahapanUmrohCard
+            booking={booking}
+            paxList={activePaxList}
+            onTogglePax={handleTogglePaxProgress}
+            onToggleTiket={(nilai) => handleToggleProgress('tiket', nilai)}
+          />
 
           {/* Section: Distribusi Perlengkapan */}
           <TableCard
@@ -1336,51 +1270,6 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               </div>
             </div>
           </Section>
-
-          {/* Progress Paket Card */}
-          <Section
-            title="Fasilitas Paket"
-            aside={
-              booking.siap_berangkat ? (
-                <DotText tone="success">Siap Berangkat</DotText>
-              ) : (
-                <DotText tone="warning">Persiapan Berjalan</DotText>
-              )
-            }
-          >
-            <div className="divide-y divide-neutral-100 [&>div]:py-3 first:[&>div]:pt-0 [&>div:last-child]:pb-0">
-              {/* 1. Tiket PP */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium font-body text-neutral-800">Tiket PP</span>
-                <Toggle
-                  id="toggle-tiket-detail"
-                  checked={Boolean(booking.progress_tiket)}
-                  onChange={() => handleToggleProgress('tiket', Boolean(booking.progress_tiket))}
-                />
-              </div>
-
-              {/* 2. Hotel */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium font-body text-neutral-800">Hotel</span>
-                <Toggle
-                  id="toggle-hotel-detail"
-                  checked={Boolean(booking.progress_hotel)}
-                  onChange={() => handleToggleProgress('hotel', Boolean(booking.progress_hotel))}
-                />
-              </div>
-
-              {/* 3. Land Arrangement */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium font-body text-neutral-800">Land Arrangement</span>
-                <Toggle
-                  id="toggle-land_arrangement-detail"
-                  checked={Boolean(booking.progress_land_arrangement)}
-                  onChange={() => handleToggleProgress('land_arrangement', Boolean(booking.progress_land_arrangement))}
-                />
-              </div>
-            </div>
-          </Section>
-
         </Surface>
       </div>
 
@@ -1947,6 +1836,16 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </div>
         </div>
       </Modal>
+
+      {bolehGantiAgen && (
+        <GantiAgenJamaahModal
+          jamaah={kaitkanJamaah}
+          agenAwal={agenKomisi?.klaim || undefined}
+          isOpen={Boolean(kaitkanJamaah)}
+          onClose={() => setKaitkanJamaah(null)}
+          onSaved={() => { fetchAgenKomisi(); }}
+        />
+      )}
     </div>
   );
 };
