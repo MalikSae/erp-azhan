@@ -220,9 +220,9 @@ func IkatRombongan(ctx context.Context, tx *sql.Tx, jamaahIDs []int64, agenAkunI
 	return nil
 }
 
-// IkatRombonganBooking menjalankan pengikatan untuk booking yang sudah
-// tersimpan (booking admin & finalisasi draft, tanpa akun pemesan): semua pax
-// yang belum terikat ikut agen pemilik kunci PIC.
+// IkatRombonganBooking menjalankan pengikatan untuk booking yang sudah tersimpan (booking admin & finalisasi
+// draft, tanpa akun pemesan): pax baru ikut agen pemilik kunci PIC. Tidak mencatat klaim: booking admin tidak
+// dibawa agen atau kode referral, jadi pax tanpa agen lainnya tetap diputuskan admin lewat Ganti Agen.
 func IkatRombonganBooking(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	var direkrut sql.NullInt64
 	err := tx.QueryRowContext(ctx, `
@@ -251,10 +251,7 @@ func IkatRombonganBooking(ctx context.Context, tx *sql.Tx, bookingID int64) erro
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	if err := IkatRombongan(ctx, tx, ids, direkrut.Int64, SumberIkutPIC, bookingID); err != nil {
-		return err
-	}
-	return CatatKlaimAgen(ctx, tx, bookingID, direkrut.Int64)
+	return IkatRombongan(ctx, tx, ids, direkrut.Int64, SumberIkutPIC, bookingID)
 }
 
 // TetapkanKaitanJalur3 menyimpan pilihan eksplisit Admin untuk jamaah baru

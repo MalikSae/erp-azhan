@@ -21,7 +21,7 @@ func klaimOf(t *testing.T, tx *sql.Tx, bookingID int64) int64 {
 }
 
 // (a) Jamaah baru terikat otomatis; jamaah tanpa agen yang sudah ikut booking lain tidak terikat, dan agen yang
-// membawanya dicatat sebagai klaim booking.
+// membawanya (bukan booking admin) dicatat sebagai klaim booking.
 func TestJamaahBaruTerikatOtomatisJamaahLamaJadiKlaim(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
@@ -38,6 +38,11 @@ func TestJamaahBaruTerikatOtomatisJamaahLamaJadiKlaim(t *testing.T) {
 	b, _ := testdb.NewBookingPax(t, tx, sched, "baru", 3000,
 		testdb.Pax{JamaahID: pic}, testdb.Pax{JamaahID: baru}, testdb.Pax{JamaahID: lama})
 	must(t, "ikat booking", IkatRombonganBooking(ctx, tx, b))
+	// Booking admin tidak dibawa agen: tidak ada klaim walau ada pax tanpa agen.
+	if k := klaimOf(t, tx, b); k != 0 {
+		t.Fatalf("klaim booking admin = %d, want kosong", k)
+	}
+	must(t, "klaim agen X", CatatKlaimAgen(ctx, tx, b, x))
 
 	// Pax booking ini sendiri tidak dihitung sebagai booking lain.
 	if st, by := kaitanOf(t, tx, baru); st != "terikat_agen" || by != x {
@@ -60,6 +65,7 @@ func TestJamaahBaruTerikatOtomatisJamaahLamaJadiKlaim(t *testing.T) {
 	baru2 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Baru2"})
 	b2, _ := testdb.NewBookingPax(t, tx, sched, "baru", 2000, testdb.Pax{JamaahID: pic2}, testdb.Pax{JamaahID: baru2})
 	must(t, "ikat booking 2", IkatRombonganBooking(ctx, tx, b2))
+	must(t, "klaim 2", CatatKlaimAgen(ctx, tx, b2, x))
 	if k := klaimOf(t, tx, b2); k != 0 {
 		t.Fatalf("klaim booking tanpa pax tanpa agen = %d, want kosong", k)
 	}
@@ -70,6 +76,7 @@ func TestJamaahBaruTerikatOtomatisJamaahLamaJadiKlaim(t *testing.T) {
 	pic3 := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "PIC3", Direkrut: x})
 	b3, _ := testdb.NewBookingPax(t, tx, sched, "baru", 2000, testdb.Pax{JamaahID: pic3}, testdb.Pax{JamaahID: lama2, Batal: true})
 	must(t, "ikat booking 3", IkatRombonganBooking(ctx, tx, b3))
+	must(t, "klaim 3", CatatKlaimAgen(ctx, tx, b3, x))
 	if k := klaimOf(t, tx, b3); k != 0 {
 		t.Fatalf("klaim dari pax batal = %d, want kosong", k)
 	}
@@ -103,6 +110,7 @@ func TestTanpaAgenPilihanAdminTidakTerikatOtomatis(t *testing.T) {
 	pic := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "PIC", Direkrut: x})
 	b, _ := testdb.NewBookingPax(t, tx, sched, "baru", 2000, testdb.Pax{JamaahID: pic}, testdb.Pax{JamaahID: pilihan})
 	must(t, "ikat booking", IkatRombonganBooking(ctx, tx, b))
+	must(t, "klaim", CatatKlaimAgen(ctx, tx, b, x))
 	if st, by := kaitanOf(t, tx, pilihan); st != "tanpa_agen" || by != 0 {
 		t.Fatalf("jalur3 tanpa_agen lewat booking = %s/%d, want tetap tanpa_agen", st, by)
 	}
