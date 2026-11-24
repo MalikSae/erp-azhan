@@ -556,6 +556,7 @@ func main() {
 		bookingEdit.Post("/bookings/{id}/discounts", bookingHandler.AddBookingDiscount)
 		bookingEdit.Delete("/bookings/{id}/discounts/{discountID}", bookingHandler.RemoveBookingDiscount)
 		bookingView.Get("/bookings/{id}/cashback", bookingHandler.GetKreditCashback)
+		bookingView.Get("/bookings/{id}/agen-komisi", bookingHandler.GetAgenKomisi)
 		bookingEdit.Post("/bookings/{id}/cashback", bookingHandler.PakaiKreditCashback)
 		r.With(identity.RequirePermission("refund.view")).Get("/bookings/{id}/refunds", bookingHandler.ListRefunds)
 		r.With(identity.RequirePermission("refund.edit")).Post("/bookings/{id}/refunds", bookingHandler.CreateRefund)

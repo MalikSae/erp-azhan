@@ -91,7 +91,7 @@ function AppRoutes() {
           <Route path="/jamaah/:id/edit" element={<RequireAccess perm="jamaah.edit"><JamaahFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/bookings" element={<RequireAccess perm="booking.view"><BookingsPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/bookings/new" element={<RequireAccess perm="booking.edit"><BookingFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
-          <Route path="/bookings/:id" element={<RequireAccess perm="booking.view"><BookingDetailPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
+          <Route path="/bookings/:id" element={<RequireAccess perm="booking.view"><BookingDetailPage showBrandColumn={showBrandColumn} bolehLihatAgen={hasPermission('agen.view')} bolehGantiAgen={hasPermission('agen.kaitan.edit')} /></RequireAccess>} />
           <Route path="/bookings/:id/edit" element={<RequireAccess perm="booking.edit"><BookingFormPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
           <Route path="/payments" element={<RequireAccess perm="payment.view"><PaymentConfirmationsPage showBrandColumn={showBrandColumn} /></RequireAccess>} />
 

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { 
   getBooking, 
   updateBookingStatus, 
@@ -13,7 +13,8 @@ import {
   updateBookingProgress,
   updatePaxProgress,
   cancelBookingPax,
-  updatePaxRoomType
+  updatePaxRoomType,
+  getBookingAgenKomisi
 } from "../api/bookings";
 import { markPerlengkapanDiberikan, batalkanPerlengkapan } from "../api/perlengkapan";
 import { getJamaah } from "../api/jamaah";
@@ -41,7 +42,8 @@ import CurrencyInput from "../components/ui/CurrencyInput";
 import Toggle from "../components/ui/Toggle";
 import BrandCell from "../components/BrandCell";
 import KreditCashbackPanel from "../components/KreditCashbackPanel";
-import { KOMISI_REPEAT_CASHBACK_AKTIF } from "../utils/agen";
+import { KOMISI_REPEAT_CASHBACK_AKTIF, JENIS_KOMISI } from "../utils/agen";
+import { GantiAgenJamaahModal } from "../components/GantiKaitanModal";
 import RefundPanel from "../components/RefundPanel";
 import VoidPaymentModal from "../components/VoidPaymentModal";
 import { CheckCircle, ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
@@ -104,15 +106,57 @@ const STATUS_BOOKING_BADGE = {
   batal: { label: 'Batal', variant: 'danger' },
 };
 
+// Status rincian komisi booking (GET /bookings/{id}/agen-komisi).
+const STATUS_KOMISI_BADGE = {
+  estimasi: { label: 'Estimasi', variant: 'warning' },
+  tercatat: { label: 'Tercatat', variant: 'success' },
+  batal: { label: 'Batal', variant: 'danger' },
+};
+
+const JENIS_KOMISI_SINGKAT = { langsung: 'Langsung', pembinaan: 'Pembinaan' };
+
+const LINK_TEKS = "font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900";
+
+// Nama agen (tautan ke Detail Agen bila boleh) dengan kode referral.
+const AgenNama = ({ agen, bolehLihat, denganKode = false, className = "" }) => (
+  <span className={className}>
+    {bolehLihat ? (
+      <Link to={`/agen/${agen.id}`} className={LINK_TEKS}>{agen.nama_lengkap}</Link>
+    ) : (
+      <span className="font-medium text-neutral-900">{agen.nama_lengkap}</span>
+    )}
+    {denganKode && agen.kode_referral && (
+      <span className="font-mono text-xs text-neutral-500"> ({agen.kode_referral})</span>
+    )}
+  </span>
+);
+
 const PROGRESS_HEADER_MANUAL_ITEMS = [
   { key: 'tiket', label: 'Tiket PP' },
   { key: 'hotel', label: 'Hotel' },
   { key: 'land_arrangement', label: 'Land Arrangement' },
 ];
 
-export const BookingDetailPage = ({ showBrandColumn = false }) => {
+export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = true, bolehGantiAgen = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  // Agen per pax, pembuat/klaim, dan rincian komisi. null = belum atau gagal dimuat.
+  const [agenKomisi, setAgenKomisi] = useState(null);
+  // Jamaah yang sedang dikaitkan ke agen klaim (objek jamaah lengkap) atau null.
+  const [kaitkanJamaah, setKaitkanJamaah] = useState(null);
+  const [kaitkanMemuat, setKaitkanMemuat] = useState(false);
+
+  // Respons booking lain (pindah halaman sebelum respons tiba) diabaikan; gagal muat ulang mempertahankan data terakhir.
+  const idAktif = useRef(id);
+  idAktif.current = id;
+  useEffect(() => { setAgenKomisi(null); }, [id]);
+  const fetchAgenKomisi = () => {
+    const diminta = id;
+    return getBookingAgenKomisi(diminta)
+      .then((data) => { if (idAktif.current === diminta) setAgenKomisi(data); })
+      .catch(() => {});
+  };
 
   const [booking, setBooking] = useState(null);
   const [jamaah, setJamaah] = useState(null);
@@ -194,6 +238,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const [paymentsGagal, setPaymentsGagal] = useState(null);
 
   const fetchAll = async () => {
+    fetchAgenKomisi();
     try {
       setLoading(true);
       // Pembayaran dimuat terpisah: gagal memuatnya (mis. tanpa izin payment.view) tidak boleh
@@ -759,6 +804,29 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
   const regularActiveCount = activePaxList.filter((p) => p.pax_type !== 'infant').length;
   const infantActiveCount = activePaxList.filter((p) => p.pax_type === 'infant').length;
 
+  const agenPax = new Map((agenKomisi?.pax || []).map((p) => [Number(p.booking_pax_id), p]));
+  const rincianKomisi = agenKomisi?.komisi || [];
+  const lihatNominal = Boolean(agenKomisi?.lihat_nominal);
+  const adaAgen = Boolean(
+    agenKomisi?.dibuat_oleh || agenKomisi?.klaim || (agenKomisi?.pax || []).some((p) => p.agen)
+  );
+  // Pax aktif pertama yang tanpa agen dan tanpa penerima komisi (pax diri agen sudah ke upline): target "Kaitkan ke agen".
+  const paxTanpaAgen = activePaxList
+    .map((p) => agenPax.get(Number(p.id)))
+    .find((p) => p && p.kaitan_status !== 'terikat_agen' && !p.agen);
+
+  const bukaKaitkan = async () => {
+    if (!paxTanpaAgen) return;
+    setKaitkanMemuat(true);
+    try {
+      setKaitkanJamaah(await getJamaah(paxTanpaAgen.jamaah_id));
+    } catch {
+      setError("Data jamaah gagal dimuat.");
+    } finally {
+      setKaitkanMemuat(false);
+    }
+  };
+
   return (
     <div className="w-full space-y-6">
       {error && <Alert variant="error">{error}</Alert>}
@@ -842,6 +910,26 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                   </span>
                 </Field>
               )}
+              {agenKomisi?.dibuat_oleh && (
+                <Field label="Dibuat oleh">
+                  <AgenNama agen={agenKomisi.dibuat_oleh} bolehLihat={bolehLihatAgen} denganKode />
+                </Field>
+              )}
+              {agenKomisi?.klaim && (
+                <Field label="Referral">
+                  <AgenNama agen={agenKomisi.klaim} bolehLihat={bolehLihatAgen} denganKode />
+                  {bolehGantiAgen && paxTanpaAgen && (
+                    <button
+                      type="button"
+                      onClick={bukaKaitkan}
+                      disabled={kaitkanMemuat}
+                      className={`block mt-0.5 text-xs ${LINK_TEKS} disabled:opacity-60`}
+                    >
+                      Kaitkan ke agen
+                    </button>
+                  )}
+                </Field>
+              )}
             </div>
           </Section>
           </Surface>
@@ -864,6 +952,7 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               <Table
                 columns={[
                   { header: "Nama Jamaah", key: "nama" },
+                  ...(agenKomisi ? [{ header: "Agen", key: "agen" }] : []),
                   { header: "Kamar", key: "kamar" },
                   { header: "Harga", key: "harga" },
                   { header: "Aksi", key: "aksi", align: "right" },
@@ -893,6 +982,28 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
                               pax.pax_type === 'infant' ? "Infant (Bayi < 2 thn)" : null,
                               isBatal ? "Batal" : null,
                             ].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (key === "agen") {
+                    const pa = agenPax.get(Number(pax.id));
+                    if (!pa) return <span className="text-sm text-neutral-400">-</span>;
+                    return (
+                      <div className={`min-w-0 text-sm font-body ${isBatal ? "opacity-60" : ""}`}>
+                        {pa.agen ? (
+                          <AgenNama agen={pa.agen} bolehLihat={bolehLihatAgen} className="whitespace-nowrap" />
+                        ) : (
+                          <span className="text-neutral-400 whitespace-nowrap">Tanpa agen</span>
+                        )}
+                        {pa.upline_berubah && (
+                          <div className="mt-1"><Badge variant="warning">Upline berubah</Badge></div>
+                        )}
+                        {pa.dikaitkan_admin_at && (
+                          <div className="mt-0.5 text-xs text-neutral-500 whitespace-nowrap">
+                            Dikaitkan admin, {formatTanggal(pa.dikaitkan_admin_at.split(" ")[0])}
                           </div>
                         )}
                       </div>
@@ -931,6 +1042,79 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
               </div>
             )}
           </TableCard>
+
+          {/* Section: Komisi — rincian per penerima; nominal hanya untuk izin komisi.view */}
+          {agenKomisi && (rincianKomisi.length > 0 || adaAgen) && (
+            <TableCard
+              title="Komisi"
+              aside={lihatNominal && booking.id_booking ? (
+                <Link
+                  to={`/agen/komisi?cari=${encodeURIComponent(booking.id_booking)}`}
+                  className={`text-xs font-body ${LINK_TEKS}`}
+                >
+                  Riwayat komisi
+                </Link>
+              ) : null}
+            >
+              {rincianKomisi.length === 0 ? (
+                <EmptyState variant="section" message="Belum ada komisi." />
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                  <Table
+                    columns={[
+                      { header: "Penerima", key: "penerima" },
+                      { header: "Jamaah", key: "jamaah" },
+                      { header: "Jenis", key: "jenis" },
+                      { header: "Status", key: "status" },
+                      ...(lihatNominal ? [{ header: "Nominal", key: "nominal", align: "right" }] : []),
+                    ]}
+                    data={rincianKomisi}
+                    renderCell={(k, key) => {
+                      const batal = k.status === "batal";
+                      const coret = batal ? "line-through text-neutral-400" : "";
+                      if (key === "penerima") {
+                        return (
+                          <span className={`text-sm font-body whitespace-nowrap ${coret}`}>
+                            {batal ? k.penerima.nama_lengkap : <AgenNama agen={k.penerima} bolehLihat={bolehLihatAgen} />}
+                          </span>
+                        );
+                      }
+                      if (key === "jamaah") {
+                        return <span className={`text-sm font-body text-neutral-800 whitespace-nowrap ${coret}`}>{k.nama_jamaah || "-"}</span>;
+                      }
+                      if (key === "jenis") {
+                        return (
+                          <span className={`text-sm font-body text-neutral-600 whitespace-nowrap ${coret}`}>
+                            {JENIS_KOMISI_SINGKAT[k.jenis] || JENIS_KOMISI[k.jenis] || k.jenis}
+                          </span>
+                        );
+                      }
+                      if (key === "status") {
+                        const s = STATUS_KOMISI_BADGE[k.status];
+                        return <Badge variant={s?.variant || "neutral"}>{s?.label || k.status}</Badge>;
+                      }
+                      if (key === "nominal") {
+                        return (
+                          <span className={`text-sm font-body font-medium text-neutral-900 tabular-nums whitespace-nowrap ${coret}`}>
+                            {k.nominal == null ? "-" : formatRupiah(k.nominal)}
+                          </span>
+                        );
+                      }
+                      return k[key];
+                    }}
+                  />
+                  </div>
+                  {lihatNominal && agenKomisi.total != null && (
+                    <div className="px-4 py-3 border-t border-neutral-200 flex justify-between text-sm font-body">
+                      <span className="text-neutral-500">Total</span>
+                      <span className="font-semibold text-neutral-900 tabular-nums">{formatRupiah(agenKomisi.total)}</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </TableCard>
+          )}
 
           {/* Section: Checklist Dokumen & Kesiapan Jamaah */}
           <TableCard
@@ -1947,6 +2131,16 @@ export const BookingDetailPage = ({ showBrandColumn = false }) => {
           </div>
         </div>
       </Modal>
+
+      {bolehGantiAgen && (
+        <GantiAgenJamaahModal
+          jamaah={kaitkanJamaah}
+          agenAwal={agenKomisi?.klaim || undefined}
+          isOpen={Boolean(kaitkanJamaah)}
+          onClose={() => setKaitkanJamaah(null)}
+          onSaved={() => { fetchAgenKomisi(); }}
+        />
+      )}
     </div>
   );
 };
