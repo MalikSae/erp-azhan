@@ -34,9 +34,6 @@ type aktivasiRequest struct {
 	NoHP        string `json:"no_hp"`
 	Email       string `json:"email"`
 	Password    string `json:"password"`
-	KodeAgen    string `json:"kode_agen"`
-	// KodeReferral diisi proxy web dari cookie azhan_ref; diabaikan bila jamaah sudah terikat agen.
-	KodeReferral string `json:"kode_referral"`
 }
 
 // Publik POST /api/public/auth/aktivasi: cek (simpan=false) mengembalikan data jamaah; simpan=true membuat akun dan sesi.
@@ -51,7 +48,7 @@ func (h *AktivasiHandler) Publik(w http.ResponseWriter, r *http.Request) {
 	}
 	h.jalankan(w, r, AktivasiInput{
 		BrandID: req.BrandID, KodeBooking: req.KodeBooking, NIK: req.NIK, Simpan: req.Simpan,
-		NoHP: req.NoHP, Email: req.Email, Password: req.Password, KodeAgen: req.KodeAgen, KodeReferral: req.KodeReferral,
+		NoHP: req.NoHP, Email: req.Email, Password: req.Password,
 	})
 }
 
@@ -74,8 +71,6 @@ func (h *AktivasiHandler) jalankan(w http.ResponseWriter, r *http.Request, in Ak
 		writeError(w, http.StatusBadRequest, input.Pesan)
 	case errors.Is(err, ErrAktivasiGagal):
 		writeErrorCode(w, http.StatusBadRequest, PesanAktivasiGagal, KodeGalatAktivasiGagal)
-	case errors.Is(err, ErrKodeAgenTidakAda):
-		writeErrorCode(w, http.StatusBadRequest, "Kode agen tidak ditemukan.", KodeGalatKodeAgenTidakAda)
 	case errors.Is(err, ErrEmailTaken):
 		writeError(w, http.StatusConflict, "Pendaftaran dengan email ini tidak dapat diproses. Bila Anda sudah punya akun, masuk atau gunakan Lupa kata sandi.")
 	case errors.Is(err, ErrPhoneTaken):
