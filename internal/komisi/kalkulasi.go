@@ -179,6 +179,19 @@ func positive(v sql.NullFloat64) bool { return v.Valid && v.Float64 > 0 }
 // Bonus pembinaan ke upline penerima (satu tingkat). Penerima nonaktif: komisi langsung hangus, tanpa backfill saat
 // diaktifkan lagi; bonus pembinaan tetap ke upline aktif di atasnya. Pax bukan diri: pemilik kunci jamaah.
 
+// joinPenerimaSQL menurunkan penerima komisi per pax (alias bp = booking_pax, j = jamaah): diri = akun milik pax,
+// a = penerima komisi langsung menurut kaitan saat ini, u = upline a (penerima bonus pembinaan). Satu sumber untuk
+// pencatatan komisi (loadPax) dan ringkasan Detail Booking (RingkasanBooking).
+const joinPenerimaSQL = `
+		LEFT JOIN customer_accounts diri ON diri.id = COALESCE(bp.saya_sendiri_akun_id,
+		     (SELECT ca.id FROM customer_accounts ca WHERE ca.jamaah_id = j.id LIMIT 1))
+		LEFT JOIN customer_accounts a ON a.id = CASE
+		     WHEN diri.id IS NULL THEN IF(j.kaitan_status = 'tanpa_agen', NULL, j.direkrut_oleh_akun_id)
+		     WHEN j.kaitan_status = 'terikat_agen' AND j.direkrut_oleh_akun_id <> diri.id THEN j.direkrut_oleh_akun_id
+		     WHEN diri.status_agen IN ('aktif','nonaktif') THEN diri.upline_akun_id
+		     ELSE NULL END
+		LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id`
+
 // loadPax mengunci baris jamaah pax (FOR SHARE) agar kaitan agen yang dibaca
 // tetap berlaku sampai komisi tercatat: Ganti Kaitan Agen (C4) yang datang
 // bersamaan menunggu, lalu melihat komisi dan ditolak (audit KA-01).
@@ -190,14 +203,7 @@ func loadPax(ctx context.Context, tx *sql.Tx, bookingID int64) ([]paxKomisi, err
 		       COALESCE(u.status_agen = 'aktif', FALSE)
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
-		LEFT JOIN customer_accounts diri ON diri.id = COALESCE(bp.saya_sendiri_akun_id,
-		     (SELECT ca.id FROM customer_accounts ca WHERE ca.jamaah_id = j.id LIMIT 1))
-		LEFT JOIN customer_accounts a ON a.id = CASE
-		     WHEN diri.id IS NULL THEN IF(j.kaitan_status = 'tanpa_agen', NULL, j.direkrut_oleh_akun_id)
-		     WHEN j.kaitan_status = 'terikat_agen' AND j.direkrut_oleh_akun_id <> diri.id THEN j.direkrut_oleh_akun_id
-		     WHEN diri.status_agen IN ('aktif','nonaktif') THEN diri.upline_akun_id
-		     ELSE NULL END
-		LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id
+		`+joinPenerimaSQL+`
 		WHERE bp.booking_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant'
 		ORDER BY bp.id
 		FOR SHARE OF j`, bookingID)

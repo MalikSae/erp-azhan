@@ -13,6 +13,12 @@ import (
 //     batal: estimasi dari snapshot nominal booking.
 //   - Nominal hanya diisi bila lihatNominal (izin komisi.view).
 
+// Nilai jamaah.kaitan_status (migrasi 158).
+const (
+	kaitanTerikatAgen = "terikat_agen"
+	kaitanTanpaAgen   = "tanpa_agen"
+)
+
 const (
 	StatusKomisiEstimasi = "estimasi"
 	StatusKomisiTercatat = "tercatat"
@@ -31,7 +37,8 @@ type PaxAgen struct {
 	KaitanStatus  string       `json:"kaitan_status"`
 	Agen          *AgenRingkas `json:"agen"`
 	UplineBerubah bool         `json:"upline_berubah"`
-	// DikaitkanAdminAt: waktu terakhir admin mengubah kaitan jamaah ini ("YYYY-MM-DD HH:MM").
+	// DikaitkanAdminAt: waktu terakhir admin mengaitkan jamaah ke agen, dari tanpa agen maupun ganti agen
+	// ("YYYY-MM-DD HH:MM"). Kaitan yang ditetapkan saat jamaah dibuat tidak tercatat di log.
 	DikaitkanAdminAt *string `json:"dikaitkan_admin_at"`
 }
 
@@ -62,13 +69,6 @@ func agenDari(id sql.NullInt64, nama sql.NullString, kode sql.NullString) *AgenR
 	}
 	return a
 }
-
-// penerimaLangsungSQL: penerima komisi langsung menurut kaitan saat ini, sama dengan loadPax.
-const penerimaLangsungSQL = `CASE
-	WHEN diri.id IS NULL THEN IF(j.kaitan_status = 'tanpa_agen', NULL, j.direkrut_oleh_akun_id)
-	WHEN j.kaitan_status = 'terikat_agen' AND j.direkrut_oleh_akun_id <> diri.id THEN j.direkrut_oleh_akun_id
-	WHEN diri.status_agen IN ('aktif','nonaktif') THEN diri.upline_akun_id
-	ELSE NULL END`
 
 // RingkasanBooking membaca ringkasan agen dan komisi. sql.ErrNoRows bila booking tidak ada.
 func RingkasanBooking(ctx context.Context, q querier, bookingID int64, lihatNominal bool) (*BookingAgenKomisi, error) {
@@ -163,13 +163,10 @@ func RingkasanBooking(ctx context.Context, q querier, bookingID int64, lihatNomi
 		       a.id, a.nama_lengkap, a.kode_referral, COALESCE(a.status_agen = 'aktif', FALSE),
 		       u.id, u.nama_lengkap, u.kode_referral, COALESCE(u.status_agen = 'aktif', FALSE),
 		       (SELECT MAX(l.diganti_at) FROM jamaah_kaitan_log l WHERE l.jamaah_id = j.id
-		          AND l.kaitan_status_lama = 'tanpa_agen' AND l.kaitan_status_baru = 'terikat_agen')
+		          AND l.kaitan_status_baru = 'terikat_agen')
 		FROM booking_pax bp
 		JOIN jamaah j ON j.id = bp.jamaah_id
-		LEFT JOIN customer_accounts diri ON diri.id = COALESCE(bp.saya_sendiri_akun_id,
-		     (SELECT ca.id FROM customer_accounts ca WHERE ca.jamaah_id = j.id LIMIT 1))
-		LEFT JOIN customer_accounts a ON a.id = `+penerimaLangsungSQL+`
-		LEFT JOIN customer_accounts u ON u.id = a.upline_akun_id
+		`+joinPenerimaSQL+`
 		WHERE bp.booking_id = ?
 		ORDER BY bp.id`, bookingID)
 	if err != nil {
@@ -187,7 +184,7 @@ func RingkasanBooking(ctx context.Context, q querier, bookingID int64, lihatNomi
 		}
 		p.Agen = agenDari(aID, aNama, aKode)
 		p.upline = agenDari(uID, uNama, uKode)
-		if dikaitkan.Valid && p.KaitanStatus == "terikat_agen" {
+		if dikaitkan.Valid && p.KaitanStatus == kaitanTerikatAgen {
 			s := dikaitkan.Time.Format("2006-01-02 15:04")
 			p.DikaitkanAdminAt = &s
 		}
@@ -207,7 +204,7 @@ func RingkasanBooking(ctx context.Context, q querier, bookingID int64, lihatNomi
 			pa.Agen = &r
 		}
 		// Pax diri agen tanpa_agen sudah punya penerima (upline agen), bukan bahan klaim.
-		if p.aktif && p.KaitanStatus == "tanpa_agen" && pa.Agen == nil {
+		if p.aktif && p.KaitanStatus == kaitanTanpaAgen && pa.Agen == nil {
 			adaTanpaAgen = true
 		}
 		out.Pax = append(out.Pax, pa)
@@ -224,14 +221,18 @@ func RingkasanBooking(ctx context.Context, q querier, bookingID int64, lihatNomi
 	// komisinya sudah aktif tercatat dilewati, pengaitan admin setelah lunas pertama tidak berkomisi, dan satu komisi
 	// per jamaah per keberangkatan.
 	if status == "baru" || status == "dp" {
-		aktif := map[[2]any]bool{}
+		type paxJenis struct {
+			paxID int64
+			jenis string
+		}
+		aktif := map[paxJenis]bool{}
 		for _, t := range rows {
 			if t.rincian.Status == StatusKomisiTercatat {
-				aktif[[2]any{t.paxID, t.jenis}] = true
+				aktif[paxJenis{t.paxID, t.jenis}] = true
 			}
 		}
 		tambah := func(p paxSaatIni, penerima *AgenRingkas, jenis string, nominal float64) error {
-			if aktif[[2]any{p.BookingPaxID, jenis}] {
+			if aktif[paxJenis{p.BookingPaxID, jenis}] {
 				return nil
 			}
 			ada, err := sudahDibayarKeberangkatan(ctx, q, p.JamaahID, jadwalID, bookingID, jenis)
