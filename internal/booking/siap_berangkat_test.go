@@ -7,7 +7,8 @@ import (
 	"erp-azhan/api/internal/testdb"
 )
 
-// S-03: kelengkapan pax untuk daftar booking dihitung dari booking_pax dan dokumen paspor.
+// S-03: kelengkapan pax untuk daftar booking mengikuti tahapan umroh (keputusan 2026-11-24): perlengkapan diserahkan
+// (bukan untuk infant), paspor disetujui, SISKOPATUH, dan visa. Vaksin dan manasik tidak lagi dihitung.
 func TestPaxBelumLengkapSet(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
@@ -23,22 +24,25 @@ func TestPaxBelumLengkapSet(t *testing.T) {
 	if !belum() {
 		t.Fatal("pax tanpa progress harus terhitung belum lengkap")
 	}
-	testdb.Exec(t, tx, `UPDATE booking_pax SET progress_visa=TRUE, progress_siskopatuh=TRUE, progress_manasik=TRUE, progress_vaksin_meningitis=TRUE WHERE id=?`, b.PaxID)
+	testdb.Exec(t, tx, `UPDATE booking_pax SET progress_visa=TRUE, progress_siskopatuh=TRUE, perlengkapan_status='sudah_diberikan' WHERE id=?`, b.PaxID)
 	if !belum() {
 		t.Fatal("tanpa dokumen paspor harus tetap belum lengkap")
 	}
 	testdb.Exec(t, tx, `INSERT INTO dokumen_jamaah (jamaah_id, jenis, file_url, status) VALUES (?, 'paspor', '/uploads/uji.pdf', 'submitted')`, b.JamaahID)
-	if belum() {
-		t.Fatal("semua progress dan paspor lengkap harus terhitung lengkap")
-	}
-	// Infant tidak wajib manasik.
-	testdb.Exec(t, tx, `UPDATE booking_pax SET progress_manasik=FALSE WHERE id=?`, b.PaxID)
 	if !belum() {
-		t.Fatal("reguler tanpa manasik harus belum lengkap")
+		t.Fatal("paspor yang belum disetujui harus tetap belum lengkap")
+	}
+	testdb.Exec(t, tx, `UPDATE dokumen_jamaah SET status='approved' WHERE jamaah_id=? AND jenis='paspor'`, b.JamaahID)
+	if belum() {
+		t.Fatal("perlengkapan, paspor disetujui, SISKOPATUH, dan visa harus terhitung lengkap tanpa vaksin dan manasik")
+	}
+	testdb.Exec(t, tx, `UPDATE booking_pax SET perlengkapan_status='belum_diberikan' WHERE id=?`, b.PaxID)
+	if !belum() {
+		t.Fatal("reguler tanpa perlengkapan harus belum lengkap")
 	}
 	testdb.Exec(t, tx, `UPDATE booking_pax SET pax_type='infant', counts_for_seat=FALSE, room_type=NULL WHERE id=?`, b.PaxID)
 	if belum() {
-		t.Fatal("infant tanpa manasik harus terhitung lengkap")
+		t.Fatal("infant tanpa perlengkapan harus terhitung lengkap")
 	}
 	// Pax batal tidak dihitung.
 	testdb.Exec(t, tx, `UPDATE booking_pax SET progress_visa=FALSE, pax_status='batal' WHERE id=?`, b.PaxID)

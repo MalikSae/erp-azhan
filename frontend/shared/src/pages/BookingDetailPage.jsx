@@ -46,7 +46,7 @@ import { KOMISI_REPEAT_CASHBACK_AKTIF, JENIS_KOMISI } from "../utils/agen";
 import { GantiAgenJamaahModal } from "../components/GantiKaitanModal";
 import RefundPanel from "../components/RefundPanel";
 import VoidPaymentModal from "../components/VoidPaymentModal";
-import { CheckCircle, ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
+import { ExternalLink, FileText, Printer, Lock, Unlock, Upload, X, Check, Plus, Trash2, BedDouble, UserX } from "lucide-react";
 
 const formatRupiah = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
@@ -131,11 +131,34 @@ const AgenNama = ({ agen, bolehLihat, denganKode = false, className = "" }) => (
   </span>
 );
 
-const PROGRESS_HEADER_MANUAL_ITEMS = [
-  { key: 'tiket', label: 'Tiket PP' },
-  { key: 'hotel', label: 'Hotel' },
-  { key: 'land_arrangement', label: 'Land Arrangement' },
-];
+// Status tahap yang diisi di tempat lain, dengan label yang menyebut keadaannya (bukan "Diproses").
+// Perlengkapan diserahkan di Distribusi Perlengkapan; tidak berlaku untuk infant ("-").
+const StatusPerlengkapan = ({ tahap }) => {
+  if (!tahap) return <span className="text-xs text-neutral-400">-</span>;
+  return tahap.status === 'selesai'
+    ? <DotText tone="success">Diserahkan</DotText>
+    : <DotText tone="neutral">Belum diserahkan</DotText>;
+};
+
+// Paspor dari dokumen jamaah: disetujui, ditolak, terunggah menunggu dicek, atau belum diunggah.
+const StatusPaspor = ({ tahap, terunggah }) => {
+  if (tahap?.status === 'selesai') return <DotText tone="success">Disetujui</DotText>;
+  if (tahap?.status === 'perbaiki') return <DotText tone="danger">Ditolak</DotText>;
+  if (terunggah) return <DotText tone="warning">Perlu dicek</DotText>;
+  return <DotText tone="neutral">Belum diunggah</DotText>;
+};
+
+const CentangTahap = ({ checked, onChange, label }) => (
+  <div className="flex justify-center">
+    <input
+      type="checkbox"
+      className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
+      checked={checked}
+      onChange={onChange}
+      aria-label={label}
+    />
+  </div>
+);
 
 export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = true, bolehGantiAgen = false, bolehLihatAkun = false }) => {
   const { id } = useParams();
@@ -587,77 +610,31 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
     }
   };
 
-  // ─── Progress Keberangkatan Handler ──────────────────────────────────────────
+  // ─── Tahapan Umroh Handler ───────────────────────────────────────────────────
+  // Siap berangkat dan tahapan dihitung server; respons menggantikan nilai optimistis.
   const handleToggleProgress = async (key, currentValue) => {
     const newValue = !currentValue;
-
-    // Optimistic Update
-    setBooking((prev) => {
-      if (!prev) return prev;
-      const progressField = `progress_${key}`;
-      const updated = { ...prev, [progressField]: newValue };
-
-      const headerLengkap = Boolean(updated.progress_tiket) && Boolean(updated.progress_hotel) && Boolean(updated.progress_land_arrangement);
-      let activePaxCount = 0;
-      let allPaxLengkap = true;
-      (updated.pax || []).forEach((p) => {
-        if (p.pax_status !== 'aktif') return;
-        activePaxCount++;
-        const manasikReq = p.pax_type === 'infant' ? true : Boolean(p.progress_manasik);
-        const pLengkap = Boolean(p.progress_paspor) && Boolean(p.progress_visa) && Boolean(p.progress_siskopatuh) && Boolean(p.progress_vaksin_meningitis) && manasikReq;
-        if (!pLengkap) allPaxLengkap = false;
-      });
-
-      updated.siap_berangkat = (activePaxCount > 0) && headerLengkap && allPaxLengkap;
-      return updated;
-    });
-
+    setBooking((prev) => (prev ? { ...prev, [`progress_${key}`]: newValue } : prev));
     try {
       const res = await updateBookingProgress(id, { [key]: newValue });
       setBooking(res);
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal memperbarui progress paket");
+      setError(err.response?.data?.error || "Gagal memperbarui tahapan.");
       fetchAll();
     }
   };
 
   const handleTogglePaxProgress = async (paxId, key, currentValue) => {
     const newValue = !currentValue;
-    const progressField = `progress_${key}`;
-
-    // Optimistic Update
-    setBooking((prev) => {
-      if (!prev) return prev;
-      const updatedPax = (prev.pax || []).map((p) => {
-        if (p.id === paxId) {
-          return { ...p, [progressField]: newValue };
-        }
-        return p;
-      });
-
-      const headerLengkap = Boolean(prev.progress_tiket) && Boolean(prev.progress_hotel) && Boolean(prev.progress_land_arrangement);
-      let activePaxCount = 0;
-      let allPaxLengkap = true;
-      updatedPax.forEach((p) => {
-        if (p.pax_status !== 'aktif') return;
-        activePaxCount++;
-        const manasikReq = p.pax_type === 'infant' ? true : Boolean(p.progress_manasik);
-        const pLengkap = Boolean(p.progress_paspor) && Boolean(p.progress_visa) && Boolean(p.progress_siskopatuh) && Boolean(p.progress_vaksin_meningitis) && manasikReq;
-        if (!pLengkap) allPaxLengkap = false;
-      });
-
-      return {
-        ...prev,
-        pax: updatedPax,
-        siap_berangkat: (activePaxCount > 0) && headerLengkap && allPaxLengkap
-      };
-    });
-
+    setBooking((prev) => (prev ? {
+      ...prev,
+      pax: (prev.pax || []).map((p) => (p.id === paxId ? { ...p, [`progress_${key}`]: newValue } : p)),
+    } : prev));
     try {
       const res = await updatePaxProgress(id, paxId, { [key]: newValue });
       setBooking(res);
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal memperbarui checklist pax");
+      setError(err.response?.data?.error || "Gagal memperbarui tahapan.");
       fetchAll();
     }
   };
@@ -1117,117 +1094,76 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
             </TableCard>
           )}
 
-          {/* Section: Checklist Dokumen & Kesiapan Jamaah */}
+          {/* Section: Tahapan Umroh — urutan dan status sama dengan yang dilihat jamaah dan agen */}
           <TableCard
-            title="Kesiapan Dokumen & Operasional"
+            title="Tahapan Umroh"
+            aside={booking.siap_berangkat
+              ? <DotText tone="success">Siap Berangkat</DotText>
+              : <DotText tone="warning">Persiapan Berjalan</DotText>}
           >
             {activePaxList.length === 0 ? (
               <EmptyState variant="section" message="Tidak ada jamaah aktif." />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm font-body text-neutral-700 border-collapse">
-                  <thead className="bg-neutral-50 text-neutral-500 font-body text-xs font-medium border-b border-neutral-200">
-                    <tr className="border-b border-neutral-200">
-                      <th className="py-2.5 px-4" rowSpan={2}>Nama Jamaah</th>
-                      <th className="py-2 px-3 text-center border-x border-neutral-200" colSpan={2}>
-                        Dokumen Jamaah
-                      </th>
-                      <th className="py-2 px-3 text-center" colSpan={3}>
-                        Operasional Travel
-                      </th>
-                    </tr>
-                    <tr className="text-xs text-neutral-500">
-                      <th className="py-2 px-3 text-center border-l border-neutral-200">Paspor</th>
-                      <th className="py-2 px-3 text-center border-r border-neutral-200">Vaksin</th>
-                      <th className="py-2 px-3 text-center">Visa</th>
-                      <th className="py-2 px-3 text-center">Siskopatuh</th>
-                      <th className="py-2 px-3 text-center">Manasik</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-100">
-                    {activePaxList.map((pax) => {
-                      const isPic = Number(pax.jamaah_id) === Number(booking.pic_jamaah_id);
-                      return (
-                        <tr key={pax.id} className="hover:bg-neutral-50/70 transition-colors">
-                          <td className="py-3 px-4">
-                            <div>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm font-body text-neutral-700 border-collapse">
+                    <thead className="bg-neutral-50 text-neutral-500 font-body text-xs font-medium border-b border-neutral-200">
+                      <tr>
+                        <th className="py-2.5 px-4">Nama Jamaah</th>
+                        <th className="py-2.5 px-3 text-center">Perlengkapan</th>
+                        <th className="py-2.5 px-3 text-center">Paspor</th>
+                        <th className="py-2.5 px-3 text-center">SISKOPATUH</th>
+                        <th className="py-2.5 px-3 text-center">Visa</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {activePaxList.map((pax) => {
+                        const tahap = Object.fromEntries((pax.tahapan || []).map((t) => [t.kunci, t]));
+                        return (
+                          <tr key={pax.id} className="hover:bg-neutral-50/70 transition-colors">
+                            <td className="py-3 px-4">
                               <span className="font-heading font-semibold text-neutral-900 block">
                                 {pax.nama_jamaah || `Jamaah #${pax.jamaah_id}`}
                               </span>
                               {pax.pax_type === 'infant' && (
-                                <span className="block text-xs text-neutral-400 font-body">
-                                  Infant (Bayi &lt; 2 thn)
-                                </span>
+                                <span className="block text-xs text-neutral-400 font-body">Infant</span>
                               )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              {pax.progress_paspor ? (
-                                <span title="Paspor sudah diunggah" className="text-success-600 inline-flex items-center gap-1 text-xs font-medium">
-                                  <CheckCircle size={16} />
-                                </span>
-                              ) : (
-                                <span title="Paspor belum diunggah" className="text-neutral-400 inline-flex items-center gap-1 text-xs font-medium">
-                                  <X size={16} />
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
-                                checked={Boolean(pax.progress_vaksin_meningitis)}
-                                onChange={() => handleTogglePaxProgress(pax.id, 'vaksin_meningitis', Boolean(pax.progress_vaksin_meningitis))}
-                                title="Tandai Vaksin Meningitis Selesai"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
-                                checked={Boolean(pax.progress_visa)}
-                                onChange={() => handleTogglePaxProgress(pax.id, 'visa', Boolean(pax.progress_visa))}
-                                title="Tandai Visa Selesai"
-                              />
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <div className="flex justify-center">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <StatusPerlengkapan tahap={tahap.perlengkapan} />
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <StatusPaspor tahap={tahap.paspor} terunggah={Boolean(pax.progress_paspor)} />
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <CentangTahap
                                 checked={Boolean(pax.progress_siskopatuh)}
                                 onChange={() => handleTogglePaxProgress(pax.id, 'siskopatuh', Boolean(pax.progress_siskopatuh))}
-                                title="Tandai Siskopatuh Selesai"
+                                label="SISKOPATUH"
                               />
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            {pax.pax_type === 'infant' ? (
-                              <span className="text-xs text-neutral-400 font-semibold font-body">N/A</span>
-                            ) : (
-                              <div className="flex justify-center">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 transition-colors cursor-pointer"
-                                  checked={Boolean(pax.progress_manasik)}
-                                  onChange={() => handleTogglePaxProgress(pax.id, 'manasik', Boolean(pax.progress_manasik))}
-                                  title="Tandai Manasik Selesai"
-                                />
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <CentangTahap
+                                checked={Boolean(pax.progress_visa)}
+                                onChange={() => handleTogglePaxProgress(pax.id, 'visa', Boolean(pax.progress_visa))}
+                                label="Visa"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-neutral-200">
+                  <span className="text-sm font-medium font-body text-neutral-800">Tiket PP</span>
+                  <Toggle
+                    id="toggle-tiket-detail"
+                    checked={Boolean(booking.progress_tiket)}
+                    onChange={() => handleToggleProgress('tiket', Boolean(booking.progress_tiket))}
+                  />
+                </div>
+              </>
             )}
           </TableCard>
 
@@ -1521,51 +1457,6 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
               </div>
             </div>
           </Section>
-
-          {/* Progress Paket Card */}
-          <Section
-            title="Fasilitas Paket"
-            aside={
-              booking.siap_berangkat ? (
-                <DotText tone="success">Siap Berangkat</DotText>
-              ) : (
-                <DotText tone="warning">Persiapan Berjalan</DotText>
-              )
-            }
-          >
-            <div className="divide-y divide-neutral-100 [&>div]:py-3 first:[&>div]:pt-0 [&>div:last-child]:pb-0">
-              {/* 1. Tiket PP */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium font-body text-neutral-800">Tiket PP</span>
-                <Toggle
-                  id="toggle-tiket-detail"
-                  checked={Boolean(booking.progress_tiket)}
-                  onChange={() => handleToggleProgress('tiket', Boolean(booking.progress_tiket))}
-                />
-              </div>
-
-              {/* 2. Hotel */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium font-body text-neutral-800">Hotel</span>
-                <Toggle
-                  id="toggle-hotel-detail"
-                  checked={Boolean(booking.progress_hotel)}
-                  onChange={() => handleToggleProgress('hotel', Boolean(booking.progress_hotel))}
-                />
-              </div>
-
-              {/* 3. Land Arrangement */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium font-body text-neutral-800">Land Arrangement</span>
-                <Toggle
-                  id="toggle-land_arrangement-detail"
-                  checked={Boolean(booking.progress_land_arrangement)}
-                  onChange={() => handleToggleProgress('land_arrangement', Boolean(booking.progress_land_arrangement))}
-                />
-              </div>
-            </div>
-          </Section>
-
         </Surface>
       </div>
 
