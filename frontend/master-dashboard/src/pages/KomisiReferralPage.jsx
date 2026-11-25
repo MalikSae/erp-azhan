@@ -19,6 +19,7 @@ import PageHeader from 'shared/ui/PageHeader';
 import StatTile from 'shared/ui/StatTile';
 import ActionMenu from 'shared/ui/ActionMenu';
 import Textarea from 'shared/ui/Textarea';
+import TextButton from 'shared/ui/TextButton';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
@@ -187,7 +188,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
         <ActionMenu
           align="right"
           items={[{
-            label: row.status === 'pending' ? 'Proses' : 'Lihat Detail',
+            label: row.status === 'pending' ? 'Proses' : 'Lihat detail',
             icon: Eye,
             tooltip: row.status === 'pending' ? 'Setujui atau tolak pengajuan ini' : 'Lihat detail pengajuan',
             onClick: () => open(row),
@@ -250,28 +251,25 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
         isOpen={Boolean(selected)}
         onClose={close}
         title="Pengajuan Pencairan"
-        footer={
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 w-full">
-            <Button variant="secondary" onClick={close} disabled={saving}>Tutup</Button>
-            {selected?.status === 'pending' && (
-              <div className="flex flex-col sm:flex-row gap-2">
-                {mode ? (
-                  <>
-                    <Button variant="secondary" onClick={() => { setMode(null); setActionError(''); }} disabled={saving}>Batal</Button>
-                    <Button variant={mode === 'tolak' ? 'danger' : 'primary'} onClick={submit} isLoading={saving}>
-                      {mode === 'tolak' ? 'Konfirmasi Tolak' : 'Konfirmasi Setujui'}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="danger-light" onClick={() => setMode('tolak')}>Tolak</Button>
-                    <Button variant="primary" onClick={() => setMode('setujui')} disabled={saldoKurang}>Setujui & Unggah Bukti</Button>
-                  </>
-                )}
-              </div>
+        footer={selected?.status === 'pending' && (
+          <div className="flex items-center justify-end gap-4">
+            {mode ? (
+              <>
+                {!saving && <TextButton onClick={() => { setMode(null); setActionError(''); }}>Kembali</TextButton>}
+                <Button variant={mode === 'tolak' ? 'secondary' : 'primary'} onClick={submit} isLoading={saving}>
+                  {mode === 'tolak' ? 'Tolak pengajuan' : 'Setujui pencairan'}
+                </Button>
+              </>
+            ) : saldoKurang ? (
+              <Button variant="secondary" onClick={() => setMode('tolak')}>Tolak</Button>
+            ) : (
+              <>
+                <TextButton onClick={() => setMode('tolak')}>Tolak</TextButton>
+                <Button variant="primary" onClick={() => setMode('setujui')}>Setujui</Button>
+              </>
             )}
           </div>
-        }
+        )}
       >
         {selected && (
           <div className="space-y-4">
@@ -294,8 +292,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
 
             {selected.status === 'pending' && (
               <div className={`p-3 rounded-xl border text-sm ${saldoKurang ? 'border-danger-200 bg-danger-50 text-danger-700' : 'border-neutral-200 bg-neutral-50 text-neutral-700'}`}>
-                Saldo tersedia setelah pengajuan ini: <span className="font-semibold">{money(selected.saldo_tersedia)}</span>
-                {saldoKurang && <p className="mt-1 text-xs">Saldo tidak lagi mencukupi. Tolak pengajuan ini.</p>}
+                Saldo setelah pengajuan ini: <span className="font-semibold tabular-nums">{money(selected.saldo_tersedia)}</span>
               </div>
             )}
 
@@ -304,7 +301,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
             )}
 
             {selected.status === 'disetujui' && selected.bukti_transfer_keluar_url && (
-              <Button variant="secondary" onClick={() => lihatBukti(selected.bukti_transfer_keluar_url)}>Lihat bukti</Button>
+              <TextButton onClick={() => lihatBukti(selected.bukti_transfer_keluar_url)}>Lihat bukti</TextButton>
             )}
 
             {mode === 'setujui' && (
@@ -316,7 +313,6 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
                   onChange={(e) => setBukti(e.target.files?.[0] || null)}
                   className="block w-full text-sm text-neutral-700 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-neutral-800 hover:file:bg-neutral-200"
                 />
-                <p className="text-xs text-neutral-500">Transfer dulu ke rekening di atas, lalu unggah buktinya. Pajak (bila ada) dicatat manual oleh keuangan.</p>
               </div>
             )}
 

@@ -3,6 +3,7 @@ import Modal from 'shared/ui/Modal';
 import Input from 'shared/ui/Input';
 import Button from 'shared/ui/Button';
 import Alert from 'shared/ui/Alert';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { getScheduleSeat, samakanScheduleSeat, updateScheduleSeatTampil } from '../api/schedules';
 
 const teksTampil = (n) => (n ? `${n} seat` : 'Mati');
@@ -35,9 +36,10 @@ const SeatManagement = ({ scheduleId, canEdit = true }) => {
   useEffect(() => { load(); }, [load]);
 
   if (loadError) return <Alert variant="error">{loadError}</Alert>;
-  if (!overview) return <p className="text-xs text-neutral-500 font-body">Memuat data seat...</p>;
+  if (!overview) return <LoadingSpinner />;
 
-  const terisi = Math.max(0, overview.seat_total - overview.seat_sisa);
+  // Terisi = seat dipegang booking (hitungan server), tetap benar saat sisa seat tidak cocok.
+  const terisi = overview.seat_dialokasikan ?? Math.max(0, overview.seat_total - overview.seat_sisa);
   const persen = overview.seat_total > 0 ? (terisi / overview.seat_total) * 100 : 0;
 
   const samakan = async () => {
@@ -88,12 +90,12 @@ const SeatManagement = ({ scheduleId, canEdit = true }) => {
     <div className="space-y-4 font-body">
       <div className="grid grid-cols-2 gap-3 divide-x divide-neutral-200">
         <div>
-          <span className="text-xs text-neutral-500 block">Sisa Seat</span>
-          <span className="text-xl font-semibold font-heading text-neutral-900">{overview.seat_sisa}</span>
+          <span className="text-xs text-neutral-500 block">Sisa seat</span>
+          <span className="text-2xl md:text-3xl font-semibold font-heading tracking-tight tabular-nums text-neutral-900">{overview.seat_sisa}</span>
         </div>
         <div className="pl-4">
-          <span className="text-xs text-neutral-500 block">Total Kuota</span>
-          <span className="text-xl font-semibold font-heading text-neutral-900">{overview.seat_total}</span>
+          <span className="text-xs text-neutral-500 block">Kuota seat</span>
+          <span className="text-2xl md:text-3xl font-semibold font-heading tracking-tight tabular-nums text-neutral-900">{overview.seat_total}</span>
         </div>
       </div>
 

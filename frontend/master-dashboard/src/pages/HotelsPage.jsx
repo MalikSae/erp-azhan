@@ -12,6 +12,7 @@ import CustomDropdown from 'shared/ui/CustomDropdown';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import ActionMenu from 'shared/ui/ActionMenu';
+import NamaBarisButton from '../components/master/NamaBarisButton';
 import { listHotels, listHotelCities, createHotel, updateHotel, deleteHotel } from '../api/hotels';
 import { uploadMedia } from '../api/media';
 
@@ -276,14 +277,7 @@ const HotelsPage = () => {
       return (
         <div className="flex items-center gap-3 min-w-0">
           <PhotoCell url={row.photo_url} name={row.name} />
-          <button
-            type="button"
-            disabled={!canEdit}
-            onClick={() => handleOpenModal(row)}
-            className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
-          >
-            {row.name}
-          </button>
+          <NamaBarisButton disabled={!canEdit} onClick={() => handleOpenModal(row)}>{row.name}</NamaBarisButton>
         </div>
       );
     }
@@ -364,17 +358,17 @@ const HotelsPage = () => {
           columns={columns}
           data={rows}
           itemsPerPage={10}
-          emptyMessage={canEdit ? 'Belum ada hotel. Klik "+ Tambah Hotel" untuk menambahkan.' : 'Belum ada hotel.'}
+          emptyMessage="Belum ada hotel."
           searchPlaceholder="Cari nama hotel atau kota..."
           toolbarActions={
             <CustomDropdown
               value={cityFilter}
               onChange={(val) => setCityFilter(val)}
               className="!mb-0 w-52"
-              placeholder="Semua Kota"
+              placeholder="Semua kota"
               options={filterTabs.map(tab => ({
                 value: tab.value,
-                label: `${tab.value === '' ? 'Semua Kota' : tab.label} (${tab.count})`,
+                label: `${tab.value === '' ? 'Semua kota' : tab.label} (${tab.count})`,
               }))}
             />
           }
@@ -388,10 +382,20 @@ const HotelsPage = () => {
         onClose={handleCloseModal}
         title={editingHotel ? "Edit Hotel" : "Tambah Hotel"}
         size="md"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={handleCloseModal} disabled={isSubmitting}>
+              Batal
+            </Button>
+            <Button type="submit" form="form-hotel" variant="primary" isLoading={isSubmitting}>
+              Simpan
+            </Button>
+          </>
+        )}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="form-hotel" onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Nama Hotel"
+            label="Nama hotel"
             name="name"
             value={formData.name}
             onChange={handleChange}
@@ -414,15 +418,15 @@ const HotelsPage = () => {
               }}
               options={[
                 ...cities.map(c => ({ value: c, label: c })),
-                { value: '__new__', label: '+ Tambah Kota Baru' }
+                { value: '__new__', label: '+ Tambah kota baru' }
               ]}
-              placeholder="Pilih Kota"
+              placeholder="Pilih kota"
             />
           ) : (
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm font-medium text-neutral-700 font-heading">
-                  Kota Baru <span className="text-danger-600">*</span>
+                  Kota baru <span className="text-danger-600">*</span>
                 </label>
                 <button
                   type="button"
@@ -447,7 +451,7 @@ const HotelsPage = () => {
           )}
 
           <CustomDropdown
-            label="Rating Bintang"
+            label="Rating bintang"
             required
             value={formData.star_rating}
             onChange={(val) => handleChange({ target: { name: 'star_rating', value: val }})}
@@ -458,20 +462,20 @@ const HotelsPage = () => {
               { value: '4', label: '4 Bintang' },
               { value: '5', label: '5 Bintang' }
             ]}
-            placeholder="Pilih Rating Bintang"
+            placeholder="Pilih rating"
           />
 
           <Input
-            label="Jarak ke Masjid (meter)"
+            label="Jarak ke masjid (meter)"
             type="number"
             name="distance_m"
             value={formData.distance_m}
             onChange={handleChange}
-            placeholder="200 (opsional)"
+            placeholder="200"
           />
 
           <FileInput
-            label="Foto Hotel (Opsional)"
+            label="Foto hotel"
             value={formData.photo_url}
             previewUrl={localPreview}
             onChange={handleFileChange}
@@ -480,30 +484,21 @@ const HotelsPage = () => {
               setFormData(prev => ({ ...prev, photo_url: '' }));
             }}
             isUploading={isUploading}
-            uploadingText="Mengupload foto hotel..."
+            uploadingText="Mengunggah foto..."
             placeholder="Pilih file foto hotel (JPG, PNG, WebP)..."
           />
 
           <Input
-            label="Link Video Hotel (Opsional)"
+            label="Link video hotel"
             name="video_url"
             value={formData.video_url}
             onChange={handleChange}
-            placeholder="https://www.youtube.com/watch?v=... atau https://youtu.be/..."
+            placeholder="https://youtu.be/..."
           />
 
           {formErrors && (
             <Alert variant="error">{formErrors}</Alert>
           )}
-
-          <div className="pt-4 flex justify-end space-x-3 border-t border-neutral-200">
-            <Button type="button" variant="secondary" onClick={handleCloseModal} disabled={isSubmitting}>
-              Batal
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmitting}>
-              {editingHotel ? "Update" : "Simpan"}
-            </Button>
-          </div>
         </form>
       </Modal>
 

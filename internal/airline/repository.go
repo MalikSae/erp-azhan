@@ -17,6 +17,14 @@ var ErrDuplicate = errors.New("maskapai dengan nama ini sudah ada")
 // ErrCodeInUse dikembalikan saat kode maskapai yang masih dipakai paket hendak diubah.
 var ErrCodeInUse = errors.New("kode maskapai tidak bisa diubah, masih dipakai oleh")
 
+// ErrCodeDuplicate dikembalikan saat kode IATA sudah dipakai maskapai lain (case-insensitive).
+var ErrCodeDuplicate = errors.New("kode maskapai sudah dipakai")
+
+// queryRower: *sql.DB atau *sql.Tx.
+type queryRower interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // Repository mengelola semua query ke tabel airlines.
 type Repository struct {
 	db *sql.DB
@@ -54,6 +62,11 @@ func (r *Repository) Create(ctx context.Context, name string, code *string, logo
 		return nil, err
 	} else if exists {
 		return nil, ErrDuplicate
+	}
+	if exists, err := codeExists(ctx, r.db, code, 0); err != nil {
+		return nil, err
+	} else if exists {
+		return nil, ErrCodeDuplicate
 	}
 
 	const q = `INSERT INTO airlines (name, code, logo_url) VALUES (?, ?, ?)`
@@ -102,6 +115,11 @@ func (r *Repository) Update(ctx context.Context, id uint64, name string, code *s
 	} else if exists {
 		return nil, ErrDuplicate
 	}
+	if exists, err := codeExists(ctx, r.db, code, id); err != nil {
+		return nil, err
+	} else if exists {
+		return nil, ErrCodeDuplicate
+	}
 
 	const q = `UPDATE airlines SET name=?, code=?, logo_url=? WHERE id=?`
 	if _, err := r.db.ExecContext(ctx, q, name, code, logoURL, id); err != nil {
@@ -146,6 +164,20 @@ func (r *Repository) nameExists(ctx context.Context, name string, excludeID uint
 	err := r.db.QueryRowContext(ctx, q, name, excludeID).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("airline.nameExists: %w", err)
+	}
+	return count > 0, nil
+}
+
+// codeExists mengecek apakah kode IATA (case-insensitive) sudah dipakai maskapai lain. Kode kosong/NULL tidak dicek.
+func codeExists(ctx context.Context, q queryRower, code *string, excludeID uint64) (bool, error) {
+	if code == nil || strings.TrimSpace(*code) == "" {
+		return false, nil
+	}
+	var count int
+	err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM airlines WHERE UPPER(TRIM(code)) = UPPER(TRIM(?)) AND id != ?`,
+		*code, excludeID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("airline.codeExists: %w", err)
 	}
 	return count > 0, nil
 }

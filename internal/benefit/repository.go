@@ -15,9 +15,9 @@ var (
 	// ErrDuplikat: teks yang sama (tanpa membedakan huruf besar-kecil) sudah ada di brand itu (409).
 	ErrDuplikat = errors.New("benefit dengan teks yang sama sudah ada di brand ini")
 	// ErrDuplikatNonaktif: teks yang sama sudah ada tetapi nonaktif, sehingga tidak muncul di pilihan paket (409).
-	ErrDuplikatNonaktif = errors.New("benefit dengan teks yang sama sudah ada tetapi nonaktif; aktifkan lagi di menu Benefit Paket")
+	ErrDuplikatNonaktif = errors.New("benefit dengan teks yang sama sudah ada tetapi nonaktif")
 	// ErrDipakai: benefit masih dipakai paket sehingga tidak bisa dihapus (409).
-	ErrDipakai = errors.New("benefit masih dipakai paket; nonaktifkan saja")
+	ErrDipakai = errors.New("benefit masih dipakai paket")
 	// ErrBrandTidakSah: brand_id yang dikirim admin holding tidak ada (400).
 	ErrBrandTidakSah = errors.New("brand_id tidak valid")
 )
@@ -114,6 +114,24 @@ func kembarNonaktif(ctx context.Context, q Querier, brandID int64, teks string) 
 	var aktif bool
 	err := q.QueryRowContext(ctx, `SELECT is_active FROM paket_benefits WHERE brand_id = ? AND teks = ?`, brandID, teks).Scan(&aktif)
 	return err == nil && !aktif
+}
+
+// AktifBerteks mengambil benefit aktif brand itu yang teksnya sama (tanpa beda huruf besar-kecil dan spasi
+// tepi); nil bila tidak ada.
+func (r *Repository) AktifBerteks(ctx context.Context, brandID int64, teks string) (*Benefit, error) {
+	return aktifBerteks(ctx, r.db, brandID, teks)
+}
+
+func aktifBerteks(ctx context.Context, q Querier, brandID int64, teks string) (*Benefit, error) {
+	b, err := scanBenefit(q.QueryRowContext(ctx, selectBenefit+
+		" WHERE b.brand_id = ? AND b.is_active = 1 AND UPPER(TRIM(b.teks)) = UPPER(TRIM(?)) ORDER BY b.id LIMIT 1", brandID, teks))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("benefit.AktifBerteks: %w", err)
+	}
+	return &b, nil
 }
 
 // Create menyisipkan benefit baru (aktif). teks dan ikon sudah divalidasi pemanggil (ValidasiIsi).

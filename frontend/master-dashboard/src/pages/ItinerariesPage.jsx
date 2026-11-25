@@ -10,6 +10,7 @@ import Modal from 'shared/ui/Modal';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import ActionMenu from 'shared/ui/ActionMenu';
+import NamaBarisButton from '../components/master/NamaBarisButton';
 import { listItineraries, deleteItinerary } from '../api/itineraries';
 
 const formatDate = (dateStr) => {
@@ -94,14 +95,7 @@ const ItinerariesPage = () => {
   const renderCell = (row, key) => {
     if (key === 'title') {
       return (
-        <button
-          type="button"
-          disabled={!canEdit}
-            onClick={() => navigate(`/itineraries/${row.id}/edit`)}
-          className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
-        >
-          {row.title}
-        </button>
+        <NamaBarisButton disabled={!canEdit} onClick={() => navigate(`/itineraries/${row.id}/edit`)}>{row.title}</NamaBarisButton>
       );
     }
 
@@ -157,7 +151,7 @@ const ItinerariesPage = () => {
           columns={columns}
           data={itineraries}
           itemsPerPage={10}
-          emptyMessage={canEdit ? 'Belum ada itinerary. Klik "+ Tambah Itinerary" untuk menambahkan.' : 'Belum ada itinerary.'}
+          emptyMessage="Belum ada itinerary."
           searchPlaceholder="Cari judul itinerary..."
           renderCell={renderCell}
         />
@@ -168,7 +162,7 @@ const ItinerariesPage = () => {
         isOpen={deleteConfirmId !== null}
         onClose={cancelDelete}
         title="Hapus Itinerary"
-        size="md"
+        size="sm"
         footer={
           <>
             <Button variant="secondary" onClick={cancelDelete}>Batal</Button>

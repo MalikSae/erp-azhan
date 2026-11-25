@@ -67,6 +67,22 @@ func RequirePermission(perm string) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireAnyPermission seperti RequirePermission, tetapi lolos bila token memuat salah satu izin.
+// Batas brand tetap diterapkan handler, sama seperti RequirePermission.
+func RequireAnyPermission(perms ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			for _, p := range perms {
+				if HasPermission(r.Context(), p) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			writeError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
+		})
+	}
+}
+
 // RequireHoldingPermission seperti RequirePermission, tetapi juga menolak token akun brand.
 // Dipakai untuk izin tingkat holding (user.admin: kelola pengguna) yang handlernya tidak memfilter
 // brand. Izin itu hanya dimiliki Super Admin; penjaga ini lapis kedua bila token brand keliru

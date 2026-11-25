@@ -13,6 +13,9 @@ import Select from 'shared/ui/Select';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import ActionMenu from 'shared/ui/ActionMenu';
+import Badge from 'shared/ui/Badge';
+import Checkbox from 'shared/ui/Checkbox';
+import NamaBarisButton from '../components/master/NamaBarisButton';
 import { listCategories, createCategory, updateCategory, deleteCategory } from '../api/categories';
 import { listBrandOptions } from '../api/brands';
 import { listPerlengkapanItems, getCategoryPerlengkapan, putCategoryPerlengkapan } from '../api/perlengkapan';
@@ -209,7 +212,7 @@ const CategoriesPage = () => {
           );
         } catch (error) {
           const sebab = error.response?.data?.error;
-          setFormErrors(`Kategori sudah tersimpan, tetapi set perlengkapan gagal disimpan${sebab ? `: ${sebab}` : '.'} Klik simpan lagi untuk mencoba ulang.`);
+          setFormErrors(`Kategori sudah tersimpan, tetapi set perlengkapan gagal disimpan${sebab ? `: ${sebab}` : '.'} Simpan lagi untuk mencoba ulang.`);
           fetchData();
           return;
         }
@@ -255,14 +258,7 @@ const CategoriesPage = () => {
     if (key === 'name') {
       return (
         <div className="min-w-0">
-          <button
-            type="button"
-            disabled={!canEdit}
-            onClick={() => handleOpenModal(row)}
-            className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
-          >
-            {row.name}
-          </button>
+          <NamaBarisButton disabled={!canEdit} onClick={() => handleOpenModal(row)}>{row.name}</NamaBarisButton>
           <div className="text-xs font-body text-neutral-400 truncate">/{row.slug}</div>
         </div>
       );
@@ -279,7 +275,7 @@ const CategoriesPage = () => {
 
     if (key === 'seo_tier') {
       return row.seo_tier
-        ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium font-heading border bg-primary-50 text-primary-700 border-primary-200">{SEO_TIER_LABELS[row.seo_tier] || row.seo_tier}</span>
+        ? <Badge variant="neutral">{SEO_TIER_LABELS[row.seo_tier] || row.seo_tier}</Badge>
         : <span className="text-xs text-neutral-400 font-body">Belum dipetakan</span>;
     }
 
@@ -312,13 +308,11 @@ const CategoriesPage = () => {
       const lowCost = row.slug === SLUG_LOW_COST;
       const menuItems = [
         { label: 'Edit', icon: Pencil, tooltip: 'Edit Kategori', onClick: () => handleOpenModal(row) },
-        ...(lowCost ? [] : [{
+        ...(lowCost || used ? [] : [{
           label: 'Hapus',
           icon: Trash2,
           danger: true,
           tooltip: 'Hapus Kategori',
-          disabled: used,
-          disabledTooltip: `Tidak bisa dihapus, dipakai ${row.package_count} paket`,
           onClick: () => setDeleteConfirmId(row.id),
         }]),
       ];
@@ -348,7 +342,7 @@ const CategoriesPage = () => {
           columns={columns}
           data={rows}
           itemsPerPage={15}
-          emptyMessage={canEdit ? 'Belum ada data kategori paket. Klik "+ Tambah Kategori" untuk menambahkan.' : 'Belum ada data kategori paket.'}
+          emptyMessage="Belum ada kategori."
           searchPlaceholder="Cari nama, slug, atau brand..."
           toolbarLeading={<SegmentedTabs tabs={tabs} value={activeTab} onChange={setActiveTab} />}
           renderCell={renderCell}
@@ -361,16 +355,32 @@ const CategoriesPage = () => {
         onClose={handleCloseModal}
         title={editingCategory ? "Edit Kategori" : "Tambah Kategori"}
         size="lg"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={handleCloseModal} disabled={isSubmitting}>
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              form="form-kategori"
+              variant="primary"
+              isLoading={isSubmitting}
+              disabled={perlStatus === 'memuat'}
+            >
+              Simpan
+            </Button>
+          </>
+        )}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="form-kategori" onSubmit={handleSubmit} className="space-y-4">
           {formErrors && <Alert variant="error">{formErrors}</Alert>}
 
           <Input
-            label="Nama Kategori"
+            label="Nama kategori"
             name="name"
             value={formData.name}
             onChange={handleChange}
-            placeholder="mis. Reguler"
+            placeholder="Reguler"
             required
           />
 
@@ -383,31 +393,25 @@ const CategoriesPage = () => {
             disabled={kunciLowCost}
           />
 
-          <div>
-            <Select
-              label="Tier SEO"
-              className="!mb-0"
-              name="seo_tier"
-              value={formData.seo_tier}
-              onChange={handleChange}
-              placeholder={null}
-              disabled={kunciLowCost}
-            >
-              <option value="">Belum dipetakan</option>
-              <option value="hemat">Hemat</option>
-              <option value="reguler">Reguler</option>
-              <option value="comfort">Comfort</option>
-              <option value="premium">Premium</option>
-            </Select>
-            <p className="mt-1.5 text-xs font-body text-neutral-500">Dipakai untuk URL tier di web publik. Kosongkan bila belum diputuskan.</p>
-          </div>
+          <Select
+            label="Tier SEO"
+            className="!mb-0"
+            name="seo_tier"
+            value={formData.seo_tier}
+            onChange={handleChange}
+            placeholder={null}
+            disabled={kunciLowCost}
+          >
+            <option value="">Belum dipetakan</option>
+            <option value="hemat">Hemat</option>
+            <option value="reguler">Reguler</option>
+            <option value="comfort">Comfort</option>
+            <option value="premium">Premium</option>
+          </Select>
 
           {/* Warna badge */}
           <div className="space-y-2 pt-1 border-t border-neutral-100">
-            <div>
-              <div className="text-xs font-semibold text-neutral-800 font-heading">Warna Badge</div>
-              <p className="text-xs font-body text-neutral-500">Warna label kategori di situs booking. Otomatis = dipilihkan sistem.</p>
-            </div>
+            <div className="text-xs font-semibold text-neutral-800 font-heading">Warna badge</div>
             <BadgeColorField
               value={formData.badge_color}
               label={formData.name.trim()}
@@ -418,16 +422,16 @@ const CategoriesPage = () => {
           {/* Checklist Brand */}
           <div className="space-y-2 pt-1 border-t border-neutral-100">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-neutral-800 font-heading">
-                Pilih Brand
-              </label>
+              <div className="text-xs font-semibold text-neutral-800 font-heading">
+                Brand
+              </div>
               <div className="flex items-center gap-2 text-xs">
                 <button
                   type="button"
                   onClick={() => handleSelectAllBrands(true)}
                   className="cursor-pointer font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
                 >
-                  Pilih Semua
+                  Pilih semua
                 </button>
                 <span className="text-neutral-300">|</span>
                 <button
@@ -442,38 +446,24 @@ const CategoriesPage = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-neutral-50 rounded-lg border border-neutral-200">
               {brands.map(b => (
-                <label
+                <Checkbox
                   key={b.id}
-                  className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer p-1.5 rounded hover:bg-white transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.brand_ids.includes(b.id)}
-                    onChange={(e) => handleBrandCheckboxChange(b.id, e.target.checked)}
-                    className="rounded border-neutral-300 text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
-                  />
-                  <span>{b.name}</span>
-                </label>
+                  id={`brand-${b.id}`}
+                  label={b.name}
+                  checked={formData.brand_ids.includes(b.id)}
+                  onChange={(checked) => handleBrandCheckboxChange(b.id, checked)}
+                  className="p-1.5 rounded hover:bg-white transition-colors"
+                />
               ))}
             </div>
           </div>
 
           {/* Isi perlengkapan bawaan */}
           <div className="space-y-2 pt-3 border-t border-neutral-100">
-            <div>
-              <div className="text-xs font-semibold text-neutral-800 font-heading">Perlengkapan Bawaan</div>
-              <p className="text-xs font-body text-neutral-500">
-                Dibagikan ke tiap jamaah pada paket kategori ini. Bisa diubah khusus per paket di form Paket.
-              </p>
-            </div>
-            {perlStatus === 'memuat' && (
-              <p className="text-xs font-body text-neutral-500">Memuat set perlengkapan...</p>
-            )}
+            <div className="text-xs font-semibold text-neutral-800 font-heading">Perlengkapan bawaan</div>
+            {perlStatus === 'memuat' && <LoadingSpinner variant="inline" />}
             {perlStatus === 'gagal' && (
-              <Alert variant="warning">
-                Set perlengkapan gagal dimuat. Menyimpan tidak akan mengubah set yang sudah ada. Tutup lalu buka lagi
-                untuk mengubah set.
-              </Alert>
+              <Alert variant="warning">Set perlengkapan gagal dimuat.</Alert>
             )}
             {perlStatus === 'siap' && (
               <PerlengkapanSetEditor catalog={perlCatalog} value={perlItems} onChange={setPerlItems} />
@@ -481,7 +471,7 @@ const CategoriesPage = () => {
           </div>
 
           <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
-            <div className="text-xs font-semibold text-neutral-800 font-heading">Status Aktif</div>
+            <div className="text-xs font-semibold text-neutral-800 font-heading">Status aktif</div>
             <Toggle
               id="is_active"
               name="is_active"
@@ -490,54 +480,29 @@ const CategoriesPage = () => {
               disabled={kunciLowCost}
             />
           </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleCloseModal}
-              disabled={isSubmitting}
-            >
-              Batal
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={isSubmitting || perlStatus === 'memuat'}
-            >
-              {isSubmitting ? 'Menyimpan...' : (editingCategory ? 'Simpan Perubahan' : 'Simpan')}
-            </Button>
-          </div>
         </form>
       </Modal>
 
       {/* Modal Hapus */}
       <Modal
         isOpen={!!deleteConfirmId}
-        onClose={() => setDeleteConfirmId(null)}
+        onClose={() => !isDeleting && setDeleteConfirmId(null)}
         title="Hapus Kategori"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-neutral-600">
-            Hapus kategori paket ini? Data tidak bisa dikembalikan.
-          </p>
-          <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
-            <Button
-              variant="secondary"
-              onClick={() => setDeleteConfirmId(null)}
-              disabled={isDeleting}
-            >
+        size="sm"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setDeleteConfirmId(null)} disabled={isDeleting}>
               Batal
             </Button>
-            <Button
-              variant="danger"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? 'Menghapus...' : 'Ya, Hapus'}
+            <Button variant="danger" onClick={handleDelete} isLoading={isDeleting}>
+              Hapus
             </Button>
-          </div>
-        </div>
+          </>
+        )}
+      >
+        <p className="font-body text-sm text-neutral-700">
+          Hapus kategori paket ini? Data tidak bisa dikembalikan.
+        </p>
       </Modal>
     </div>
   );

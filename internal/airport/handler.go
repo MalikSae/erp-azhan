@@ -3,10 +3,12 @@ package airport
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
@@ -114,10 +116,22 @@ func (h *Handler) DeleteAirport(w http.ResponseWriter, r *http.Request) {
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
+// Panjang kolom airports (migrasi 037).
+const (
+	maksNama = 150
+	maksKode = 4
+	maksKota = 100
+)
+
+// validateAirportInput: berhenti di gate pertama yang gagal. Jika ok=false, response sudah ditulis.
 func validateAirportInput(w http.ResponseWriter, rawName string, rawCode string, rawCity string) (string, string, string, bool) {
 	name := strings.TrimSpace(rawName)
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "Nama bandara wajib diisi.")
+		return "", "", "", false
+	}
+	if utf8.RuneCountInString(name) > maksNama {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Nama bandara maksimal %d karakter.", maksNama))
 		return "", "", "", false
 	}
 
@@ -126,14 +140,18 @@ func validateAirportInput(w http.ResponseWriter, rawName string, rawCode string,
 		writeError(w, http.StatusBadRequest, "Kode bandara wajib diisi.")
 		return "", "", "", false
 	}
-	if len(code) > 4 {
-		writeError(w, http.StatusBadRequest, "Kode bandara maksimal 4 karakter.")
+	if utf8.RuneCountInString(code) > maksKode {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Kode bandara maksimal %d karakter.", maksKode))
 		return "", "", "", false
 	}
 
 	city := strings.TrimSpace(rawCity)
 	if city == "" {
 		writeError(w, http.StatusBadRequest, "Kota bandara wajib diisi.")
+		return "", "", "", false
+	}
+	if utf8.RuneCountInString(city) > maksKota {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Kota bandara maksimal %d karakter.", maksKota))
 		return "", "", "", false
 	}
 

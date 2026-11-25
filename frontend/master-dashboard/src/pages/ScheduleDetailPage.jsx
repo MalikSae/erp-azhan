@@ -30,43 +30,8 @@ import { AuthContext } from '../context/AuthContext';
 import { getSchedule } from '../api/schedules';
 import { getItinerary } from '../api/itineraries';
 import { listBrandOptions } from '../api/brands';
-
-const formatRupiah = (amount) => {
-  if (amount === undefined || amount === null || amount === '') return '-';
-  const num = Number(amount);
-  if (isNaN(num) || num <= 0) return '-';
-  return 'Rp ' + num.toLocaleString('id-ID');
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-';
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-  } catch (e) {
-    return dateStr;
-  }
-};
-
-const formatDateShort = (dateStr) => {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '-';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-};
-
-const formatTime = (timeStr) => {
-  if (!timeStr) return '';
-  return timeStr.substring(0, 5);
-};
-
-const assetUrl = (url) =>
-  url.startsWith('http') ? url : `${import.meta.env.VITE_API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
-
-const STATUS_LABEL = { published: 'Published', draft: 'Draft', archived: 'Archived' };
+import { STATUS_LABEL, formatTanggal as formatDate, formatTanggalPendek as formatDateShort, formatJam as formatTime, formatRupiah, assetUrl } from '../utils/paketFormat';
+import { transitUtama } from '../utils/paketTransit';
 
 // Status paket memakai Badge bersama (satu gaya status, lihat Badge.jsx);
 // atribut lain (brand, kategori) memakai pil netral.
@@ -75,45 +40,6 @@ const StatusBadge = ({ status }) => (
     {STATUS_LABEL[status] || '-'}
   </Badge>
 );
-
-const parseTransitAirports = (rawStr) => {
-  if (!rawStr || typeof rawStr !== 'string') {
-    return { berangkat: null, pulang: null };
-  }
-  const str = rawStr.trim();
-  if (!str) return { berangkat: null, pulang: null };
-
-  let berangkatRaw = null;
-  let pulangRaw = null;
-
-  if (str.toLowerCase().includes('berangkat:') || str.toLowerCase().includes('pulang:')) {
-    const parts = str.split('|').map(p => p.trim());
-    parts.forEach(p => {
-      const lower = p.toLowerCase();
-      if (lower.startsWith('berangkat:')) {
-        berangkatRaw = p.substring(p.indexOf(':') + 1).trim();
-      } else if (lower.startsWith('pulang:')) {
-        pulangRaw = p.substring(p.indexOf(':') + 1).trim();
-      }
-    });
-  } else {
-    berangkatRaw = str;
-    pulangRaw = str;
-  }
-
-  const extractCode = (part) => {
-    if (!part) return null;
-    const cleaned = part.split(',')[0].split('(')[0].trim().toUpperCase();
-    const match = cleaned.match(/[A-Z]{3}/);
-    if (match) return match[0];
-    return cleaned || null;
-  };
-
-  return {
-    berangkat: extractCode(berangkatRaw),
-    pulang: extractCode(pulangRaw)
-  };
-};
 
 const StarRating = ({ count = 0 }) => {
   const stars = Math.max(0, Math.min(5, Number(count) || 0));
@@ -133,7 +59,7 @@ const StarRating = ({ count = 0 }) => {
 };
 
 // Satu sisi penerbangan (berangkat / pulang), tanpa kotak sendiri.
-const FlightLeg = ({ title, iconClass, code, tanggal, jam, asal, transit, tujuan }) => {
+const FlightLeg = ({ title, code, tanggal, jam, asal, transit, tujuan }) => {
   const hasRoute = asal || transit || tujuan;
   return (
     <div className="space-y-3 min-w-0">
@@ -328,16 +254,14 @@ const ScheduleDetailPage = ({ tab = 'detail' }) => {
 
   if (errorMessage || !schedule) {
     return (
-      <div className="space-y-4">
-        <Alert variant="error">{errorMessage || "Data paket tidak ditemukan."}</Alert>
-        <Button variant="ghost" onClick={() => navigate('/schedules')}>
-          ← Kembali ke daftar Paket
-        </Button>
+      <div className="space-y-6">
+        <PageHeader title="Detail Paket" onBack={() => navigate('/schedules')} />
+        <Alert variant="error">{errorMessage || "Paket tidak ditemukan."}</Alert>
       </div>
     );
   }
 
-  const transitAirports = parseTransitAirports(schedule.transit_bandara);
+  const transitAirports = transitUtama(schedule.transit_bandara);
 
   // Keterangan hari di bawah tanggal berangkat: lama perjalanan (inklusif) dan hitung mundur.
   const dayStamp = (value) => {
@@ -452,9 +376,8 @@ const ScheduleDetailPage = ({ tab = 'detail' }) => {
         onBack={() => navigate('/schedules')}
         {...(canEdit ? { actionLabel: 'Edit Paket', onAction: () => navigate(`/schedules/${id}/edit`) } : {})}
       >
-        <Button variant="secondary" onClick={handlePrintPackage}>
-          <Printer size={16} strokeWidth={1.75} />
-          <span>Cetak PDF</span>
+        <Button variant="secondary" onClick={handlePrintPackage} className="w-9 !px-0" aria-label="Cetak PDF" title="Cetak PDF">
+          <Printer size={16} strokeWidth={1.75} aria-hidden="true" />
         </Button>
       </PageHeader>
 
@@ -468,10 +391,10 @@ const ScheduleDetailPage = ({ tab = 'detail' }) => {
 
       {tabAktif === 'manifest' ? <ManifestPaket scheduleId={schedule.id} /> : (<>
       {/* Ringkasan: satu strip, bukan empat card */}
-      <Surface className="grid grid-cols-3 divide-x divide-neutral-200">
+      <Surface className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-neutral-200">
         <SummaryItem label="Keberangkatan" value={formatDateShort(schedule.berangkat_tanggal)} hint={departureHint || undefined} />
         <SummaryItem
-          label="Seat Tersisa"
+          label="Sisa seat"
           value={hasSeatSisa ? schedule.seat_sisa : '-'}
           hint={seatTotal > 0 ? `dari ${seatTotal} pax` : undefined}
         />
@@ -517,7 +440,6 @@ const ScheduleDetailPage = ({ tab = 'detail' }) => {
                 <div className="md:pr-6">
                   <FlightLeg
                     title="Berangkat"
-                    iconClass="rotate-45"
                     code={schedule.berangkat_kode_penerbangan}
                     tanggal={schedule.berangkat_tanggal}
                     jam={schedule.berangkat_jam}
@@ -529,7 +451,6 @@ const ScheduleDetailPage = ({ tab = 'detail' }) => {
                 <div className="md:pl-6">
                   <FlightLeg
                     title="Pulang"
-                    iconClass="-rotate-135"
                     code={schedule.pulang_kode_penerbangan}
                     tanggal={schedule.pulang_tanggal}
                     jam={schedule.pulang_jam}
@@ -581,9 +502,7 @@ const ScheduleDetailPage = ({ tab = 'detail' }) => {
                 <Button variant="secondary" size="sm"
                   onClick={handlePrintItinerary}
                 >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V3h12v6M6 18H4a1 1 0 01-1-1v-6a2 2 0 012-2h14a2 2 0 012 2v6a1 1 0 01-1 1h-2M7 14h10v7H7z" />
-                  </svg>
+                  <Printer size={16} strokeWidth={1.75} aria-hidden="true" />
                   <span>Cetak PDF</span>
                 </Button>
               </div>

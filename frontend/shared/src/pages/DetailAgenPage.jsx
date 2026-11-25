@@ -195,7 +195,7 @@ export default function DetailAgenPage({ showBrandColumn = false, atas = null, c
           </MetaBox>
 
           {/* f. Riwayat pencairan (read-only) */}
-          <MetaBox title="Pencairan Terbaru" subtitle="Tiga pengajuan terakhir. Persetujuan dan riwayat lengkap ada di menu Komisi." icon={<Banknote size={16} strokeWidth={1.75} className="text-neutral-700" />}>
+          <MetaBox title="Pencairan Terbaru" icon={<Banknote size={16} strokeWidth={1.75} className="text-neutral-700" />}>
             {pencairanTerbaru.length === 0 ? (
               <EmptyState variant="inline" message="Belum ada pengajuan pencairan." />
             ) : (

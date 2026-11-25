@@ -11,6 +11,7 @@ import FileInput from 'shared/ui/FileInput';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import ActionMenu from 'shared/ui/ActionMenu';
+import NamaBarisButton from '../components/master/NamaBarisButton';
 import { listAirlines, createAirline, updateAirline, deleteAirline } from '../api/airlines';
 import { listAirports, createAirport, updateAirport, deleteAirport } from '../api/airports';
 import { uploadMedia } from '../api/media';
@@ -302,14 +303,7 @@ const AirlinesPage = () => {
       return (
         <div className="flex items-center gap-3 min-w-0">
           <LogoCell url={row.logo_url} name={row.name} />
-          <button
-            type="button"
-            disabled={!canEdit}
-            onClick={() => handleOpenAirlineModal(row)}
-            className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
-          >
-            {row.name}
-          </button>
+          <NamaBarisButton disabled={!canEdit} onClick={() => handleOpenAirlineModal(row)}>{row.name}</NamaBarisButton>
         </div>
       );
     }
@@ -334,14 +328,7 @@ const AirlinesPage = () => {
   const renderAirportCell = (row, key) => {
     if (key === 'name') {
       return (
-        <button
-          type="button"
-          disabled={!canEdit}
-            onClick={() => handleOpenAirportModal(row)}
-          className="font-body font-medium text-neutral-900 hover:text-primary-600 disabled:hover:text-neutral-900 disabled:cursor-default text-left leading-snug transition-colors"
-        >
-          {row.name}
-        </button>
+        <NamaBarisButton disabled={!canEdit} onClick={() => handleOpenAirportModal(row)}>{row.name}</NamaBarisButton>
       );
     }
     if (key === 'code') return <CodeText code={row.code} />;
@@ -394,7 +381,7 @@ const AirlinesPage = () => {
           data={airlines}
           itemsPerPage={10}
           searchPlaceholder="Cari maskapai..."
-          emptyMessage={canEdit ? 'Belum ada maskapai. Klik "+ Tambah Maskapai" untuk menambahkan.' : 'Belum ada maskapai.'}
+          emptyMessage="Belum ada maskapai."
           toolbarLeading={tabSwitcher}
           renderCell={renderAirlineCell}
         />
@@ -405,7 +392,7 @@ const AirlinesPage = () => {
           data={airports}
           itemsPerPage={10}
           searchPlaceholder="Cari bandara (nama, kode, kota)..."
-          emptyMessage={canEdit ? 'Belum ada bandara. Klik "+ Tambah Bandara" untuk menambahkan.' : 'Belum ada bandara.'}
+          emptyMessage="Belum ada bandara."
           toolbarLeading={tabSwitcher}
           renderCell={renderAirportCell}
         />
@@ -417,8 +404,18 @@ const AirlinesPage = () => {
         onClose={handleCloseAirlineModal}
         title={editingAirline ? "Edit Maskapai" : "Tambah Maskapai"}
         size="md"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={handleCloseAirlineModal} disabled={isSubmittingAirline}>
+              Batal
+            </Button>
+            <Button type="submit" form="form-maskapai" variant="primary" isLoading={isSubmittingAirline}>
+              Simpan
+            </Button>
+          </>
+        )}
       >
-        <form onSubmit={handleAirlineSubmit} className="space-y-4 font-body">
+        <form id="form-maskapai" onSubmit={handleAirlineSubmit} className="space-y-4 font-body">
           <Input
             label="Nama"
             name="name"
@@ -452,7 +449,7 @@ const AirlinesPage = () => {
               setAirlineFormData(prev => ({ ...prev, logo_url: '' }));
             }}
             isUploading={isUploadingLogo}
-            uploadingText="Mengupload logo maskapai..."
+            uploadingText="Mengunggah logo..."
             placeholder="Pilih file..."
             className="!mb-0"
           />
@@ -460,15 +457,6 @@ const AirlinesPage = () => {
           {airlineFormErrors && (
             <Alert variant="error">{airlineFormErrors}</Alert>
           )}
-
-          <div className="pt-4 flex justify-end space-x-3 border-t border-neutral-200">
-            <Button type="button" variant="secondary" onClick={handleCloseAirlineModal} disabled={isSubmittingAirline}>
-              Batal
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmittingAirline}>
-              {editingAirline ? "Update" : "Simpan"}
-            </Button>
-          </div>
         </form>
       </Modal>
 
@@ -478,8 +466,18 @@ const AirlinesPage = () => {
         onClose={handleCloseAirportModal}
         title={editingAirport ? "Edit Bandara" : "Tambah Bandara"}
         size="md"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={handleCloseAirportModal} disabled={isSubmittingAirport}>
+              Batal
+            </Button>
+            <Button type="submit" form="form-bandara" variant="primary" isLoading={isSubmittingAirport}>
+              Simpan
+            </Button>
+          </>
+        )}
       >
-        <form onSubmit={handleAirportSubmit} className="space-y-4 font-body">
+        <form id="form-bandara" onSubmit={handleAirportSubmit} className="space-y-4 font-body">
           <Input
             label="Nama"
             name="name"
@@ -519,15 +517,6 @@ const AirlinesPage = () => {
           {airportFormErrors && (
             <Alert variant="error">{airportFormErrors}</Alert>
           )}
-
-          <div className="pt-4 flex justify-end space-x-3 border-t border-neutral-200">
-            <Button type="button" variant="secondary" onClick={handleCloseAirportModal} disabled={isSubmittingAirport}>
-              Batal
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmittingAirport}>
-              {editingAirport ? "Update" : "Simpan"}
-            </Button>
-          </div>
         </form>
       </Modal>
 

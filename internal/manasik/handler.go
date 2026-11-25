@@ -43,7 +43,7 @@ func tulisGalat(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrBukanJamaah):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrRSVPDitutup), errors.Is(err, ErrBelumAda), errors.Is(err, ErrSudahDimulai),
-		errors.Is(err, ErrAdaAbsensi), errors.Is(err, ErrAbsensiBelumDibuka):
+		errors.Is(err, ErrAdaAbsensi), errors.Is(err, ErrAbsensiBelumDibuka), errors.Is(err, ErrPaketSudahBermanasik):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] manasik: %v", err)
@@ -54,7 +54,7 @@ func tulisGalat(w http.ResponseWriter, err error) {
 func idParam(w http.ResponseWriter, r *http.Request, nama, label string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, nama), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, label+" Tidak valid.")
+		writeError(w, http.StatusBadRequest, label+" tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -140,7 +140,7 @@ func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 
 // Detail GET /api/admin/manasik/{id}
 func (h *Handler) Detail(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id manasik")
+	id, ok := idParam(w, r, "id", "ID manasik")
 	if !ok {
 		return
 	}
@@ -149,7 +149,7 @@ func (h *Handler) Detail(w http.ResponseWriter, r *http.Request) {
 
 // Ubah PUT /api/admin/manasik/{id}
 func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id manasik")
+	id, ok := idParam(w, r, "id", "ID manasik")
 	if !ok {
 		return
 	}
@@ -167,7 +167,7 @@ func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
 
 // Hapus DELETE /api/admin/manasik/{id}
 func (h *Handler) Hapus(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id manasik")
+	id, ok := idParam(w, r, "id", "ID manasik")
 	if !ok {
 		return
 	}
@@ -180,7 +180,7 @@ func (h *Handler) Hapus(w http.ResponseWriter, r *http.Request) {
 
 // TambahPaket POST /api/admin/manasik/{id}/paket: {schedule_ids}
 func (h *Handler) TambahPaket(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id manasik")
+	id, ok := idParam(w, r, "id", "ID manasik")
 	if !ok {
 		return
 	}
@@ -203,11 +203,11 @@ func (h *Handler) TambahPaket(w http.ResponseWriter, r *http.Request) {
 
 // LepasPaket DELETE /api/admin/manasik/{id}/paket/{schedule_id}
 func (h *Handler) LepasPaket(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id manasik")
+	id, ok := idParam(w, r, "id", "ID manasik")
 	if !ok {
 		return
 	}
-	sid, ok := idParam(w, r, "schedule_id", "id paket")
+	sid, ok := idParam(w, r, "schedule_id", "ID paket")
 	if !ok {
 		return
 	}
@@ -223,7 +223,7 @@ func (h *Handler) LepasPaket(w http.ResponseWriter, r *http.Request) {
 
 // Absensi PUT /api/admin/manasik/{id}/absensi: {pax_id, hadir}
 func (h *Handler) Absensi(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id manasik")
+	id, ok := idParam(w, r, "id", "ID manasik")
 	if !ok {
 		return
 	}
@@ -244,7 +244,7 @@ func (h *Handler) Absensi(w http.ResponseWriter, r *http.Request) {
 
 // UntukPaket GET /api/admin/schedules/{id}/manasik: ringkasan manasik paket ({manasik: null} bila belum ada).
 func (h *Handler) UntukPaket(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id", "id paket")
+	id, ok := idParam(w, r, "id", "ID paket")
 	if !ok {
 		return
 	}
@@ -259,7 +259,7 @@ func (h *Handler) UntukPaket(w http.ResponseWriter, r *http.Request) {
 // Booking GET /api/account/bookings/{id}/manasik
 func (h *Handler) Booking(w http.ResponseWriter, r *http.Request) {
 	acc := customer.FromContext(r.Context())
-	id, ok := idParam(w, r, "id", "id booking")
+	id, ok := idParam(w, r, "id", "ID booking")
 	if !ok {
 		return
 	}
@@ -283,7 +283,7 @@ type rsvpRequest struct {
 // RSVP PUT /api/account/bookings/{id}/manasik/rsvp: {jamaah_id, hadir}. Mengembalikan tampilan manasik booking terbaru.
 func (h *Handler) RSVP(w http.ResponseWriter, r *http.Request) {
 	acc := customer.FromContext(r.Context())
-	id, ok := idParam(w, r, "id", "id booking")
+	id, ok := idParam(w, r, "id", "ID booking")
 	if !ok {
 		return
 	}

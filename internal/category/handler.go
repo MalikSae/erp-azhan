@@ -87,7 +87,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "Kategori tidak ditemukan.")
 	case errors.Is(err, ErrSlugDuplicate):
 		writeError(w, http.StatusConflict, "Slug kategori sudah digunakan.")
-	case errors.Is(err, ErrConflict):
+	case errors.Is(err, ErrConflict), errors.Is(err, ErrDipakai):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrForbidden):
 		writeError(w, http.StatusForbidden, err.Error())
@@ -320,8 +320,8 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 }
 
 // bolehUbah membatasi admin yang terikat satu brand (audit menu Paket S-08): ia hanya boleh mengubah atau
-// menghapus kategori yang khusus milik brand-nya, dan tidak boleh menautkannya ke brand lain atau
-// menjadikannya berlaku untuk semua brand. Admin holding tidak dibatasi. brandBaru nil = hapus.
+// menghapus kategori yang khusus milik brand-nya, dan tidak boleh menautkannya ke brand lain.
+// Admin holding tidak dibatasi. brandBaru nil = hapus.
 func (h *Handler) bolehUbah(r *http.Request, id int64, brandBaru []int64) error {
 	scoped := identity.GetBrandID(r.Context())
 	if scoped == nil {
@@ -360,10 +360,6 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.Delete(r.Context(), id); err != nil {
-		if strings.Contains(err.Error(), "tidak bisa dihapus") {
-			writeError(w, http.StatusConflict, err.Error())
-			return
-		}
 		handleRepoError(w, err)
 		return
 	}

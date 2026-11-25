@@ -164,7 +164,7 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	if req.LokasiIDs != nil {
 		lokasi = *req.LokasiIDs
 	}
-	if !h.lokasiSah(r.Context(), w, lokasi) {
+	if !h.lokasiSah(r.Context(), w, 0, lokasi) {
 		return
 	}
 	inp.LokasiIDs = &lokasi
@@ -218,30 +218,22 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	// Override req.BrandID agar validateScheduleInput tidak error saat Super Admin tidak kirim brand_id
 	req.BrandID = &finalBrandID
-	// Sisa seat saat edit dihitung repository dari data terkunci; nilai form diabaikan
+	// Sisa seat saat edit ditentukan repository dari data terkunci; nilai form diabaikan
 	// agar kapasitas di bawah alokasi mendapat pesan yang tepat (MP-07).
 	req.SeatSisa = nil
+	// Status hanya berubah lewat PUT /schedules/{id}/status; nilai status di body diabaikan.
+	req.Status = ""
 
 	inp, ok := h.validateScheduleInput(r.Context(), w, &req, existing)
 	if !ok {
 		return
 	}
 
-	finalStatus := inp.Status
-	if finalStatus == "" {
-		finalStatus = existing.Status
-	}
-	tanggalBerubah := inp.BerangkatTanggal != existing.BerangkatTanggal
-	if finalStatus == StatusPublished && inp.BerangkatTanggal < todayWIB() && (tanggalBerubah || existing.Status != StatusPublished) {
+	// Paket yang sedang tayang tetap tunduk pada aturan tayang saat isinya diubah.
+	finalStatus := existing.Status
+	if finalStatus == StatusPublished && inp.BerangkatTanggal < todayWIB() && inp.BerangkatTanggal != existing.BerangkatTanggal {
 		writeError(w, http.StatusBadRequest, errPublishLampau)
 		return
-	}
-	if finalStatus == StatusArchived && existing.Status != StatusArchived {
-		// Tanggal tersimpan, bukan tanggal dari request: mengirim tanggal lampau bersama status arsip
-		// tidak boleh melewati pemeriksaan booking aktif (audit menu Paket S-01).
-		if !h.bolehArsip(r.Context(), w, id, existing.BerangkatTanggal) {
-			return
-		}
 	}
 	// Highlight benefit: daftar baru bila dikirim, selain itu yang tersimpan. Paket yang dijual wajib 4.
 	jumlahBenefit := 0
@@ -269,7 +261,7 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	// Lokasi Dikunjungi: replaced only when sent.
 	if req.LokasiIDs != nil {
-		if !h.lokasiSah(r.Context(), w, *req.LokasiIDs) {
+		if !h.lokasiSah(r.Context(), w, id, *req.LokasiIDs) {
 			return
 		}
 		inp.LokasiIDs = req.LokasiIDs
@@ -328,13 +320,9 @@ func (h *Handler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Request) {
 		if !benefitCukup(w, req.Status, len(s.Benefits)) {
 			return
 		}
-		if req.Status == StatusArchived && s.Status != StatusArchived {
-			if !h.bolehArsip(r.Context(), w, id, s.BerangkatTanggal) {
-				return
-			}
-		}
 	}
-	resID, resStatus, err := h.repo.UpdateStatus(r.Context(), id, req.Status, brandID)
+	// Syarat arsip (booking aktif) diperiksa repository dengan baris paket terkunci.
+	resID, resStatus, err := h.repo.UpdateStatus(r.Context(), id, req.Status, brandID, todayWIB())
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -477,8 +465,8 @@ func (h *Handler) validateScheduleInput(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
-	// Gate 3 & 4: seat_sisa. Paket baru selalu mulai penuh; pada edit, nilai ini
-	// diabaikan dan dihitung repository dari seat teralokasi.
+	// Gate 3 & 4: seat_sisa. Paket baru selalu mulai penuh; pada edit, nilai ini diabaikan
+	// (repository mempertahankan sisa tersimpan, atau menghitungnya dari booking bila kuota berubah).
 	seatSisa := req.SeatTotal
 	if existing == nil {
 		var err error
@@ -859,7 +847,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		// Tangkap MySQL FK constraint violation (error 1451) — defensive
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih ada jamaah yang booking paket ini.")
+			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh booking.")
 			return
 		}
 		log.Printf("[ERROR] schedule: %v", err)
@@ -894,25 +882,6 @@ func todayWIB() string {
 // batasPublikWIB: tanggal berangkat paling awal yang masih tampil dan bisa dipesan di situs publik (hari ini + 30 hari).
 func batasPublikWIB() string {
 	return time.Now().In(time.FixedZone("WIB", 7*60*60)).AddDate(0, 0, 30).Format("2006-01-02")
-}
-
-// bolehArsip: sebelum tanggal berangkat lewat, paket dengan booking aktif tidak boleh
-// diarsipkan; untuk menghentikan penjualan gunakan status draft (MP-09).
-func (h *Handler) bolehArsip(ctx context.Context, w http.ResponseWriter, id int64, berangkat string) bool {
-	if berangkat < todayWIB() {
-		return true
-	}
-	aktif, err := h.repo.CountActiveBookings(ctx, id)
-	if err != nil {
-		log.Printf("[ERROR] schedule: hitung booking aktif: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
-		return false
-	}
-	if aktif > 0 {
-		writeError(w, http.StatusConflict, fmt.Sprintf("Paket belum berangkat dan masih punya %d booking aktif; untuk menghentikan penjualan, ubah status ke Draft.", aktif))
-		return false
-	}
-	return true
 }
 
 // errPublishLampau: paket tidak boleh terbit bila keberangkatan sudah lewat (MP-04).

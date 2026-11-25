@@ -80,10 +80,10 @@ func normalizeKota(kota string) string {
 
 // seatSisaForCreate: paket baru selalu mulai penuh. Semua seat terjual lewat booking
 // di ERP, jadi sisa tidak boleh diisi lebih kecil dari total saat paket dibuat
-// (perubahan kemudian hanya lewat booking atau penyesuaian beralasan).
+// (perubahan kemudian hanya lewat booking).
 func seatSisaForCreate(total int, requested *int) (int, error) {
 	if requested != nil && *requested != total {
-		return 0, errors.New("seat_sisa tidak bisa diisi saat membuat paket: seat berkurang otomatis lewat booking")
+		return 0, errors.New("seat_sisa harus sama dengan seat_total")
 	}
 	return total, nil
 }

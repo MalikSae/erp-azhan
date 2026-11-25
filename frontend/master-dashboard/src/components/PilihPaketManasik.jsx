@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import Input from 'shared/ui/Input';
 import EmptyState from 'shared/ui/EmptyState';
+import Checkbox from 'shared/ui/Checkbox';
 
 const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 export const tanggalPendek = (iso) => {
@@ -45,11 +46,10 @@ const PilihPaketManasik = ({ paket, value, onChange, tanggalManasik, brandNama =
           {tampil.map((p) => (
             <li key={p.schedule_id}>
               <label className="flex cursor-pointer items-center gap-3 px-4 py-3 font-body hover:bg-neutral-50">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 shrink-0 rounded border-neutral-300 accent-primary-500"
+                <Checkbox
                   checked={terpilih.has(p.schedule_id)}
                   onChange={() => ubah(p.schedule_id)}
+                  ariaLabel={p.nama}
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-neutral-900">{p.nama}</span>

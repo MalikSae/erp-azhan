@@ -132,6 +132,10 @@ func TestManasikPaketRSVPDanAbsensi(t *testing.T) {
 	if _, err := Buat(ctx, tx, &brand, 0, inputSah(), []int64{s1}, sebelum); !galatValidasi(err) {
 		t.Errorf("paket yang sudah punya manasik: %v", err)
 	}
+	// Kaitan ganda di manasik_jadwal ditolak, bukan dilewati diam-diam.
+	if err := kaitkan(ctx, tx, id, []int64{s1}); !errors.Is(err, ErrPaketSudahBermanasik) {
+		t.Errorf("kaitkan paket yang sudah punya manasik: %v", err)
+	}
 	tersedia, err := PaketTersedia(ctx, tx, &brand, sebelum)
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +153,7 @@ func TestManasikPaketRSVPDanAbsensi(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(d.Paket) != 2 || d.SudahDimulai || d.AbsensiTerbuka || d.Manasik.BrandID != brand {
+	if len(d.Paket) != 2 || d.SudahDimulai || d.AbsensiTerbuka || d.AdaAbsensi || d.Manasik.BrandID != brand {
 		t.Errorf("detail awal: paket=%d dimulai=%v absensi=%v", len(d.Paket), d.SudahDimulai, d.AbsensiTerbuka)
 	}
 	if cariJamaah(d, j1) == nil || cariJamaah(d, j3) == nil || cariJamaah(d, bayi) != nil {
@@ -243,6 +247,13 @@ func TestManasikPaketRSVPDanAbsensi(t *testing.T) {
 	if err := Hapus(ctx, tx, id, &brand, hariH); !errors.Is(err, ErrAdaAbsensi) {
 		t.Errorf("hapus dengan absensi: %v", err)
 	}
+	// Penanda bisa diisi dari Detail Booking sebelum hari manasik: hapus tetap ditolak.
+	if err := Hapus(ctx, tx, id, &brand, sebelum); !errors.Is(err, ErrAdaAbsensi) {
+		t.Errorf("hapus dengan absensi sebelum hari-H: %v", err)
+	}
+	if d, _ = AmbilDetail(ctx, tx, id, &brand, sebelum); !d.AdaAbsensi {
+		t.Error("ada_absensi harus true")
+	}
 
 	// Booking kedaluwarsa atau batal tidak lagi membuka manasik dan keluar dari daftar jamaah.
 	testdb.Exec(t, tx, `UPDATE bookings SET status = 'baru', is_seat_blocked = FALSE WHERE id = ?`, b2)
@@ -258,6 +269,9 @@ func TestManasikPaketRSVPDanAbsensi(t *testing.T) {
 	}
 	testdb.Exec(t, tx, `UPDATE booking_pax bp JOIN bookings b ON b.id = bp.booking_id SET bp.progress_manasik = FALSE
 		WHERE b.schedule_id IN (?, ?)`, s1, s2)
+	if d, _ = AmbilDetail(ctx, tx, id, &brand, hariH); d.AdaAbsensi {
+		t.Error("ada_absensi harus false setelah penanda dikosongkan")
+	}
 	if err := Hapus(ctx, tx, id, &lain, hariH); !errors.Is(err, ErrTidakAda) {
 		t.Errorf("hapus lintas brand: %v", err)
 	}

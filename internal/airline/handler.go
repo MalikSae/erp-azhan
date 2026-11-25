@@ -3,10 +3,12 @@ package airline
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
@@ -50,30 +52,9 @@ func (h *Handler) CreateAirline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name, ok := validateAirlineInput(w, req.Name)
+	name, code, logoURL, ok := validateAirlineInput(w, req.Name, req.Code, req.LogoURL)
 	if !ok {
 		return
-	}
-
-	var code *string
-	if req.Code != nil && strings.TrimSpace(*req.Code) != "" {
-		trimmedCode := strings.TrimSpace(*req.Code)
-		if len(trimmedCode) != 2 {
-			writeError(w, http.StatusBadRequest, "Kode IATA harus 2 karakter.")
-			return
-		}
-		upperCode := strings.ToUpper(trimmedCode)
-		code = &upperCode
-	}
-
-	var logoURL *string
-	if req.LogoURL != nil && strings.TrimSpace(*req.LogoURL) != "" {
-		val := strings.TrimSpace(*req.LogoURL)
-		if !shared.ValidMediaURL(val) {
-			writeError(w, http.StatusBadRequest, "Logo harus berkas unggahan atau URL http(s).")
-			return
-		}
-		logoURL = &val
 	}
 
 	airline, err := h.repo.Create(r.Context(), name, code, logoURL)
@@ -101,30 +82,9 @@ func (h *Handler) UpdateAirline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name, ok := validateAirlineInput(w, req.Name)
+	name, code, logoURL, ok := validateAirlineInput(w, req.Name, req.Code, req.LogoURL)
 	if !ok {
 		return
-	}
-
-	var code *string
-	if req.Code != nil && strings.TrimSpace(*req.Code) != "" {
-		trimmedCode := strings.TrimSpace(*req.Code)
-		if len(trimmedCode) != 2 {
-			writeError(w, http.StatusBadRequest, "Kode IATA harus 2 karakter.")
-			return
-		}
-		upperCode := strings.ToUpper(trimmedCode)
-		code = &upperCode
-	}
-
-	var logoURL *string
-	if req.LogoURL != nil && strings.TrimSpace(*req.LogoURL) != "" {
-		val := strings.TrimSpace(*req.LogoURL)
-		if !shared.ValidMediaURL(val) {
-			writeError(w, http.StatusBadRequest, "Logo harus berkas unggahan atau URL http(s).")
-			return
-		}
-		logoURL = &val
 	}
 
 	airline, err := h.repo.Update(r.Context(), id, name, code, logoURL)
@@ -155,19 +115,54 @@ func (h *Handler) DeleteAirline(w http.ResponseWriter, r *http.Request) {
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
-// validateAirlineInput memvalidasi dan menormalisasi input nama maskapai.
-// Mengembalikan (normalizedName, ok). Jika ok=false, response sudah ditulis.
-func validateAirlineInput(w http.ResponseWriter, rawName string) (string, bool) {
-	// Gate 1: name wajib
-	if strings.TrimSpace(rawName) == "" {
-		writeError(w, http.StatusBadRequest, "Name wajib diisi.")
-		return "", false
+// Panjang kolom airlines (migrasi 001, 004).
+const (
+	maksNama    = 150
+	maksLogoURL = 500
+)
+
+// validateAirlineInput memvalidasi dan menormalisasi nama, kode IATA, dan logo maskapai, berhenti di gate
+// pertama yang gagal. Kode dan logo kosong menjadi nil. Jika ok=false, response sudah ditulis.
+func validateAirlineInput(w http.ResponseWriter, rawName string, rawCode, rawLogo *string) (string, *string, *string, bool) {
+	// Gate 1: nama wajib
+	name := strings.ToUpper(strings.TrimSpace(rawName))
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "Nama wajib diisi.")
+		return "", nil, nil, false
+	}
+	// Gate 2: panjang nama
+	if utf8.RuneCountInString(name) > maksNama {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Nama maksimal %d karakter.", maksNama))
+		return "", nil, nil, false
 	}
 
-	// Gate 2: normalisasi
-	name := strings.ToUpper(strings.TrimSpace(rawName))
+	// Gate 3: kode IATA opsional, tepat 2 karakter
+	var code *string
+	if rawCode != nil && strings.TrimSpace(*rawCode) != "" {
+		c := strings.ToUpper(strings.TrimSpace(*rawCode))
+		if utf8.RuneCountInString(c) != 2 {
+			writeError(w, http.StatusBadRequest, "Kode IATA harus 2 karakter.")
+			return "", nil, nil, false
+		}
+		code = &c
+	}
 
-	return name, true
+	// Gate 4: logo opsional
+	var logoURL *string
+	if rawLogo != nil && strings.TrimSpace(*rawLogo) != "" {
+		val := strings.TrimSpace(*rawLogo)
+		if utf8.RuneCountInString(val) > maksLogoURL {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("URL logo maksimal %d karakter.", maksLogoURL))
+			return "", nil, nil, false
+		}
+		if !shared.ValidMediaURL(val) {
+			writeError(w, http.StatusBadRequest, "Logo harus berkas unggahan atau URL http(s).")
+			return "", nil, nil, false
+		}
+		logoURL = &val
+	}
+
+	return name, code, logoURL, true
 }
 
 // ─── Error handling ───────────────────────────────────────────────────────────
@@ -180,6 +175,8 @@ func handleAirlineRepoError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "Maskapai dengan nama ini sudah ada.")
 	case errors.Is(err, ErrCodeInUse):
 		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, ErrCodeDuplicate):
+		writeError(w, http.StatusConflict, "Kode maskapai sudah dipakai.")
 	default:
 		// Tangkap MySQL FK constraint violation (error 1451)
 		var mysqlErr *mysql.MySQLError
