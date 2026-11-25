@@ -1789,6 +1789,9 @@ func updateBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64, new
 			if err != nil {
 				return fmt.Errorf("booking.UpdateStatus mark seat block: %w", err)
 			}
+			if err = shared.SimpanSeatCountTx(ctx, tx, bookingID, activeRegularPax); err != nil {
+				return fmt.Errorf("booking.UpdateStatus seat_count: %w", err)
+			}
 		}
 	}
 	// DP/Lunas mengubah hold sementara menjadi reservasi tanpa kedaluwarsa.

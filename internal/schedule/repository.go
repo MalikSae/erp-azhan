@@ -543,21 +543,6 @@ func (r *Repository) GetSeatTotal(ctx context.Context, id int64, brandID *int64)
 	return seatTotal, nil
 }
 
-// sqlQuerier: *sql.DB atau *sql.Tx.
-type sqlQuerier interface {
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-// seatDipegangBooking: jumlah seat yang dipegang booking paket. Sisa seat yang sah selalu
-// seat_total dikurangi angka ini; tidak ada seat terpakai tanpa booking.
-func seatDipegangBooking(ctx context.Context, q sqlQuerier, scheduleID int64) (int, error) {
-	var n int
-	err := q.QueryRowContext(ctx,
-		`SELECT COALESCE(SUM(seat_count),0) FROM bookings WHERE schedule_id=? AND is_seat_blocked=1 AND status <> 'batal'`,
-		scheduleID).Scan(&n)
-	return n, err
-}
-
 // SamakanSeat mengisi seat_sisa = seat_total − seat dipegang booking (minimal 0). Hanya untuk
 // memperbaiki sisa seat yang tidak cocok dengan booking; dicatat di log server.
 func (r *Repository) SamakanSeat(ctx context.Context, id int64, brandID *int64, actorID int64) (int, error) {
@@ -591,7 +576,7 @@ func samakanSeatTx(ctx context.Context, tx *sql.Tx, id int64, brandID *int64) (o
 	if brandID != nil && owner != *brandID {
 		return 0, 0, 0, ErrNotFound
 	}
-	dipegang, err := seatDipegangBooking(ctx, tx, id)
+	dipegang, err := shared.SeatDipegangBooking(ctx, tx, id)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -653,7 +638,7 @@ func updateSeatTampilTx(ctx context.Context, tx *sql.Tx, id int64, seatTampil *i
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO schedule_seat_adjustments (schedule_id, jenis, admin_user_id, seat_before, seat_after, reason) VALUES (?, 'tampil', ?, ?, ?, ?)`,
-		id, nullInt64(actorID), before, after, "Angka tampil di publik"); err != nil {
+		id, nullInt64(actorID), before, after, "Seat tampil"); err != nil {
 		return fmt.Errorf("catat riwayat angka tampil: %w", err)
 	}
 	return nil
@@ -665,15 +650,17 @@ func (r *Repository) SeatOverview(ctx context.Context, id int64, brandID *int64)
 	var o SeatOverview
 	var seatTampil sql.NullInt64
 	err := r.db.QueryRowContext(ctx, `
-		SELECT s.seat_total, s.seat_sisa, s.seat_tampil,
-		       COALESCE((SELECT SUM(b.seat_count) FROM bookings b WHERE b.schedule_id=s.id AND b.is_seat_blocked=1 AND b.status <> 'batal'),0)
+		SELECT s.seat_total, s.seat_sisa, s.seat_tampil
 		FROM schedules s WHERE s.id=? AND (? IS NULL OR s.brand_id=?)`, id, brandID, brandID).
-		Scan(&o.SeatTotal, &o.SeatSisa, &seatTampil, &o.SeatDialokasikan)
+		Scan(&o.SeatTotal, &o.SeatSisa, &seatTampil)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("schedule.SeatOverview: %w", err)
+	}
+	if o.SeatDialokasikan, err = shared.SeatDipegangBooking(ctx, r.db, id); err != nil {
+		return nil, fmt.Errorf("schedule.SeatOverview seat dipegang: %w", err)
 	}
 	o.SeatSesuaiBooking = o.SeatTotal - o.SeatDialokasikan
 	if o.SeatSesuaiBooking < 0 {
@@ -865,6 +852,12 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 			return nil, fmt.Errorf("schedule.GetByID itinerary khusus: %w", err)
 		}
 	}
+
+	dipegang, err := shared.SeatDipegangBooking(ctx, r.db, s.ID)
+	if err != nil {
+		return nil, fmt.Errorf("schedule.GetByID seat dipegang: %w", err)
+	}
+	s.SeatDipegang = &dipegang
 
 	var bCount int
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id = ?`, s.ID).Scan(&bCount); err != nil {
@@ -1139,7 +1132,7 @@ func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *Sched
 			return fmt.Errorf("%w: brand paket yang memiliki booking tidak dapat diubah", ErrConflict)
 		}
 	}
-	dipegang, err := seatDipegangBooking(ctx, tx, id)
+	dipegang, err := shared.SeatDipegangBooking(ctx, tx, id)
 	if err != nil {
 		return err
 	}
@@ -1154,6 +1147,10 @@ func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *Sched
 			id, nullInt64(inp.ActorID), oldRemaining, inp.SeatSisa, alasanUbahKuota(oldTotal, inp.SeatTotal)); err != nil {
 			return fmt.Errorf("catat riwayat ubah kuota seat: %w", err)
 		}
+	} else if inp.SeatSisa != oldRemaining {
+		// Kuota tetap tetapi sisa lama tidak cocok dengan booking: ikut disamakan saat simpan, dicatat
+		// seperti Samakan dengan booking supaya selisih tidak hilang tanpa jejak.
+		log.Printf("[AUDIT] schedule_seat_samakan id=%d brand=%d before=%d after=%d by=%d via=edit_paket", id, oldBrand, oldRemaining, inp.SeatSisa, inp.ActorID)
 	}
 
 	return nil

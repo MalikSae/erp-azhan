@@ -35,8 +35,9 @@ func CloneSchedule(t *testing.T, tx *sql.Tx, scheduleID int64) int64 {
 	return id
 }
 
-// seatDipegang: seat yang dipegang booking jadwal (is_seat_blocked, bukan batal).
-func seatDipegang(t *testing.T, tx *sql.Tx, scheduleID int64) (total, sisa, dipegang int) {
+// bacaSeatJadwal: seat_total, seat_sisa, dan seat yang dipegang booking (is_seat_blocked, bukan batal).
+// Rumus ditulis ulang di sini dengan sengaja sebagai pembanding yang tidak bergantung pada kode produksi.
+func bacaSeatJadwal(t *testing.T, tx *sql.Tx, scheduleID int64) (total, sisa, dipegang int) {
 	t.Helper()
 	if err := tx.QueryRowContext(context.Background(), `
 		SELECT s.seat_total, s.seat_sisa,
@@ -51,7 +52,7 @@ func seatDipegang(t *testing.T, tx *sql.Tx, scheduleID int64) (total, sisa, dipe
 // kuota tanpa booking; panggil ini sebelum menguji rumus sisa seat.
 func SamakanSisa(t *testing.T, tx *sql.Tx, scheduleID int64) {
 	t.Helper()
-	total, _, dipegang := seatDipegang(t, tx, scheduleID)
+	total, _, dipegang := bacaSeatJadwal(t, tx, scheduleID)
 	mustExec(t, tx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, total-dipegang, scheduleID)
 }
 
@@ -59,7 +60,7 @@ func SamakanSisa(t *testing.T, tx *sql.Tx, scheduleID int64) {
 // (tidak ada booking di luar sistem).
 func CekRumusSeat(t *testing.T, tx *sql.Tx, scheduleID int64, langkah string) {
 	t.Helper()
-	total, sisa, dipegang := seatDipegang(t, tx, scheduleID)
+	total, sisa, dipegang := bacaSeatJadwal(t, tx, scheduleID)
 	if sisa != total-dipegang {
 		t.Fatalf("%s: seat_sisa=%d, want seat_total(%d) − dipegang(%d) = %d", langkah, sisa, total, dipegang, total-dipegang)
 	}

@@ -67,7 +67,7 @@ const SeatManagement = ({ scheduleId, canEdit = true }) => {
     if (!matikan && nilaiTampil !== '') {
       angka = Number(nilaiTampil);
       if (!Number.isInteger(angka) || angka < 1 || angka > overview.seat_total) {
-        setTampilError(`Angka tampil harus antara 1 dan ${overview.seat_total}.`);
+        setTampilError(`Seat tampil harus antara 1 dan ${overview.seat_total}.`);
         return;
       }
     }
@@ -78,7 +78,7 @@ const SeatManagement = ({ scheduleId, canEdit = true }) => {
       setIsTampilOpen(false);
       await load();
     } catch (err) {
-      setTampilError(err.response?.data?.error || 'Angka tampil gagal disimpan. Coba lagi.');
+      setTampilError(err.response?.data?.error || 'Seat tampil gagal disimpan. Coba lagi.');
     } finally {
       setIsSavingTampil(false);
     }
@@ -174,7 +174,7 @@ const SeatManagement = ({ scheduleId, canEdit = true }) => {
         <div className="space-y-4">
           {tampilError && <Alert variant="error">{tampilError}</Alert>}
           <Input
-            label="Angka tampil"
+            label="Jumlah seat"
             name="seat_tampil"
             type="number"
             min="1"

@@ -58,7 +58,10 @@ type Schedule struct {
 	SeatTotal          int          `json:"seat_total"`
 	SeatSisa           int          `json:"seat_sisa"`
 	// SeatTampil: angka scarcity yang diisi admin; nil = nonaktif. Hanya label publik.
-	SeatTampil   *int `json:"seat_tampil"`
+	SeatTampil *int `json:"seat_tampil"`
+	// SeatDipegang: seat yang dipegang booking; hanya diisi pada detail jadwal (form edit menghitung
+	// sisa setelah ubah kuota dari angka ini, sama dengan server).
+	SeatDipegang *int `json:"seat_dipegang,omitempty"`
 	BookingCount int  `json:"booking_count"`
 	// KomisiAktif: jumlah baris komisi aktif dari booking jadwal ini. Hanya diisi pada detail jadwal, untuk
 	// peringatan saat tanggal berangkat diubah (ketersediaan komisi mengikuti tanggal berangkat).

@@ -385,7 +385,7 @@ func (h *Handler) UpdateScheduleSeatTampil(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if req.SeatTampil != nil && (*req.SeatTampil < 1 || *req.SeatTampil > seatTotal) {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Angka tampil harus antara 1 dan %d.", seatTotal))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Seat tampil harus antara 1 dan %d.", seatTotal))
 		return
 	}
 

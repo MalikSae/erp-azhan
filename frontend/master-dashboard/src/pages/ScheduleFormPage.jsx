@@ -317,7 +317,8 @@ const ScheduleFormPage = () => {
             is_direct_flight: scheduleData.is_direct_flight || false,
             seat_total: scheduleData.seat_total || '',
             expected_seat_total: scheduleData.seat_total,
-            kuota_terisi: (scheduleData.seat_total !== undefined && scheduleData.seat_sisa !== undefined) ? (scheduleData.seat_total - scheduleData.seat_sisa) : '',
+            // Terisi = seat dipegang booking, sama dengan hitungan server saat kuota diubah.
+            kuota_terisi: scheduleData.seat_dipegang ?? '',
             maskapai_id: scheduleData.maskapai?.id || scheduleData.maskapai_id || '',
             berangkat_tanggal: scheduleData.berangkat_tanggal ? scheduleData.berangkat_tanggal.split('T')[0] : '',
             // Untuk peringatan: tanggal berangkat menentukan kapan komisi agen jadwal ini tersedia.
