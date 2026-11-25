@@ -1,4 +1,4 @@
--- 163_seat_tanpa_di_luar_booking.sql
+-- 164_seat_tanpa_di_luar_booking.sql
 -- Tidak ada booking di luar sistem (keputusan 2026-11-25): sisa seat selalu
 -- seat_total − seat yang dipegang booking. Koreksi sisa seat manual
 -- (PUT /schedules/{id}/seat) dihapus.
