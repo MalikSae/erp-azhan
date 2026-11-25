@@ -55,6 +55,9 @@ func TestLangkah8dan9Pencairan(t *testing.T) {
 	if err := ajukan(400_000, rekeningUji); err != ErrPencairanMinimal {
 		t.Fatalf("di bawah minimal: %v", err)
 	}
+	if err := ajukan(600_000.5, rekeningUji); err != ErrPencairanTidakBulat {
+		t.Fatalf("nominal pecahan: %v", err)
+	}
 	if err := ajukan(1_000_000, Rekening{Bank: "BSI"}); err != ErrRekeningTidakLengkap {
 		t.Fatalf("rekening kosong: %v", err)
 	}

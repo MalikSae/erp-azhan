@@ -21,7 +21,7 @@ func handlePencairanKaitanError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrBukanAgenAktif):
 		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, ErrPencairanMinimal), errors.Is(err, ErrPencairanMelebihi),
+	case errors.Is(err, ErrPencairanMinimal), errors.Is(err, ErrPencairanTidakBulat), errors.Is(err, ErrPencairanMelebihi),
 		errors.Is(err, ErrRekeningTidakLengkap), errors.Is(err, ErrAgenTidakValid),
 		errors.Is(err, ErrKaitanTidakBerubah), errors.Is(err, ErrKaitanModeTidakSah):
 		writeError(w, http.StatusBadRequest, err.Error())
