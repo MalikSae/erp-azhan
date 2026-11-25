@@ -243,3 +243,37 @@ func TestDokumenAkunTertaut(t *testing.T) {
 		t.Errorf("hold kedaluwarsa: %+v", d)
 	}
 }
+
+// Komisi tersedia (H+3) dikabarkan juga bila booking dibatalkan setelah lunas (K20: komisinya tetap di saldo).
+// Komisi yang sudah dibatalkan (booking turun dari lunas) tidak dikabarkan.
+func TestKomisiTersediaBookingBatalSetelahLunas(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	hari := time.Now().In(ZonaWIB).Format("2006-01-02")
+	berangkat := time.Now().In(ZonaWIB).AddDate(0, 0, -3).Format("2006-01-02")
+	jadwal, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: berangkat})
+	agen := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenKomisiTersediaQzp", StatusAgen: "aktif"})
+
+	komisi := func(status string, batal bool) {
+		j := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "JamaahKomisi" + status + "Qzp", Direkrut: agen})
+		b, pax := testdb.NewBookingPax(t, tx, jadwal, status, 1000, testdb.Pax{JamaahID: j})
+		dibatalkan := any(nil)
+		if batal {
+			dibatalkan = time.Now()
+		}
+		testdb.Exec(t, tx, `INSERT INTO transaksi_komisi (brand_id, akun_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal, dibatalkan_at)
+			VALUES (?,?,?,?,?,'langsung',500000,?)`, brand, agen, j, b, pax[0], dibatalkan)
+	}
+	komisi("lunas", false)
+	komisi("batal", false) // dibatalkan setelah lunas: komisi tetap
+	komisi("dp", true)     // turun dari lunas: komisi batal
+
+	for i := 0; i < 2; i++ {
+		if err := komisiTersedia(ctx, tx, hari); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d := daftarJenis(t, tx, agen)[JenisKomisiTersedia]; len(d) != 2 {
+		t.Errorf("komisi tersedia: ingin 2 (lunas dan batal setelah lunas), dapat %d: %+v", len(d), d)
+	}
+}
