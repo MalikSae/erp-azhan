@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"erp-azhan/api/internal/shared"
 )
 
 // zonaWIB: tanggal klik dan "bulan berjalan" dibaca sebagai waktu Indonesia Barat.
@@ -111,7 +113,12 @@ func (r *Repository) ListMutasiAgen(ctx context.Context, akunID int64) ([]Mutasi
 // bookingTercatat: booking minimal DP (bukan draft, baru, atau batal).
 const bookingTercatat = `b.status IN ('dp', 'lunas')`
 
-// JamaahAgen: satu jamaah dalam satu booking minimal DP, dari jamaah yang terikat ke agen.
+// sqlJamaahAgen: baris jamaah di menu Jamaah agen (spek menu Jamaah 2026-11-25), alias j, bp, b; dua argumen akun agen.
+// Jamaah terikat ke agen dari booking minimal DP, ditambah jamaah dari booking yang dibuat agen sendiri (termasuk
+// yang belum DP). Booking yang dibuat agen = bookings.dibuat_oleh_agen_akun_id (diisi untuk agen aktif di jalur mana pun).
+const sqlJamaahAgen = `((j.direkrut_oleh_akun_id = ? AND b.status IN ('dp', 'lunas')) OR (b.dibuat_oleh_agen_akun_id = ? AND b.status IN ('baru', 'dp', 'lunas')))`
+
+// JamaahAgen: satu jamaah dalam satu booking di menu Jamaah agen.
 type JamaahAgen struct {
 	BookingID     int64  `json:"booking_id"`
 	JamaahID      int64  `json:"jamaah_id"`
@@ -119,42 +126,108 @@ type JamaahAgen struct {
 	Paket         string `json:"paket"`
 	Jenis         string `json:"jenis"`          // umroh | haji | wisata
 	TanggalDaftar string `json:"tanggal_daftar"` // YYYY-MM-DD, tanggal booking dibuat
-	Status        string `json:"status"`         // dp | lunas | berangkat
+	Status        string `json:"status"`         // belum_dp | dp | lunas | berangkat
+	// Saya: jamaah ini adalah agen sendiri (pax "Saya sendiri" atau jamaah yang tertaut ke akun agen); lencana "Anda".
+	Saya bool `json:"saya"`
+	// BisaIsiData: agen adalah akun pembuat data jamaah ini (akses penuh): tautan "Isi data".
+	BisaIsiData bool `json:"bisa_isi_data"`
+	// PerluTindakan: belum DP, belum lunas, atau data/dokumen wajib belum lengkap; jamaah yang sudah berangkat tidak.
+	PerluTindakan bool `json:"perlu_tindakan"`
 }
 
 func listDataJamaah(ctx context.Context, q querier, akunID int64, now time.Time) ([]JamaahAgen, error) {
 	hariIni := now.In(zonaWIB).Format("2006-01-02")
 	rows, err := q.QueryContext(ctx, `
 		SELECT b.id, j.id, j.nama_lengkap, s.jadwal_nama, s.journey_type, DATE_FORMAT(b.created_at, '%Y-%m-%d'),
-			b.status, DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d')
+			b.status, DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d'), bp.pax_type,
+			(bp.saya_sendiri_akun_id = ? OR j.id = (SELECT jamaah_id FROM customer_accounts WHERE id = ?)),
+			COALESCE(j.dibuat_oleh_akun_id = ?, FALSE),
+			`+sqlHitungData()+`
 		FROM jamaah j
 		JOIN booking_pax bp ON bp.jamaah_id = j.id AND bp.pax_status = 'aktif'
 		JOIN bookings b ON b.id = bp.booking_id
 		JOIN schedules s ON s.id = b.schedule_id
-		WHERE j.direkrut_oleh_akun_id = ? AND `+bookingTercatat+`
-		ORDER BY b.created_at DESC, b.id DESC, bp.id`, akunID)
+		WHERE `+sqlJamaahAgen+`
+		ORDER BY b.created_at DESC, b.id DESC, bp.id`, akunID, akunID, akunID, akunID, akunID)
 	if err != nil {
 		return nil, fmt.Errorf("agen: data jamaah: %w", err)
 	}
 	defer rows.Close()
 	out := []JamaahAgen{}
+	paxType := map[int]string{}
+	dataKurang := map[int]bool{}
 	for rows.Next() {
 		var it JamaahAgen
-		var jenis, status, berangkat string
-		if err := rows.Scan(&it.BookingID, &it.JamaahID, &it.Nama, &it.Paket, &jenis, &it.TanggalDaftar, &status, &berangkat); err != nil {
+		var jenis, status, berangkat, tipe string
+		var saya sql.NullBool
+		var terisi, total int
+		if err := rows.Scan(&it.BookingID, &it.JamaahID, &it.Nama, &it.Paket, &jenis, &it.TanggalDaftar, &status, &berangkat, &tipe,
+			&saya, &it.BisaIsiData, &terisi, &total); err != nil {
 			return nil, fmt.Errorf("agen: data jamaah: %w", err)
 		}
 		it.Jenis = jenis
 		if jenis == "wisata_halal" {
 			it.Jenis = "wisata"
 		}
+		it.Saya = saya.Valid && saya.Bool
 		it.Status = status
+		if status == "baru" {
+			it.Status = "belum_dp"
+		}
 		if berangkat != "" && berangkat <= hariIni {
 			it.Status = "berangkat"
 		}
+		paxType[len(out)] = tipe
+		dataKurang[len(out)] = terisi < total
 		out = append(out, it)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Dokumen wajib yang sudah disetujui, sekali untuk semua jamaah di daftar.
+	disetujui := map[int64]map[string]bool{}
+	if len(out) > 0 {
+		ids := make([]any, 0, len(out))
+		marks := make([]string, 0, len(out))
+		for _, it := range out {
+			ids = append(ids, it.JamaahID)
+			marks = append(marks, "?")
+		}
+		drows, err := q.QueryContext(ctx, `SELECT jamaah_id, jenis FROM dokumen_jamaah WHERE status = 'approved' AND jamaah_id IN (`+strings.Join(marks, ",")+`)`, ids...)
+		if err != nil {
+			return nil, fmt.Errorf("agen: data jamaah dokumen: %w", err)
+		}
+		defer drows.Close()
+		for drows.Next() {
+			var id int64
+			var jenis string
+			if err := drows.Scan(&id, &jenis); err != nil {
+				return nil, fmt.Errorf("agen: data jamaah dokumen: %w", err)
+			}
+			if disetujui[id] == nil {
+				disetujui[id] = map[string]bool{}
+			}
+			disetujui[id][jenis] = true
+		}
+		if err := drows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	for i := range out {
+		if out[i].Status == "berangkat" {
+			continue
+		}
+		dokumenKurang := false
+		for _, w := range shared.DokumenWajibJamaah(paxType[i]) {
+			if !disetujui[out[i].JamaahID][w] {
+				dokumenKurang = true
+				break
+			}
+		}
+		out[i].PerluTindakan = out[i].Status == "belum_dp" || out[i].Status == "dp" || dataKurang[i] || dokumenKurang
+	}
+	return out, nil
 }
 
 func (r *Repository) ListDataJamaahAgen(ctx context.Context, akunID int64, now time.Time) ([]JamaahAgen, error) {

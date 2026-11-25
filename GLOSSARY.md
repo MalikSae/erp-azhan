@@ -110,7 +110,10 @@ _Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti k
 
 **Keputusan admin**: satu aksi di kartu pengajuan (B1): setujui, bebaskan biaya, minta unggah ulang, tolak, atau setujui dengan bayar menyusul.
 
-**Prospek**: akun yang daftar lewat tautan agen (upline = agen itu) dan belum sampai DP, dalam tiga tahap: belum booking, belum DP (hold berjalan), expired (hold habis; label "Kuota penuh" / "Pendaftaran tutup" bila tidak bisa lanjut DP). Tampil di segmen Prospek pada Jamaah Saya; agen hanya bisa chat WhatsApp akun pemesan. Booking buatan agen sendiri bukan prospek. Keluar dari daftar saat DP, batal, atau 30 hari tanpa kabar. Tidak masuk komisi, peringkat, atau KPI. Spek: `docs/spek/SPEK-PROSPEK-AGEN-2026-11-25.md`.
+**Menu Jamaah**: menu daftar orang di portal akun web dan app, satu nama untuk semua peran. Akun biasa: jamaah yang ia daftarkan, untuk melengkapi data. Agen aktif: segmen Jamaah (booking buatan agen termasuk yang belum DP, jamaah terikat mulai DP, agen sendiri berlencana "Anda") dan segmen Prospek; saringan Semua / Perlu tindakan / Lunas / Berangkat. Daftar transaksi bernama menu **Booking**. Spek: `docs/spek/SPEK-MENU-JAMAAH-ISTILAH-2026-11-25.md`.
+_Hindari_: Data Jamaah, Jamaah Saya, Booking Saya, Perjalanan (untuk daftar booking).
+
+**Prospek**: akun yang daftar lewat tautan agen (upline = agen itu) dan belum sampai DP, dalam tiga tahap: belum booking, belum DP (hold berjalan), expired (hold habis; label "Kuota penuh" / "Pendaftaran tutup" bila tidak bisa lanjut DP). Tampil di segmen Prospek pada menu Jamaah agen; agen hanya bisa chat WhatsApp akun pemesan. Booking buatan agen sendiri bukan prospek. Keluar dari daftar saat DP, batal, atau 30 hari tanpa kabar. Tidak masuk komisi, peringkat, atau KPI. Spek: `docs/spek/SPEK-PROSPEK-AGEN-2026-11-25.md`.
 _Hindari_: lead, calon jamaah (untuk daftar ini).
 
 ## Tabungan Umroh
