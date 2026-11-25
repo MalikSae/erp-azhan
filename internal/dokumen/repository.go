@@ -100,13 +100,26 @@ func (r *Repository) Upsert(ctx context.Context, jamaahID int64, req *CreateDoku
 		return nil, err
 	}
 	defer tx.Rollback()
-	var owner int64
-	if err = tx.QueryRowContext(ctx, `SELECT id FROM jamaah WHERE id=? FOR UPDATE`, jamaahID).Scan(&owner); err != nil {
-		return nil, err
-	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO dokumen_jamaah_versions(dokumen_id,version,file_url,status,rejection_reason) SELECT id,version,file_url,status,rejection_reason FROM dokumen_jamaah WHERE jamaah_id=? AND jenis=? ON DUPLICATE KEY UPDATE status=VALUES(status),rejection_reason=VALUES(rejection_reason)`, jamaahID, req.Jenis)
+	id, err := UpsertTx(ctx, tx, jamaahID, req)
 	if err != nil {
 		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return r.GetByID(ctx, id, nil)
+}
+
+// UpsertTx: isi Upsert di dalam transaksi pemanggil, agar pemanggil bisa memeriksa status dokumen
+// (SELECT ... FOR UPDATE) lalu menyimpan berkas pengganti secara atomik. Mengembalikan id dokumen;
+// commit tanggung jawab pemanggil.
+func UpsertTx(ctx context.Context, tx *sql.Tx, jamaahID int64, req *CreateDokumenRequest) (int64, error) {
+	var owner int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM jamaah WHERE id=? FOR UPDATE`, jamaahID).Scan(&owner); err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO dokumen_jamaah_versions(dokumen_id,version,file_url,status,rejection_reason) SELECT id,version,file_url,status,rejection_reason FROM dokumen_jamaah WHERE jamaah_id=? AND jenis=? ON DUPLICATE KEY UPDATE status=VALUES(status),rejection_reason=VALUES(rejection_reason)`, jamaahID, req.Jenis); err != nil {
+		return 0, err
 	}
 	const q = `
 		INSERT INTO dokumen_jamaah (jamaah_id, jenis, file_url, status)
@@ -120,27 +133,19 @@ func (r *Repository) Upsert(ctx context.Context, jamaahID int64, req *CreateDoku
 
 	res, err := tx.ExecContext(ctx, q, jamaahID, req.Jenis, req.FileURL)
 	if err != nil {
-		return nil, fmt.Errorf("dokumen.Upsert: %w", err)
+		return 0, fmt.Errorf("dokumen.Upsert: %w", err)
 	}
 
-	// Untuk mendapatkan ID setelah upsert, kita perlu SELECT ulang
-	// karena LastInsertId() mungkin tidak akurat pada UPDATE (ON DUPLICATE KEY)
+	// LastInsertId() tidak akurat pada cabang UPDATE (ON DUPLICATE KEY), jadi id diambil ulang.
 	var id int64
 	err = tx.QueryRowContext(ctx, `SELECT id FROM dokumen_jamaah WHERE jamaah_id=? AND jenis=?`, jamaahID, req.Jenis).Scan(&id)
 	if err != nil {
-		// Fallback ke LastInsertId jika query ini gagal, meski jarang terjadi
-		lastID, errLast := res.LastInsertId()
-		if errLast == nil && lastID > 0 {
-			id = lastID
-		} else {
-			return nil, fmt.Errorf("dokumen.Upsert get id: %w", err)
+		if lastID, errLast := res.LastInsertId(); errLast == nil && lastID > 0 {
+			return lastID, nil
 		}
+		return 0, fmt.Errorf("dokumen.Upsert get id: %w", err)
 	}
-
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
-	return r.GetByID(ctx, id, nil)
+	return id, nil
 }
 
 // ─── UpdateStatus ─────────────────────────────────────────────────────────────
