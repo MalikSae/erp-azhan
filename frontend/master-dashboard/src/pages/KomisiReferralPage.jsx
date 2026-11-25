@@ -21,6 +21,7 @@ import StatTile from 'shared/ui/StatTile';
 import ActionMenu from 'shared/ui/ActionMenu';
 import Textarea from 'shared/ui/Textarea';
 import TextButton from 'shared/ui/TextButton';
+import FileInput from 'shared/ui/FileInput';
 
 const money = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(value) || 0);
 const dateLabel = (value) => !value ? '-' : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
@@ -305,15 +306,14 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
             )}
 
             {mode === 'setujui' && (
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-neutral-900 font-heading">Bukti transfer keluar *</label>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(e) => setBukti(e.target.files?.[0] || null)}
-                  className="block w-full text-sm text-neutral-700 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-neutral-800 hover:file:bg-neutral-200"
-                />
-              </div>
+              <FileInput
+                label="Bukti transfer keluar"
+                required
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                showPreview={false}
+                placeholder={bukti ? bukti.name : 'JPG, PNG, WebP, atau PDF'}
+                onChange={(e) => setBukti(e.target.files?.[0] || null)}
+              />
             )}
 
             {mode === 'tolak' && (

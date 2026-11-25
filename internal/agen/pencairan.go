@@ -22,6 +22,7 @@ const MinimalPencairan = 500_000
 var (
 	ErrPencairanMasihPending = errors.New("masih ada pengajuan pencairan yang sedang diproses")
 	ErrPencairanMinimal      = errors.New("nominal pencairan minimal Rp500.000")
+	ErrPencairanTidakBulat   = errors.New("nominal harus bilangan bulat rupiah")
 	ErrPencairanMelebihi     = errors.New("nominal melebihi saldo tersedia")
 	ErrRekeningTidakLengkap  = errors.New("rekening tujuan wajib diisi lengkap (bank, nomor, atas nama)")
 	ErrPencairanBukanPending = errors.New("pengajuan pencairan sudah diproses")
@@ -79,8 +80,11 @@ func (req *AjukanPencairanRequest) normalize() error {
 	if strings.Trim(req.Nomor, "0123456789 -") != "" {
 		return ErrRekeningTidakLengkap
 	}
-	if req.Nominal < MinimalPencairan || !shared.RupiahBulat(req.Nominal) {
+	if req.Nominal < MinimalPencairan {
 		return ErrPencairanMinimal
+	}
+	if !shared.RupiahBulat(req.Nominal) {
+		return ErrPencairanTidakBulat
 	}
 	return nil
 }

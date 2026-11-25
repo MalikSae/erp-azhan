@@ -88,8 +88,8 @@ func insertMutasi(ctx context.Context, tx execQuerier, m mutasiInput) error {
 }
 
 // ApplyBrandDelta mengubah stok brand sebesar delta dalam transaksi pemanggil dan mencatatnya
-// di buku besar. Dipakai penyerahan/pembatalan perlengkapan pada booking.
-func ApplyBrandDelta(ctx context.Context, tx *sql.Tx, brandID, itemID uint64, delta int, jenis, refTipe string, refID uint64) error {
+// di buku besar. Dipakai penyerahan/pembatalan perlengkapan pada booking; adminID = petugas (0 = tidak diketahui).
+func ApplyBrandDelta(ctx context.Context, tx *sql.Tx, brandID, itemID uint64, delta int, jenis, refTipe string, refID uint64, adminID int64) error {
 	cur, err := lockStok(ctx, tx, itemID, brandID)
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func ApplyBrandDelta(ctx context.Context, tx *sql.Tx, brandID, itemID uint64, de
 	}
 	return insertMutasi(ctx, tx, mutasiInput{
 		ItemID: itemID, BrandID: brandID, Jenis: jenis, Qty: delta, Setelah: next,
-		RefTipe: &refTipe, RefID: &refID,
+		RefTipe: &refTipe, RefID: &refID, CreatedBy: adminPtr(adminID),
 	})
 }
 
@@ -179,7 +179,7 @@ func (r *Repository) Koreksi(ctx context.Context, userID *int64, itemID, brandID
 	return stokBaru, tx.Commit()
 }
 
-// ListMutasi mengembalikan riwayat terbaru (maks 300), bisa disaring per item / brand / jenis.
+// ListMutasi mengembalikan riwayat terbaru (maks 200), bisa disaring per item / brand / jenis.
 func (r *Repository) ListMutasi(ctx context.Context, itemID, brandID *uint64, jenis string, beforeID uint64, limit int) ([]MutasiRow, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 100
@@ -283,7 +283,7 @@ func (h *Handler) mutasiError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrStokKurang):
 		h.sendError(w, http.StatusBadRequest, err.Error())
 	default:
-		h.sendError(w, http.StatusInternalServerError, "Gagal mencatat pergerakan stok.")
+		h.serverError(w, err, "Gagal mencatat pergerakan stok.")
 	}
 }
 
@@ -386,8 +386,16 @@ func (h *Handler) ListMutasi(w http.ResponseWriter, r *http.Request) {
 	beforeID, _ := strconv.ParseUint(q.Get("before_id"), 10, 64)
 	rows, err := h.repo.ListMutasi(r.Context(), itemID, brandID, q.Get("jenis"), beforeID, limit)
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat riwayat stok.")
+		h.serverError(w, err, "Gagal memuat riwayat stok.")
 		return
 	}
 	h.sendJSON(w, http.StatusOK, rows)
+}
+
+// adminPtr: id petugas untuk kolom created_by; 0 berarti tidak diketahui (NULL).
+func adminPtr(id int64) *int64 {
+	if id == 0 {
+		return nil
+	}
+	return &id
 }

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"erp-azhan/api/internal/booking"
 )
 
 type querier interface {
@@ -14,7 +16,7 @@ type querier interface {
 }
 
 // Pax yang masuk manifest: pax aktif dari booking baru, DP, dan lunas (draft dan batal tidak).
-const syaratPax = `b.status IN ('baru','dp','lunas') AND bp.pax_status = 'aktif'`
+const syaratPax = booking.SQLStatusAktif + ` AND bp.pax_status = 'aktif'`
 
 // ambilPaket memuat header manifest; ErrTidakAda bila paket tidak ada atau di luar brand admin.
 func ambilPaket(ctx context.Context, q querier, scheduleID int64, scope *int64) (*Paket, error) {

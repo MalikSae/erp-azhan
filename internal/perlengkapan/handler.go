@@ -3,6 +3,7 @@ package perlengkapan
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,7 +36,7 @@ func (h *Handler) sendError(w http.ResponseWriter, status int, message string) {
 func (h *Handler) ListItems(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.ListItems(r.Context())
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat item perlengkapan.")
+		h.serverError(w, err, "Gagal memuat item perlengkapan.")
 		return
 	}
 	h.sendJSON(w, http.StatusOK, items)
@@ -78,7 +79,7 @@ func (h *Handler) CreateItem(w http.ResponseWriter, r *http.Request) {
 			h.sendError(w, http.StatusConflict, "Nama item perlengkapan sudah terdaftar.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal menambahkan item perlengkapan.")
+		h.serverError(w, err, "Gagal menambahkan item perlengkapan.")
 		return
 	}
 
@@ -126,7 +127,7 @@ func (h *Handler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 			h.sendError(w, http.StatusConflict, "Nama item perlengkapan sudah terdaftar.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal mengubah item perlengkapan.")
+		h.serverError(w, err, "Gagal mengubah item perlengkapan.")
 		return
 	}
 
@@ -148,10 +149,10 @@ func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, ErrInUse) {
-			h.sendError(w, http.StatusConflict, "Tidak bisa dihapus, item masih dipakai di template set atau masih memiliki stok.")
+			h.sendError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai di set atau stok.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal menghapus item perlengkapan.")
+		h.serverError(w, err, "Gagal menghapus item perlengkapan.")
 		return
 	}
 
@@ -168,7 +169,7 @@ func (h *Handler) ListStok(w http.ResponseWriter, r *http.Request) {
 	if brandIDStr == "" {
 		items, err := h.repo.ListStokAll(r.Context())
 		if err != nil {
-			h.sendError(w, http.StatusInternalServerError, "Gagal memuat stok perlengkapan seluruh brand.")
+			h.serverError(w, err, "Gagal memuat stok perlengkapan seluruh brand.")
 			return
 		}
 		if scoped != nil {
@@ -196,7 +197,7 @@ func (h *Handler) ListStok(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.repo.ListStokByBrand(r.Context(), brandID)
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat stok perlengkapan.")
+		h.serverError(w, err, "Gagal memuat stok perlengkapan.")
 		return
 	}
 
@@ -252,7 +253,7 @@ func (h *Handler) UpdateStok(w http.ResponseWriter, r *http.Request) {
 			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan.")
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal memperbarui stok perlengkapan.")
+		h.serverError(w, err, "Gagal memperbarui stok perlengkapan.")
 		return
 	}
 
@@ -265,7 +266,7 @@ func (h *Handler) UpdateStok(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetSetTemplate(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.GetSetTemplate(r.Context())
 	if err != nil {
-		h.sendError(w, http.StatusInternalServerError, "Gagal memuat template set perlengkapan.")
+		h.serverError(w, err, "Gagal memuat template set perlengkapan.")
 		return
 	}
 	h.sendJSON(w, http.StatusOK, items)
@@ -285,9 +286,15 @@ func (h *Handler) UpdateSetTemplate(w http.ResponseWriter, r *http.Request) {
 			h.sendError(w, http.StatusBadRequest, pesanInputTidakValid(err))
 			return
 		}
-		h.sendError(w, http.StatusInternalServerError, "Gagal memperbarui template set perlengkapan.")
+		h.serverError(w, err, "Gagal memperbarui template set perlengkapan.")
 		return
 	}
 
 	h.sendJSON(w, http.StatusOK, items)
+}
+
+// serverError mencatat galat internal ke log lalu menjawab 500 dengan pesan untuk pengguna.
+func (h *Handler) serverError(w http.ResponseWriter, err error, msg string) {
+	log.Printf("[ERROR] perlengkapan: %s: %v", msg, err)
+	h.sendError(w, http.StatusInternalServerError, msg)
 }

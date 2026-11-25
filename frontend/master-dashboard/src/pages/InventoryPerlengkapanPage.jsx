@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { Pencil, Trash2, History, PackagePlus, SlidersHorizontal } from 'lucide-react';
+import { Pencil, Trash2, History, SlidersHorizontal } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import DataTable from 'shared/ui/DataTable';
 import Button from 'shared/ui/Button';
+import TextButton from 'shared/ui/TextButton';
 import Modal from 'shared/ui/Modal';
 import FormField from 'shared/ui/FormField';
 import Input from 'shared/ui/Input';
@@ -362,21 +363,18 @@ const InventoryPerlengkapanPage = () => {
 
   return (
     <div className="space-y-6">
+      {/* Satu tombol utama: Tambah Item bagi pengelola katalog, selain itu Terima Barang. Aksi lain tautan teks. */}
       <PageHeader
         title="Perlengkapan"
-        {...(canEditCatalog ? { actionLabel: '+ Tambah Item', onAction: () => handleOpenModal() } : {})}
+        {...(canEditCatalog
+          ? { actionLabel: '+ Tambah Item', onAction: () => handleOpenModal() }
+          : canEditStok
+            ? { actionLabel: 'Terima Barang', onAction: openTerima }
+            : {})}
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" onClick={() => navigate('/inventory/riwayat-stok')}>
-            <History size={16} strokeWidth={1.75} />
-            <span>Riwayat</span>
-          </Button>
-          {canEditStok && (
-            <Button variant="secondary" onClick={openTerima}>
-              <PackagePlus size={16} strokeWidth={1.75} />
-              <span>Terima barang</span>
-            </Button>
-          )}
+        <div className="flex flex-wrap items-center gap-4 md:mr-2">
+          <TextButton onClick={() => navigate('/inventory/riwayat-stok')}>Riwayat stok</TextButton>
+          {canEditCatalog && canEditStok && <TextButton onClick={openTerima}>Terima barang</TextButton>}
         </div>
       </PageHeader>
 
@@ -390,7 +388,7 @@ const InventoryPerlengkapanPage = () => {
           columns={columns}
           data={rows}
           itemsPerPage={15}
-          emptyMessage='Belum ada item perlengkapan. Klik "+ Tambah Item" untuk menambahkan.'
+          emptyMessage="Belum ada item perlengkapan."
           searchPlaceholder="Cari nama item..."
           toolbarActions={
             <CustomDropdown
@@ -417,20 +415,20 @@ const InventoryPerlengkapanPage = () => {
         <form onSubmit={handleSubmitItem} className="space-y-4">
           {formErrors && <Alert variant="error">{formErrors}</Alert>}
 
-          <FormField label="Nama Item" required>
+          <FormField label="Nama item" required>
             <Input
               type="text"
               name="nama"
               value={formData.nama}
               onChange={(e) => setFormData((prev) => ({ ...prev, nama: e.target.value }))}
-              placeholder="Koper 24 inch, Kain Ihram, Buku Doa"
+              placeholder="Kain ihram"
               autoFocus
               required
             />
           </FormField>
 
           <FileInput
-            label="Foto Item"
+            label="Foto item"
             accept="image/png,image/jpeg,image/webp"
             value={formData.photo_url}
             previewUrl={photoPreview}
@@ -443,10 +441,6 @@ const InventoryPerlengkapanPage = () => {
             uploadingText="Mengunggah foto..."
             placeholder="Pilih foto item (PNG, JPG, WebP)..."
           />
-
-          <p className="text-xs font-body text-neutral-500">
-            Jumlah per jamaah diatur di menu Kategori (bawaan) atau di form Paket (khusus paket).
-          </p>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
             <Button type="button" variant="secondary" onClick={handleCloseModal} disabled={isSubmitting}>
@@ -472,14 +466,14 @@ const InventoryPerlengkapanPage = () => {
             className="!mb-0"
           />
           <CustomDropdown
-            label="Masuk ke Stok Brand"
+            label="Brand"
             required
             value={terimaForm.brand_id}
             onChange={(v) => setTerimaForm((p) => ({ ...p, brand_id: valueOf(v) }))}
             options={[{ value: '', label: 'Pilih brand' }, ...brandOptions]}
             className="!mb-0"
           />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
               label="Jumlah"
               type="number"
@@ -491,7 +485,7 @@ const InventoryPerlengkapanPage = () => {
               className="!mb-0"
             />
             <Input
-              label="Harga Satuan (Opsional)"
+              label="Harga satuan"
               type="number"
               min="0"
               step="1"
@@ -502,16 +496,16 @@ const InventoryPerlengkapanPage = () => {
             />
           </div>
           <Input
-            label="Vendor (Opsional)"
+            label="Vendor"
             value={terimaForm.vendor}
             onChange={(e) => setTerimaForm((p) => ({ ...p, vendor: e.target.value }))}
             className="!mb-0"
           />
           <Input
-            label="Catatan (Opsional)"
+            label="Catatan"
             value={terimaForm.catatan}
             onChange={(e) => setTerimaForm((p) => ({ ...p, catatan: e.target.value }))}
-            placeholder="Mis. nomor PO / surat jalan"
+            placeholder="PO-2026-014"
             className="!mb-0"
           />
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">
@@ -525,10 +519,6 @@ const InventoryPerlengkapanPage = () => {
       <Modal isOpen={aturOpen} onClose={() => !stokSubmitting && setAturOpen(false)} title={`Atur Stok · ${aturItem?.nama || ''}`}>
         <form onSubmit={submitAtur} className="space-y-4">
           {stokModalError && <Alert variant="error">{stokModalError}</Alert>}
-          <p className="text-xs font-body text-neutral-500">
-            Untuk menambah stok dari pembelian, gunakan <strong>Terima barang</strong>. Di sini untuk barang rusak/hilang
-            atau menyamakan stok dengan hasil hitung fisik.
-          </p>
           <CustomDropdown
             label="Brand"
             required
@@ -571,7 +561,7 @@ const InventoryPerlengkapanPage = () => {
             required
             value={aturForm.catatan}
             onChange={(e) => setAturForm((p) => ({ ...p, catatan: e.target.value }))}
-            placeholder={aturForm.mode === 'kurangi' ? 'Mis. 2 pcs rusak saat dikirim' : 'Mis. stok opname Oktober'}
+            placeholder={aturForm.mode === 'kurangi' ? '2 pcs rusak saat dikirim' : 'Stok opname Oktober'}
             className="!mb-0"
           />
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">

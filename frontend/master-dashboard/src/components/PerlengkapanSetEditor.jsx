@@ -51,7 +51,7 @@ const PerlengkapanSetEditor = ({ catalog = [], value = [], onChange }) => {
   return (
     <div className="space-y-2">
       {value.length === 0 && (
-        <p className="text-xs font-body text-neutral-500">Belum ada item. Tambahkan item perlengkapan untuk jamaah.</p>
+        <p className="text-xs font-body text-neutral-500">Belum ada item.</p>
       )}
 
       {value.map((row, index) => {
@@ -59,12 +59,16 @@ const PerlengkapanSetEditor = ({ catalog = [], value = [], onChange }) => {
           .filter((c) => String(c.id) === String(row.perlengkapan_item_id) || !used.has(String(c.id)))
           .map((c) => ({ value: String(c.id), label: c.nama }));
         return (
-          <div key={`${row.perlengkapan_item_id}-${index}`} className="grid grid-cols-[minmax(0,1fr)_72px_132px_36px] items-center gap-2">
+          // Mobile: item selebar baris, jumlah/berlaku/hapus di baris kedua. Layar sm ke atas: satu baris.
+          <div
+            key={`${row.perlengkapan_item_id}-${index}`}
+            className="grid grid-cols-[72px_minmax(0,1fr)_36px] items-center gap-2 border-b border-neutral-100 pb-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_72px_132px_36px] sm:border-b-0 sm:pb-0"
+          >
             <CustomDropdown
               value={String(row.perlengkapan_item_id)}
               onChange={(v) => update(index, { perlengkapan_item_id: Number(valueOf(v)) })}
               options={options}
-              className="!mb-0"
+              className="!mb-0 col-span-3 sm:col-span-1"
             />
             <Input
               type="number"
@@ -93,15 +97,16 @@ const PerlengkapanSetEditor = ({ catalog = [], value = [], onChange }) => {
         );
       })}
 
-      <button
-        type="button"
-        onClick={add}
-        disabled={!canAdd}
-        className="inline-flex cursor-pointer items-center gap-1.5 text-xs disabled:cursor-not-allowed disabled:text-neutral-400 font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
-      >
-        <Plus size={14} strokeWidth={2} />
-        Tambah item
-      </button>
+      {canAdd && (
+        <button
+          type="button"
+          onClick={add}
+          className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900"
+        >
+          <Plus size={14} strokeWidth={2} />
+          Tambah item
+        </button>
+      )}
     </div>
   );
 };

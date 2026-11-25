@@ -15,6 +15,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-sql-driver/mysql"
+
+	"erp-azhan/api/internal/booking"
 )
 
 var (
@@ -646,27 +648,19 @@ func CatatHadir(ctx context.Context, q querier, id int64, scope *int64, adminID,
 	if !m.AbsensiTerbuka(now) {
 		return ErrAbsensiBelumDibuka
 	}
-	res, err := q.ExecContext(ctx, `
-		UPDATE booking_pax bp
-		JOIN bookings b ON b.id = bp.booking_id
+	var x int
+	err = q.QueryRowContext(ctx, `SELECT 1 FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
 		JOIN manasik_jadwal mj ON mj.schedule_id = b.schedule_id AND mj.manasik_id = ?
-		SET bp.progress_manasik = ?, bp.progress_manasik_oleh = ?, bp.progress_manasik_at = NOW()
-		WHERE bp.id = ? AND `+paxManasik, id, hadir, adminAtauNull(adminID), paxID)
+		WHERE bp.id = ? AND `+paxManasik+` FOR UPDATE`, id, paxID).Scan(&x)
+	if errors.Is(err, sql.ErrNoRows) {
+		return validasiGalat("Jamaah tidak terdaftar di manasik ini")
+	}
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		// Nilai sama juga menghasilkan 0 baris; bedakan dengan jamaah yang memang bukan peserta manasik ini.
-		var x int
-		err := q.QueryRowContext(ctx, `SELECT 1 FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
-			JOIN manasik_jadwal mj ON mj.schedule_id = b.schedule_id AND mj.manasik_id = ?
-			WHERE bp.id = ? AND `+paxManasik, id, paxID).Scan(&x)
-		if errors.Is(err, sql.ErrNoRows) {
-			return validasiGalat("Jamaah tidak terdaftar di manasik ini")
-		}
-		return err
-	}
-	return nil
+	// Penanda manasik milik modul booking; nilai sama menghasilkan false dan tetap dianggap berhasil.
+	_, err = booking.CatatProgressManasik(ctx, q, paxID, hadir, adminID)
+	return err
 }
 
 // ManasikPaket: ringkasan manasik sebuah paket untuk halaman detail paket (nil = belum punya manasik).
