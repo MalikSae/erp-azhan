@@ -61,6 +61,21 @@ func holdSeat(ctx context.Context, db Execer, now time.Time) error {
 		WHERE b.status = 'baru' AND b.is_seat_blocked AND b.customer_account_id IS NOT NULL
 		  AND b.seat_hold_expires_at > ? AND b.seat_hold_expires_at <= ?`,
 		JenisHoldSeat, RefBooking, now, now.Add(3*time.Hour))
+	if err != nil {
+		return err
+	}
+	// Agen perekrut akun pemesan juga diingatkan (prospek agen), kecuali booking buatan agen itu sendiri.
+	_, err = db.ExecContext(ctx, `INSERT IGNORE INTO notifikasi (akun_id, jenis, judul, isi, ref_tipe, ref_id, kunci)
+		SELECT a.direkrut_oleh_akun_id, ?, 'Hold berakhir 3 jam lagi', LEFT(CONCAT(a.nama_lengkap, ' · ', s.jadwal_nama), 300), ?, b.id,
+		       CONCAT('hold-agen:', b.id, ':', DATE_FORMAT(b.seat_hold_expires_at, '%Y%m%d%H%i'))
+		FROM bookings b
+		JOIN schedules s ON s.id = b.schedule_id
+		JOIN customer_accounts a ON a.id = b.customer_account_id
+		JOIN customer_accounts ag ON ag.id = a.direkrut_oleh_akun_id AND ag.status_agen = 'aktif' AND ag.dihapus_at IS NULL
+		WHERE b.status = 'baru' AND b.is_seat_blocked
+		  AND (b.dibuat_oleh_agen_akun_id IS NULL OR b.dibuat_oleh_agen_akun_id <> a.direkrut_oleh_akun_id)
+		  AND b.seat_hold_expires_at > ? AND b.seat_hold_expires_at <= ?`,
+		JenisProspekHold, RefAgen, now, now.Add(3*time.Hour))
 	return err
 }
 

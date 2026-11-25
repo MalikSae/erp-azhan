@@ -110,6 +110,9 @@ _Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti k
 
 **Keputusan admin**: satu aksi di kartu pengajuan (B1): setujui, bebaskan biaya, minta unggah ulang, tolak, atau setujui dengan bayar menyusul.
 
+**Prospek**: akun yang daftar lewat tautan agen (upline = agen itu) dan belum sampai DP, dalam tiga tahap: belum booking, belum DP (hold berjalan), expired (hold habis; label "Kuota penuh" / "Pendaftaran tutup" bila tidak bisa lanjut DP). Tampil di segmen Prospek pada Jamaah Saya; agen hanya bisa chat WhatsApp akun pemesan. Booking buatan agen sendiri bukan prospek. Keluar dari daftar saat DP, batal, atau 30 hari tanpa kabar. Tidak masuk komisi, peringkat, atau KPI. Spek: `docs/spek/SPEK-PROSPEK-AGEN-2026-11-25.md`.
+_Hindari_: lead, calon jamaah (untuk daftar ini).
+
 ## Tabungan Umroh
 
 **Target Tabungan**: catatan pribadi calon jamaah tentang berapa yang ingin dikumpulkan untuk umroh, berikut bulan berangkat dan DP minimal. Satu per akun. Tabel `tabungan_target`. Hana tidak menyimpan uang; ini hanya catatan.

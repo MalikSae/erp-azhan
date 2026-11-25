@@ -303,6 +303,7 @@ func main() {
 			r.Get("/komisi-paket", agenHandler.KomisiPaketPortal)
 			r.Get("/peringkat", agenHandler.PeringkatPortal)
 			r.Get("/peringkat/{akunID}/foto", agenHandler.FotoPeringkatPortal)
+			r.Get("/prospek", agenHandler.ProspekPortal)
 			r.Get("/pencairan", agenHandler.GetPencairan)
 			r.Post("/pencairan", agenHandler.AjukanPencairan)
 			r.Get("/pencairan/{id}/bukti", agenHandler.BuktiPencairanPortal)
