@@ -110,7 +110,7 @@ func (h *Handler) UpsertDokumen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Berkas wajib unggahan resmi, bukan URL bebas (JB-11).
-	if err := media.ValidateAdminUpload(r.Context(), h.repo.db, req.FileURL, jamaahID); err != nil {
+	if err := media.ValidateAdminUpload(r.Context(), h.repo.db, req.FileURL, jamaahID, identity.GetAdminUserID(r.Context())); err != nil {
 		var uploadErr *media.UploadError
 		if errors.As(err, &uploadErr) {
 			writeError(w, http.StatusBadRequest, uploadErr.Message)

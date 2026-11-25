@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"erp-azhan/api/internal/identity"
@@ -140,6 +141,13 @@ func TestServeProtectedWajibIzinKategori(t *testing.T) {
 		req = req.WithContext(adminCtx(req.Context(), perms...))
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
+		// Semua penolakan menjawab JSON yang sama, tanpa membedakan izin kurang dan berkas tidak ada.
+		if rec.Code == http.StatusNotFound {
+			if body := strings.TrimSpace(rec.Body.String()); body != `{"error":"Berkas tidak ditemukan."}` ||
+				rec.Header().Get("Content-Type") != "application/json" {
+				t.Errorf("%s perms=%v: 404 body=%q type=%q", path, perms, body, rec.Header().Get("Content-Type"))
+			}
+		}
 		return rec.Code
 	}
 	cases := []struct {
@@ -153,6 +161,8 @@ func TestServeProtectedWajibIzinKategori(t *testing.T) {
 		{"/api/admin/media/dokumen-jamaah/bukti.png", []string{"payment.view"}, 200}, // bukti transfer pelanggan
 		{"/api/admin/media/payment-proofs/bukti.png", []string{"dokumen.view"}, 404},
 		{"/api/admin/media/payment-proofs/bukti.png", []string{"payment.view"}, 200},
+		{"/api/admin/media/payment-proofs/tidak-ada.png", []string{"payment.view"}, 404},
+		{"/api/admin/media/kategori-lain/bukti.png", []string{"payment.view"}, 404},
 	}
 	for _, c := range cases {
 		if got := get(c.path, c.perms...); got != c.want {

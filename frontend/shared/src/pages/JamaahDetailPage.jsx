@@ -6,7 +6,7 @@ import { listKaitanLog } from "../api/agen";
 const formatDate = (v) => (!v ? "-" : new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(v)));
 import PerubahanJamaahPanel from "../components/PerubahanJamaahPanel";
 import { listDokumen, upsertDokumen } from "../api/dokumen";
-import { uploadMedia, openProtectedMedia } from "../api/media";
+import { uploadMedia, openProtectedMedia, protectedMediaErrorMessage } from "../api/media";
 import { listBookings } from "../api/bookings";
 import { listBrandOptions } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
@@ -238,6 +238,16 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
     } finally {
       setUploadingJenis(null);
       setActiveUploadJenis(null);
+    }
+  };
+
+  const bukaDokumen = async (url) => {
+    setError(null);
+    setSuccess(null);
+    try {
+      await openProtectedMedia(url);
+    } catch (err) {
+      setError(protectedMediaErrorMessage(err));
     }
   };
 
@@ -525,7 +535,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
                       {hasFile && (
                         <button
                           type="button"
-                          onClick={() => openProtectedMedia(existing.file_url)}
+                          onClick={() => bukaDokumen(existing.file_url)}
                           className="p-1.5 text-neutral-500 hover:text-primary-600 rounded transition-colors"
                           title="Lihat Dokumen"
                         >

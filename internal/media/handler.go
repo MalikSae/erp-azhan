@@ -187,24 +187,25 @@ func (h *Handler) ServePublic(w http.ResponseWriter, r *http.Request) {
 }
 
 // ServeProtected serves sensitive media only after the admin middleware has
-// authenticated the request. The file remains in the existing uploads folder;
-// this changes exposure, not stored data.
+// authenticated the request. Every refusal (category, permission, other brand,
+// missing file) answers the same 404 JSON, so a response never reveals whether
+// a file exists.
 func (h *Handler) ServeProtected(w http.ResponseWriter, r *http.Request) {
 	category := chi.URLParam(r, "category")
 	filename := chi.URLParam(r, "filename")
 	if _, ok := protectedCategories[category]; !ok || !safeFilename(filename) {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
 		return
 	}
 	if !h.canViewCategory(r, category, filename) || !h.canReadAdminFile(r, category, filename) {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
 		return
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	path := filepath.Join(".", "uploads", category, filename)
 	if info, err := os.Stat(path); err != nil || info.IsDir() {
-		http.NotFound(w, r)
+		writeError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
 		return
 	}
 	http.ServeFile(w, r, path)

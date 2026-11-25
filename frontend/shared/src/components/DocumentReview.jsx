@@ -3,7 +3,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Textarea from './ui/Textarea';
 import { updateDokumenStatus } from '../api/dokumen';
-import { loadProtectedMedia } from '../api/media';
+import { loadProtectedMedia, protectedMediaErrorMessage } from '../api/media';
 
 // Satu dialog verifikasi: berkas ditampilkan di dalam dialog yang sama (bukan lapisan pratinjau terpisah),
 // lalu admin menyetujui atau menolak dengan alasan.
@@ -34,7 +34,7 @@ export default function DocumentReview({ document, onChanged }) {
   async function review() {
     setError('');
     try { const preview = await loadProtectedMedia(document.file_url); setReviewed({ ...document, preview }); setReason(''); }
-    catch { setError('Berkas belum dapat dibuka. Coba lagi.'); }
+    catch (e) { setError(protectedMediaErrorMessage(e)); }
   }
   async function save(status) {
     if (status === 'rejected' && !reason.trim()) { setError('Isi alasan penolakan.'); return; }
