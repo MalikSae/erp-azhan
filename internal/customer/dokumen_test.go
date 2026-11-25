@@ -42,3 +42,24 @@ func TestSusunDokumenGabungkanStatus(t *testing.T) {
 		t.Errorf("kk harus opsional: %+v", got[3])
 	}
 }
+
+// Keputusan 2026-11-25: hanya dokumen wajib berstatus approved yang dihitung lengkap.
+func TestHitungWajibDisetujuiHanyaApproved(t *testing.T) {
+	items := susunDokumen("reguler", map[string]dokumenItem{
+		"paspor":            {Status: "approved"},
+		"ktp":               {Status: "submitted"},
+		"pas_foto":          {Status: "rejected"},
+		"kk":                {Status: "approved"}, // tambahan, tidak dihitung
+		"vaksin_meningitis": {Status: "approved"},
+	})
+	setuju, total := hitungWajibDisetujui(items)
+	if setuju != 1 || total != 3 {
+		t.Fatalf("wajib disetujui = %d/%d, want 1/3", setuju, total)
+	}
+	items = susunDokumen("reguler", map[string]dokumenItem{
+		"paspor": {Status: "approved"}, "ktp": {Status: "approved"}, "pas_foto": {Status: "approved"},
+	})
+	if setuju, total = hitungWajibDisetujui(items); setuju != 3 || total != 3 {
+		t.Fatalf("semua disetujui = %d/%d, want 3/3", setuju, total)
+	}
+}

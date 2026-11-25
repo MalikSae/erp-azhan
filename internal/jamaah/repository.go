@@ -105,13 +105,14 @@ type ListOpts struct {
 	Offset int
 }
 
-// pctDokumenSQL: persentase jenis dokumen yang sudah terkirim atau disetujui, dari semua 7 jenis
+// pctDokumenSQL: persentase jenis dokumen yang sudah disetujui admin, dari semua 7 jenis
 // (pas foto, paspor, KTP, KK, buku nikah, akta lahir, vaksin meningitis; sama dengan dokumen.validJenis).
-// 100 hanya bila ketujuhnya ada. Pembaginya harus ikut diubah bila jenis dokumen bertambah.
+// Menunggu verifikasi dan ditolak tidak dihitung (keputusan 2026-11-25). 100 hanya bila ketujuhnya disetujui.
+// Pembaginya harus ikut diubah bila jenis dokumen bertambah.
 const pctDokumenSQL = `ROUND(
 			(SELECT COUNT(DISTINCT dj.jenis)
 			 FROM dokumen_jamaah dj
-			 WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status IN ('submitted', 'approved')) / 7.0 * 100
+			 WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status = 'approved') / 7.0 * 100
 		)`
 
 // List mengambil semua jamaah, filter brand kalau scoped admin.

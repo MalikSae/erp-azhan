@@ -257,7 +257,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, jamaahID *int64, 
 			ids = append(ids, *items[i].JamaahID)
 		}
 	}
-	withPaspor, err := r.pasporUploadedSet(ctx, ids)
+	withPaspor, err := pasporDisetujuiSet(ctx, r.db, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -327,8 +327,9 @@ func paxBelumLengkapSet(ctx context.Context, q interface {
 	return out, nil
 }
 
-// pasporUploadedSet mengembalikan himpunan jamaah_id yang sudah mengunggah dokumen paspor.
-func (r *Repository) pasporUploadedSet(ctx context.Context, jamaahIDs []int64) (map[int64]bool, error) {
+// pasporDisetujuiSet mengembalikan himpunan jamaah_id yang dokumen paspornya sudah disetujui admin
+// (keputusan 2026-11-25: menunggu verifikasi dan ditolak belum dihitung).
+func pasporDisetujuiSet(ctx context.Context, db querier, jamaahIDs []int64) (map[int64]bool, error) {
 	out := make(map[int64]bool, len(jamaahIDs))
 	const chunk = 1000
 	for start := 0; start < len(jamaahIDs); start += chunk {
@@ -342,17 +343,17 @@ func (r *Repository) pasporUploadedSet(ctx context.Context, jamaahIDs []int64) (
 			args[i] = id
 		}
 		q := `SELECT DISTINCT jamaah_id FROM dokumen_jamaah
-			WHERE jenis = 'paspor' AND file_url IS NOT NULL AND file_url != ''
+			WHERE jenis = 'paspor' AND status = 'approved' AND file_url IS NOT NULL AND file_url != ''
 			AND jamaah_id IN (?` + strings.Repeat(",?", len(part)-1) + `)`
-		rows, err := r.db.QueryContext(ctx, q, args...)
+		rows, err := db.QueryContext(ctx, q, args...)
 		if err != nil {
-			return nil, fmt.Errorf("booking.pasporUploadedSet: %w", err)
+			return nil, fmt.Errorf("booking.pasporDisetujuiSet: %w", err)
 		}
 		for rows.Next() {
 			var id int64
 			if err := rows.Scan(&id); err != nil {
 				rows.Close()
-				return nil, fmt.Errorf("booking.pasporUploadedSet scan: %w", err)
+				return nil, fmt.Errorf("booking.pasporDisetujuiSet scan: %w", err)
 			}
 			out[id] = true
 		}
@@ -395,9 +396,9 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 	}
 
 	if b.JamaahID != nil && *b.JamaahID > 0 {
-		hasPaspor, err := r.checkPasporUploaded(ctx, *b.JamaahID)
+		disetujui, _, err := statusPaspor(ctx, r.db, *b.JamaahID)
 		if err == nil {
-			b.ProgressPaspor = hasPaspor
+			b.ProgressPaspor = disetujui
 		}
 	}
 
@@ -482,9 +483,9 @@ func (r *Repository) ListPaxByBookingID(ctx context.Context, bookingID int64) ([
 		if perlengkapanTanggal.Valid {
 			p.PerlengkapanTanggal = &perlengkapanTanggal.String
 		}
-		hasPaspor, err := r.checkPasporUploaded(ctx, p.JamaahID)
+		disetujui, terunggah, err := statusPaspor(ctx, r.db, p.JamaahID)
 		if err == nil {
-			p.ProgressPaspor = hasPaspor
+			p.ProgressPaspor, p.PasporTerunggah = disetujui, terunggah
 		}
 		items = append(items, p)
 	}
@@ -2319,18 +2320,20 @@ func simpanProgressPax(ctx context.Context, q notifikasi.Querier, bookingID, pax
 	return nil
 }
 
-// checkPasporUploaded memeriksa apakah jamaah memiliki dokumen paspor yang sudah diupload.
-func (r *Repository) checkPasporUploaded(ctx context.Context, jamaahID int64) (bool, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) 
-		FROM dokumen_jamaah 
+// statusPaspor: disetujui = dokumen paspor jamaah sudah disetujui admin (dasar progress_paspor, keputusan
+// 2026-11-25); terunggah = berkas paspor ada, apa pun statusnya.
+func statusPaspor(ctx context.Context, q interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}, jamaahID int64) (disetujui, terunggah bool, err error) {
+	err = q.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(status = 'approved'), FALSE), COUNT(*) > 0
+		FROM dokumen_jamaah
 		WHERE jamaah_id = ? AND jenis = 'paspor' AND file_url IS NOT NULL AND file_url != ''
-	`, jamaahID).Scan(&count)
+	`, jamaahID).Scan(&disetujui, &terunggah)
 	if err != nil {
-		return false, fmt.Errorf("booking.checkPasporUploaded: %w", err)
+		return false, false, fmt.Errorf("booking.statusPaspor: %w", err)
 	}
-	return count > 0, nil
+	return disetujui, terunggah, nil
 }
 
 // terapkanTahapan memasang tahapan umroh per pax (sama dengan yang dilihat jamaah dan agen) dan menghitung siap

@@ -49,7 +49,11 @@ type paxDokumen struct {
 	PaxType  string        `json:"pax_type"`
 	// AksesTerbatas: akun bukan pembuat jamaah; hanya boleh mengunggah jenis yang belum ada berkasnya.
 	AksesTerbatas bool     `json:"akses_terbatas"`
-	Dokumen  []dokumenItem `json:"dokumen"`
+	// WajibDisetujui dari WajibTotal: dokumen wajib yang sudah disetujui admin (keputusan 2026-11-25:
+	// hanya approved yang dihitung lengkap).
+	WajibDisetujui int           `json:"wajib_disetujui"`
+	WajibTotal     int           `json:"wajib_total"`
+	Dokumen        []dokumenItem `json:"dokumen"`
 }
 
 // susunDokumen menggabungkan daftar jenis (wajib lalu tambahan) dengan status yang sudah tersimpan.
@@ -70,6 +74,20 @@ func susunDokumen(paxType string, ada map[string]dokumenItem) []dokumenItem {
 		tambah(j, false)
 	}
 	return out
+}
+
+// hitungWajibDisetujui: jumlah dokumen wajib berstatus approved dan jumlah dokumen wajib.
+func hitungWajibDisetujui(items []dokumenItem) (disetujui, total int) {
+	for _, it := range items {
+		if !it.Wajib {
+			continue
+		}
+		total++
+		if it.Status == "approved" {
+			disetujui++
+		}
+	}
+	return disetujui, total
 }
 
 // Dokumen GET /api/account/bookings/{id}/dokumen
@@ -137,6 +155,7 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 	for _, jid := range urut {
 		p := pax[jid]
 		p.Dokumen = susunDokumen(p.PaxType, ada[jid])
+		p.WajibDisetujui, p.WajibTotal = hitungWajibDisetujui(p.Dokumen)
 		out = append(out, *p)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"pax": out})
