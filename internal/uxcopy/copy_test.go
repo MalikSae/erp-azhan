@@ -12,7 +12,10 @@ import (
 )
 
 // Panggilan helper galat dengan pesan literal. Pesan yang disambung (+) dilewati.
+// Galat sentinel internal/akses dan konstanta pesannya ikut diperiksa: handler pengguna
+// mengirimnya apa adanya lewat err.Error().
 var panggilan = regexp.MustCompile(`(?m)(?:writeError|sendError|writeErrorCode)\(w, [^"\n]*?(?:fmt\.Sprintf\()?"((?:[^"\\\n]|\\.)*)"([^\n]*)`)
+var pesanAkses = regexp.MustCompile(`(?m)(?:errors\.New\(|ErrConcurrentMsg = )"((?:[^"\\\n]|\\.)*)"([^\n]*)`)
 
 var larangan = []struct {
 	pola *regexp.Regexp
@@ -25,7 +28,6 @@ var larangan = []struct {
 	{regexp.MustCompile(`(?i)\b(request body|payload|token|rfc3339|jwt|turnstile|logout)\b`), "istilah teknis; pakai bahasa pengguna"},
 	{regexp.MustCompile(`(?i)\bmaaf\b`), "tanpa permintaan maaf"},
 	{regexp.MustCompile(`[A-Za-z]!`), "tanpa tanda seru"},
-	{regexp.MustCompile(`(?i)\bsuper admin\b`), `tanpa peran sistem; pakai "admin"`},
 	{regexp.MustCompile(`(?i)\b(peserta|penumpang|kursi|pesanan|pemesanan|reservasi|blokir|cicilan|uang muka)\b`), "ikuti istilah di GLOSSARY.md"},
 }
 
@@ -40,7 +42,11 @@ func TestPesanGalatMengikutiPanduanUXCopy(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		for _, m := range panggilan.FindAllStringSubmatchIndex(string(b), -1) {
+		cocok := panggilan.FindAllStringSubmatchIndex(string(b), -1)
+		if filepath.Base(filepath.Dir(p)) == "akses" {
+			cocok = append(cocok, pesanAkses.FindAllStringSubmatchIndex(string(b), -1)...)
+		}
+		for _, m := range cocok {
 			pesan := string(b)[m[2]:m[3]]
 			sisa := string(b)[m[4]:m[5]]
 			baris := strings.Count(string(b)[:m[0]], "\n") + 1

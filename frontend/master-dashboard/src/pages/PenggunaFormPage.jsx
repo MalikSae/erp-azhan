@@ -8,6 +8,8 @@ import Alert from 'shared/ui/Alert';
 import Input from 'shared/ui/Input';
 import Modal from 'shared/ui/Modal';
 import Checkbox from 'shared/ui/Checkbox';
+import TextButton from 'shared/ui/TextButton';
+import { Check } from 'lucide-react';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { AuthContext } from '../context/AuthContext';
@@ -23,10 +25,9 @@ import {
 
 const emptyForm = {
   display_name: '', email: '', no_hp: '',
-  access: 'holding', brand_id: '', akses: TIM, password: '',
+  cakupan: 'holding', brand_id: '', akses: TIM, password: '',
 };
 
-const tautan = 'font-body text-sm font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900 disabled:cursor-not-allowed disabled:opacity-50';
 
 // Form Pengguna (SPEK-AKSES-PENGGUNA-2026-11-25 §6): profil, akses, dan izin
 // disimpan atomik dalam satu permintaan.
@@ -70,7 +71,7 @@ const PenggunaFormPage = () => {
             display_name: userData.display_name || '',
             email: userData.email || '',
             no_hp: userData.no_hp || '',
-            access: holding ? 'holding' : 'brand',
+            cakupan: holding ? 'holding' : 'brand',
             brand_id: holding ? '' : String(userData.brand_id),
             akses: userData.akses === SUPER_ADMIN ? SUPER_ADMIN : TIM,
             password: '',
@@ -87,7 +88,7 @@ const PenggunaFormPage = () => {
     return () => { active = false; };
   }, [id, isEdit]);
 
-  const isBrand = form.access === 'brand';
+  const isBrand = form.cakupan === 'brand';
   const isTim = form.akses === TIM;
 
   // Baris dan izin khusus yang boleh dipilih untuk akses ini; sisanya disembunyikan.
@@ -115,10 +116,10 @@ const PenggunaFormPage = () => {
   const setLihat = (b, on) => (on ? ubah(b.lihat) : ubah([], b.lihat));
   const setKelola = (b, on) => (on ? ubah([...b.kelola, ...(b.bisaLihat ? b.lihat : [])]) : ubah([], b.kelola));
 
-  const changeAccess = (access) => {
-    if (access === form.access) return;
-    const boleh = kodeBoleh(access);
-    setForm((p) => ({ ...p, access, brand_id: '', akses: access === 'brand' ? TIM : p.akses }));
+  const ubahCakupan = (cakupan) => {
+    if (cakupan === form.cakupan) return;
+    const boleh = kodeBoleh(cakupan);
+    setForm((p) => ({ ...p, cakupan, brand_id: '', akses: cakupan === 'brand' ? TIM : p.akses }));
     setIzin((prev) => new Set([...prev].filter((k) => boleh.has(k))));
     setTemplat('');
   };
@@ -126,7 +127,7 @@ const PenggunaFormPage = () => {
   const pakaiTemplat = (idTemplat) => {
     const t = TEMPLAT_AKSES.find((x) => x.id === idTemplat);
     if (!t) return;
-    const boleh = kodeBoleh(form.access);
+    const boleh = kodeBoleh(form.cakupan);
     setIzin(new Set(t.kode.filter((k) => boleh.has(k))));
     setTemplat(idTemplat);
   };
@@ -135,7 +136,7 @@ const PenggunaFormPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError(null);
-    const permissions = isTim ? rapikanIzin([...izin], form.access) : [];
+    const permissions = isTim ? rapikanIzin([...izin], form.cakupan) : [];
     if (isBrand && !form.brand_id) { setSubmitError('Pilih brand.'); return; }
     if (isTim && permissions.length === 0) { setSubmitError('Pilih minimal satu izin.'); return; }
     if (!isEdit && form.password.trim().length < 8) { setSubmitError('Kata sandi minimal 8 karakter.'); return; }
@@ -232,8 +233,8 @@ const PenggunaFormPage = () => {
               <CustomDropdown
                 label="Cakupan data"
                 required
-                value={form.access}
-                onChange={changeAccess}
+                value={form.cakupan}
+                onChange={ubahCakupan}
                 options={[
                   { value: 'holding', label: 'Holding (semua brand)' },
                   { value: 'brand', label: 'Satu brand' },
@@ -292,10 +293,13 @@ const PenggunaFormPage = () => {
                     <li key={b.id} className="grid grid-cols-[minmax(0,1fr)_4rem_4rem] items-center py-2.5">
                       <span className="font-body text-sm text-neutral-800">{b.label}</span>
                       <span className="flex justify-center">
-                        {b.bisaLihat && (
-                          <Checkbox ariaLabel={`Lihat ${b.label}`} checked={lihat} disabled={kelola}
+                        {/* Kelola sudah termasuk Lihat: tanda centang biasa, bukan kotak nonaktif. */}
+                        {b.bisaLihat && (kelola ? (
+                          <Check size={16} className="text-neutral-400" aria-label={`Lihat ${b.label} termasuk`} />
+                        ) : (
+                          <Checkbox ariaLabel={`Lihat ${b.label}`} checked={lihat}
                             onChange={(on) => setLihat(b, on)} />
-                        )}
+                        ))}
                       </span>
                       <span className="flex justify-center">
                         {b.bisaKelola && (
@@ -328,15 +332,15 @@ const PenggunaFormPage = () => {
                   <StatusChip active={user.is_active} />
                   <div className="flex flex-col items-start gap-2">
                     {user.is_active && (
-                      <button type="button" className={tautan} onClick={() => bukaAksi('password')}>Ganti kata sandi</button>
+                      <TextButton onClick={() => bukaAksi('password')}>Ganti kata sandi</TextButton>
                     )}
                     {!isSelf && (
-                      <button type="button" className={tautan} onClick={() => bukaAksi('status')}>
+                      <TextButton onClick={() => bukaAksi('status')}>
                         {user.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                      </button>
+                      </TextButton>
                     )}
                     {!isSelf && (
-                      <button type="button" className={tautan} onClick={() => bukaAksi('delete')}>Hapus</button>
+                      <TextButton onClick={() => bukaAksi('delete')}>Hapus</TextButton>
                     )}
                   </div>
                 </div>

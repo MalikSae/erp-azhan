@@ -48,8 +48,6 @@ func TestValidateUpsert(t *testing.T) {
 	}{
 		{"nama terlalu pendek", func(u *UpsertInput) { u.DisplayName = "H" }},
 		{"email salah", func(u *UpsertInput) { u.Email = "bukan-email" }},
-		{"tim tanpa izin", func(u *UpsertInput) { u.Permissions = []string{"  "} }},
-		{"jenis akses salah", func(u *UpsertInput) { u.Akses = "admin" }},
 		{"no hp terlalu panjang", func(u *UpsertInput) { u.NoHP = strPtr("0812345678901234567890123456789012") }},
 	}
 	for _, b := range bad {

@@ -21,12 +21,12 @@ const (
 )
 
 var (
-	ErrUserNotFound    = errors.New("pengguna tidak ditemukan")
-	ErrJenisTidakSah   = errors.New("jenis akses harus Super Admin atau Tim")
-	ErrSuperAdminBrand = errors.New("Super Admin hanya untuk akses Holding")
-	ErrTanpaIzin       = errors.New("pilih minimal satu izin")
-	ErrIzinTidakSah    = errors.New("izin tidak dapat diberikan")
-	ErrLastSuperAdmin  = errors.New("sistem harus punya minimal satu Super Admin aktif")
+	ErrUserNotFound    = errors.New("Pengguna tidak ditemukan.")
+	ErrJenisTidakSah   = errors.New("Pilih jenis akses.")
+	ErrSuperAdminBrand = errors.New("Super Admin hanya untuk akses Holding.")
+	ErrTanpaIzin       = errors.New("Pilih minimal satu izin.")
+	ErrIzinTidakSah    = errors.New("Ada izin yang tidak dapat diberikan.")
+	ErrLastSuperAdmin  = errors.New("Harus ada minimal satu Super Admin aktif.")
 )
 
 // hanyaSuperAdmin: izin yang tidak bisa diberikan ke Tim (A4).
@@ -37,7 +37,8 @@ var hanyaSuperAdmin = map[string]bool{
 }
 
 // izinBrand: izin yang boleh diberikan ke pengguna terikat brand (A5). Sama
-// dengan kolom Brand di spek §4; ubah keduanya bersamaan.
+// dengan kolom Brand di spek §4 dan penanda `brand` di
+// frontend/master-dashboard/src/constants/izinAkses.js; ubah ketiganya bersamaan.
 var izinBrand = map[string]bool{
 	"jamaah.view": true, "jamaah.edit": true, "dokumen.view": true, "dokumen.edit": true,
 	"booking.view": true, "booking.edit": true,
@@ -105,10 +106,10 @@ func ValidasiIzinTim(ctx context.Context, q Querier, codes []string, brandID *in
 	}
 	for _, c := range codes {
 		if hanyaSuperAdmin[c] {
-			return fmt.Errorf("%w: %s hanya untuk Super Admin", ErrIzinTidakSah, c)
+			return ErrIzinTidakSah
 		}
 		if brandID != nil && !izinBrand[c] {
-			return fmt.Errorf("%w: %s hanya untuk akses Holding", ErrIzinTidakSah, c)
+			return ErrIzinTidakSah
 		}
 	}
 	placeholders, args := inArgs(codes)
@@ -118,7 +119,7 @@ func ValidasiIzinTim(ctx context.Context, q Querier, codes []string, brandID *in
 		return fmt.Errorf("akses.ValidasiIzinTim: %w", err)
 	}
 	if n != len(codes) {
-		return fmt.Errorf("%w: kode izin tidak dikenal", ErrIzinTidakSah)
+		return ErrIzinTidakSah
 	}
 	return nil
 }
@@ -231,7 +232,7 @@ func SamaIzin(a, b []string) bool {
 
 // ErrConcurrentMsg pesan untuk transaksi yang kalah balapan kunci (deadlock /
 // lock wait timeout): aturan tetap aman, pengguna cukup mencoba lagi.
-const ErrConcurrentMsg = "data sedang diubah bersamaan oleh admin lain — coba lagi"
+const ErrConcurrentMsg = "Data sedang diubah admin lain. Coba lagi."
 
 // IsConcurrencyErr true untuk MySQL 1213 (deadlock) & 1205 (lock wait timeout).
 func IsConcurrencyErr(err error) bool {

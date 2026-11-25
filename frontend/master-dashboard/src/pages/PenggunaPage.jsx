@@ -15,7 +15,7 @@ import SegmentedTabs from 'shared/ui/SegmentedTabs';
 import { AuthContext } from '../context/AuthContext';
 import { listAdminUsers, setAdminUserStatus, resetAdminUserPassword } from '../api/adminUsers';
 import { errMsg, StatusChip, AksesChip } from '../components/penggunaUi';
-import { AKSES_LABEL } from '../constants/izinAkses';
+import { AKSES_LABEL, SUPER_ADMIN } from '../constants/izinAkses';
 
 const FILTERS = [
   { value: 'aktif', label: 'Aktif' },
@@ -72,8 +72,8 @@ const PenggunaPage = () => {
     const aktif = users.filter(u => u.is_active);
     return {
       aktif: aktif.length,
-      superAdmin: aktif.filter(u => u.akses === 'super_admin').length,
-      tim: aktif.filter(u => u.akses !== 'super_admin').length,
+      superAdmin: aktif.filter(u => u.akses === SUPER_ADMIN).length,
+      tim: aktif.filter(u => u.akses !== SUPER_ADMIN).length,
       nonaktif: users.length - aktif.length,
     };
   }, [users]);

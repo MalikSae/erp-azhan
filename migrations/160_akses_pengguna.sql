@@ -39,6 +39,25 @@ JOIN permissions p ON p.id = rp.permission_id
 WHERE u.is_super_admin = FALSE
   AND p.code NOT IN ('user.admin', 'brand.edit', 'crmdeal.process');
 
+-- Pengguna terikat brand hanya boleh memegang izin brand (A5; daftar sama dengan
+-- izinBrand di internal/akses). Pemegang role Holding yang terikat brand tidak
+-- membawa izin Holding-nya.
+DELETE up FROM user_permissions up
+JOIN admin_users u ON u.id = up.admin_user_id
+JOIN permissions p ON p.id = up.permission_id
+WHERE u.brand_id IS NOT NULL
+  AND p.code NOT IN (
+    'jamaah.view', 'jamaah.edit', 'dokumen.view', 'dokumen.edit',
+    'booking.view', 'booking.edit',
+    'payment.view', 'payment.edit', 'refund.view', 'refund.edit',
+    'akun.view', 'akun.edit',
+    'agen.view', 'agen.edit', 'komisi.view',
+    'schedule.view', 'manifest.manage', 'manasik.view', 'manasik.edit',
+    'masterdata.view', 'perlengkapan.view', 'perlengkapan.edit',
+    'bankaccount.view', 'bankaccount.edit', 'brand.view',
+    'pengumuman.manage', 'banner.manage',
+    'payment.verify', 'payment.void', 'agen.approve', 'jamaah.perubahan.approve');
+
 ALTER TABLE roles DROP FOREIGN KEY fk_roles_divisi;
 DROP TABLE user_roles;
 DROP TABLE role_permissions;

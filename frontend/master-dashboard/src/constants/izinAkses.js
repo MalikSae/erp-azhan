@@ -93,19 +93,17 @@ export const kodeBoleh = (access) => {
   return out;
 };
 
-// Rapikan pilihan sebelum simpan: satu kode dari sebuah kelompok berarti seluruh
-// kelompoknya, Kelola menyertakan Lihat, dan kode di luar batas akses dibuang.
+// Rapikan pilihan sebelum simpan: kode di luar batas akses dibuang, dan Kelola tanpa
+// Lihat sama sekali diberi Lihat. Kelompok yang hanya terisi sebagian (hasil migrasi
+// role lama) dibiarkan apa adanya, supaya simpan tanpa perubahan tidak menambah izin.
+// Mencentang atau melepas baris di form selalu mengubah seluruh kelompoknya.
 export const rapikanIzin = (kode, access) => {
-  const punya = new Set(kode);
   const boleh = kodeBoleh(access);
-  const out = new Set();
-  const tambah = (list) => list.forEach((k) => { if (boleh.has(k)) out.add(k); });
+  const out = new Set(kode.filter((k) => boleh.has(k)));
   BARIS_IZIN.forEach((b) => {
-    const kelola = b.kelola.some((k) => punya.has(k) && boleh.has(k));
-    const lihat = kelola || b.lihat.some((k) => punya.has(k) && boleh.has(k));
-    if (lihat) tambah(b.lihat);
-    if (kelola) tambah(b.kelola);
+    const kelola = b.kelola.some((k) => out.has(k));
+    const lihat = b.lihat.some((k) => out.has(k));
+    if (kelola && !lihat) b.lihat.forEach((k) => { if (boleh.has(k)) out.add(k); });
   });
-  IZIN_KHUSUS.forEach((k) => { if (k.kode.some((x) => punya.has(x) && boleh.has(x))) tambah(k.kode); });
   return [...out].sort();
 };

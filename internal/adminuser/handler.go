@@ -89,12 +89,6 @@ func validateUpsert(in *UpsertInput) string {
 	if in.NoHP != nil && len(*in.NoHP) > 32 {
 		return "no. HP maksimal 32 karakter"
 	}
-	if in.Akses != akses.SuperAdmin && in.Akses != akses.Tim {
-		return akses.ErrJenisTidakSah.Error()
-	}
-	if in.Akses == akses.Tim && len(in.Permissions) == 0 {
-		return akses.ErrTanpaIzin.Error()
-	}
 	return ""
 }
 
