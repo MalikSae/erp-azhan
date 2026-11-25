@@ -30,13 +30,6 @@ export async function listPerlengkapanStok(brandId) {
   return response.data;
 }
 
-export async function updatePerlengkapanStok(itemId, brandId, payload) {
-  const response = await client.put(`/api/admin/perlengkapan-stok/${itemId}`, payload, {
-    params: { brand_id: brandId }
-  });
-  return response.data;
-}
-
 // ─── Set Template Global ─────────────────────────────────────────────────────
 
 export async function getPerlengkapanSetTemplate() {

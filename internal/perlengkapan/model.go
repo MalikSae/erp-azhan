@@ -49,7 +49,8 @@ type PerlengkapanStokAllRow struct {
 
 // UpdateStokRequest adalah payload untuk PUT /api/admin/perlengkapan-stok/{item_id}?brand_id={id}.
 type UpdateStokRequest struct {
-	StokTersedia *int `json:"stok_tersedia"`
+	StokTersedia *int    `json:"stok_tersedia"`
+	Catatan      *string `json:"catatan"`
 }
 
 // PerlengkapanSetTemplateItem merepresentasikan 1 item dalam set template global.

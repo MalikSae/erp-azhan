@@ -120,6 +120,12 @@ func TestLangkah8dan9Pencairan(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("antrian C1 berisi %d, want 3", len(items))
 	}
+	// Ringkasan dihitung di server: satu disetujui Rp1 juta, dua ditolak.
+	rk, err := ringkasanPencairan(ctx, tx, &brand)
+	must(t, "ringkasan C1", err)
+	if rk != (RingkasanPencairan{Disetujui: 1, Dicairkan: 1_000_000, Ditolak: 2}) {
+		t.Fatalf("ringkasan C1 = %+v", rk)
+	}
 }
 
 func kaitanSumber(t *testing.T, tx *sql.Tx, id int64) (string, int64, string) {

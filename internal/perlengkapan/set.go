@@ -70,20 +70,20 @@ func normalizeInputs(inputs []SetItemInput) ([]SetItemInput, error) {
 	out := make([]SetItemInput, 0, len(inputs))
 	for _, in := range inputs {
 		if in.PerlengkapanItemID == 0 {
-			return nil, fmt.Errorf("%w: item tidak valid", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Item tidak valid.", ErrInvalidInput)
 		}
 		if in.Qty < 1 {
-			return nil, fmt.Errorf("%w: jumlah minimal 1", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Jumlah minimal 1.", ErrInvalidInput)
 		}
 		in.Untuk = strings.ToLower(strings.TrimSpace(in.Untuk))
 		if in.Untuk == "" {
 			in.Untuk = "semua"
 		}
 		if !untukValid[in.Untuk] {
-			return nil, fmt.Errorf("%w: nilai 'untuk' harus semua, pria, atau wanita", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Jenis kelamin tidak valid.", ErrInvalidInput)
 		}
 		if seen[in.PerlengkapanItemID] {
-			return nil, fmt.Errorf("%w: item yang sama tidak boleh dipilih dua kali", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Item tidak boleh dipilih dua kali.", ErrInvalidInput)
 		}
 		seen[in.PerlengkapanItemID] = true
 		out = append(out, in)
@@ -107,20 +107,48 @@ func (r *Repository) itemsExist(ctx context.Context, q querier, inputs []SetItem
 		return err
 	}
 	if n != len(inputs) {
-		return fmt.Errorf("%w: ada item yang tidak ditemukan di katalog", ErrInvalidInput)
+		return fmt.Errorf("%w: Item tidak ditemukan.", ErrInvalidInput)
 	}
 	return nil
 }
 
 // ─── Kategori ─────────────────────────────────────────────────────────────────
 
-func (r *Repository) GetCategorySet(ctx context.Context, categoryID int64) ([]SetItem, error) {
+// ErrKategoriBrandLain: admin brand mengubah set kategori yang tidak khusus milik brand-nya.
+var ErrKategoriBrandLain = errors.New("kategori bukan milik brand admin")
+
+// cekAksesKategori mengikuti aturan modul kategori (MP-01, S-08). Admin holding (brandID nil) bebas.
+// Admin brand hanya melihat kategori yang tertaut ke brand-nya (selain itu dianggap tidak ada) dan hanya
+// mengubah kategori yang khusus milik brand-nya.
+func cekAksesKategori(ctx context.Context, q querier, categoryID int64, brandID *int64, ubah bool) error {
 	var exists int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories WHERE id = ?`, categoryID).Scan(&exists); err != nil {
-		return nil, err
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories WHERE id = ?`, categoryID).Scan(&exists); err != nil {
+		return err
 	}
 	if exists == 0 {
-		return nil, ErrNotFound
+		return ErrNotFound
+	}
+	if brandID == nil {
+		return nil
+	}
+	var tertaut, total int
+	if err := q.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(brand_id = ?), 0), COUNT(*) FROM category_brands WHERE category_id = ?`,
+		*brandID, categoryID).Scan(&tertaut, &total); err != nil {
+		return err
+	}
+	if tertaut == 0 {
+		return ErrNotFound
+	}
+	if ubah && total != 1 {
+		return ErrKategoriBrandLain
+	}
+	return nil
+}
+
+func (r *Repository) GetCategorySet(ctx context.Context, categoryID int64, brandID *int64) ([]SetItem, error) {
+	if err := cekAksesKategori(ctx, r.db, categoryID, brandID, false); err != nil {
+		return nil, err
 	}
 	return r.categorySet(ctx, r.db, categoryID)
 }
@@ -138,7 +166,7 @@ func (r *Repository) categorySet(ctx context.Context, q querier, categoryID int6
 	return scanSetItems(rows)
 }
 
-func (r *Repository) PutCategorySet(ctx context.Context, categoryID int64, inputs []SetItemInput) ([]SetItem, error) {
+func (r *Repository) PutCategorySet(ctx context.Context, categoryID int64, brandID *int64, inputs []SetItemInput) ([]SetItem, error) {
 	inputs, err := normalizeInputs(inputs)
 	if err != nil {
 		return nil, err
@@ -149,12 +177,8 @@ func (r *Repository) PutCategorySet(ctx context.Context, categoryID int64, input
 	}
 	defer tx.Rollback()
 
-	var exists int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories WHERE id = ?`, categoryID).Scan(&exists); err != nil {
+	if err := cekAksesKategori(ctx, tx, categoryID, brandID, true); err != nil {
 		return nil, err
-	}
-	if exists == 0 {
-		return nil, ErrNotFound
 	}
 	if err := r.itemsExist(ctx, tx, inputs); err != nil {
 		return nil, err
@@ -314,8 +338,10 @@ func (h *Handler) setError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		h.sendError(w, http.StatusNotFound, "Data tidak ditemukan.")
+	case errors.Is(err, ErrKategoriBrandLain):
+		h.sendError(w, http.StatusForbidden, "Kategori ini bukan milik brand Anda.")
 	case errors.Is(err, ErrInvalidInput):
-		h.sendError(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), ErrInvalidInput.Error()+": ."))
+		h.sendError(w, http.StatusBadRequest, pesanInputTidakValid(err))
 	default:
 		h.sendError(w, http.StatusInternalServerError, "Gagal memproses isi perlengkapan.")
 	}
@@ -327,7 +353,7 @@ func (h *Handler) GetCategorySet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := h.repo.GetCategorySet(r.Context(), id)
+	items, err := h.repo.GetCategorySet(r.Context(), id, identity.GetBrandID(r.Context()))
 	if err != nil {
 		h.setError(w, err)
 		return
@@ -346,7 +372,7 @@ func (h *Handler) PutCategorySet(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
-	items, err := h.repo.PutCategorySet(r.Context(), id, req.Items)
+	items, err := h.repo.PutCategorySet(r.Context(), id, identity.GetBrandID(r.Context()), req.Items)
 	if err != nil {
 		h.setError(w, err)
 		return
@@ -386,4 +412,9 @@ func (h *Handler) PutScheduleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.sendJSON(w, http.StatusOK, res)
+}
+
+// pesanInputTidakValid membuang prefix ErrInvalidInput sehingga yang tampil hanya pesan untuk pengguna.
+func pesanInputTidakValid(err error) string {
+	return strings.TrimPrefix(err.Error(), ErrInvalidInput.Error()+": ")
 }

@@ -239,8 +239,14 @@ func (h *Handler) UpdateStok(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusBadRequest, "Stok wajib bernilai 0 atau lebih.")
 		return
 	}
+	// Setiap koreksi stok wajib beralasan, sama dengan POST /perlengkapan-mutasi/koreksi.
+	catatan := trimPtr(req.Catatan)
+	if catatan == nil {
+		h.sendError(w, http.StatusBadRequest, "Alasan koreksi stok wajib diisi.")
+		return
+	}
 
-	item, err := h.repo.UpdateStok(r.Context(), brandID, itemID, *req.StokTersedia, adminID(r))
+	item, err := h.repo.UpdateStok(r.Context(), brandID, itemID, *req.StokTersedia, adminID(r), catatan)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			h.sendError(w, http.StatusNotFound, "Item perlengkapan tidak ditemukan.")
@@ -276,7 +282,7 @@ func (h *Handler) UpdateSetTemplate(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.UpdateSetTemplate(r.Context(), inputs)
 	if err != nil {
 		if errors.Is(err, ErrInvalidInput) {
-			h.sendError(w, http.StatusBadRequest, err.Error())
+			h.sendError(w, http.StatusBadRequest, pesanInputTidakValid(err))
 			return
 		}
 		h.sendError(w, http.StatusInternalServerError, "Gagal memperbarui template set perlengkapan.")

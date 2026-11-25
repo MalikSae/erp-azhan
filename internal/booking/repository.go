@@ -1745,9 +1745,10 @@ func updateBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64, new
 
 	// 3. Lock schedule row untuk cek/ubah seat_sisa
 	var seatSisa int
+	var scheduleBrandID int64
 	err = tx.QueryRowContext(ctx,
-		`SELECT seat_sisa FROM schedules WHERE id=? FOR UPDATE`, scheduleID,
-	).Scan(&seatSisa)
+		`SELECT seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, scheduleID,
+	).Scan(&seatSisa, &scheduleBrandID)
 	if err != nil {
 		return fmt.Errorf("booking.UpdateStatus lock schedule: %w", err)
 	}
@@ -1771,7 +1772,19 @@ func updateBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64, new
 		}
 		// Pax ikut batal walau kursinya sudah dilepas lebih dulu (lepas blokir manual atau hold habis),
 		// supaya booking batal tidak menyisakan pax aktif yang masih bisa diberi progress atau perlengkapan.
-		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status='batal' WHERE booking_id=?`, bookingID)
+		// Perlengkapan pax aktif diperlakukan sama dengan batal per pax (audit T-06): log dihapus, stok brand
+		// kembali hanya bila booking belum dibayar (baru atau draft).
+		kembalikanStok := oldStatus == "baru" || oldStatus == "draft"
+		paxBerperlengkapan, err := paxAktifBerperlengkapanTx(ctx, tx, bookingID)
+		if err != nil {
+			return err
+		}
+		for _, paxID := range paxBerperlengkapan {
+			if err := returPerlengkapanPaxTx(ctx, tx, scheduleBrandID, paxID, kembalikanStok); err != nil {
+				return err
+			}
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID)
 		if err != nil {
 			return fmt.Errorf("booking.UpdateStatus cancel pax: %w", err)
 		}
@@ -2507,6 +2520,7 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id = ?
+		FOR UPDATE OF b
 	`
 	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&scheduleBrandID, &bookingStatus)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -2712,6 +2726,7 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id = ?
+		FOR UPDATE OF b
 	`
 	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&bookingStatus, &scheduleBrandID)
 	if errors.Is(err, sql.ErrNoRows) {

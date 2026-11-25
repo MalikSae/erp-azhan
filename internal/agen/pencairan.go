@@ -367,6 +367,40 @@ func (r *Repository) TolakPencairan(ctx context.Context, id, adminID int64, cata
 	})
 }
 
+// RingkasanPencairan: jumlah dan nominal pengajuan per status, dihitung di server supaya tidak ikut
+// terpotong batasDaftarPencairan.
+type RingkasanPencairan struct {
+	Pending        int     `json:"pending"`
+	PendingNominal float64 `json:"pending_nominal"`
+	Disetujui      int     `json:"disetujui"`
+	Dicairkan      float64 `json:"dicairkan"`
+	Ditolak        int     `json:"ditolak"`
+}
+
+func ringkasanPencairan(ctx context.Context, q querier, brandID *int64) (RingkasanPencairan, error) {
+	query := `
+		SELECT COALESCE(SUM(status = 'pending'), 0),
+		       COALESCE(SUM(CASE WHEN status = 'pending' THEN nominal_diajukan END), 0),
+		       COALESCE(SUM(status = 'disetujui'), 0),
+		       COALESCE(SUM(CASE WHEN status = 'disetujui' THEN nominal_diajukan END), 0),
+		       COALESCE(SUM(status = 'ditolak'), 0)
+		FROM pengajuan_pencairan WHERE 1=1`
+	args := []any{}
+	if brandID != nil {
+		query += ` AND brand_id = ?`
+		args = append(args, *brandID)
+	}
+	var s RingkasanPencairan
+	if err := q.QueryRowContext(ctx, query, args...).Scan(&s.Pending, &s.PendingNominal, &s.Disetujui, &s.Dicairkan, &s.Ditolak); err != nil {
+		return s, fmt.Errorf("agen: ringkasan pencairan: %w", err)
+	}
+	return s, nil
+}
+
+func (r *Repository) RingkasanPencairan(ctx context.Context, brandID *int64) (RingkasanPencairan, error) {
+	return ringkasanPencairan(ctx, r.db, brandID)
+}
+
 func (r *Repository) ListPencairanAdmin(ctx context.Context, status string, brandID *int64) ([]PencairanAdmin, error) {
 	return listPencairanAdmin(ctx, r.db, status, brandID)
 }
