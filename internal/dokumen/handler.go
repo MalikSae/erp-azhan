@@ -33,9 +33,11 @@ var validJenis = map[string]bool{
 	"vaksin_meningitis": true,
 }
 
+// submitted = batalkan persetujuan; hanya dari approved.
 var validStatuses = map[string]bool{
-	"approved": true,
-	"rejected": true,
+	"approved":  true,
+	"rejected":  true,
+	"submitted": true,
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
@@ -110,7 +112,7 @@ func (h *Handler) UpsertDokumen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Berkas wajib unggahan resmi, bukan URL bebas (JB-11).
-	if err := media.ValidateAdminUpload(r.Context(), h.repo.db, req.FileURL, jamaahID); err != nil {
+	if err := media.ValidateAdminUpload(r.Context(), h.repo.db, req.FileURL, jamaahID, identity.GetAdminUserID(r.Context())); err != nil {
 		var uploadErr *media.UploadError
 		if errors.As(err, &uploadErr) {
 			writeError(w, http.StatusBadRequest, uploadErr.Message)
@@ -146,7 +148,7 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !validStatuses[req.Status] {
-		writeError(w, http.StatusBadRequest, "Status tidak valid, harus approved/rejected.")
+		writeError(w, http.StatusBadRequest, "Status tidak valid.")
 		return
 	}
 	req.RejectionReason = strings.TrimSpace(req.RejectionReason)
@@ -158,20 +160,24 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Alasan penolakan wajib diisi, maksimal 500 karakter.")
 		return
 	}
-	if req.Status == "approved" {
+	if req.Status != "rejected" {
 		req.RejectionReason = ""
 	}
 
 	brandID := identity.GetBrandID(r.Context())
 
 	// Ambil dokumen untuk verifikasi brand
-	_, err := h.repo.GetByID(r.Context(), id, brandID)
+	current, err := h.repo.GetByID(r.Context(), id, brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
+	if req.Status == "submitted" && current.Status != "approved" {
+		writeError(w, http.StatusConflict, "Dokumen belum disetujui.")
+		return
+	}
 
-	updated, err := h.repo.UpdateStatus(r.Context(), id, req.Status, req.Version, req.RejectionReason)
+	updated, err := h.repo.UpdateStatus(r.Context(), id, req.Status, req.Version, req.RejectionReason, identity.GetAdminUserID(r.Context()))
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -179,12 +185,34 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+// ─── Riwayat ──────────────────────────────────────────────────────────────────
+
+// RiwayatDokumen godoc
+// GET /api/admin/dokumen/{id}/riwayat
+// Versi lama dokumen (sebelum diganti) beserta peninjaunya, terbaru dulu.
+func (h *Handler) RiwayatDokumen(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r, "id")
+	if !ok {
+		return
+	}
+	if _, err := h.repo.GetByID(r.Context(), id, identity.GetBrandID(r.Context())); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	items, err := h.repo.ListVersi(r.Context(), id)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 // ─── Error handling ───────────────────────────────────────────────────────────
 
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrVersionConflict):
-		writeError(w, http.StatusConflict, err.Error())
+		writeError(w, http.StatusConflict, "Dokumen sudah berubah. Muat ulang halaman.")
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	default:
@@ -200,7 +228,7 @@ func parseID(w http.ResponseWriter, r *http.Request, param string) (int64, bool)
 	raw := chi.URLParam(r, param)
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, param+" Tidak valid.")
+		writeError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
