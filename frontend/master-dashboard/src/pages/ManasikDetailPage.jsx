@@ -284,7 +284,7 @@ const ManasikDetailPage = () => {
 
       <TableCard
         title={`Paket (${data.paket.length})`}
-        aside={bisaUbah && <Button size="sm" variant="secondary" onClick={bukaTambah}>+ Tambah Paket</Button>}
+        aside={bisaUbah && !data.sudah_dimulai && <Button size="sm" variant="secondary" onClick={bukaTambah}>+ Tambah Paket</Button>}
       >
         <div className="overflow-x-auto">
           <Table columns={kolomPaket} data={data.paket} renderCell={selPaket} emptyMessage="Belum ada paket." />

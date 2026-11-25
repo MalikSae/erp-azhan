@@ -19,8 +19,8 @@ import (
 
 var (
 	ErrTidakAda = errors.New("manasik tidak ditemukan")
-	// ErrSudahDimulai: paket tidak bisa dilepas setelah manasik dimulai, supaya data absensi tetap utuh.
-	ErrSudahDimulai = errors.New("manasik sudah dimulai, paket tidak bisa dilepas lagi")
+	// ErrSudahDimulai: paket tidak bisa ditambah atau dilepas setelah manasik dimulai, supaya data absensi tetap utuh.
+	ErrSudahDimulai = errors.New("Manasik sudah dimulai")
 	// ErrAdaAbsensi: manasik yang sudah punya jamaah tercatat hadir tidak bisa dihapus.
 	ErrAdaAbsensi = errors.New("Manasik sudah punya absensi")
 	// ErrAbsensiBelumDibuka: absensi baru bisa diisi mulai hari manasik.
@@ -404,6 +404,9 @@ func TambahPaket(ctx context.Context, q querier, id int64, scope *int64, schedul
 	m, err := ambilAdmin(ctx, q, id, scope)
 	if err != nil {
 		return err
+	}
+	if !now.Before(m.Mulai()) {
+		return ErrSudahDimulai
 	}
 	if _, err := cekPaketBaru(ctx, q, scheduleIDs, scope, m.BrandID, m.Tanggal, now); err != nil {
 		return err

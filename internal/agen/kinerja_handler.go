@@ -338,7 +338,7 @@ func (h *Handler) RincianBonusPortal(w http.ResponseWriter, r *http.Request) {
 	offset, ok1 := angka("offset", 0)
 	limit, ok2 := angka("limit", MaksHalamanRincian)
 	if !ok1 || !ok2 || limit == 0 || limit > MaksHalamanRincian {
-		writeError(w, http.StatusBadRequest, "parameter offset dan limit tidak valid")
+		writeError(w, http.StatusBadRequest, "Halaman tidak valid.")
 		return
 	}
 	hal, err := h.repo.RincianBonusBinaan(r.Context(), identity.GetCustomerAccountID(r.Context()), binaanID, r.URL.Query().Get("status"), offset, limit)

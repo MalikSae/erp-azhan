@@ -244,6 +244,9 @@ func TestManasikPaketRSVPDanAbsensi(t *testing.T) {
 	if err := LepasPaket(ctx, tx, id, &brand, s2, hariH); !errors.Is(err, ErrSudahDimulai) {
 		t.Errorf("lepas setelah mulai: %v", err)
 	}
+	if err := TambahPaket(ctx, tx, id, &brand, []int64{s2}, hariH); !errors.Is(err, ErrSudahDimulai) {
+		t.Errorf("tambah setelah mulai: %v", err)
+	}
 	if err := Hapus(ctx, tx, id, &brand, hariH); !errors.Is(err, ErrAdaAbsensi) {
 		t.Errorf("hapus dengan absensi: %v", err)
 	}
