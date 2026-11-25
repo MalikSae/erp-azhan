@@ -13,7 +13,7 @@ Spek app (SPEK-APP-AZHAN-BOOKING-2026-11-12, cerita pengguna jamaah-agen) memint
 ## Keputusan
 **Isi**
 1. Prospek = akun dengan `direkrut_oleh_akun_id` = agen, dalam tiga tahap:
-   - **Belum booking**: akun tanpa booking.
+   - **Belum booking**: akun tanpa booking. Akun yang sudah jadi agen tetap ikut (diputuskan pemilik 2026-11-26).
    - **Belum DP**: booking `baru` dengan hold berjalan (sisa waktu tampil).
    - **Expired** (tahap `hold_habis`): booking `baru` tanpa hold. Bila kuota jadwal penuh atau pendaftaran ditutup, label **"Kuota penuh"** / **"Pendaftaran tutup"** (agen menawarkan paket lain).
 2. Booking yang dibuat agen sendiri tidak ikut (sudah di Booking Saya).
