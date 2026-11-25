@@ -29,7 +29,6 @@ import (
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/brand"
 	"erp-azhan/api/internal/category"
-	"erp-azhan/api/internal/crmdeal"
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/haramain"
@@ -183,14 +182,12 @@ func main() {
 
 	paymentRepo := payment.NewRepository(db)
 	paymentHandler := payment.NewHandler(paymentRepo)
-	crmDealRepo := crmdeal.NewRepository(db)
-	crmDealHandler := crmdeal.NewHandler(crmDealRepo)
 
 	selfBookingRepo := selfbooking.NewRepository(db)
 	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo, mailer.NewFromEnv())
 
 	if db != nil {
-		go runSeatHoldExpiry(crmDealRepo)
+		go runSeatHoldExpiry(bookingRepo)
 		go runAktivasiCleanup(db)
 		go notifikasi.JalankanPengingat(context.Background(), db, time.Minute)
 		if v := strings.ToLower(strings.TrimSpace(os.Getenv("PELUNASAN_AUTO_BATAL"))); v == "false" || v == "0" || v == "off" {
@@ -575,9 +572,6 @@ func main() {
 		r.With(identity.RequirePermission("payment.verify")).Delete("/payments/{id}", paymentHandler.DeletePayment)
 		r.With(identity.RequirePermission("payment.void")).Post("/payments/{id}/void", paymentHandler.VoidPayment)
 
-		// CRM: konversi lead menjadi jamaah, booking, seat hold/payment dalam satu transaksi.
-		r.With(identity.RequirePermission("crmdeal.process")).Post("/crm/deals", crmDealHandler.ProcessDeal)
-
 		// Akun Pelanggan: daftar dan detail akun yang bisa booking (baca saja; brand scope dicek di query).
 		r.Route("/akun", func(r chi.Router) {
 			r.Use(identity.RequirePermission("akun.view"))
@@ -763,7 +757,7 @@ func runPelunasanExpiry(repo *booking.Repository, db *sql.DB) {
 	}
 }
 
-func runSeatHoldExpiry(repo *crmdeal.Repository) {
+func runSeatHoldExpiry(repo *booking.Repository) {
 	release := func() {
 		count, err := repo.ReleaseExpiredSeatHolds(context.Background())
 		if err != nil {

@@ -78,9 +78,8 @@ Catatan di bawah ini adalah acuan modul booking & jamaah. Keputusan kebijakan te
 - **Kuota kursi (`seat_sisa`)** — kursi "terkunci" ditandai `bookings.is_seat_blocked = TRUE`. Setiap pengurangan/pengembalian WAJIB pakai row-level lock (`SELECT ... FOR UPDATE` pada `schedules`) dan hanya untuk pax `counts_for_seat = TRUE` + `pax_status = 'aktif'` (infant tidak makan kursi). Aturan yang berlaku (keputusan 2026-09-27: ikuti kode, bukan aturan lama "hanya saat `dp`"):
   - **Booking admin** (`POST /bookings`) dan **finalisasi draft** (`POST /bookings/{id}/finalize`): kursi langsung dikurangi saat booking masuk status `baru`, **tanpa batas waktu** (`seat_hold_expires_at` NULL). Draft (`status = 'draft'`) belum mengurangi kursi.
   - **Self-booking publik** (`POST /api/public/book`): kursi dikurangi saat `baru` dengan hold **24 jam** (`seat_hold_expires_at`).
-  - **CRM deal** (`POST /crm/deals`): kursi dikurangi saat dibuat hanya untuk `commitment_type = "book_seat"` (hold dengan `seat_hold_expires_at` dari request). Komitmen `dp`/`lunas` belum mengurangi kursi sampai pembayarannya dikonfirmasi.
   - **Hold manual** (`PUT /bookings/{id}/seat-block`): mengunci kursi booking `baru` yang belum terkunci, opsional dengan batas waktu; `DELETE` mengembalikannya.
-  - **Hold kedaluwarsa**: worker tiap menit (`ReleaseExpiredSeatHolds`) mengembalikan kursi booking `baru` yang `seat_hold_expires_at`-nya lewat.
+  - **Hold kedaluwarsa**: worker tiap menit (`booking.ReleaseExpiredSeatHolds`) mengembalikan kursi booking `baru` yang `seat_hold_expires_at`-nya lewat.
   - **Masuk `dp`/`lunas`** (via konfirmasi pembayaran atau ubah status): jika kursi belum terkunci, kursi dikurangi saat itu; hold jadi permanen (`seat_hold_expires_at` di-NULL-kan).
   - **`batal`** (booking) atau **batal per pax**: kursi dikembalikan hanya jika sebelumnya terkunci, dibatasi `LEAST(seat_total, ...)`.
   - Implikasi yang disadari: booking admin berstatus `baru` yang tidak pernah dibayar menahan kursi sampai dibatalkan manual.

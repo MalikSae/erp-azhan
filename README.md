@@ -41,7 +41,6 @@ erp-azhan/
 │   ├── bankaccount/         # Rekening transfer resmi per brand
 │   ├── booking/             # Booking (admin): status, diskon, progress, refund, cashback, perlengkapan
 │   ├── brand/               # Brand multi-brand dan resolusi domain
-│   ├── crmdeal/             # Pemrosesan deal dari CRM
 │   ├── customer/            # Akun pelanggan (email + password) dan pesanan pelanggan
 │   ├── dokumen/             # Dokumen jamaah (paspor, KTP, KK, dll)
 │   ├── identity/            # Login admin, JWT, dan pemeriksaan izin
@@ -269,7 +268,6 @@ Kelompok rute di bawah `/api/admin/`:
 | Pembayaran | `payments`, `bookings/{id}/payments`, `payments/{id}/status` |
 | Perlengkapan | `perlengkapan-items`, `-stok`, `-mutasi`, `-set-template` |
 | Agen Syiar | `agen`, `agen/pencairan`, `kaitan-agen` |
-| CRM | `crm/deals` |
 | Laporan | `analytics/transactions-30-days`, `analytics/pax-30-days` |
 | Media | `media/upload`, `media/{category}/{filename}` (berkas terlindungi) |
 

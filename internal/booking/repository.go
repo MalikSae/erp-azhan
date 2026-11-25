@@ -715,7 +715,7 @@ func (r *Repository) CreateBooking(ctx context.Context, req *CreateBookingReques
 	// 6. Insert header ke bookings
 	isSeatBlocked := regularCount > 0
 
-	// seat_count = jumlah pax reguler (invariant yang sama dengan self-booking & CRM);
+	// seat_count = jumlah pax reguler (invariant yang sama dengan self-booking);
 	// dipakai blokir ulang, worker hold, dan penyesuaian kuota.
 	// dp_per_pax: snapshot DP efektif saat booking dibuat agar perubahan DP paket
 	// tidak berlaku surut (MP-02).

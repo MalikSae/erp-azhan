@@ -43,7 +43,7 @@ func TodayWIB() string {
 }
 
 // ScheduleClosedReason mengembalikan alasan bila paket tidak boleh menerima booking
-// baru dari admin atau CRM, atau "" bila boleh (SM-05): paket yang sudah diarsipkan,
+// baru dari admin, atau "" bila boleh (SM-05): paket yang sudah diarsipkan,
 // atau tanggal berangkatnya sudah lewat. Paket draft tetap boleh dipesan supaya
 // pra-pendaftaran sebelum terbit bisa dicatat. berangkat berformat YYYY-MM-DD.
 func ScheduleClosedReason(status, berangkat, today string) string {

@@ -35,7 +35,7 @@ const (
 
 // SnapshotNominal menyalin nominal efektif komisi jadwal ke booking (keputusan D9).
 // Dipanggil saat booking resmi dibuat (bukan draft) di semua jalur: booking
-// admin, finalisasi draft, self-booking, dan CRM deal. Perubahan nominal jadwal atau
+// admin, finalisasi draft, dan self-booking. Perubahan nominal jadwal atau
 // bawaan brand setelahnya tidak mengubah booking yang sudah ada.
 func SnapshotNominal(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	_, err := tx.ExecContext(ctx, `

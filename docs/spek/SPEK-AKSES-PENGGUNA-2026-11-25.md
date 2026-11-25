@@ -21,7 +21,7 @@ Alasan: dari 10 role hanya 3 yang punya pengguna, tidak ada pengguna yang memega
 | A1 | Pengguna punya tepat satu jenis akses: `super_admin` atau `tim`. |
 | A2 | Super Admin hanya untuk pengguna Holding (`brand_id` kosong). |
 | A3 | Tim wajib punya minimal satu izin. |
-| A4 | Izin `user.admin`, `brand.edit`, dan `crmdeal.process` hanya dimiliki Super Admin; tidak bisa dicentang untuk Tim. |
+| A4 | Izin `user.admin` dan `brand.edit` hanya dimiliki Super Admin; tidak bisa dicentang untuk Tim. |
 | A5 | Pengguna yang terikat brand hanya bisa diberi izin dalam daftar izin brand (§4). |
 | A6 | Sistem wajib selalu punya minimal satu Super Admin aktif. Menurunkan, menonaktifkan, atau menghapus Super Admin aktif terakhir ditolak (409). |
 | A7 | Mengubah jenis akses, izin, atau akses brand menaikkan `perm_version` dan mencabut semua sesi pengguna itu (login ulang). |
@@ -106,7 +106,7 @@ Dihapus: `/roles`, `/permissions`, `/users/{id}/roles`, `/org-units/*`.
 
 `GET /api/admin/me` dan respons login/refresh mempertahankan nama field (kontrak dengan azhan-booking): `role` berisi `super_admin` atau `tim`, `roles` berisi satu elemen yang sama, `permissions` berisi kode izin (Super Admin: semua kode).
 
-Middleware `RequireAdminRole` dan `RequireAdminOrCRMAccess` (gerbang khusus akun CS) dihapus. Fitur CS/CRM belum ada; `POST /crm/deals` tetap dijaga `crmdeal.process` yang hanya dimiliki Super Admin sampai sambungan CRM dibangun.
+Middleware `RequireAdminRole` dan `RequireAdminOrCRMAccess` (gerbang khusus akun CS) dihapus. Modul CRM deal (`POST /crm/deals`, izin `crmdeal.process`) dihapus di migrasi 161; CS dan deal CRM dibahas saat integrasi CRM.
 
 ## 6. UI
 

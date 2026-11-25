@@ -31,9 +31,8 @@ var (
 
 // hanyaSuperAdmin: izin yang tidak bisa diberikan ke Tim (A4).
 var hanyaSuperAdmin = map[string]bool{
-	"user.admin":      true,
-	"brand.edit":      true,
-	"crmdeal.process": true,
+	"user.admin": true,
+	"brand.edit": true,
 }
 
 // izinBrand: izin yang boleh diberikan ke pengguna terikat brand (A5). Sama
