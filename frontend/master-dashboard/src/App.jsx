@@ -36,7 +36,6 @@ import InventoryRiwayatStokPage from './pages/InventoryRiwayatStokPage';
 import StokBrandCabangPage from './pages/StokBrandCabangPage';
 import PenggunaPage from './pages/PenggunaPage';
 import PenggunaFormPage from './pages/PenggunaFormPage';
-import StrukturOrganisasiPage from './pages/StrukturOrganisasiPage';
 import BrandsPage from './pages/BrandsPage';
 import BrandFormPage from './pages/BrandFormPage';
 
@@ -128,7 +127,6 @@ function AppRoutes() {
           <Route path="/users" element={<RequireAccess perm="user.admin"><PenggunaPage /></RequireAccess>} />
           <Route path="/users/new" element={<RequireAccess perm="user.admin"><PenggunaFormPage /></RequireAccess>} />
           <Route path="/users/:id" element={<RequireAccess perm="user.admin"><PenggunaFormPage /></RequireAccess>} />
-          <Route path="/organisasi" element={<RequireAccess perm="user.admin"><StrukturOrganisasiPage /></RequireAccess>} />
         </Route>
       </Route>
 

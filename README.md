@@ -34,7 +34,8 @@ erp-azhan/
 │   ├── api/                 # Entry point backend API server
 │   └── seed-*/              # Seeder admin, hotel, maskapai, dan paket
 ├── internal/
-│   ├── adminuser/           # Pengguna admin/staff dan reset password
+│   ├── adminuser/           # Pengguna dashboard dan reset password
+│   ├── akses/               # Jenis akses (Super Admin, Tim) dan izin per pengguna
 │   ├── agen/                # Agen Syiar: pengajuan, persetujuan, pencairan, ganti kaitan (portal agen belum dipasang)
 │   ├── airline/ airport/ hotel/ category/ itinerary/   # Master data
 │   ├── bankaccount/         # Rekening transfer resmi per brand
@@ -48,10 +49,8 @@ erp-azhan/
 │   ├── komisi/              # Perhitungan komisi, cashback, dan saldo agen
 │   ├── mailer/              # Email transaksional (verifikasi, reset password, booking)
 │   ├── media/               # Upload dan akses berkas terlindungi
-│   ├── orgunit/             # Struktur organisasi
 │   ├── payment/             # Pembayaran, bukti transfer, verifikasi
 │   ├── perlengkapan/        # Inventori perlengkapan dan template set
-│   ├── rbac/                # Role dan permission
 │   ├── schedule/            # Paket/jadwal keberangkatan, seat, dan API publik v1
 │   ├── selfbooking/         # Checkout booking mandiri pelanggan
 │   └── shared/              # Konfigurasi, middleware, dan helper bersama
@@ -262,7 +261,7 @@ Kelompok rute di bawah `/api/admin/`:
 
 | Kelompok | Rute |
 |---|---|
-| Identitas dan organisasi | `users`, `roles`, `permissions`, `org-units`, `brands`, `bank-accounts` |
+| Identitas | `users`, `brands`, `bank-accounts` |
 | Master data | `hotels`, `airlines`, `airports`, `categories`, `itineraries` |
 | Paket | `schedules` (termasuk `/status`, `/seat`, `/perlengkapan`) |
 | Jamaah dan dokumen | `jamaah`, `jamaah/{id}/dokumen`, `dokumen/{id}/status` |

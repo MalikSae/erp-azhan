@@ -2,46 +2,31 @@ package adminuser
 
 import "time"
 
-// Keanggotaan unit organisasi milik seorang pengguna (penugasan; bukan izin).
-type Keanggotaan struct {
-	OrgUnitID int64  `json:"org_unit_id"`
-	UnitNama  string `json:"unit_nama"`
-	Jenis     string `json:"jenis"`  // 'divisi' | 'tim'
-	Posisi    string `json:"posisi"` // 'pemimpin' | 'anggota'
-}
-
-// AdminUser = Pengguna (SPEK-PENGGUNA-ORGANISASI §2). Data aman untuk client
-// (tanpa password_hash). Jabatan hanya label tampilan, tidak dipakai logika.
+// AdminUser = Pengguna dashboard (SPEK-AKSES-PENGGUNA-2026-11-25). Data aman untuk
+// client (tanpa password_hash). Akses: "super_admin" atau "tim"; Permissions berisi
+// izin yang dicentang untuk Tim (kosong untuk Super Admin, yang memegang semuanya).
 type AdminUser struct {
-	ID          uint64        `json:"id"`
-	DisplayName string        `json:"display_name"`
-	Email       string        `json:"email"`
-	NoHP        *string       `json:"no_hp"`
-	Jabatan     *string       `json:"jabatan"`
-	BrandID     *uint64       `json:"brand_id"`
-	BrandName   *string       `json:"brand_name"`
-	BrandColor  *string       `json:"brand_color"`
-	IsActive    bool          `json:"is_active"`
-	Roles       []string      `json:"roles"`
-	Keanggotaan []Keanggotaan `json:"keanggotaan"`
-	CreatedAt   time.Time     `json:"created_at"`
-}
-
-// KeanggotaanInput satu baris penugasan di form pengguna.
-type KeanggotaanInput struct {
-	OrgUnitID int64  `json:"org_unit_id"`
-	Posisi    string `json:"posisi"`
+	ID          uint64    `json:"id"`
+	DisplayName string    `json:"display_name"`
+	Email       string    `json:"email"`
+	NoHP        *string   `json:"no_hp"`
+	BrandID     *uint64   `json:"brand_id"`
+	BrandName   *string   `json:"brand_name"`
+	BrandColor  *string   `json:"brand_color"`
+	IsActive    bool      `json:"is_active"`
+	Akses       string    `json:"akses"`
+	Permissions []string  `json:"permissions"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // UpsertInput field yang sama untuk create & update (tanpa password).
 type UpsertInput struct {
-	DisplayName string             `json:"display_name"`
-	Email       string             `json:"email"`
-	NoHP        *string            `json:"no_hp"`
-	Jabatan     *string            `json:"jabatan"`
-	BrandID     *uint64            `json:"brand_id"` // nil = akses Holding
-	Roles       []string           `json:"roles"`
-	Keanggotaan []KeanggotaanInput `json:"keanggotaan"`
+	DisplayName string   `json:"display_name"`
+	Email       string   `json:"email"`
+	NoHP        *string  `json:"no_hp"`
+	BrandID     *uint64  `json:"brand_id"` // nil = akses Holding
+	Akses       string   `json:"akses"`
+	Permissions []string `json:"permissions"`
 }
 
 // CreateAdminUserRequest payload POST /api/admin/users.
@@ -65,7 +50,7 @@ type ResetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// ChangeOwnPasswordRequest payload untuk akun Admin Travel.
+// ChangeOwnPasswordRequest payload PUT /api/admin/account/password.
 type ChangeOwnPasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`

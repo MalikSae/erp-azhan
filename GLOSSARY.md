@@ -33,6 +33,20 @@ _Hindari_: agen pengikat, perekrut, pengajak sebagai istilah tersendiri.
 
 **PIC**: pemesan yang ikut berangkat dalam satu booking, dicocokkan lewat NIK dan nama seperti jamaah lain.
 
+## Pengguna dashboard
+
+**Pengguna**: orang yang login ke dashboard ERP. Tabel `admin_users`. Bukan akun (itu pelanggan) dan bukan agen.
+_Hindari_: admin (untuk semua pengguna), pegawai, user.
+
+**Super Admin**: jenis akses pengguna yang memegang semua izin. Hanya untuk pengguna Holding. Sistem selalu punya minimal satu yang aktif.
+
+**Tim**: jenis akses pengguna yang izinnya dicentang per pengguna di form Pengguna. Bukan role, bukan divisi.
+_Hindari_: role, jabatan, divisi, struktur organisasi (semuanya dihapus 25 November 2026).
+
+**Izin**: kode di tabel `permissions` yang menjaga route (`RequirePermission`). Tim memegangnya lewat `user_permissions`. Izin baru tidak otomatis diberikan ke Tim. Spek: `docs/spek/SPEK-AKSES-PENGGUNA-2026-11-25.md`.
+
+**Templat akses**: pengisi cepat centang izin di form Pengguna (Admin Brand, Keuangan, Konten). Tidak tersimpan pada pengguna dan tidak mengikat.
+
 ## Pemesanan
 
 **Booking**: pemesanan satu jadwal untuk satu atau beberapa pax. Ada dua jalur: didaftarkan agen di portal agen, atau mandiri di web publik lewat link ref.

@@ -1,7 +1,7 @@
 import client from './client';
 
-// Pengguna (SPEK-PENGGUNA-ORGANISASI §5). Create/update membawa profil, akses
-// brand, role, dan keanggotaan sekaligus — diproses atomik di backend.
+// Pengguna (SPEK-AKSES-PENGGUNA-2026-11-25 §5). Create/update membawa profil, akses
+// brand, jenis akses, dan izin sekaligus; diproses atomik di backend.
 
 export async function listAdminUsers() {
   const response = await client.get('/api/admin/users');

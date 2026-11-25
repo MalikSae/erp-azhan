@@ -31,7 +31,7 @@ func TestPesanPanjangPassword(t *testing.T) {
 // Reset password menaikkan perm_version supaya access token lama ditolak, bukan hidup sampai kedaluwarsa.
 func TestIntegrasiResetPasswordMenaikkanPermVersion(t *testing.T) {
 	f := setup(t)
-	id := f.create(pengguna("gotest.au.pw@local.test", nil, []string{"direktur"}))
+	id := f.create(tim("gotest.au.pw@local.test", nil, "booking.view"))
 	versi := func() int {
 		return f.count(`SELECT perm_version FROM admin_users WHERE id = ?`, id)
 	}

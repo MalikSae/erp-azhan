@@ -30,15 +30,18 @@ const (
 	authMaxBodyBytes = 16 << 10
 )
 
-// UserAccess hasil resolusi RBAC untuk satu user (lihat internal/rbac).
+// UserAccess hasil resolusi akses satu pengguna (lihat internal/akses). Role berisi jenis akses
+// ("super_admin" atau "tim"); Roles memuat nilai yang sama, dipertahankan untuk klaim dan
+// respons yang sudah dibaca klien.
 type UserAccess struct {
+	Role        string
 	Roles       []string
 	Permissions []string
 	PermVersion int
 }
 
-// AccessLoader dipenuhi rbac.Repository lewat adaptor di main.go. Gagal/nil
-// loader tidak memblokir login: klaim RBAC dikosongkan (fallback transisi).
+// AccessLoader dipenuhi akses.Repository lewat adaptor di main.go. Gagal/nil
+// loader tidak memblokir login: klaim akses dikosongkan, jadi semua route berizin menolak.
 type AccessLoader func(ctx context.Context, adminUserID int64) (*UserAccess, error)
 
 type Handler struct {
@@ -251,10 +254,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.loginIP.Refund(clientIP)
 	}
 	h.recordSuccessLogin(rateLimitKey)
-	log.Printf("[AUDIT] login_success ip=%s user_id=%d role=%s", getClientIP(r), user.ID, user.Role)
+	log.Printf("[AUDIT] login_success ip=%s user_id=%d", getClientIP(r), user.ID)
 
 	access := h.resolveAccess(r.Context(), user.ID)
-	accessToken, err := GenerateAccessTokenWithAccess(user.ID, user.BrandID, user.Role, user.Email,
+	accessToken, err := GenerateAccessTokenWithAccess(user.ID, user.BrandID, access.Role, user.Email,
 		access.Roles, access.Permissions, access.PermVersion)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateAccessToken: %v", err)
@@ -280,7 +283,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		UserID:       user.ID,
 		DisplayName:  user.DisplayName,
 		Email:        user.Email,
-		Role:         user.Role,
+		Role:         access.Role,
 		Roles:        access.Roles,
 		Permissions:  access.Permissions,
 		AccessToken:  accessToken,
@@ -362,7 +365,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	access := h.resolveAccess(r.Context(), user.ID)
-	accessToken, err := GenerateAccessTokenWithAccess(user.ID, user.BrandID, user.Role, user.Email,
+	accessToken, err := GenerateAccessTokenWithAccess(user.ID, user.BrandID, access.Role, user.Email,
 		access.Roles, access.Permissions, access.PermVersion)
 	if err != nil {
 		log.Printf("[ERROR] identity.Refresh GenerateAccessToken: %v", err)
@@ -376,7 +379,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		UserID:      user.ID,
 		DisplayName: user.DisplayName,
 		Email:       user.Email,
-		Role:        user.Role,
+		Role:        access.Role,
 		Roles:       access.Roles,
 		Permissions: access.Permissions,
 		AccessToken:  accessToken,

@@ -42,11 +42,10 @@ import (
 	"erp-azhan/api/internal/media"
 	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/tabungan"
-	"erp-azhan/api/internal/orgunit"
 	"erp-azhan/api/internal/payment"
 	"erp-azhan/api/internal/pengumuman"
 	"erp-azhan/api/internal/perlengkapan"
-	"erp-azhan/api/internal/rbac"
+	"erp-azhan/api/internal/akses"
 	"erp-azhan/api/internal/manifest"
 	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/selfbooking"
@@ -147,16 +146,16 @@ func main() {
 	go schedule.JalankanArsipOtomatis(context.Background(), scheduleRepo, 24*time.Hour)
 
 	identityRepo := identity.NewRepository(db)
-	rbacRepo := rbac.NewRepository(db)
-	rbacHandler := rbac.NewHandler(rbacRepo)
-	// Loader RBAC untuk klaim JWT saat login/refresh (RBAC Fase 1).
+	aksesRepo := akses.NewRepository(db)
+	// Loader akses untuk klaim JWT saat login/refresh (SPEK-AKSES-PENGGUNA-2026-11-25).
 	accessLoader := func(ctx context.Context, adminUserID int64) (*identity.UserAccess, error) {
-		access, err := rbacRepo.GetUserAccess(ctx, adminUserID)
+		access, err := aksesRepo.GetUserAccess(ctx, adminUserID)
 		if err != nil {
 			return nil, err
 		}
 		return &identity.UserAccess{
-			Roles:       access.Roles,
+			Role:        access.Jenis,
+			Roles:       []string{access.Jenis},
 			Permissions: access.Permissions,
 			PermVersion: access.PermVersion,
 		}, nil
@@ -209,7 +208,6 @@ func main() {
 
 	adminuserRepo := adminuser.NewRepository(db)
 	adminuserHandler := adminuser.NewHandler(adminuserRepo, identityRepo)
-	orgUnitHandler := orgunit.NewHandler(orgunit.NewRepository(db))
 
 	customerRepo := customer.NewRepository(db)
 	customerHandler := customer.NewHandler(customerRepo, mailer.NewFromEnv())
@@ -375,7 +373,6 @@ func main() {
 		// Guard: tolak semua admin request jika DB tidak tersedia, LALU validasi auth token JWT
 		r.Use(requireDB(db))
 		r.Use(identity.RequireAuth)
-		r.Use(identity.RequireAdminOrCRMAccess)
 
 		// Identitas, brand, dan izin dari token yang sudah divalidasi: dipakai CMS (cms.<domain brand>).
 		r.Get("/me", identityHandler.Me)
@@ -385,23 +382,10 @@ func main() {
 		// izin per jenis dan batas brand diperiksa di paket topbar (jenis tanpa izin dikembalikan kosong).
 		r.Get("/cari", topbarHandler.Cari)
 		r.Get("/notifikasi", topbarHandler.Notifikasi)
-		r.With(identity.RequireAdminRole).Put("/account/password", adminuserHandler.ChangeOwnPassword)
+		r.Put("/account/password", adminuserHandler.ChangeOwnPassword)
 
-		// RBAC Fase 1: manajemen role & permission (SPEK-RBAC-2026-10-02.md).
-		r.Route("/roles", func(r chi.Router) {
-			r.Use(identity.RequireHoldingPermission("user.admin"))
-			r.Get("/", rbacHandler.ListRoles)
-		})
-		r.With(identity.RequireHoldingPermission("user.admin")).Get("/permissions", rbacHandler.ListPermissions)
-		r.Route("/users/{id}/roles", func(r chi.Router) {
-			r.Use(identity.RequireHoldingPermission("user.admin"))
-			r.Get("/", rbacHandler.GetUserRoles)
-			r.Put("/", rbacHandler.SetUserRoles)
-		})
-
-		// RBAC Fase 2: guard route per permission (SPEK-RBAC-2026-10-02.md §8).
-		// Pemetaan meniru akses yang berlaku sebelumnya; pengetatan kebijakan
-		// adalah keputusan terpisah. Alias guard yang sering dipakai:
+		// Penjaga route per izin. Izin pengguna berasal dari internal/akses
+		// (SPEK-AKSES-PENGGUNA-2026-11-25). Alias penjaga yang sering dipakai:
 		masterView := r.With(identity.RequirePermission("masterdata.view"))
 		masterEdit := r.With(identity.RequirePermission("masterdata.edit"))
 
@@ -458,7 +442,7 @@ func main() {
 			r.With(identity.RequirePermission("bankaccount.edit")).Delete("/{id}", bankAccountHandler.Delete)
 		})
 
-		// Users: satu permission dengan manajemen role (user.admin).
+		// Pengguna: profil, jenis akses, dan izin (user.admin, hanya Super Admin).
 		r.Route("/users", func(r chi.Router) {
 			r.Use(identity.RequireHoldingPermission("user.admin"))
 			r.Get("/", adminuserHandler.ListUsers)
@@ -468,16 +452,6 @@ func main() {
 			r.Put("/{id}/status", adminuserHandler.SetStatus)
 			r.Put("/{id}/password", adminuserHandler.ResetPassword)
 			r.Delete("/{id}", adminuserHandler.DeleteUser)
-		})
-
-		// Struktur Organisasi (SPEK-PENGGUNA-ORGANISASI §5): divisi -> tim.
-		r.Route("/org-units", func(r chi.Router) {
-			r.Use(identity.RequireHoldingPermission("user.admin"))
-			r.Get("/", orgUnitHandler.List)
-			r.Post("/", orgUnitHandler.Create)
-			r.Put("/{id}", orgUnitHandler.Update)
-			r.Put("/{id}/status", orgUnitHandler.SetStatus)
-			r.Delete("/{id}", orgUnitHandler.Delete)
 		})
 
 		// Media
@@ -660,8 +634,8 @@ func main() {
 			r.Post("/{id}/tolak", jamaahAkunHandler.Tolak)
 		})
 
-		// Agen Syiar — Persetujuan Agen & status (screen B1/B2a). Akun CS sudah
-		// diblokir oleh RequireAdminOrCRMAccess; brand scope dicek di repository.
+		// Agen Syiar — Persetujuan Agen & status (screen B1/B2a); brand scope
+		// dicek di repository.
 		r.Route("/agen", func(r chi.Router) {
 			r.Use(identity.RequirePermission("agen.view"))
 			r.Get("/pengajuan", agenHandler.ListPengajuan)
@@ -683,7 +657,7 @@ func main() {
 		})
 
 		// Agen Syiar — Admin Master lintas brand: Persetujuan Pencairan (C1) dan
-		// Ganti Kaitan Agen (C4). Permission khusus; Admin Travel tidak memilikinya.
+		// Ganti Kaitan Agen (C4). Izin khusus, hanya untuk pengguna Holding.
 		r.Group(func(r chi.Router) {
 			r.Use(identity.RequirePermission("agen.payout.approve"))
 			r.Get("/pencairan", agenHandler.ListPencairanAdmin)

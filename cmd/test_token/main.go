@@ -20,7 +20,7 @@ func main() {
 		log.Fatal("test_token menolak berjalan dengan APP_ENV=production: token yang dibuat akan sah di server produksi")
 	}
 	brandID := int64(2)
-	acc, err := identity.GenerateAccessToken(8, &brandID, "admin")
+	acc, err := identity.GenerateAccessToken(8, &brandID, "tim")
 	if err != nil {
 		log.Fatalf("gagal membuat token: %v", err)
 	}
