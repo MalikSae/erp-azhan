@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 	"erp-azhan/api/internal/testdb"
 	"github.com/go-chi/chi/v5"
 )
@@ -47,7 +48,7 @@ func router(db *sql.DB) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			id, err := strconv.ParseInt(req.Header.Get("X-Akun"), 10, 64)
 			if err != nil || id <= 0 {
-				writeError(w, http.StatusUnauthorized, "Masuk dulu.")
+				shared.WriteError(w, http.StatusUnauthorized, "Masuk dulu.")
 				return
 			}
 			next.ServeHTTP(w, req.WithContext(identity.WithCustomer(req.Context(), id, 1)))

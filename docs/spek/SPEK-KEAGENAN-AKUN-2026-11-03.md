@@ -122,7 +122,7 @@ Admin Master dapat memindahkan jamaah ke agen lain, dan memasangkan atau menggan
 - Saat komisi dipindah, aturannya sama dengan saat lunas: bonus pembinaan hanya pindah ke upline agen baru yang `aktif`. Bila agen baru tidak punya upline atau upline-nya nonaktif, bonus pembinaan itu ditandai batal dengan sebab `ganti_kaitan`; barisnya tidak dihapus. Kolom log `komisi_dihapus` kini berisi jumlah yang dibatalkan.
 - Pemindahan ditolak hanya bila ia sendiri menurunkan saldo tersedia penerima lama sampai di bawah nol (komisi itu sudah dicairkan). Saldo yang sudah negatif sebelumnya dan tidak berubah oleh pemindahan tidak menghalangi (K27).
 - Akun yang ikut berangkat dan jamaah dirinya sudah terikat ke seorang agen otomatis mendapat agen itu sebagai upline, hanya bila akun itu bukan agen. Kejadiannya dicatat di log kaitan akun sebagai "Sistem" (migrasi 132). Upline akun agen hanya berubah lewat Admin Master.
-- Setujui dan tolak pencairan, log kaitan, dan ganti kaitan memeriksa brand pemanggil; pengguna Holding tidak dibatasi.
+- Setujui dan tolak pencairan hanya untuk pengguna Holding: izin `agen.payout.approve` tidak bisa diberikan ke pengguna brand (keputusan akses 2026-11-25). Cek brand pemanggil di kode pencairan dibiarkan sebagai pengaman berlapis. Log kaitan dan ganti kaitan memeriksa brand pemanggil; pengguna Holding tidak dibatasi.
 - Upline disimpan di dua kolom `customer_accounts`: `direkrut_oleh_akun_id` (sejak akun dibuat; dipakai mengikat jamaah) dan `upline_akun_id` (disalin saat pengajuan agen disetujui; penerima bonus pembinaan). Keduanya satu konsep (K10). Penggabungan menjadi satu kolom ditunda.
 
 ## 5. Aturan komisi
@@ -156,7 +156,7 @@ Admin Master dapat memindahkan jamaah ke agen lain, dan memasangkan atau menggan
 
 Saldo tersedia: komisi aktif yang sudah lewat 3 hari kalender dari `berangkat_tanggal` (K26), dikurangi pencairan yang pending dan disetujui. Saldo tertahan: komisi aktif yang belum sampai tanggal itu. Komisi batal (K25) tidak dihitung, dan saldo tersedia boleh negatif (K27). Pencairan minimal Rp500.000, satu pengajuan pending, disetujui Admin Master (`agen.payout.approve`). Saldo hanya terdiri dari dua jenis komisi di atas. Penerima dan pemilik saldo adalah akun. Komisi dari booking yang dibatalkan (status `batal`) setelah lunas tetap dihitung dan menjadi saldo tersedia pada waktunya (K20).
 
-Agen berstatus `nonaktif` tidak dapat mengajukan pencairan, karena portal agennya tertutup. Saldonya tidak hangus dan tetap tercatat. Bila saldo itu perlu dibayar, admin mengaktifkan kembali agennya, agen mengajukan pencairan, lalu admin menonaktifkannya lagi (keputusan 2026-11-10).
+Agen berstatus `nonaktif` tidak dapat mengajukan pencairan, karena portal agennya tertutup. Saldonya tidak hangus dan tetap tercatat. Bila saldo itu perlu dibayar, admin mengaktifkan kembali agennya, agen mengajukan pencairan, lalu admin menonaktifkannya lagi (keputusan 2026-11-10). Pengajuan yang masuk sebelum agen dinonaktifkan tetap bisa disetujui; saldo dicek ulang saat disetujui (keputusan 2026-11-25).
 
 Dua hal ditunda sampai fitur repeat order dan cashback dinyalakan kembali: apakah komisi repeat order ikut saldo yang bisa dicairkan, dan apakah pemakaian kredit cashback ikut batas diskon 10%. Selama fitur itu mati, rute kredit cashback menolak semua permintaan.
 

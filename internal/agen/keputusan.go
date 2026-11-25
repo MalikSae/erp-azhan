@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 // Keputusan admin atas satu pengajuan agen (layar B1, spek bagian 7): satu aksi, satu transaksi.
@@ -177,7 +178,7 @@ func (h *Handler) Keputusan(w http.ResponseWriter, r *http.Request) {
 	}
 	var req KeputusanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
@@ -186,5 +187,5 @@ func (h *Handler) Keputusan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[AUDIT] agen_keputusan akun_id=%d aksi=%s admin_id=%d", id, strings.TrimSpace(req.Aksi), adminID)
-	writeJSON(w, http.StatusOK, map[string]string{"message": "keputusan tersimpan"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "keputusan tersimpan"})
 }

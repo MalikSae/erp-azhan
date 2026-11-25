@@ -14,8 +14,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/go-sql-driver/mysql"
-
 	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/shared"
 )
@@ -313,9 +311,8 @@ func Hapus(ctx context.Context, q querier, id int64) error {
 		return ErrDipakaiPaket
 	}
 	_, err := q.ExecContext(ctx, `DELETE FROM haramain_tempat WHERE id = ?`, id)
-	// FK RESTRICT (1451): a paket linked the tempat after the check above.
-	var me *mysql.MySQLError
-	if errors.As(err, &me) && me.Number == 1451 {
+	// FK RESTRICT: a paket linked the tempat after the check above.
+	if shared.IsFKDipakai(err) {
 		return ErrDipakaiPaket
 	}
 	return err

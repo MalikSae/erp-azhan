@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -29,7 +28,13 @@ func NewRepository(db *sql.DB) *Repository {
 
 func (r *Repository) ListItems(ctx context.Context) ([]PerlengkapanItem, error) {
 	query := `
-		SELECT i.id, i.nama, i.photo_url, COALESCE(t.qty, 0) AS qty_per_set, i.created_at
+		SELECT i.id, i.nama, i.photo_url, COALESCE(t.qty, 0) AS qty_per_set, i.created_at,
+		       (t.perlengkapan_item_id IS NULL
+		        AND NOT EXISTS (SELECT 1 FROM package_category_perlengkapan c WHERE c.perlengkapan_item_id = i.id)
+		        AND NOT EXISTS (SELECT 1 FROM schedule_perlengkapan sp WHERE sp.perlengkapan_item_id = i.id)
+		        AND NOT EXISTS (SELECT 1 FROM perlengkapan_stok s WHERE s.perlengkapan_item_id = i.id AND s.stok_tersedia > 0)
+		        AND NOT EXISTS (SELECT 1 FROM perlengkapan_mutasi m WHERE m.perlengkapan_item_id = i.id)
+		        AND NOT EXISTS (SELECT 1 FROM booking_pax_perlengkapan_logs l WHERE l.perlengkapan_item_id = i.id)) AS bisa_dihapus
 		FROM perlengkapan_items i
 		LEFT JOIN perlengkapan_set_template t ON i.id = t.perlengkapan_item_id
 		ORDER BY i.nama ASC
@@ -43,9 +48,11 @@ func (r *Repository) ListItems(ctx context.Context) ([]PerlengkapanItem, error) 
 	items := make([]PerlengkapanItem, 0)
 	for rows.Next() {
 		var it PerlengkapanItem
-		if err := rows.Scan(&it.ID, &it.Nama, &it.PhotoURL, &it.QtyPerSet, &it.CreatedAt); err != nil {
+		var bisa bool
+		if err := rows.Scan(&it.ID, &it.Nama, &it.PhotoURL, &it.QtyPerSet, &it.CreatedAt, &bisa); err != nil {
 			return nil, fmt.Errorf("perlengkapan.ListItems scan: %w", err)
 		}
+		it.BisaDihapus = &bisa
 		items = append(items, it)
 	}
 	return items, nil
@@ -198,6 +205,16 @@ func (r *Repository) DeleteItem(ctx context.Context, id uint64) error {
 		return ErrInUse
 	}
 
+	// Item yang punya riwayat stok tidak dihapus: FK perlengkapan_mutasi ON DELETE CASCADE akan ikut menghapus
+	// buku besarnya (keputusan review Inventory 2026-11-25).
+	var punyaRiwayat bool
+	if err := r.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM perlengkapan_mutasi WHERE perlengkapan_item_id = ?)", id).Scan(&punyaRiwayat); err != nil {
+		return fmt.Errorf("perlengkapan.DeleteItem cek riwayat: %w", err)
+	}
+	if punyaRiwayat {
+		return ErrInUse
+	}
+
 	query := "DELETE FROM perlengkapan_items WHERE id = ?"
 	res, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -221,31 +238,22 @@ func (r *Repository) DeleteItem(ctx context.Context, id uint64) error {
 // ─── Stok Per Brand ───────────────────────────────────────────────────────────
 
 func (r *Repository) ListStokAll(ctx context.Context) ([]PerlengkapanStokAllRow, error) {
-	// Pastikan semua kombinasi brand x item ada
-	querySync := `
-		INSERT INTO perlengkapan_stok (brand_id, perlengkapan_item_id, stok_tersedia)
-		SELECT b.id, i.id, 0
-		FROM brands b CROSS JOIN perlengkapan_items i
-		WHERE NOT EXISTS (
-			SELECT 1 FROM perlengkapan_stok s WHERE s.brand_id = b.id AND s.perlengkapan_item_id = i.id
-		)
-	`
-	_, _ = r.db.ExecContext(ctx, querySync)
-
+	// Semua kombinasi brand x item; yang belum punya baris stok dibaca sebagai 0 (baris dibuat saat stok pertama
+	// kali berubah, lihat lockStok), sehingga GET tidak menulis ke database.
 	query := `
-		SELECT 
-			s.brand_id, 
-			b.name AS brand_name, 
-			b.logo_url AS brand_logo_url, 
+		SELECT
+			b.id AS brand_id,
+			b.name AS brand_name,
+			b.logo_url AS brand_logo_url,
 			b.icon_url AS brand_icon_url,
-			s.perlengkapan_item_id, 
-			i.nama AS nama_item, 
+			i.id AS perlengkapan_item_id,
+			i.nama AS nama_item,
 			i.photo_url AS photo_url,
 			COALESCE(t.qty, 0) AS qty_per_set,
-			s.stok_tersedia
-		FROM perlengkapan_stok s
-		JOIN brands b ON s.brand_id = b.id
-		JOIN perlengkapan_items i ON s.perlengkapan_item_id = i.id
+			COALESCE(s.stok_tersedia, 0) AS stok_tersedia
+		FROM brands b
+		CROSS JOIN perlengkapan_items i
+		LEFT JOIN perlengkapan_stok s ON s.brand_id = b.id AND s.perlengkapan_item_id = i.id
 		LEFT JOIN perlengkapan_set_template t ON t.perlengkapan_item_id = i.id
 		ORDER BY b.name ASC, i.nama ASC
 	`
@@ -284,21 +292,13 @@ func (r *Repository) ListStokAll(ctx context.Context) ([]PerlengkapanStokAllRow,
 }
 
 func (r *Repository) ListStokByBrand(ctx context.Context, brandID uint64) ([]PerlengkapanStokItem, error) {
-	// Pastikan semua item global terdaftar di perlengkapan_stok untuk brand ini
-	querySync := `
-		INSERT INTO perlengkapan_stok (brand_id, perlengkapan_item_id, stok_tersedia)
-		SELECT ?, id, 0
-		FROM perlengkapan_items
-		WHERE id NOT IN (SELECT perlengkapan_item_id FROM perlengkapan_stok WHERE brand_id = ?)
-	`
-	_, _ = r.db.ExecContext(ctx, querySync, brandID, brandID)
-
+	// Semua item katalog untuk brand ini; item tanpa baris stok dibaca 0. Brand yang tidak ada menghasilkan [].
 	query := `
-		SELECT s.perlengkapan_item_id, i.nama, i.photo_url, COALESCE(t.qty, 0) AS qty_per_set, s.stok_tersedia
-		FROM perlengkapan_stok s
-		JOIN perlengkapan_items i ON s.perlengkapan_item_id = i.id
+		SELECT i.id, i.nama, i.photo_url, COALESCE(t.qty, 0) AS qty_per_set, COALESCE(s.stok_tersedia, 0) AS stok_tersedia
+		FROM perlengkapan_items i
+		JOIN brands b ON b.id = ?
+		LEFT JOIN perlengkapan_stok s ON s.brand_id = b.id AND s.perlengkapan_item_id = i.id
 		LEFT JOIN perlengkapan_set_template t ON t.perlengkapan_item_id = i.id
-		WHERE s.brand_id = ?
 		ORDER BY i.nama ASC
 	`
 	rows, err := r.db.QueryContext(ctx, query, brandID)
@@ -373,28 +373,18 @@ func (r *Repository) UpdateSetTemplate(ctx context.Context, inputs []SetTemplate
 	defer tx.Rollback()
 
 	// 1. Validasi semua perlengkapan_item_id valid
-	if len(inputs) > 0 {
-		ids := make([]string, len(inputs))
-		args := make([]interface{}, len(inputs))
-		for i, inp := range inputs {
-			if inp.Qty < 1 {
-				return nil, fmt.Errorf("%w: Jumlah minimal 1.", ErrInvalidInput)
-			}
-			ids[i] = "?"
-			args[i] = inp.PerlengkapanItemID
+	ids := make([]uint64, len(inputs))
+	for i, inp := range inputs {
+		if inp.Qty < 1 {
+			return nil, fmt.Errorf("%w: Jumlah minimal 1.", ErrInvalidInput)
 		}
-
-		queryValidate := fmt.Sprintf(
-			"SELECT COUNT(*) FROM perlengkapan_items WHERE id IN (%s)",
-			strings.Join(ids, ","),
-		)
-		var validCount int
-		if err := tx.QueryRowContext(ctx, queryValidate, args...).Scan(&validCount); err != nil {
-			return nil, fmt.Errorf("perlengkapan.UpdateSetTemplate validate: %w", err)
+		ids[i] = inp.PerlengkapanItemID
+	}
+	if err := itemIDsExist(ctx, tx, ids); err != nil {
+		if errors.Is(err, ErrInvalidInput) {
+			return nil, err
 		}
-		if validCount != len(inputs) {
-			return nil, fmt.Errorf("%w: Item tidak ditemukan.", ErrInvalidInput)
-		}
+		return nil, fmt.Errorf("perlengkapan.UpdateSetTemplate validate: %w", err)
 	}
 
 	// 2. Replace-all: DELETE semua lalu INSERT ulang

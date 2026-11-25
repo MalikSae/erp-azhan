@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
+
+	"erp-azhan/api/internal/shared"
 )
 
 var (
@@ -198,9 +200,8 @@ func hapus(ctx context.Context, q Querier, id int64, scope *int64) error {
 		return ErrDipakai
 	}
 	if _, err := q.ExecContext(ctx, `DELETE FROM paket_benefits WHERE id = ?`, id); err != nil {
-		// 1451: paket menautkan benefit ini di antara pemeriksaan di atas dan DELETE (FK RESTRICT).
-		var me *mysql.MySQLError
-		if errors.As(err, &me) && me.Number == 1451 {
+		// Paket menautkan benefit ini di antara pemeriksaan di atas dan DELETE (FK RESTRICT).
+		if shared.IsFKDipakai(err) {
 			return ErrDipakai
 		}
 		return fmt.Errorf("benefit.Delete: %w", err)

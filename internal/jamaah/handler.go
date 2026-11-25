@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-sql-driver/mysql"
 	"erp-azhan/api/internal/agen"
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
+	"github.com/go-chi/chi/v5"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler jamaah.
@@ -38,10 +38,10 @@ func (h *Handler) ListJamaah(w http.ResponseWriter, r *http.Request) {
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	items, err := h.repo.List(r.Context(), brandID, status, ListOpts{Limit: limit, Offset: offset})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil data jamaah.")
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // ─── Get Detail ───────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ func (h *Handler) GetJamaah(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, j)
+	shared.WriteJSON(w, http.StatusOK, j)
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -69,18 +69,18 @@ func (h *Handler) GetJamaah(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateJamaah(w http.ResponseWriter, r *http.Request) {
 	var req CreateJamaahRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	// Validasi nama_lengkap wajib
 	if strings.TrimSpace(req.NamaLengkap) == "" {
-		writeError(w, http.StatusBadRequest, "Nama lengkap wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Nama lengkap wajib diisi.")
 		return
 	}
 	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
 	if msg := validateJamaahInput(&req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+		shared.WriteError(w, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (h *Handler) CreateJamaah(w http.ResponseWriter, r *http.Request) {
 	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
 		s := strings.TrimSpace(*req.Status)
 		if s != "aktif" && s != "draft" {
-			writeError(w, http.StatusBadRequest, "Status tidak valid, harus 'draft' atau 'aktif'.")
+			shared.WriteError(w, http.StatusBadRequest, "Status tidak valid, harus 'draft' atau 'aktif'.")
 			return
 		}
 		req.Status = &s
@@ -96,11 +96,11 @@ func (h *Handler) CreateJamaah(w http.ResponseWriter, r *http.Request) {
 
 	// Kaitan agen wajib dipilih eksplisit untuk jamaah baru (Jalur 3, 3.5).
 	if req.KaitanAgen == nil || (req.KaitanAgen.Mode != "agen" && req.KaitanAgen.Mode != "tanpa_agen") {
-		writeError(w, http.StatusBadRequest, "Kaitan agen wajib dipilih: kaitkan ke agen atau tanpa agen.")
+		shared.WriteError(w, http.StatusBadRequest, "Kaitan agen wajib dipilih: kaitkan ke agen atau tanpa agen.")
 		return
 	}
 	if req.KaitanAgen.Mode == "agen" && (req.KaitanAgen.AgenAkunID == nil || *req.KaitanAgen.AgenAkunID <= 0) {
-		writeError(w, http.StatusBadRequest, "Agen wajib dipilih.")
+		shared.WriteError(w, http.StatusBadRequest, "Agen wajib dipilih.")
 		return
 	}
 
@@ -111,7 +111,7 @@ func (h *Handler) CreateJamaah(w http.ResponseWriter, r *http.Request) {
 		finalBrandID = *ctxBrandID
 	} else {
 		if req.BrandID == nil || *req.BrandID == 0 {
-			writeError(w, http.StatusBadRequest, "Brand wajib dipilih.")
+			shared.WriteError(w, http.StatusBadRequest, "Brand wajib dipilih.")
 			return
 		}
 		finalBrandID = *req.BrandID
@@ -122,7 +122,7 @@ func (h *Handler) CreateJamaah(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, j)
+	shared.WriteJSON(w, http.StatusCreated, j)
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -137,17 +137,17 @@ func (h *Handler) UpdateJamaah(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateJamaahRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if strings.TrimSpace(req.NamaLengkap) == "" {
-		writeError(w, http.StatusBadRequest, "Nama lengkap wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Nama lengkap wajib diisi.")
 		return
 	}
 	req.NamaLengkap = strings.TrimSpace(req.NamaLengkap)
 	if msg := validateJamaahInput(&req); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+		shared.WriteError(w, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (h *Handler) UpdateJamaah(w http.ResponseWriter, r *http.Request) {
 	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
 		s := strings.TrimSpace(*req.Status)
 		if s != "aktif" && s != "draft" {
-			writeError(w, http.StatusBadRequest, "Status tidak valid, harus 'draft' atau 'aktif'.")
+			shared.WriteError(w, http.StatusBadRequest, "Status tidak valid, harus 'draft' atau 'aktif'.")
 			return
 		}
 		req.Status = &s
@@ -187,7 +187,7 @@ func (h *Handler) UpdateJamaah(w http.ResponseWriter, r *http.Request) {
 			handleRepoError(w, err)
 			return
 		} else if msg != "" {
-			writeError(w, http.StatusConflict, msg)
+			shared.WriteError(w, http.StatusConflict, msg)
 			return
 		}
 	}
@@ -197,7 +197,7 @@ func (h *Handler) UpdateJamaah(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, j)
+	shared.WriteJSON(w, http.StatusOK, j)
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -215,7 +215,7 @@ func (h *Handler) DeleteJamaah(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
 }
 
 // ─── Update Catatan ───────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ func (h *Handler) UpdateCatatan(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateCatatanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Format data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Format data tidak valid.")
 		return
 	}
 
@@ -240,7 +240,7 @@ func (h *Handler) UpdateCatatan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "catatan berhasil disimpan"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "catatan berhasil disimpan"})
 }
 
 // ─── Update Tanggal Lahir ─────────────────────────────────────────────────────
@@ -265,12 +265,12 @@ func (h *Handler) UpdateTanggalLahir(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateTanggalLahirRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Format data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Format data tidak valid.")
 		return
 	}
 	tgl, msg := validasiTanggalLahir(req.TanggalLahir)
 	if msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+		shared.WriteError(w, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -279,7 +279,7 @@ func (h *Handler) UpdateTanggalLahir(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, j)
+	shared.WriteJSON(w, http.StatusOK, j)
 }
 
 // ─── Error handling ───────────────────────────────────────────────────────────
@@ -287,21 +287,20 @@ func (h *Handler) UpdateTanggalLahir(w http.ResponseWriter, r *http.Request) {
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrDuplicateNIK):
-		writeError(w, http.StatusConflict, "NIK sudah terdaftar.")
+		shared.WriteError(w, http.StatusConflict, "NIK sudah terdaftar.")
 	case errors.Is(err, agen.ErrAgenTidakValid):
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrKodeBrandNotSet):
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	default:
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh data booking.")
+		if shared.IsFKDipakai(err) {
+			shared.WriteError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh data booking.")
 			return
 		}
 		log.Printf("[ERROR] jamaah: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -388,20 +387,10 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
 }
 
 // ValidasiInput memvalidasi format data jamaah (tanggal, NIK, email, HP) untuk pemanggil di luar paket ini

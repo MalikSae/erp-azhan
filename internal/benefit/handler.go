@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -21,20 +22,10 @@ func NewHandler(repo *Repository) *Handler {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
 func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -43,14 +34,14 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "Benefit tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Benefit tidak ditemukan.")
 	case errors.Is(err, ErrDuplikat), errors.Is(err, ErrDuplikatNonaktif), errors.Is(err, ErrDipakai):
-		writeError(w, http.StatusConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrBrandTidakSah):
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	default:
 		log.Printf("[ERROR] benefit: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -63,7 +54,7 @@ func brandTujuan(w http.ResponseWriter, r *http.Request, dariRequest *int64) (in
 		return *scoped, true
 	}
 	if dariRequest == nil || *dariRequest <= 0 {
-		writeError(w, http.StatusBadRequest, pesanBrandWajib)
+		shared.WriteError(w, http.StatusBadRequest, pesanBrandWajib)
 		return 0, false
 	}
 	return *dariRequest, true
@@ -91,12 +82,12 @@ func (h *Handler) ListBenefits(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // ListIkon GET /api/admin/benefits/ikon
 func (h *Handler) ListIkon(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, DaftarIkon)
+	shared.WriteJSON(w, http.StatusOK, DaftarIkon)
 }
 
 // CreateBenefit POST /api/admin/benefits (master): teks kembar ditolak 409.
@@ -114,12 +105,12 @@ func (h *Handler) CreateOpsi(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) buatBenefit(w http.ResponseWriter, r *http.Request, pakaiYangAda bool) {
 	var req CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	teks, ikon, err := ValidasiIsi(req.Teks, req.Ikon)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	brandID, ok := brandTujuan(w, r, req.BrandID)
@@ -133,7 +124,7 @@ func (h *Handler) buatBenefit(w http.ResponseWriter, r *http.Request, pakaiYangA
 			return
 		}
 		if ada != nil {
-			writeJSON(w, http.StatusOK, ada)
+			shared.WriteJSON(w, http.StatusOK, ada)
 			return
 		}
 	}
@@ -142,7 +133,7 @@ func (h *Handler) buatBenefit(w http.ResponseWriter, r *http.Request, pakaiYangA
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, b)
+	shared.WriteJSON(w, http.StatusCreated, b)
 }
 
 // UpdateBenefit PUT /api/admin/benefits/{id}
@@ -153,12 +144,12 @@ func (h *Handler) UpdateBenefit(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	teks, ikon, err := ValidasiIsi(req.Teks, req.Ikon)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	b, err := h.repo.Update(r.Context(), id, identity.GetBrandID(r.Context()), teks, ikon, req.IsActive)
@@ -166,7 +157,7 @@ func (h *Handler) UpdateBenefit(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, b)
+	shared.WriteJSON(w, http.StatusOK, b)
 }
 
 // DeleteBenefit DELETE /api/admin/benefits/{id}
@@ -179,7 +170,7 @@ func (h *Handler) DeleteBenefit(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "benefit berhasil dihapus"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "benefit berhasil dihapus"})
 }
 
 // ─── Pilihan benefit di form paket (schedule.view / schedule.edit) ───────────
@@ -196,5 +187,5 @@ func (h *Handler) ListOpsi(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, Opsi{Ikon: DaftarIkon, Benefits: items})
+	shared.WriteJSON(w, http.StatusOK, Opsi{Ikon: DaftarIkon, Benefits: items})
 }

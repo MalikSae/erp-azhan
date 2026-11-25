@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"erp-azhan/api/internal/shared"
 )
 
 // API publik v1 (SPEK-WEB-PUBLIK-CMS-2026-10-20.md §4.3): read-only dan stabil, dipakai situs publik
@@ -233,12 +235,12 @@ func paginate(items []PackageV1, page, perPage int) ([]PackageV1, int) {
 func brandParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := strings.TrimSpace(r.URL.Query().Get("brand"))
 	if raw == "" {
-		writeError(w, http.StatusBadRequest, "Parameter brand wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Parameter brand wajib diisi.")
 		return 0, false
 	}
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "Parameter brand tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Parameter brand tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -290,13 +292,13 @@ func (h *Handler) ListPackagesV1(w http.ResponseWriter, r *http.Request) {
 	}
 	f, err := parseFilterV1(r.URL.Query())
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	all, err := h.visiblePackages(r.Context(), brandID)
 	if err != nil {
 		log.Printf("[ERROR] schedule v1: list: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil data paket.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil data paket.")
 		return
 	}
 	filtered := make([]PackageV1, 0, len(all))
@@ -306,7 +308,7 @@ func (h *Handler) ListPackagesV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	page, total := paginate(filtered, f.Page, f.PerPage)
-	writeJSON(w, http.StatusOK, ListPackagesV1Response{
+	shared.WriteJSON(w, http.StatusOK, ListPackagesV1Response{
 		Data: page,
 		Meta: ListMetaV1{Page: f.Page, PerPage: f.PerPage, Total: total},
 	})
@@ -333,7 +335,7 @@ func (h *Handler) GetPackageV1(w http.ResponseWriter, r *http.Request) {
 	kl, err := h.repo.loadKlasifikasi(r.Context(), []int64{s.ID})
 	if err != nil {
 		log.Printf("[ERROR] schedule v1: klasifikasi: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	k, found := kl[s.ID]
@@ -344,23 +346,23 @@ func (h *Handler) GetPackageV1(w http.ResponseWriter, r *http.Request) {
 	batas := batasPublikWIB()
 	switch {
 	case s.Status == StatusArchived:
-		writeJSON(w, http.StatusOK, gonePackage(s, k, "archived"))
+		shared.WriteJSON(w, http.StatusOK, gonePackage(s, k, "archived"))
 	case s.Status == StatusPublished && s.BerangkatTanggal < batas:
-		writeJSON(w, http.StatusOK, gonePackage(s, k, "closed"))
+		shared.WriteJSON(w, http.StatusOK, gonePackage(s, k, "closed"))
 	case s.Status == StatusPublished:
 		p := newPackageV1(s.ToPublic(), k, batas)
 		lokasi, err := h.repo.LokasiPublik(r.Context(), []int64{s.ID})
 		if err != nil {
 			log.Printf("[ERROR] schedule v1: lokasi: %v", err)
-			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+			shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 			return
 		}
 		if l := lokasi[s.ID]; l != nil {
 			p.Lokasi = l
 		}
-		writeJSON(w, http.StatusOK, p)
+		shared.WriteJSON(w, http.StatusOK, p)
 	default:
-		writeError(w, http.StatusNotFound, "Jadwal tidak ditemukan atau belum dipublikasikan.")
+		shared.WriteError(w, http.StatusNotFound, "Jadwal tidak ditemukan atau belum dipublikasikan.")
 	}
 }
 
@@ -387,7 +389,7 @@ func (h *Handler) SitemapFeedV1(w http.ResponseWriter, r *http.Request) {
 	all, err := h.visiblePackages(r.Context(), brandID)
 	if err != nil {
 		log.Printf("[ERROR] schedule v1: sitemap: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil data paket.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil data paket.")
 		return
 	}
 	out := make([]SitemapEntryV1, 0, len(all))
@@ -399,5 +401,5 @@ func (h *Handler) SitemapFeedV1(w http.ResponseWriter, r *http.Request) {
 			Klasifikasi:   p.Klasifikasi,
 		})
 	}
-	writeJSON(w, http.StatusOK, out)
+	shared.WriteJSON(w, http.StatusOK, out)
 }

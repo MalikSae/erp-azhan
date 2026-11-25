@@ -55,6 +55,7 @@ _Hindari_: role, jabatan, divisi, struktur organisasi (semuanya dihapus 25 Novem
 **Pax DP+**: pax aktif di booking berstatus dp atau lunas. Satuan KPI marketing di Dashboard Utama (keputusan 12 November 2026): pax per channel dan grafik Pax DP+. Pax per channel membagi pax DP+ menjadi "dari agen" (jamaah terikat agen) dan "tanpa agen" (`tanpa_agen`, keadaan normal jamaah web tanpa referral). Seat terisi hanya menghitung pax DP+ reguler, karena infant tidak memakai seat.
 **Tahapan umroh**: status pekerjaan travel per jamaah yang dilihat jamaah, agen, dan admin (Detail Booking), urut Perlengkapan, Paspor, SISKOPATUH, Visa, Tiket (internal/tahapan). Perlengkapan tidak berlaku untuk infant; paspor selesai saat dokumen disetujui. Vaksin, hotel, land arrangement, dan manasik bukan tahapan (keputusan 24 November 2026).
 **Siap berangkat**: semua tahapan umroh setiap pax aktif selesai, termasuk tiket booking.
+**Retur perlengkapan**: stok brand bertambah kembali karena penyerahan dibatalkan. Saat pax atau seluruh booking batal, perlengkapan yang sudah diserahkan kembali ke stok hanya bila booking masih baru atau draft; pada booking dp atau lunas perlengkapan dianggap dibawa jamaah (keputusan 25 November 2026). Item perlengkapan yang punya riwayat stok tidak bisa dihapus.
 
 **Kuota seat**: jumlah seat yang dijual untuk satu jadwal (`schedules.seat_total`). Padanan "block seat" atau allotment yang travel pesan dari maskapai.
 

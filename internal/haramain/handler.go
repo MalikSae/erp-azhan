@@ -13,6 +13,7 @@ import (
 
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 type Handler struct {
@@ -22,37 +23,27 @@ type Handler struct {
 
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db, now: time.Now} }
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
 func tulisGalat(w http.ResponseWriter, err error) {
 	var val *ErrValidasi
 	switch {
 	case errors.As(err, &val):
-		writeError(w, http.StatusBadRequest, val.Pesan)
+		shared.WriteError(w, http.StatusBadRequest, val.Pesan)
 	case errors.Is(err, ErrTidakAda), errors.Is(err, ErrUlasanTidakAda):
-		writeError(w, http.StatusNotFound, err.Error())
+		shared.WriteError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrBelumBerangkat):
-		writeError(w, http.StatusForbidden, err.Error())
+		shared.WriteError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrDipakaiPaket):
-		writeError(w, http.StatusConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] haramain: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal memproses data.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memproses data.")
 	}
 }
 
 func idParam(w http.ResponseWriter, r *http.Request, nama string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, nama), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -67,7 +58,7 @@ func (h *Handler) DaftarPublik(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 type detailView struct {
@@ -91,7 +82,7 @@ func (h *Handler) DetailPublik(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, detailView{Tempat: t, Ulasan: ulasan})
+	shared.WriteJSON(w, http.StatusOK, detailView{Tempat: t, Ulasan: ulasan})
 }
 
 // ---- Akun ----
@@ -118,7 +109,7 @@ func (h *Handler) UlasanSayaAkun(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, ulasanSayaView{BolehUlas: boleh, UlasanSaya: saya})
+	shared.WriteJSON(w, http.StatusOK, ulasanSayaView{BolehUlas: boleh, UlasanSaya: saya})
 }
 
 // SimpanUlasanAkun PUT /api/account/haramain/{id}/ulasan: {teks, foto}.
@@ -130,7 +121,7 @@ func (h *Handler) SimpanUlasanAkun(w http.ResponseWriter, r *http.Request) {
 	}
 	var in InputUlasan
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := SimpanUlasan(r.Context(), h.db, id, acc.ID, in, h.now()); err != nil {
@@ -177,7 +168,7 @@ func (h *Handler) DaftarAdmin(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // DetailAdmin GET /api/admin/haramain/{id}
@@ -191,13 +182,13 @@ func (h *Handler) DetailAdmin(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, t)
+	shared.WriteJSON(w, http.StatusOK, t)
 }
 
 func (h *Handler) bacaInput(w http.ResponseWriter, r *http.Request) (Input, bool) {
 	var in Input
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return in, false
 	}
 	return in, true
@@ -219,7 +210,7 @@ func (h *Handler) BuatAdmin(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, t)
+	shared.WriteJSON(w, http.StatusCreated, t)
 }
 
 // UbahAdmin PUT /api/admin/haramain/{id}
@@ -258,7 +249,7 @@ func (h *Handler) UrutkanAdmin(w http.ResponseWriter, r *http.Request) {
 		IDs []int64 `json:"ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
@@ -285,7 +276,7 @@ func (h *Handler) UlasanAdminList(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // AturTampilAdmin PUT /api/admin/haramain-ulasan/{id}/tampil: {disembunyikan}
@@ -298,7 +289,7 @@ func (h *Handler) AturTampilAdmin(w http.ResponseWriter, r *http.Request) {
 		Disembunyikan bool `json:"disembunyikan"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := AturTampil(r.Context(), h.db, id, identity.GetAdminUserID(r.Context()), req.Disembunyikan); err != nil {

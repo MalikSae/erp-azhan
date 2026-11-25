@@ -10,9 +10,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-sql-driver/mysql"
 	"erp-azhan/api/internal/shared"
+	"github.com/go-chi/chi/v5"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler airline.
@@ -34,10 +33,10 @@ func (h *Handler) ListAirlines(w http.ResponseWriter, r *http.Request) {
 	airlines, err := h.repo.List(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] airline: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil data maskapai.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil data maskapai.")
 		return
 	}
-	writeJSON(w, http.StatusOK, airlines)
+	shared.WriteJSON(w, http.StatusOK, airlines)
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -48,7 +47,7 @@ func (h *Handler) ListAirlines(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateAirline(w http.ResponseWriter, r *http.Request) {
 	var req CreateAirlineRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -62,7 +61,7 @@ func (h *Handler) CreateAirline(w http.ResponseWriter, r *http.Request) {
 		handleAirlineRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, airline)
+	shared.WriteJSON(w, http.StatusCreated, airline)
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -78,7 +77,7 @@ func (h *Handler) UpdateAirline(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateAirlineRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -92,7 +91,7 @@ func (h *Handler) UpdateAirline(w http.ResponseWriter, r *http.Request) {
 		handleAirlineRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, airline)
+	shared.WriteJSON(w, http.StatusOK, airline)
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -110,7 +109,7 @@ func (h *Handler) DeleteAirline(w http.ResponseWriter, r *http.Request) {
 		handleAirlineRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -127,12 +126,12 @@ func validateAirlineInput(w http.ResponseWriter, rawName string, rawCode, rawLog
 	// Gate 1: nama wajib
 	name := strings.ToUpper(strings.TrimSpace(rawName))
 	if name == "" {
-		writeError(w, http.StatusBadRequest, "Nama wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Nama wajib diisi.")
 		return "", nil, nil, false
 	}
 	// Gate 2: panjang nama
 	if utf8.RuneCountInString(name) > maksNama {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Nama maksimal %d karakter.", maksNama))
+		shared.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Nama maksimal %d karakter.", maksNama))
 		return "", nil, nil, false
 	}
 
@@ -141,7 +140,7 @@ func validateAirlineInput(w http.ResponseWriter, rawName string, rawCode, rawLog
 	if rawCode != nil && strings.TrimSpace(*rawCode) != "" {
 		c := strings.ToUpper(strings.TrimSpace(*rawCode))
 		if utf8.RuneCountInString(c) != 2 {
-			writeError(w, http.StatusBadRequest, "Kode IATA harus 2 karakter.")
+			shared.WriteError(w, http.StatusBadRequest, "Kode IATA harus 2 karakter.")
 			return "", nil, nil, false
 		}
 		code = &c
@@ -152,11 +151,11 @@ func validateAirlineInput(w http.ResponseWriter, rawName string, rawCode, rawLog
 	if rawLogo != nil && strings.TrimSpace(*rawLogo) != "" {
 		val := strings.TrimSpace(*rawLogo)
 		if utf8.RuneCountInString(val) > maksLogoURL {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("URL logo maksimal %d karakter.", maksLogoURL))
+			shared.WriteError(w, http.StatusBadRequest, fmt.Sprintf("URL logo maksimal %d karakter.", maksLogoURL))
 			return "", nil, nil, false
 		}
 		if !shared.ValidMediaURL(val) {
-			writeError(w, http.StatusBadRequest, "Logo harus berkas unggahan atau URL http(s).")
+			shared.WriteError(w, http.StatusBadRequest, "Logo harus berkas unggahan atau URL http(s).")
 			return "", nil, nil, false
 		}
 		logoURL = &val
@@ -170,21 +169,19 @@ func validateAirlineInput(w http.ResponseWriter, rawName string, rawCode, rawLog
 func handleAirlineRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrDuplicate):
-		writeError(w, http.StatusConflict, "Maskapai dengan nama ini sudah ada.")
+		shared.WriteError(w, http.StatusConflict, "Maskapai dengan nama ini sudah ada.")
 	case errors.Is(err, ErrCodeInUse):
-		writeError(w, http.StatusConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrCodeDuplicate):
-		writeError(w, http.StatusConflict, "Kode maskapai sudah dipakai.")
+		shared.WriteError(w, http.StatusConflict, "Kode maskapai sudah dipakai.")
 	default:
-		// Tangkap MySQL FK constraint violation (error 1451)
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh paket lain.")
+		if shared.IsFKDipakai(err) {
+			shared.WriteError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh paket lain.")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -194,18 +191,8 @@ func parseID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(raw, 10, 64)
 	if err != nil || id == 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
 }

@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 // Override agen akun (screen C4, spek 4.4): Admin Master memasangkan akun tanpa agen, atau mengganti/
@@ -309,7 +310,7 @@ func (h *Handler) CariAkunKaitan(w http.ResponseWriter, r *http.Request) {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // LogKaitanAkun GET /api/admin/kaitan-agen/akun/{akunID}/log
@@ -323,7 +324,7 @@ func (h *Handler) LogKaitanAkun(w http.ResponseWriter, r *http.Request) {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // GantiAgenAkun PUT /api/admin/kaitan-agen/akun/{akunID} {agen_akun_id|null, alasan}
@@ -334,12 +335,12 @@ func (h *Handler) GantiAgenAkun(w http.ResponseWriter, r *http.Request) {
 	}
 	var req GantiAgenAkunRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	req.Alasan = strings.TrimSpace(req.Alasan)
 	if n := utf8.RuneCountInString(req.Alasan); n < 5 || n > 1000 {
-		writeError(w, http.StatusBadRequest, "Alasan wajib diisi (5–1000 karakter).")
+		shared.WriteError(w, http.StatusBadRequest, "Alasan wajib diisi (5–1000 karakter).")
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
@@ -349,7 +350,7 @@ func (h *Handler) GantiAgenAkun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[AUDIT] kaitan_akun_diganti akun_id=%d admin_id=%d jamaah_ikut=%d", id, adminID, dipindah)
-	writeJSON(w, http.StatusOK, map[string]any{"message": "agen akun diganti", "jamaah_dipindah": dipindah})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"message": "agen akun diganti", "jamaah_dipindah": dipindah})
 }
 
 // JamaahIkutUpline GET /api/admin/kaitan-agen/akun/{akunID}/jamaah-ikut → {jumlah}
@@ -364,5 +365,5 @@ func (h *Handler) JamaahIkutUpline(w http.ResponseWriter, r *http.Request) {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"jumlah": n})
+	shared.WriteJSON(w, http.StatusOK, map[string]int{"jumlah": n})
 }

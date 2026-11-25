@@ -74,7 +74,7 @@ func adminBrandScope(r *http.Request) *int64 {
 
 func handleKinerjaError(w http.ResponseWriter, err error) {
 	if errors.Is(err, ErrBukanAgenAktif) {
-		writeError(w, http.StatusForbidden, err.Error())
+		shared.WriteError(w, http.StatusForbidden, err.Error())
 		return
 	}
 	handleError(w, err)
@@ -87,7 +87,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		handleKinerjaError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, d)
+	shared.WriteJSON(w, http.StatusOK, d)
 }
 
 // MutasiPortal GET /api/portal/agen/mutasi: komisi, koreksi, dan pencairan terbaru untuk app.
@@ -97,7 +97,7 @@ func (h *Handler) MutasiPortal(w http.ResponseWriter, r *http.Request) {
 		handleKinerjaError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // DataJamaahPortal GET /api/portal/agen/data-jamaah: jamaah per booking minimal DP dari jamaah terikat.
@@ -107,7 +107,7 @@ func (h *Handler) DataJamaahPortal(w http.ResponseWriter, r *http.Request) {
 		handleKinerjaError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // AgenBinaanPortal GET /api/portal/agen/binaan: agen yang upline-nya agen ini.
@@ -117,7 +117,7 @@ func (h *Handler) AgenBinaanPortal(w http.ResponseWriter, r *http.Request) {
 		handleKinerjaError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // Batas klik referral per IP pengunjung. Penanda pengunjung dikirim situs dan bisa diisi bebas oleh pemanggil
@@ -175,7 +175,7 @@ func (h *Handler) KlikReferral(w http.ResponseWriter, r *http.Request) {
 		Pengunjung   string `json:"pengunjung"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	// IP dari shared.ClientIP: header proxy hanya dipercaya dari proxy tepercaya (TRUSTED_PROXIES), jadi pemanggil
@@ -205,7 +205,7 @@ func (h *Handler) KlikReferral(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RiwayatKomisiPortal(w http.ResponseWriter, r *http.Request) {
 	f, err := komisiFilterFromQuery(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	items, err := h.repo.ListKomisiAgen(r.Context(), identity.GetCustomerAccountID(r.Context()), f)
@@ -213,7 +213,7 @@ func (h *Handler) RiwayatKomisiPortal(w http.ResponseWriter, r *http.Request) {
 		handleKinerjaError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // ListAgen GET /api/admin/agen?q=&dari=&sampai= (B2)
@@ -223,14 +223,14 @@ func (h *Handler) ListAgen(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	items, err := h.repo.ListAgen(r.Context(), adminBrandScope(r), q.Get("q"), RentangAgen{Dari: q.Get("dari"), Sampai: q.Get("sampai")})
 	if errors.Is(err, ErrPeriodeTidakValid) {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err != nil {
 		handleError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // DetailAgen GET /api/admin/agen/{akunID} (B2a)
@@ -244,7 +244,7 @@ func (h *Handler) DetailAgen(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, d)
+	shared.WriteJSON(w, http.StatusOK, d)
 }
 
 // PeringkatAgen GET /api/admin/agen/peringkat?dari=&sampai=&brand_id=
@@ -253,14 +253,14 @@ func (h *Handler) PeringkatAgen(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	items, err := h.repo.PeringkatAgen(r.Context(), adminBrandScope(r), q.Get("dari"), q.Get("sampai"))
 	if errors.Is(err, ErrPeriodeTidakValid) {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err != nil {
 		handleError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // RiwayatKomisiAdmin GET /api/admin/agen/komisi?agen_id=&jenis=&dari=&sampai=&status=&limit=&offset= (B3)
@@ -269,7 +269,7 @@ func (h *Handler) PeringkatAgen(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RiwayatKomisiAdmin(w http.ResponseWriter, r *http.Request) {
 	f, err := komisiFilterFromQuery(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	f.BrandID = adminBrandScope(r)
@@ -278,7 +278,7 @@ func (h *Handler) RiwayatKomisiAdmin(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, halaman)
+	shared.WriteJSON(w, http.StatusOK, halaman)
 }
 
 // DetailJamaahPortal GET /api/portal/agen/data-jamaah/{bookingID}/{jamaahID}: status satu jamaah untuk agen perekrutnya.
@@ -286,45 +286,45 @@ func (h *Handler) DetailJamaahPortal(w http.ResponseWriter, r *http.Request) {
 	bookingID, err1 := strconv.ParseInt(chi.URLParam(r, "bookingID"), 10, 64)
 	jamaahID, err2 := strconv.ParseInt(chi.URLParam(r, "jamaahID"), 10, 64)
 	if err1 != nil || err2 != nil || bookingID <= 0 || jamaahID <= 0 {
-		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Jamaah tidak ditemukan.")
 		return
 	}
 	d, err := h.repo.DetailJamaahAgen(r.Context(), identity.GetCustomerAccountID(r.Context()), bookingID, jamaahID, time.Now())
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Jamaah tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		handleKinerjaError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, d)
+	shared.WriteJSON(w, http.StatusOK, d)
 }
 
 // DetailBinaanPortal GET /api/portal/agen/binaan/{akunID}: kinerja satu agen binaan dan bonus pembinaan upline darinya.
 func (h *Handler) DetailBinaanPortal(w http.ResponseWriter, r *http.Request) {
 	binaanID, err := strconv.ParseInt(chi.URLParam(r, "akunID"), 10, 64)
 	if err != nil || binaanID <= 0 {
-		writeError(w, http.StatusNotFound, "Agen tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Agen tidak ditemukan.")
 		return
 	}
 	d, err := h.repo.DetailAgenBinaan(r.Context(), identity.GetCustomerAccountID(r.Context()), binaanID, time.Now())
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Agen tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Agen tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		handleKinerjaError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, d)
+	shared.WriteJSON(w, http.StatusOK, d)
 }
 
 // RincianBonusPortal GET /api/portal/agen/binaan/{akunID}/bonus?status=&offset=&limit=: Rincian Bonus berhalaman.
 func (h *Handler) RincianBonusPortal(w http.ResponseWriter, r *http.Request) {
 	binaanID, err := strconv.ParseInt(chi.URLParam(r, "akunID"), 10, 64)
 	if err != nil || binaanID <= 0 {
-		writeError(w, http.StatusNotFound, "Agen tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Agen tidak ditemukan.")
 		return
 	}
 	angka := func(nama string, bawaan int) (int, bool) {
@@ -338,18 +338,18 @@ func (h *Handler) RincianBonusPortal(w http.ResponseWriter, r *http.Request) {
 	offset, ok1 := angka("offset", 0)
 	limit, ok2 := angka("limit", MaksHalamanRincian)
 	if !ok1 || !ok2 || limit == 0 || limit > MaksHalamanRincian {
-		writeError(w, http.StatusBadRequest, "Halaman tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Halaman tidak valid.")
 		return
 	}
 	hal, err := h.repo.RincianBonusBinaan(r.Context(), identity.GetCustomerAccountID(r.Context()), binaanID, r.URL.Query().Get("status"), offset, limit)
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "Agen tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Agen tidak ditemukan.")
 	case errors.Is(err, ErrStatusBonus):
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	case err != nil:
 		handleKinerjaError(w, err)
 	default:
-		writeJSON(w, http.StatusOK, hal)
+		shared.WriteJSON(w, http.StatusOK, hal)
 	}
 }

@@ -38,6 +38,9 @@ type perlengkapanJamaah struct {
 	DiserahkanNama *string           `json:"diserahkan_nama"`
 	DiterimaAt     *string           `json:"diterima_at"`
 	Isi            []isiPerlengkapan `json:"isi"`
+	// PerluJenisKelamin: jenis kelamin jamaah kosong padahal paket punya barang khusus pria/wanita. Penyerahan
+	// di dashboard menolak jamaah ini, jadi pengajuan juga ditolak sampai datanya dilengkapi.
+	PerluJenisKelamin bool `json:"perlu_jenis_kelamin"`
 }
 
 type perlengkapanView struct {
@@ -74,19 +77,28 @@ func isiUntuk(set []perlengkapan.SetItem, jenisKelamin string) []isiPerlengkapan
 	return out
 }
 
+// perluJenisKelamin: set punya barang khusus pria/wanita, sedangkan jenis kelamin jamaah belum diisi.
+func perluJenisKelamin(set []perlengkapan.SetItem, jenisKelamin string) bool {
+	if jenisKelamin != "" {
+		return false
+	}
+	for _, it := range set {
+		if it.Untuk == "pria" || it.Untuk == "wanita" {
+			return true
+		}
+	}
+	return false
+}
+
 func bisaAjukanPerlengkapan(o *orderSummary) bool {
 	return o.Tab != "batal" && o.Status != "baru"
 }
 
 func (o *Orders) perlengkapanBooking(ctx context.Context, acc *Account, order *orderSummary) (*perlengkapanView, error) {
 	view := &perlengkapanView{BookingCode: order.BookingCode, Jamaah: []perlengkapanJamaah{}, BisaAjukan: bisaAjukanPerlengkapan(order)}
-	set, err := perlengkapan.NewRepository(o.db).GetScheduleSet(ctx, order.ScheduleID, nil)
-	if err != nil && !errors.Is(err, perlengkapan.ErrNotFound) {
+	items, err := o.isiSetPaket(ctx, order.ScheduleID)
+	if err != nil {
 		return nil, err
-	}
-	var items []perlengkapan.SetItem
-	if set != nil {
-		items = set.Items
 	}
 	if view.Jamaah, err = daftarPerlengkapan(ctx, o.db, order.ID, items); err != nil {
 		return nil, err
@@ -96,6 +108,18 @@ func (o *Orders) perlengkapanBooking(ctx context.Context, acc *Account, order *o
 		return nil, err
 	}
 	return view, nil
+}
+
+// isiSetPaket: isi perlengkapan yang berlaku untuk paket (khusus paket, kategori, atau set global).
+func (o *Orders) isiSetPaket(ctx context.Context, scheduleID int64) ([]perlengkapan.SetItem, error) {
+	set, err := perlengkapan.NewRepository(o.db).GetScheduleSet(ctx, scheduleID, nil)
+	if err != nil && !errors.Is(err, perlengkapan.ErrNotFound) {
+		return nil, err
+	}
+	if set == nil {
+		return nil, nil
+	}
+	return set.Items, nil
 }
 
 type pembacaDB interface {
@@ -131,6 +155,7 @@ func daftarPerlengkapan(ctx context.Context, q pembacaDB, bookingID int64, items
 		}
 		p.Status = statusPerlengkapan(diberikan, p.DiajukanAt != nil, p.DiterimaAt != nil)
 		p.Isi = isiUntuk(items, p.JenisKelamin)
+		p.PerluJenisKelamin = perluJenisKelamin(items, p.JenisKelamin)
 		out = append(out, p)
 	}
 	return out, rows.Err()
@@ -206,11 +231,20 @@ func (o *Orders) AjukanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "Perlengkapan bisa diajukan setelah DP terverifikasi.")
 		return
 	}
-	err := dalamTx(r.Context(), o.db, func(tx *sql.Tx) error {
-		return ajukanPerlengkapanTx(r.Context(), tx, acc.ID, order.ID, req.JamaahIDs)
+	items, err := o.isiSetPaket(r.Context(), order.ScheduleID)
+	if err != nil {
+		log.Printf("[ERROR] account ajukan perlengkapan isi paket: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal mengajukan perlengkapan.")
+		return
+	}
+	err = dalamTx(r.Context(), o.db, func(tx *sql.Tx) error {
+		return ajukanPerlengkapanTx(r.Context(), tx, acc.ID, order.ID, req.JamaahIDs, items)
 	})
 	switch {
 	case errors.Is(err, errJamaahBukanBooking):
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	case errors.Is(err, errJenisKelaminKosong):
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	case errors.Is(err, errSudahDiajukan):
@@ -225,17 +259,19 @@ func (o *Orders) AjukanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 }
 
 // ajukanPerlengkapanTx mencatat pengajuan (ambil di kantor) untuk jamaah booking; semua atau tidak sama sekali.
-func ajukanPerlengkapanTx(ctx context.Context, tx *sql.Tx, accountID, bookingID int64, jamaahIDs []int64) error {
+func ajukanPerlengkapanTx(ctx context.Context, tx *sql.Tx, accountID, bookingID int64, jamaahIDs []int64, items []perlengkapan.SetItem) error {
 	// Periksa semua jamaah dulu, baru simpan: satu jamaah yang ditolak membatalkan seluruh pengajuan.
 	paxIDs := make([]int64, 0, len(jamaahIDs))
 	for _, jid := range jamaahIDs {
 		var paxID int64
 		var diberikan bool
 		var diajukan sql.NullTime
+		var jenisKelamin string
 		err := tx.QueryRowContext(ctx, `
-				SELECT id, perlengkapan_status = 'sudah_diberikan', perlengkapan_diajukan_at
-				FROM booking_pax WHERE booking_id = ? AND jamaah_id = ? AND pax_status = 'aktif' AND pax_type <> 'infant' FOR UPDATE`, bookingID, jid).
-			Scan(&paxID, &diberikan, &diajukan)
+				SELECT bp.id, bp.perlengkapan_status = 'sudah_diberikan', bp.perlengkapan_diajukan_at, COALESCE(j.jenis_kelamin, '')
+				FROM booking_pax bp JOIN jamaah j ON j.id = bp.jamaah_id
+				WHERE bp.booking_id = ? AND bp.jamaah_id = ? AND bp.pax_status = 'aktif' AND bp.pax_type <> 'infant' FOR UPDATE OF bp`, bookingID, jid).
+			Scan(&paxID, &diberikan, &diajukan, &jenisKelamin)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errJamaahBukanBooking
 		}
@@ -244,6 +280,9 @@ func ajukanPerlengkapanTx(ctx context.Context, tx *sql.Tx, accountID, bookingID 
 		}
 		if diberikan || diajukan.Valid {
 			return errSudahDiajukan
+		}
+		if perluJenisKelamin(items, jenisKelamin) {
+			return errJenisKelaminKosong
 		}
 		paxIDs = append(paxIDs, paxID)
 	}
@@ -262,6 +301,7 @@ var (
 	errSudahDiajukan      = errors.New("perlengkapan salah satu jamaah sudah diajukan atau diserahkan, muat ulang halaman")
 	errBelumDiserahkan    = errors.New("perlengkapan jamaah ini belum diserahkan petugas")
 	errSudahDiterima      = errors.New("penerimaan perlengkapan jamaah ini sudah dikonfirmasi")
+	errJenisKelaminKosong = errors.New("Jenis kelamin jamaah belum diisi.")
 )
 
 type terimaPerlengkapanRequest struct {

@@ -26,13 +26,30 @@ Masih membaca tabel modul lain (hanya baca, ditunda):
 - `internal/category`, `internal/hotel`, `internal/airline`, `internal/airport`: menghitung `schedules` sebelum hapus.
 - Modul booking sendiri masih menulis literal `'baru','dp','lunas'` di `repository.go`.
 
+### Grup menu Inventory (dicatat 2026-11-25, review alur Inventory)
+
+Ditunda atas keputusan user; perilaku sudah benar, hanya batas modul:
+
+- `internal/perlengkapan/set.go`: menulis `schedules.perlengkapan_custom`; membaca `schedules`, `package_categories`, `category_brands`.
+- `internal/perlengkapan/pengajuan.go`, `mutasi.go`, `repository.go`: join `booking_pax`, `bookings`, `schedules`, `jamaah`, `customer_accounts`, `admin_users`, `brands`.
+- `internal/booking/repository.go` (penyerahan): membaca set paket/kategori/global dan mengunci `perlengkapan_stok` langsung; hanya perubahan stok yang lewat `perlengkapan.ApplyBrandDelta`. Urutan set paket → kategori → global ditulis dua kali (booking dan `set.go`).
+- `internal/customer/perlengkapan_pelanggan.go`: menulis `booking_pax` (ajukan, terima) dan membaca `brands`.
+
+Perbaikan: `perlengkapan` menyediakan `IsiUntukPax(scheduleID, gender)` dan `KunciStok`; booking menyediakan fungsi ajukan/terima perlengkapan untuk customer.
+
 ## Kode berulang di backend (dicatat 2026-11-25)
 
-- `writeError`/`writeJSON` didefinisikan ulang di hampir tiap paket, dengan nama berbeda (`tulisGalat`, `galatTulis`, `handleRepoError`).
-- Blok tangkap MySQL 1451 disalin di hotel, airline, airport, itinerary, category, schedule.
-- `internal/schedule/handler.go` dan `repository.go` mencampur CRUD, seat, tanggal, benefit, lokasi, dan publik. Pecah per alasan berubah (mis. `seat.go`, `tanggal.go`).
+Sudah diperbaiki (2026-11-25):
 
-Perbaikan: helper bersama di `internal/shared`.
+- `shared.WriteJSON`/`shared.WriteError` menggantikan salinan lokal di 26 paket.
+- `shared.IsFKDipakai` dan `shared.IsMySQLErr` menggantikan blok tangkap 1451 di hotel, airline, airport, itinerary, category, schedule, jamaah, benefit, haramain, brand, adminuser.
+- `internal/schedule` dipecah: `seat.go`, `status.go`, `tanggal.go`, `publik.go`, `master_cek.go`, `benefit_paket.go`.
+
+Masih tersisa:
+
+- `booking`, `customer`, `perlengkapan` masih punya `writeJSON`/`writeError` dan blok 1451 sendiri; ditunda karena sedang diubah sesi review Inventory. `customer.writeJSON` menambah `Cache-Control: no-store`, jadi butuh varian sendiri.
+- Penerjemah galat per modul (`tulisGalat`, `handleRepoError`) tetap per modul karena isinya memetakan galat sentinel milik modul itu.
+- Blok tangkap MySQL 1062 (duplikat) masih ditulis manual di beberapa modul; bisa memakai `shared.IsMySQLErr(err, 1062)`.
 
 ## Kode berulang di dashboard (dicatat 2026-11-25)
 

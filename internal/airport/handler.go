@@ -11,7 +11,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-sql-driver/mysql"
+
+	"erp-azhan/api/internal/shared"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler airport.
@@ -35,10 +36,10 @@ func (h *Handler) ListAirports(w http.ResponseWriter, r *http.Request) {
 	airports, err := h.repo.List(r.Context(), search)
 	if err != nil {
 		log.Printf("[ERROR] airport: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil data bandara.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil data bandara.")
 		return
 	}
-	writeJSON(w, http.StatusOK, airports)
+	shared.WriteJSON(w, http.StatusOK, airports)
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ func (h *Handler) ListAirports(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateAirport(w http.ResponseWriter, r *http.Request) {
 	var req CreateAirportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -63,7 +64,7 @@ func (h *Handler) CreateAirport(w http.ResponseWriter, r *http.Request) {
 		handleAirportRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, airport)
+	shared.WriteJSON(w, http.StatusCreated, airport)
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ func (h *Handler) UpdateAirport(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateAirportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -93,7 +94,7 @@ func (h *Handler) UpdateAirport(w http.ResponseWriter, r *http.Request) {
 		handleAirportRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, airport)
+	shared.WriteJSON(w, http.StatusOK, airport)
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -111,7 +112,7 @@ func (h *Handler) DeleteAirport(w http.ResponseWriter, r *http.Request) {
 		handleAirportRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -127,31 +128,31 @@ const (
 func validateAirportInput(w http.ResponseWriter, rawName string, rawCode string, rawCity string) (string, string, string, bool) {
 	name := strings.TrimSpace(rawName)
 	if name == "" {
-		writeError(w, http.StatusBadRequest, "Nama bandara wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Nama bandara wajib diisi.")
 		return "", "", "", false
 	}
 	if utf8.RuneCountInString(name) > maksNama {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Nama bandara maksimal %d karakter.", maksNama))
+		shared.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Nama bandara maksimal %d karakter.", maksNama))
 		return "", "", "", false
 	}
 
 	code := strings.ToUpper(strings.TrimSpace(rawCode))
 	if code == "" {
-		writeError(w, http.StatusBadRequest, "Kode bandara wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Kode bandara wajib diisi.")
 		return "", "", "", false
 	}
 	if utf8.RuneCountInString(code) > maksKode {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Kode bandara maksimal %d karakter.", maksKode))
+		shared.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Kode bandara maksimal %d karakter.", maksKode))
 		return "", "", "", false
 	}
 
 	city := strings.TrimSpace(rawCity)
 	if city == "" {
-		writeError(w, http.StatusBadRequest, "Kota bandara wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Kota bandara wajib diisi.")
 		return "", "", "", false
 	}
 	if utf8.RuneCountInString(city) > maksKota {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Kota bandara maksimal %d karakter.", maksKota))
+		shared.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Kota bandara maksimal %d karakter.", maksKota))
 		return "", "", "", false
 	}
 
@@ -163,24 +164,21 @@ func validateAirportInput(w http.ResponseWriter, rawName string, rawCode string,
 func handleAirportRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrDuplicateCode):
-		writeError(w, http.StatusConflict, "Kode bandara sudah digunakan.")
+		shared.WriteError(w, http.StatusConflict, "Kode bandara sudah digunakan.")
 	case errors.Is(err, ErrInUse), errors.Is(err, ErrCodeInUse):
-		writeError(w, http.StatusConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, err.Error())
 	default:
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) {
-			if mysqlErr.Number == 1062 {
-				writeError(w, http.StatusConflict, "Kode bandara sudah digunakan.")
-				return
-			}
-			if mysqlErr.Number == 1451 {
-				writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh data lain.")
-				return
-			}
+		if shared.IsMySQLErr(err, 1062) {
+			shared.WriteError(w, http.StatusConflict, "Kode bandara sudah digunakan.")
+			return
 		}
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		if shared.IsFKDipakai(err) {
+			shared.WriteError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh data lain.")
+			return
+		}
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -190,18 +188,8 @@ func parseID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseUint(raw, 10, 64)
 	if err != nil || id == 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
 }

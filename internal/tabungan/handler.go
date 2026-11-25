@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -21,29 +22,19 @@ type Handler struct {
 
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db, now: time.Now} }
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
 func (h *Handler) gagal(w http.ResponseWriter, aksi string, akun int64, err error) {
 	log.Printf("[ERROR] tabungan %s akun=%d: %v", aksi, akun, err)
-	writeError(w, http.StatusInternalServerError, "Gagal menyimpan. Coba lagi.")
+	shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan. Coba lagi.")
 }
 
 func (h *Handler) balas(w http.ResponseWriter, r *http.Request, status int, akun int64) {
 	res, err := Ambil(r.Context(), h.db, akun, h.now())
 	if err != nil {
 		log.Printf("[ERROR] tabungan ambil akun=%d: %v", akun, err)
-		writeError(w, http.StatusInternalServerError, "Gagal memuat target. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memuat target. Coba lagi.")
 		return
 	}
-	writeJSON(w, status, res)
+	shared.WriteJSON(w, status, res)
 }
 
 // Ambil: GET /api/account/tabungan.
@@ -56,11 +47,11 @@ func (h *Handler) SimpanTarget(w http.ResponseWriter, r *http.Request) {
 	akun := identity.GetCustomerAccountID(r.Context())
 	var t Target
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if pesan := ValidasiTarget(&t, h.now()); pesan != "" {
-		writeError(w, http.StatusBadRequest, pesan)
+		shared.WriteError(w, http.StatusBadRequest, pesan)
 		return
 	}
 	if t.ScheduleID != nil {
@@ -70,7 +61,7 @@ func (h *Handler) SimpanTarget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !ada {
-			writeError(w, http.StatusBadRequest, "Paket tidak ditemukan. Pilih paket lain.")
+			shared.WriteError(w, http.StatusBadRequest, "Paket tidak ditemukan. Pilih paket lain.")
 			return
 		}
 	}
@@ -109,17 +100,17 @@ func (h *Handler) TambahCatatan(w http.ResponseWriter, r *http.Request) {
 		Tanggal string `json:"tanggal"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	tanggal, pesan := ValidasiCatatan(req.Jumlah, req.Tanggal, h.now())
 	if pesan != "" {
-		writeError(w, http.StatusBadRequest, pesan)
+		shared.WriteError(w, http.StatusBadRequest, pesan)
 		return
 	}
 	if err := TambahCatatan(r.Context(), h.db, akun, req.Jumlah, tanggal); err != nil {
 		if errors.Is(err, ErrTanpaTarget) {
-			writeError(w, http.StatusConflict, "Belum ada target. Buat target dulu.")
+			shared.WriteError(w, http.StatusConflict, "Belum ada target. Buat target dulu.")
 			return
 		}
 		h.gagal(w, "tambah catatan", akun, err)
@@ -133,12 +124,12 @@ func (h *Handler) HapusCatatan(w http.ResponseWriter, r *http.Request) {
 	akun := identity.GetCustomerAccountID(r.Context())
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusNotFound, "Catatan tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Catatan tidak ditemukan.")
 		return
 	}
 	if err := HapusCatatan(r.Context(), h.db, akun, id); err != nil {
 		if errors.Is(err, ErrTidakAda) {
-			writeError(w, http.StatusNotFound, "Catatan tidak ditemukan.")
+			shared.WriteError(w, http.StatusNotFound, "Catatan tidak ditemukan.")
 			return
 		}
 		h.gagal(w, "hapus catatan", akun, err)
@@ -157,15 +148,15 @@ func (h *Handler) SimpanPerangkat(w http.ResponseWriter, r *http.Request) {
 	akun := identity.GetCustomerAccountID(r.Context())
 	var req perangkatReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if !TokenValid(req.Token) {
-		writeError(w, http.StatusBadRequest, "Perangkat tidak dikenali. Buka ulang aplikasi.")
+		shared.WriteError(w, http.StatusBadRequest, "Perangkat tidak dikenali. Buka ulang aplikasi.")
 		return
 	}
 	if req.Platform != "ios" && req.Platform != "android" {
-		writeError(w, http.StatusBadRequest, "Platform harus ios atau android.")
+		shared.WriteError(w, http.StatusBadRequest, "Platform harus ios atau android.")
 		return
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
@@ -190,7 +181,7 @@ func (h *Handler) HapusPerangkat(w http.ResponseWriter, r *http.Request) {
 	akun := identity.GetCustomerAccountID(r.Context())
 	var req perangkatReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := HapusPerangkat(r.Context(), h.db, akun, req.Token); err != nil {

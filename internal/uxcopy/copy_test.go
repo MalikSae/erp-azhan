@@ -14,11 +14,11 @@ import (
 // Panggilan helper galat dengan pesan literal. Pesan yang disambung (+) dilewati.
 // Galat sentinel internal/akses dan konstanta pesannya ikut diperiksa: handler pengguna
 // mengirimnya apa adanya lewat err.Error().
-var panggilan = regexp.MustCompile(`(?m)(?:writeError|sendError|writeErrorCode)\(w, [^"\n]*?(?:fmt\.Sprintf\()?"((?:[^"\\\n]|\\.)*)"([^\n]*)`)
+var panggilan = regexp.MustCompile(`(?m)(?:[wW]riteError|sendError|writeErrorCode)\(w,[^"\n]*?(?:fmt\.Sprintf\()?"((?:[^"\\\n]|\\.)*)"([^\n]*)`)
 var pesanAkses = regexp.MustCompile(`(?m)(?:errors\.New\(|ErrConcurrentMsg = )"((?:[^"\\\n]|\\.)*)"([^\n]*)`)
 
 var larangan = []struct {
-	pola *regexp.Regexp
+	pola  *regexp.Regexp
 	saran string
 }{
 	{regexp.MustCompile(`\b[a-z]+_[a-z_]+\b`), "nama field teknis; pakai istilah pengguna (brand, paket, jamaah)"},

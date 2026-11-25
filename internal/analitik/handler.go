@@ -1,11 +1,11 @@
 package analitik
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 type Handler struct {
@@ -22,14 +22,8 @@ func (h *Handler) MarketingRingkas(w http.ResponseWriter, r *http.Request) {
 	hasil, err := h.repo.MarketingRingkas(r.Context(), identity.GetBrandID(r.Context()))
 	if err != nil {
 		log.Printf("[ERROR] analitik marketing ringkas: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal mengambil ringkasan marketing"})
+		shared.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "gagal mengambil ringkasan marketing"})
 		return
 	}
-	writeJSON(w, http.StatusOK, hasil)
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	shared.WriteJSON(w, http.StatusOK, hasil)
 }

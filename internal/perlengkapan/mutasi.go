@@ -29,7 +29,7 @@ type MutasiRow struct {
 	ItemID      uint64    `json:"perlengkapan_item_id"`
 	ItemNama    string    `json:"item_nama"`
 	BrandID     uint64    `json:"brand_id"`
-	Lokasi      string    `json:"lokasi"` // nama brand
+	BrandNama   string    `json:"brand_nama"`
 	Jenis       string    `json:"jenis"`
 	Qty         int       `json:"qty"`
 	StokSetelah int       `json:"stok_setelah"`
@@ -229,7 +229,7 @@ func (r *Repository) ListMutasi(ctx context.Context, itemID, brandID *uint64, je
 	out := make([]MutasiRow, 0)
 	for rows.Next() {
 		var m MutasiRow
-		if err := rows.Scan(&m.ID, &m.ItemID, &m.ItemNama, &m.BrandID, &m.Lokasi, &m.Jenis, &m.Qty, &m.StokSetelah,
+		if err := rows.Scan(&m.ID, &m.ItemID, &m.ItemNama, &m.BrandID, &m.BrandNama, &m.Jenis, &m.Qty, &m.StokSetelah,
 			&m.HargaSatuan, &m.Vendor, &m.Catatan, &m.Referensi, &m.Oleh, &m.CreatedAt); err != nil {
 			return nil, err
 		}

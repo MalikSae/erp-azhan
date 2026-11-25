@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 // Handler melayani pengaturan surat per brand di dashboard (GET dan PUT /api/admin/brands/{id}/surat).
@@ -20,24 +21,14 @@ func NewHandler(repo *Repository) *Handler { return &Handler{repo: repo} }
 
 var polaGambarBrand = regexp.MustCompile(`^/uploads/brand-logos/[A-Za-z0-9._-]+$`)
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
 func brandID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	id, err := strconv.ParseUint(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id == 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil && int64(id) != *scoped {
-		writeError(w, http.StatusNotFound, "Brand tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Brand tidak ditemukan.")
 		return 0, false
 	}
 	return id, true
@@ -51,10 +42,10 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.repo.Pengaturan(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	shared.WriteJSON(w, http.StatusOK, p)
 }
 
 // Validasi merapikan dan memeriksa isian: panjang, kode surat (huruf dan angka), dan gambar hanya dari unggahan brand.
@@ -86,31 +77,31 @@ func (h *Handler) Put(w http.ResponseWriter, r *http.Request) {
 	}
 	var p Pengaturan
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&p); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := p.Validasi(); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	p.BrandID = id
 	saatIni, err := h.repo.Pengaturan(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
 		return
 	}
 	if p.NomorTerakhir < saatIni.NomorTerakhir {
-		writeError(w, http.StatusBadRequest, "Nomor terakhir tidak boleh diturunkan agar tidak ada nomor surat ganda.")
+		shared.WriteError(w, http.StatusBadRequest, "Nomor terakhir tidak boleh diturunkan agar tidak ada nomor surat ganda.")
 		return
 	}
 	if err := h.repo.SimpanPengaturan(r.Context(), p); err != nil {
-		writeError(w, http.StatusInternalServerError, "Gagal menyimpan pengaturan surat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan pengaturan surat.")
 		return
 	}
 	hasil, err := h.repo.Pengaturan(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil pengaturan surat.")
 		return
 	}
-	writeJSON(w, http.StatusOK, hasil)
+	shared.WriteJSON(w, http.StatusOK, hasil)
 }

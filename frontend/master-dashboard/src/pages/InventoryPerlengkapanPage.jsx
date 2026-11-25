@@ -353,7 +353,9 @@ const InventoryPerlengkapanPage = () => {
       menu.push({ label: 'Riwayat Stok', icon: History, tooltip: 'Lihat pergerakan stok item ini', onClick: () => navigate(`/inventory/riwayat-stok?item=${row.id}`) });
       if (canEditCatalog) {
         menu.push({ label: 'Edit', icon: Pencil, tooltip: 'Edit item', onClick: () => handleOpenModal(row) });
-        menu.push({ label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus item', onClick: () => setDeleteConfirmId(row.id) });
+        if (row.bisa_dihapus) {
+          menu.push({ label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus item', onClick: () => setDeleteConfirmId(row.id) });
+        }
       }
       return <ActionMenu align="right" items={menu} />;
     }

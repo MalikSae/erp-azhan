@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -18,26 +19,16 @@ type Handler struct{ db *sql.DB }
 
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
 func tulisGalat(w http.ResponseWriter, err error) {
 	var val *ErrValidasi
 	switch {
 	case errors.As(err, &val):
-		writeError(w, http.StatusBadRequest, val.Pesan)
+		shared.WriteError(w, http.StatusBadRequest, val.Pesan)
 	case errors.Is(err, ErrTidakAda):
-		writeError(w, http.StatusNotFound, err.Error())
+		shared.WriteError(w, http.StatusNotFound, err.Error())
 	default:
 		log.Printf("[ERROR] pengumuman: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal memproses pengumuman.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memproses pengumuman.")
 	}
 }
 
@@ -59,13 +50,13 @@ func (h *Handler) DaftarAdmin(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 func idParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id < 1 {
-		writeError(w, http.StatusBadRequest, "ID pengumuman tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID pengumuman tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -74,7 +65,7 @@ func idParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return false
 	}
 	return true
@@ -91,7 +82,7 @@ func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 		brand = in.BrandID
 	}
 	if brand == nil || *brand < 1 {
-		writeError(w, http.StatusBadRequest, "Brand wajib dipilih.")
+		shared.WriteError(w, http.StatusBadRequest, "Brand wajib dipilih.")
 		return
 	}
 	id, err := Buat(r.Context(), h.db, *brand, identity.GetAdminUserID(r.Context()), in)
@@ -100,7 +91,7 @@ func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[AUDIT] pengumuman_dibuat id=%d brand_id=%d admin_id=%d", id, *brand, identity.GetAdminUserID(r.Context()))
-	writeJSON(w, http.StatusCreated, map[string]int64{"id": id})
+	shared.WriteJSON(w, http.StatusCreated, map[string]int64{"id": id})
 }
 
 // Ubah PUT /api/admin/pengumuman/{id}
@@ -117,7 +108,7 @@ func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "pengumuman diperbarui"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "pengumuman diperbarui"})
 }
 
 // Hapus DELETE /api/admin/pengumuman/{id}
@@ -130,7 +121,7 @@ func (h *Handler) Hapus(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "pengumuman dihapus"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "pengumuman dihapus"})
 }
 
 // Akun GET /api/account/pengumuman?limit=2: pengumuman yang tayang dan sesuai akun. {items, total}.
@@ -148,5 +139,5 @@ func (h *Handler) Akun(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "total": total})
 }

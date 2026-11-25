@@ -138,7 +138,7 @@ const FileInput = ({
           <div className="shrink-0">
             <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-neutral-100 text-neutral-700 border border-neutral-200 group-hover:bg-primary-50 group-hover:text-primary-700 group-hover:border-primary-300 transition-all">
               <Upload size={12} />
-              <span>Pilih File</span>
+              <span>Pilih file</span>
             </span>
           </div>
         </div>

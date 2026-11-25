@@ -60,7 +60,7 @@ Form Pengguna menampilkan satu baris per menu. Mencentang Kelola otomatis mencen
 | Manifest | | `manifest.manage` | ya |
 | Manasik | `manasik.view` | `manasik.edit` | ya |
 | Master data | `masterdata.view` | `masterdata.edit` | hanya Lihat |
-| Perlengkapan | `perlengkapan.view` | `perlengkapan.edit` | ya |
+| Perlengkapan | `perlengkapan.view` | `perlengkapan.edit` (stok: terima barang, atur stok) | ya |
 | Rekening bank | `bankaccount.view` | `bankaccount.edit` | ya |
 | Brand | `brand.view` | | ya |
 | Pengumuman | | `pengumuman.manage` | ya |
@@ -81,6 +81,8 @@ Izin khusus (aksi berisiko, dicentang terpisah):
 | Cairkan komisi | `agen.payout.approve` | tidak |
 | Ganti kaitan agen | `agen.kaitan.edit` | tidak |
 | Terbitkan konten | `cms.publish`, `cms.blog.publish`, `cms.schema.approve`, `cms.tracking.manage` | tidak |
+
+Izin perlengkapan di luar stok (keputusan review Inventory 2026-11-25, mengikuti kode): katalog item dan set global memakai `masterdata.edit`, set kategori `masterdata.edit`, set paket `schedule.edit`, serahkan dan batalkan penyerahan di Detail Booking atau antrean Pengajuan Perlengkapan `booking.edit`.
 
 Kolom Brand menandai izin yang boleh dicentang untuk pengguna terikat brand (A5): sama dengan izin yang dimiliki role Admin Brand dan Finance sebelum spek ini. Backend menegakkan daftar yang sama di `internal/akses`.
 

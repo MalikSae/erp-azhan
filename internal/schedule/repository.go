@@ -4,14 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
 	"erp-azhan/api/internal/benefit"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/itinerary"
 	"erp-azhan/api/internal/shared"
-	"errors"
-	"fmt"
-	"log"
-	"strings"
 )
 
 // ErrNotFound dikembalikan saat schedule tidak ditemukan.
@@ -205,58 +205,6 @@ func (r *Repository) List(ctx context.Context, brandID *int64) ([]ScheduleListIt
 	}
 
 	return items, rows.Err()
-}
-
-// ListPublic mengambil schedule yang published saja untuk brand tertentu, diurutkan berangkat_tanggal ASC.
-// Paket yang berangkat kurang dari 30 hari lagi tidak ditampilkan (pendaftaran online sudah ditutup).
-func (r *Repository) ListPublic(ctx context.Context, brandID int64) ([]*PublicSchedule, error) {
-	q := selectFull + " WHERE s.status = 'published' AND s.brand_id = ? AND s.berangkat_tanggal >= DATE_ADD(CURDATE(), INTERVAL 30 DAY) ORDER BY s.berangkat_tanggal ASC"
-	rows, err := r.db.QueryContext(ctx, q, brandID)
-	if err != nil {
-		return nil, fmt.Errorf("schedule.ListPublic: %w", err)
-	}
-	defer rows.Close()
-
-	var list []*Schedule
-	for rows.Next() {
-		s, err := scanRow(rows)
-		if err != nil {
-			return nil, err
-		}
-		list = append(list, s)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	rows.Close()
-	// Hotel transit seluruh paket diambil dalam satu query (sebelumnya satu query per paket).
-	ids := make([]int64, len(list))
-	for i, s := range list {
-		ids[i] = s.ID
-	}
-	transit, err := transitHotelsBySchedule(ctx, r.db, ids)
-	if err != nil {
-		// Sama dengan perilaku lama: kegagalan hotel transit tidak menggagalkan daftar paket.
-		log.Printf("[WARN] schedule.ListPublic hotel transit: %v", err)
-		transit = map[int64][]TransitHotel{}
-	}
-	// Benefit seluruh paket diambil dalam satu query. Kegagalannya tidak menggagalkan daftar paket:
-	// paket tetap tayang tanpa benefit.
-	benefits, err := benefit.UntukJadwal(ctx, r.db, ids)
-	if err != nil {
-		log.Printf("[WARN] schedule.ListPublic benefit: %v", err)
-		benefits = map[int64][]benefit.Ref{}
-	}
-	items := make([]*PublicSchedule, 0, len(list))
-	for _, s := range list {
-		s.Benefits = benefits[s.ID]
-		s.TransitHotels = transit[s.ID]
-		if s.TransitHotels == nil {
-			s.TransitHotels = []TransitHotel{}
-		}
-		items = append(items, s.ToPublic())
-	}
-	return items, nil
 }
 
 type rowsQuerier interface {
@@ -506,229 +454,7 @@ func (r *Repository) Update(ctx context.Context, id int64, inp ScheduleInput, br
 
 // ─── UpdateStatus ─────────────────────────────────────────────────────────────
 
-// UpdateStatus mengubah hanya kolom status. Baris paket dikunci dulu, sehingga syarat arsip (MP-09: paket
-// belum berangkat tanpa booking aktif) tidak terlewati booking yang masuk bersamaan. hariIni dari pemanggil.
-func (r *Repository) UpdateStatus(ctx context.Context, id int64, status string, brandID *int64, hariIni string) (int64, string, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, "", fmt.Errorf("schedule.UpdateStatus tx: %w", err)
-	}
-	defer tx.Rollback()
-	if err := ubahStatusTx(ctx, tx, id, status, brandID, hariIni); err != nil {
-		return 0, "", err
-	}
-	if err := tx.Commit(); err != nil {
-		return 0, "", fmt.Errorf("schedule.UpdateStatus commit: %w", err)
-	}
-	return id, status, nil
-}
-
-func ubahStatusTx(ctx context.Context, tx *sql.Tx, id int64, status string, brandID *int64, hariIni string) error {
-	var lama, berangkat string
-	var owner int64
-	err := tx.QueryRowContext(ctx,
-		`SELECT status, brand_id, DATE_FORMAT(berangkat_tanggal, '%Y-%m-%d') FROM schedules WHERE id=? FOR UPDATE`, id).
-		Scan(&lama, &owner, &berangkat)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("schedule.UpdateStatus baca: %w", err)
-	}
-	if brandID != nil && owner != *brandID {
-		return ErrNotFound
-	}
-	if status == StatusArchived && lama != StatusArchived && berangkat >= hariIni {
-		aktif, err := booking.HitungAktif(ctx, tx, id)
-		if err != nil {
-			return fmt.Errorf("schedule: hitung booking aktif: %w", err)
-		}
-		if aktif > 0 {
-			return fmt.Errorf("%w: paket masih punya %d booking aktif", ErrConflict, aktif)
-		}
-	}
-	// Satu pernyataan: status dan penanda pernah tayang berubah bersama.
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE schedules SET status=?, pernah_tayang_at = IF(? = 'published', COALESCE(pernah_tayang_at, NOW()), pernah_tayang_at)
-		WHERE id=?`, status, status, id); err != nil {
-		return fmt.Errorf("schedule.UpdateStatus: %w", err)
-	}
-	return nil
-}
-
 // ─── Seat ─────────────────────────────────────────────────────────────────────
-
-// GetSeatTotal mengambil seat_total dari schedule berdasarkan id (batas atas seat tampil).
-func (r *Repository) GetSeatTotal(ctx context.Context, id int64, brandID *int64) (int, error) {
-	var seatTotal int
-	q := `SELECT seat_total FROM schedules WHERE id=?`
-	var args []interface{}
-	args = append(args, id)
-	if brandID != nil {
-		q += " AND brand_id=?"
-		args = append(args, *brandID)
-	}
-	err := r.db.QueryRowContext(ctx, q, args...).Scan(&seatTotal)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, ErrNotFound
-	}
-	if err != nil {
-		return 0, fmt.Errorf("schedule.GetSeatTotal: %w", err)
-	}
-	return seatTotal, nil
-}
-
-// SamakanSeat mengisi seat_sisa = seat_total − seat dipegang booking (minimal 0). Hanya untuk
-// memperbaiki sisa seat yang tidak cocok dengan booking; dicatat di log server.
-func (r *Repository) SamakanSeat(ctx context.Context, id int64, brandID *int64, actorID int64) (int, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
-	owner, before, after, err := samakanSeatTx(ctx, tx, id, brandID)
-	if err != nil {
-		return 0, err
-	}
-	if err := tx.Commit(); err != nil {
-		return 0, err
-	}
-	if before != after {
-		log.Printf("[AUDIT] schedule_seat_samakan id=%d brand=%d before=%d after=%d by=%d", id, owner, before, after, actorID)
-	}
-	return after, nil
-}
-
-func samakanSeatTx(ctx context.Context, tx *sql.Tx, id int64, brandID *int64) (owner int64, before, after int, err error) {
-	var total int
-	err = tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &before, &owner)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, 0, 0, ErrNotFound
-	}
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	if brandID != nil && owner != *brandID {
-		return 0, 0, 0, ErrNotFound
-	}
-	dipegang, err := shared.SeatDipegangBooking(ctx, tx, id)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	after = total - dipegang
-	if after < 0 {
-		after = 0
-	}
-	if after != before {
-		if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, after, id); err != nil {
-			return 0, 0, 0, err
-		}
-	}
-	return owner, before, after, nil
-}
-
-// UpdateSeatTampil menyimpan angka scarcity (nil = nonaktif) dan mencatatnya di riwayat seat
-// dengan jenis 'tampil' (0 = nonaktif). Tidak menyentuh seat_sisa.
-func (r *Repository) UpdateSeatTampil(ctx context.Context, id int64, seatTampil *int, brandID *int64, actorID int64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := updateSeatTampilTx(ctx, tx, id, seatTampil, brandID, actorID); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-func updateSeatTampilTx(ctx context.Context, tx *sql.Tx, id int64, seatTampil *int, brandID *int64, actorID int64) error {
-	var total int
-	var current sql.NullInt64
-	var owner int64
-	err := tx.QueryRowContext(ctx, `SELECT seat_total, seat_tampil, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &current, &owner)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return err
-	}
-	if brandID != nil && owner != *brandID {
-		return ErrNotFound
-	}
-	if seatTampil != nil && (*seatTampil < 1 || *seatTampil > total) {
-		return fmt.Errorf("%w: kuota paket berubah, muat ulang paket", ErrConflict)
-	}
-	before := int(current.Int64) // NULL → 0
-	after := 0
-	var seatTampilDB any
-	if seatTampil != nil {
-		after = *seatTampil
-		seatTampilDB = after
-	}
-	if before == after {
-		return nil
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_tampil=? WHERE id=?`, seatTampilDB, id); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO schedule_seat_adjustments (schedule_id, jenis, admin_user_id, seat_before, seat_after, reason) VALUES (?, 'tampil', ?, ?, ?, ?)`,
-		id, nullInt64(actorID), before, after, "Seat tampil"); err != nil {
-		return fmt.Errorf("catat riwayat angka tampil: %w", err)
-	}
-	return nil
-}
-
-// SeatOverview mengambil ringkasan seat dan 20 riwayat penyesuaian terakhir.
-// brandID non-nil membatasi ke paket milik brand itu (ErrNotFound bila bukan).
-func (r *Repository) SeatOverview(ctx context.Context, id int64, brandID *int64) (*SeatOverview, error) {
-	var o SeatOverview
-	var seatTampil sql.NullInt64
-	err := r.db.QueryRowContext(ctx, `
-		SELECT s.seat_total, s.seat_sisa, s.seat_tampil
-		FROM schedules s WHERE s.id=? AND (? IS NULL OR s.brand_id=?)`, id, brandID, brandID).
-		Scan(&o.SeatTotal, &o.SeatSisa, &seatTampil)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("schedule.SeatOverview: %w", err)
-	}
-	if o.SeatDialokasikan, err = shared.SeatDipegangBooking(ctx, r.db, id); err != nil {
-		return nil, fmt.Errorf("schedule.SeatOverview seat dipegang: %w", err)
-	}
-	o.SeatSesuaiBooking = o.SeatTotal - o.SeatDialokasikan
-	if o.SeatSesuaiBooking < 0 {
-		o.SeatSesuaiBooking = 0
-	}
-	o.SeatCocok = o.SeatSisa == o.SeatSesuaiBooking
-	if seatTampil.Valid {
-		v := int(seatTampil.Int64)
-		o.SeatTampil = &v
-	}
-
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT a.id, a.jenis, a.seat_before, a.seat_after, a.reason, u.email, a.created_at
-		FROM schedule_seat_adjustments a LEFT JOIN admin_users u ON u.id=a.admin_user_id
-		WHERE a.schedule_id=? ORDER BY a.id DESC LIMIT 20`, id)
-	if err != nil {
-		return nil, fmt.Errorf("schedule.SeatOverview riwayat: %w", err)
-	}
-	defer rows.Close()
-	o.Adjustments = []SeatAdjustment{}
-	for rows.Next() {
-		var a SeatAdjustment
-		var email sql.NullString
-		if err := rows.Scan(&a.ID, &a.Jenis, &a.SeatBefore, &a.SeatAfter, &a.Reason, &email, &a.CreatedAt); err != nil {
-			return nil, fmt.Errorf("schedule.SeatOverview scan: %w", err)
-		}
-		if email.Valid {
-			a.AdminEmail = &email.String
-		}
-		o.Adjustments = append(o.Adjustments, a)
-	}
-	return &o, rows.Err()
-}
 
 // Delete menghapus schedule berdasarkan id.
 func (r *Repository) Delete(ctx context.Context, id int64, brandID *int64) error {
@@ -785,41 +511,6 @@ func simpanItineraryKhusus(ctx context.Context, tx *sql.Tx, scheduleID int64, k 
 }
 
 // ─── Existence checks (dipakai handler untuk validasi FK) ─────────────────────
-
-// AirlineExists memeriksa apakah airline dengan id tersebut ada.
-func (r *Repository) AirlineExists(ctx context.Context, id int64) (bool, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM airlines WHERE id=?`, id).Scan(&count)
-	return count > 0, err
-}
-
-// HotelExists memeriksa apakah hotel dengan id tersebut ada.
-func (r *Repository) HotelExists(ctx context.Context, id int64) (bool, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM hotels WHERE id=?`, id).Scan(&count)
-	return count > 0, err
-}
-
-// ItineraryExists memeriksa apakah itinerary dengan id tersebut ada.
-func (r *Repository) ItineraryExists(ctx context.Context, id int64) (bool, error) {
-	return r.ItineraryTersedia(ctx, id, 0)
-}
-
-// ItineraryTersedia: id itu master, atau salinan pribadi milik paket scheduleID (0 = paket baru).
-func (r *Repository) ItineraryTersedia(ctx context.Context, id, scheduleID int64) (bool, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM itineraries WHERE id=? AND (schedule_id IS NULL OR schedule_id=?)`, id, scheduleID).Scan(&count)
-	return count > 0, err
-}
-
-// CategoryExists memeriksa apakah category dengan id tersebut ada.
-// CategoryAvailable: kategori ada, berlaku untuk brand ini, dan aktif. bolehNonaktif melewati syarat aktif;
-// dipakai saat paket tetap memakai kategori yang sudah dipilihnya sebelum kategori itu dinonaktifkan.
-func (r *Repository) CategoryAvailable(ctx context.Context, id int64, brandID int64, bolehNonaktif bool) (bool, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM package_categories c WHERE c.id=? AND (c.is_active=TRUE OR ?) AND EXISTS (SELECT 1 FROM category_brands cb WHERE cb.category_id=c.id AND cb.brand_id=?)`, id, bolehNonaktif, brandID).Scan(&count)
-	return count > 0, err
-}
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -1140,12 +831,6 @@ func nullString(v string) sql.NullString {
 	return sql.NullString{String: v, Valid: v != ""}
 }
 
-func (r *Repository) IncrementViews(ctx context.Context, id int64) error {
-	query := "UPDATE schedules SET views = views + 1 WHERE id = ?"
-	_, err := r.db.ExecContext(ctx, query, id)
-	return err
-}
-
 func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *ScheduleInput, brandID *int64, finalBrandID int64) error {
 	var oldTotal, oldRemaining int
 	var oldBrand int64
@@ -1203,69 +888,9 @@ func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *Sched
 	return nil
 }
 
-// ubahTanggalBerangkatTx menegakkan aturan ubah tanggal berangkat (audit menu Paket S-04). Paket tanpa
-// booking aktif bebas diubah. Bila ada booking aktif: paket yang sudah berangkat terkunci, tanggal baru
-// tidak boleh lampau, alasan wajib diisi, dan perubahan dicatat di schedule_tanggal_log. Dipanggil setelah
-// baris jadwal dikunci, sehingga booking yang masuk bersamaan tidak lolos dari hitungan.
-func ubahTanggalBerangkatTx(ctx context.Context, tx *sql.Tx, id int64, lama string, inp *ScheduleInput) error {
-	if inp.BerangkatTanggal == lama {
-		return nil
-	}
-	aktif, err := booking.HitungAktif(ctx, tx, id)
-	if err != nil {
-		return fmt.Errorf("schedule: hitung booking aktif: %w", err)
-	}
-	if aktif == 0 {
-		return nil
-	}
-	hariIni := todayWIB()
-	if lama < hariIni {
-		return fmt.Errorf("%w: paket sudah berangkat dan punya %d booking aktif, tanggal berangkat tidak dapat diubah", ErrConflict, aktif)
-	}
-	if inp.BerangkatTanggal < hariIni {
-		return fmt.Errorf("%w: paket punya %d booking aktif, tanggal berangkat baru tidak boleh sudah lewat", ErrConflict, aktif)
-	}
-	if inp.AlasanUbahTanggal == "" {
-		return fmt.Errorf("%w: paket punya %d booking aktif, alasan ubah tanggal berangkat wajib diisi", ErrConflict, aktif)
-	}
-	var oleh any
-	if inp.ActorID > 0 {
-		oleh = inp.ActorID
-	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO schedule_tanggal_log (schedule_id, tanggal_lama, tanggal_baru, booking_aktif, alasan, diubah_oleh)
-		VALUES (?, ?, ?, ?, ?, ?)`, id, lama, inp.BerangkatTanggal, aktif, inp.AlasanUbahTanggal, oleh); err != nil {
-		return fmt.Errorf("schedule: catat ubah tanggal: %w", err)
-	}
-	return nil
-}
-
 // CountActiveBookings menghitung booking aktif (baru/dp/lunas) pada paket (MP-09).
 func (r *Repository) CountActiveBookings(ctx context.Context, scheduleID int64) (int, error) {
 	return booking.HitungAktif(ctx, r.db, scheduleID)
-}
-
-// HotelCity mengembalikan kota hotel; ErrNotFound bila hotel tidak ada (MP-03).
-func (r *Repository) HotelCity(ctx context.Context, id int64) (string, error) {
-	var city string
-	err := r.db.QueryRowContext(ctx, `SELECT city FROM hotels WHERE id=?`, id).Scan(&city)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	return city, err
-}
-
-// AirportCodeExists memeriksa kode bandara terdaftar di master (case-insensitive, MP-06).
-func (r *Repository) AirportCodeExists(ctx context.Context, code string) (bool, error) {
-	var n int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM airports WHERE UPPER(code)=UPPER(?)`, code).Scan(&n)
-	return n > 0, err
-}
-
-func (r *Repository) BrandMinimalDP(ctx context.Context, id int64) (float64, error) {
-	var dp float64
-	err := r.db.QueryRowContext(ctx, `SELECT minimal_dp FROM brands WHERE id=?`, id).Scan(&dp)
-	return dp, err
 }
 
 // NameTaken: sudah ada paket dengan nama (tanpa beda huruf besar-kecil dan spasi tepi) dan tanggal berangkat
@@ -1275,22 +900,6 @@ func (r *Repository) NameTaken(ctx context.Context, brandID int64, nama, berangk
 	var n int
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schedules WHERE brand_id=? AND UPPER(TRIM(jadwal_nama))=UPPER(TRIM(?)) AND berangkat_tanggal=? AND id<>?`, brandID, nama, berangkat, excludeID).Scan(&n)
 	return n > 0, err
-}
-
-// alasanUbahKuota: keterangan riwayat penyesuaian seat untuk perubahan kuota lewat form edit paket.
-func alasanUbahKuota(kuotaLama, kuotaBaru int) string {
-	return fmt.Sprintf("Ubah kuota seat lewat edit paket: %d menjadi %d", kuotaLama, kuotaBaru)
-}
-
-// tandaiPernahTayang mengisi schedules.pernah_tayang_at saat paket berstatus published dan penandanya masih
-// kosong. Dipanggil setelah paket dibuat atau diubah, di transaksi yang sama.
-func tandaiPernahTayang(ctx context.Context, tx *sql.Tx, id int64) error {
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE schedules SET pernah_tayang_at = NOW()
-		WHERE id = ? AND status = 'published' AND pernah_tayang_at IS NULL`, id); err != nil {
-		return fmt.Errorf("schedule: tandai pernah tayang: %w", err)
-	}
-	return nil
 }
 
 // tolakHapusPaket: paket hanya boleh dihapus permanen bila berstatus draft dan belum pernah tayang.
@@ -1303,19 +912,4 @@ func tolakHapusPaket(status string, pernahTayang bool) string {
 		return "paket pernah tayang tidak dapat dihapus"
 	}
 	return ""
-}
-
-// ValidasiBenefit memeriksa daftar highlight benefit sebuah paket (milik brand paket, tidak kembar, paling
-// banyak empat, benefit nonaktif hanya bila paket sudah memakainya). scheduleID 0 untuk paket baru.
-func (r *Repository) ValidasiBenefit(ctx context.Context, brandID, scheduleID int64, ids []int64) error {
-	return benefit.ValidasiPilihan(ctx, r.db, brandID, scheduleID, ids)
-}
-
-// JumlahBenefit menghitung highlight benefit yang tersimpan pada sebuah paket.
-func (r *Repository) JumlahBenefit(ctx context.Context, scheduleID int64) (int, error) {
-	n, err := benefit.JumlahTautan(ctx, r.db, scheduleID)
-	if err != nil {
-		return 0, fmt.Errorf("schedule.JumlahBenefit: %w", err)
-	}
-	return n, nil
 }

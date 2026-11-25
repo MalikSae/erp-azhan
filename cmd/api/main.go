@@ -654,8 +654,8 @@ func main() {
 			r.With(identity.RequirePermission("agen.approve")).Post("/pembayaran/{id}/bukti", agenHandler.UploadBuktiAdmin)
 		})
 
-		// Agen Syiar — Admin Master lintas brand: Persetujuan Pencairan (C1) dan
-		// Ganti Kaitan Agen (C4). Izin khusus, hanya untuk pengguna Holding.
+		// Agen Syiar — Persetujuan Pencairan (C1), lintas brand. Izin agen.payout.approve
+		// hanya bisa diberikan ke pengguna Holding (akses.ValidasiIzinTim).
 		r.Group(func(r chi.Router) {
 			r.Use(identity.RequirePermission("agen.payout.approve"))
 			r.Get("/pencairan", agenHandler.ListPencairanAdmin)

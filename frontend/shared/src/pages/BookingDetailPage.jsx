@@ -1046,7 +1046,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
                           setIsBatalkanModalOpen(true);
                         }}
                       >
-                        Batal
+                        Batalkan
                       </Button>
                     ) : (
                       <Button

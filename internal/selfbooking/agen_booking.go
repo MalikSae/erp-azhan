@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 // Daftar "Jamaah Saya" untuk agen. Booking agen sendiri lewat jalur inti (handler.go, CreateBookingAgen).
@@ -74,5 +75,5 @@ func (h *Handler) ListJamaahSaya(w http.ResponseWriter, r *http.Request) {
 		tulisGalatBooking(w, err, true)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }

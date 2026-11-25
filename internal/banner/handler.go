@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 type Handler struct {
@@ -22,33 +23,23 @@ type Handler struct {
 
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db, dirUnggah: "uploads", now: time.Now} }
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
 func tulisGalat(w http.ResponseWriter, err error) {
 	var val *ErrValidasi
 	switch {
 	case errors.As(err, &val):
-		writeError(w, http.StatusBadRequest, val.Pesan)
+		shared.WriteError(w, http.StatusBadRequest, val.Pesan)
 	case errors.Is(err, ErrTidakAda):
-		writeError(w, http.StatusNotFound, err.Error())
+		shared.WriteError(w, http.StatusNotFound, err.Error())
 	default:
 		log.Printf("[ERROR] banner: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal memproses banner.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memproses banner.")
 	}
 }
 
 func idParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -74,7 +65,7 @@ type daftarView struct {
 func (h *Handler) Daftar(w http.ResponseWriter, r *http.Request) {
 	brand := brandAdmin(r, 0)
 	if brand <= 0 {
-		writeError(w, http.StatusBadRequest, "Pilih brand.")
+		shared.WriteError(w, http.StatusBadRequest, "Pilih brand.")
 		return
 	}
 	items, err := Daftar(r.Context(), h.db, brand, h.now())
@@ -82,19 +73,19 @@ func (h *Handler) Daftar(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, daftarView{Banner: items})
+	shared.WriteJSON(w, http.StatusOK, daftarView{Banner: items})
 }
 
 // Buat POST /api/admin/banner-promosi
 func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 	var in Input
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	in.BrandID = brandAdmin(r, in.BrandID)
 	if in.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "Pilih brand.")
+		shared.WriteError(w, http.StatusBadRequest, "Pilih brand.")
 		return
 	}
 	id, err := Buat(r.Context(), h.db, h.dirUnggah, identity.GetAdminUserID(r.Context()), in)
@@ -108,7 +99,7 @@ func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.Status = statusBanner(b, hariIni(h.now()))
-	writeJSON(w, http.StatusCreated, b)
+	shared.WriteJSON(w, http.StatusCreated, b)
 }
 
 // Ubah PUT /api/admin/banner-promosi/{id}
@@ -119,7 +110,7 @@ func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
 	}
 	var in Input
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	scope := identity.GetBrandID(r.Context())
@@ -133,7 +124,7 @@ func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.Status = statusBanner(b, hariIni(h.now()))
-	writeJSON(w, http.StatusOK, b)
+	shared.WriteJSON(w, http.StatusOK, b)
 }
 
 // Hapus DELETE /api/admin/banner-promosi/{id}
@@ -156,12 +147,12 @@ func (h *Handler) Urutkan(w http.ResponseWriter, r *http.Request) {
 		IDs     []int64 `json:"ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	brand := brandAdmin(r, req.BrandID)
 	if brand <= 0 {
-		writeError(w, http.StatusBadRequest, "Pilih brand.")
+		shared.WriteError(w, http.StatusBadRequest, "Pilih brand.")
 		return
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
@@ -185,7 +176,7 @@ func (h *Handler) Urutkan(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Promosi(w http.ResponseWriter, r *http.Request) {
 	brand, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64)
 	if err != nil || brand <= 0 {
-		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 	p, err := AmbilPromosi(r.Context(), h.db, brand, r.URL.Query().Get("platform"), h.now())
@@ -193,7 +184,7 @@ func (h *Handler) Promosi(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	shared.WriteJSON(w, http.StatusOK, p)
 }
 
 // Klik POST /api/public/promosi/{id}/klik: selalu 204.

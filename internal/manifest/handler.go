@@ -12,39 +12,30 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 type Handler struct{ db *sql.DB }
 
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db} }
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
 func tulisGalat(w http.ResponseWriter, err error) {
 	var val *ErrValidasi
 	switch {
 	case errors.As(err, &val):
-		writeError(w, http.StatusBadRequest, val.Pesan)
+		shared.WriteError(w, http.StatusBadRequest, val.Pesan)
 	case errors.Is(err, ErrTidakAda):
-		writeError(w, http.StatusNotFound, err.Error())
+		shared.WriteError(w, http.StatusNotFound, err.Error())
 	default:
 		log.Printf("[ERROR] manifest: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal memproses manifest.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memproses manifest.")
 	}
 }
 
 func idPaket(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID paket tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID paket tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -61,7 +52,7 @@ func (h *Handler) Detail(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, m)
+	shared.WriteJSON(w, http.StatusOK, m)
 }
 
 // Simpan PUT /api/admin/schedules/{id}/manifest {pnr, detail_penerbangan}
@@ -72,7 +63,7 @@ func (h *Handler) Simpan(w http.ResponseWriter, r *http.Request) {
 	}
 	var in InputInfo
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	scope := identity.GetBrandID(r.Context())
@@ -85,7 +76,7 @@ func (h *Handler) Simpan(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, m)
+	shared.WriteJSON(w, http.StatusOK, m)
 }
 
 // Unduh GET /api/admin/schedules/{id}/manifest/unduh: file .xlsx, lalu jejak unduhan dicatat.
