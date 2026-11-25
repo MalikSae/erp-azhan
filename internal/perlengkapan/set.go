@@ -70,20 +70,20 @@ func normalizeInputs(inputs []SetItemInput) ([]SetItemInput, error) {
 	out := make([]SetItemInput, 0, len(inputs))
 	for _, in := range inputs {
 		if in.PerlengkapanItemID == 0 {
-			return nil, fmt.Errorf("%w: item tidak valid", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Item tidak valid.", ErrInvalidInput)
 		}
 		if in.Qty < 1 {
-			return nil, fmt.Errorf("%w: jumlah minimal 1", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Jumlah minimal 1.", ErrInvalidInput)
 		}
 		in.Untuk = strings.ToLower(strings.TrimSpace(in.Untuk))
 		if in.Untuk == "" {
 			in.Untuk = "semua"
 		}
 		if !untukValid[in.Untuk] {
-			return nil, fmt.Errorf("%w: nilai 'untuk' harus semua, pria, atau wanita", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Jenis kelamin tidak valid.", ErrInvalidInput)
 		}
 		if seen[in.PerlengkapanItemID] {
-			return nil, fmt.Errorf("%w: item yang sama tidak boleh dipilih dua kali", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Item tidak boleh dipilih dua kali.", ErrInvalidInput)
 		}
 		seen[in.PerlengkapanItemID] = true
 		out = append(out, in)
@@ -107,7 +107,7 @@ func (r *Repository) itemsExist(ctx context.Context, q querier, inputs []SetItem
 		return err
 	}
 	if n != len(inputs) {
-		return fmt.Errorf("%w: ada item yang tidak ditemukan di katalog", ErrInvalidInput)
+		return fmt.Errorf("%w: Item tidak ditemukan.", ErrInvalidInput)
 	}
 	return nil
 }
@@ -341,7 +341,7 @@ func (h *Handler) setError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrKategoriBrandLain):
 		h.sendError(w, http.StatusForbidden, "Kategori ini bukan milik brand Anda.")
 	case errors.Is(err, ErrInvalidInput):
-		h.sendError(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), ErrInvalidInput.Error()+": ."))
+		h.sendError(w, http.StatusBadRequest, pesanInputTidakValid(err))
 	default:
 		h.sendError(w, http.StatusInternalServerError, "Gagal memproses isi perlengkapan.")
 	}
@@ -412,4 +412,9 @@ func (h *Handler) PutScheduleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.sendJSON(w, http.StatusOK, res)
+}
+
+// pesanInputTidakValid membuang prefix ErrInvalidInput sehingga yang tampil hanya pesan untuk pengguna.
+func pesanInputTidakValid(err error) string {
+	return strings.TrimPrefix(err.Error(), ErrInvalidInput.Error()+": ")
 }

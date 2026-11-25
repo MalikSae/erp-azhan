@@ -295,11 +295,30 @@ func adminID(r *http.Request) *int64 {
 	return &id
 }
 
+// gateItemBrand: gate pertama pembelian dan koreksi, satu pesan per isian yang kosong.
+func gateItemBrand(itemID, brandID uint64) string {
+	if itemID == 0 {
+		return "Item wajib dipilih."
+	}
+	if brandID == 0 {
+		return "Brand wajib dipilih."
+	}
+	return ""
+}
+
 // Pembelian: POST /api/admin/perlengkapan-mutasi/pembelian
 func (h *Handler) Pembelian(w http.ResponseWriter, r *http.Request) {
 	var req pembelianRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ItemID == 0 || req.BrandID == 0 || req.Qty < 1 {
-		h.sendError(w, http.StatusBadRequest, "Item, brand, dan jumlah (minimal 1) wajib diisi.")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
+		return
+	}
+	if msg := gateItemBrand(req.ItemID, req.BrandID); msg != "" {
+		h.sendError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if req.Qty < 1 {
+		h.sendError(w, http.StatusBadRequest, "Jumlah minimal 1.")
 		return
 	}
 	if req.HargaSatuan != nil && *req.HargaSatuan < 0 {
@@ -320,8 +339,16 @@ func (h *Handler) Pembelian(w http.ResponseWriter, r *http.Request) {
 // Koreksi: POST /api/admin/perlengkapan-mutasi/koreksi
 func (h *Handler) Koreksi(w http.ResponseWriter, r *http.Request) {
 	var req koreksiRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ItemID == 0 || req.BrandID == 0 || req.StokBaru == nil || *req.StokBaru < 0 {
-		h.sendError(w, http.StatusBadRequest, "Item, brand, dan stok baru (0 atau lebih) wajib diisi.")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")
+		return
+	}
+	if msg := gateItemBrand(req.ItemID, req.BrandID); msg != "" {
+		h.sendError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if req.StokBaru == nil || *req.StokBaru < 0 {
+		h.sendError(w, http.StatusBadRequest, "Stok wajib bernilai 0 atau lebih.")
 		return
 	}
 	if trimPtr(req.Catatan) == nil {

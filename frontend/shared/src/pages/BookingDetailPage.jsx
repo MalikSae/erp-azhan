@@ -163,7 +163,9 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
   const [diskonSubmitting, setDiskonSubmitting] = useState(false);
 
   // Perlengkapan State
-  const [perlengkapanLoading, setPerlengkapanLoading] = useState(false);
+  // Id pax yang sedang diproses; label "Memproses..." hanya tampil di baris itu.
+  const [perlengkapanPaxId, setPerlengkapanPaxId] = useState(null);
+  const perlengkapanLoading = perlengkapanPaxId !== null;
   const [perlengkapanError, setPerlengkapanError] = useState(null);
   const [isBatalkanModalOpen, setIsBatalkanModalOpen] = useState(false);
 
@@ -252,7 +254,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
   }, [id, showBrandColumn]);
 
   const handleDistribusiPerlengkapan = async (paxId) => {
-    setPerlengkapanLoading(true);
+    setPerlengkapanPaxId(paxId);
     setPerlengkapanError(null);
     try {
       await markPerlengkapanDiberikan(id, paxId);
@@ -261,7 +263,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
       const msg = err.response?.data?.error || "Gagal mendistribusikan perlengkapan.";
       setPerlengkapanError(msg);
     } finally {
-      setPerlengkapanLoading(false);
+      setPerlengkapanPaxId(null);
     }
   };
 
@@ -269,7 +271,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
 
   const handleBatalkanPerlengkapan = async () => {
     if (!selectedPaxForCancelPerlengkapan) return;
-    setPerlengkapanLoading(true);
+    setPerlengkapanPaxId(selectedPaxForCancelPerlengkapan.id);
     setPerlengkapanError(null);
     try {
       await batalkanPerlengkapan(id, selectedPaxForCancelPerlengkapan.id);
@@ -280,7 +282,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
       const msg = err.response?.data?.error || "Gagal membatalkan perlengkapan.";
       setPerlengkapanError(msg);
     } finally {
-      setPerlengkapanLoading(false);
+      setPerlengkapanPaxId(null);
     }
   };
 
@@ -1054,7 +1056,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
                         disabled={perlengkapanLoading}
                         onClick={() => handleDistribusiPerlengkapan(pax.id)}
                       >
-                        {perlengkapanLoading ? "Memproses..." : "Serahkan"}
+                        {perlengkapanPaxId === pax.id ? "Memproses..." : "Serahkan"}
                       </Button>
                     );
                   }

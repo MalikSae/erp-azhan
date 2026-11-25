@@ -2520,6 +2520,7 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id = ?
+		FOR UPDATE OF b
 	`
 	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&scheduleBrandID, &bookingStatus)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -2725,6 +2726,7 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 		FROM bookings b
 		JOIN schedules s ON s.id = b.schedule_id
 		WHERE b.id = ?
+		FOR UPDATE OF b
 	`
 	err = tx.QueryRowContext(ctx, qBooking, bookingID).Scan(&bookingStatus, &scheduleBrandID)
 	if errors.Is(err, sql.ErrNoRows) {

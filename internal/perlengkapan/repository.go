@@ -319,7 +319,7 @@ func (r *Repository) ListStokByBrand(ctx context.Context, brandID uint64) ([]Per
 }
 
 // UpdateStok menyetel stok brand ke angka baru; selisihnya tercatat sebagai koreksi di buku besar.
-func (r *Repository) UpdateStok(ctx context.Context, brandID, itemID uint64, stok int, userID *int64) (*PerlengkapanStokItem, error) {
+func (r *Repository) UpdateStok(ctx context.Context, brandID, itemID uint64, stok int, userID *int64, catatan *string) (*PerlengkapanStokItem, error) {
 	var nama string
 	err := r.db.QueryRowContext(ctx, "SELECT nama FROM perlengkapan_items WHERE id = ?", itemID).Scan(&nama)
 	if err != nil {
@@ -328,7 +328,7 @@ func (r *Repository) UpdateStok(ctx context.Context, brandID, itemID uint64, sto
 		}
 		return nil, fmt.Errorf("perlengkapan.UpdateStok check item: %w", err)
 	}
-	next, err := r.Koreksi(ctx, userID, itemID, brandID, stok, nil)
+	next, err := r.Koreksi(ctx, userID, itemID, brandID, stok, catatan)
 	if err != nil {
 		return nil, fmt.Errorf("perlengkapan.UpdateStok: %w", err)
 	}
@@ -378,7 +378,7 @@ func (r *Repository) UpdateSetTemplate(ctx context.Context, inputs []SetTemplate
 		args := make([]interface{}, len(inputs))
 		for i, inp := range inputs {
 			if inp.Qty < 1 {
-				return nil, fmt.Errorf("%w: qty untuk item_id %d minimal 1", ErrInvalidInput, inp.PerlengkapanItemID)
+				return nil, fmt.Errorf("%w: Jumlah minimal 1.", ErrInvalidInput)
 			}
 			ids[i] = "?"
 			args[i] = inp.PerlengkapanItemID
@@ -393,7 +393,7 @@ func (r *Repository) UpdateSetTemplate(ctx context.Context, inputs []SetTemplate
 			return nil, fmt.Errorf("perlengkapan.UpdateSetTemplate validate: %w", err)
 		}
 		if validCount != len(inputs) {
-			return nil, fmt.Errorf("%w: salah satu item tidak ditemukan di master items", ErrInvalidInput)
+			return nil, fmt.Errorf("%w: Item tidak ditemukan.", ErrInvalidInput)
 		}
 	}
 
