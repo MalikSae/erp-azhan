@@ -1,25 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Modal from 'shared/ui/Modal';
 import Input from 'shared/ui/Input';
-import Textarea from 'shared/ui/Textarea';
 import Button from 'shared/ui/Button';
 import Alert from 'shared/ui/Alert';
-import { getScheduleSeat, updateScheduleSeat, updateScheduleSeatTampil } from '../api/schedules';
+import { getScheduleSeat, samakanScheduleSeat, updateScheduleSeatTampil } from '../api/schedules';
 
 const teksTampil = (n) => (n ? `${n} seat` : 'Mati');
 
 const formatWaktu = (iso) => new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
 
-// Kuota & seat sebuah paket: ringkasan, selisih terhadap booking, penyesuaian manual
-// dengan alasan wajib, dan riwayatnya (SM-02, SM-03).
-const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
+const linkClass = 'font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900';
+
+// Kuota & seat sebuah paket. Tidak ada booking di luar sistem: sisa seat selalu kuota dikurangi
+// seat yang dipegang booking. Selisih (bug atau data lama) hanya bisa disamakan dengan booking.
+const SeatManagement = ({ scheduleId, canEdit = true }) => {
   const [overview, setOverview] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [nilai, setNilai] = useState('');
-  const [alasan, setAlasan] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [formError, setFormError] = useState(null);
+  const [samakanError, setSamakanError] = useState(null);
+  const [isSamakan, setIsSamakan] = useState(false);
   const [isTampilOpen, setIsTampilOpen] = useState(false);
   const [nilaiTampil, setNilaiTampil] = useState('');
   const [tampilError, setTampilError] = useState(null);
@@ -41,43 +39,21 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
 
   const terisi = Math.max(0, overview.seat_total - overview.seat_sisa);
   const persen = overview.seat_total > 0 ? (terisi / overview.seat_total) * 100 : 0;
-  const diLuar = overview.seat_di_luar_booking;
 
-  const bukaForm = () => {
-    setNilai(String(overview.seat_sisa));
-    setAlasan('');
-    setFormError(null);
-    setIsOpen(true);
-  };
-
-  const simpan = async () => {
-    const sisaBaru = Number(nilai);
-    if (nilai === '' || !Number.isInteger(sisaBaru) || sisaBaru < 0 || sisaBaru > overview.seat_sisa_maks) {
-      setFormError(`Sisa seat harus bilangan bulat antara 0 dan ${overview.seat_sisa_maks}.`);
-      return;
-    }
-    if (sisaBaru === overview.seat_sisa) {
-      setFormError('Nilainya sama dengan sisa seat saat ini.');
-      return;
-    }
-    if (!alasan.trim()) {
-      setFormError('Alasan penyesuaian wajib diisi.');
-      return;
-    }
-    setIsSaving(true);
-    setFormError(null);
+  const samakan = async () => {
+    setIsSamakan(true);
+    setSamakanError(null);
     try {
-      await updateScheduleSeat(scheduleId, sisaBaru, overview.seat_sisa, alasan.trim());
-      setIsOpen(false);
+      await samakanScheduleSeat(scheduleId);
       await load();
     } catch (err) {
-      setFormError(err.response?.data?.error || 'Penyesuaian gagal disimpan. Coba lagi.');
+      setSamakanError(err.response?.data?.error || 'Sisa seat gagal disamakan. Coba lagi.');
     } finally {
-      setIsSaving(false);
+      setIsSamakan(false);
     }
   };
 
-  // Angka tampil di publik (scarcity): hanya label, tidak mengubah sisa seat.
+  // Seat tampil di publik (scarcity): hanya label, tidak mengubah sisa seat.
   const angkaTampil = overview.seat_tampil == null ? null : Math.min(overview.seat_tampil, overview.seat_sisa);
 
   const bukaTampil = () => {
@@ -133,44 +109,33 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
         </div>
       )}
 
+      {!overview.seat_cocok && (
+        <Alert variant="warning">
+          <span className="flex flex-wrap items-center justify-between gap-2">
+            <span>Sisa seat tidak cocok dengan booking.</span>
+            {canEdit && (
+              <button type="button" className={linkClass} onClick={samakan} disabled={isSamakan}>
+                Samakan dengan booking
+              </button>
+            )}
+          </span>
+        </Alert>
+      )}
+      {samakanError && <Alert variant="error">{samakanError}</Alert>}
+
       <div className="pt-2 border-t border-neutral-200 text-xs text-neutral-600 space-y-1.5">
         <div className="flex justify-between gap-2">
           <span>Seat tampil:</span>
           <span className="flex items-center gap-2">
             <span className="font-semibold text-neutral-900">{angkaTampil == null ? 'Sesuai sisa seat' : `${angkaTampil} seat`}</span>
             {canEdit && (
-              <button type="button" className="font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900" onClick={bukaTampil}>
+              <button type="button" className={linkClass} onClick={bukaTampil}>
                 Ubah
               </button>
             )}
           </span>
         </div>
-        <div className="flex justify-between">
-          <span>Total Booking Terdaftar:</span>
-          <span className="font-semibold text-neutral-900">{bookingCount || 0} booking</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Seat dipegang booking:</span>
-          <span className="font-semibold text-neutral-900">{overview.seat_dialokasikan} pax</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Terpakai di luar booking:</span>
-          <span className="font-semibold text-neutral-900">{diLuar} pax</span>
-        </div>
       </div>
-
-      {diLuar > 0 && (
-        <p className="text-xs text-neutral-500">
-          {diLuar} seat terpakai tanpa booking di ERP (impor data atau penjualan di luar sistem). Jika angka ini tidak benar, sesuaikan sisa seat.
-        </p>
-      )}
-      {diLuar < 0 && (
-        <Alert variant="warning">
-          Sisa seat lebih besar {Math.abs(diLuar)} dari seharusnya: ada seat dipegang booking yang belum dikurangkan. Sesuaikan sisa seat agar tidak terjadi penjualan melebihi kapasitas.
-        </Alert>
-      )}
-
-      {canEdit && <Button variant="secondary" size="sm" onClick={bukaForm}>Sesuaikan seat</Button>}
 
       {overview.adjustments.length > 0 && (
         <details className="text-xs text-neutral-600">
@@ -182,7 +147,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
                   <span className="font-semibold text-neutral-900">
                     {a.jenis === 'tampil'
                       ? `Seat tampil: ${teksTampil(a.seat_before)} → ${teksTampil(a.seat_after)}`
-                      : `${a.seat_before} → ${a.seat_after}`}
+                      : `Sisa seat: ${a.seat_before} → ${a.seat_after}`}
                   </span>
                   <span className="text-neutral-500">{formatWaktu(a.created_at)}</span>
                 </div>
@@ -193,45 +158,6 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
           </ul>
         </details>
       )}
-
-      <Modal
-        isOpen={isOpen}
-        onClose={() => !isSaving && setIsOpen(false)}
-        title="Sesuaikan Sisa Seat"
-        footer={
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setIsOpen(false)} disabled={isSaving}>Batal</Button>
-            <Button variant="primary" onClick={simpan} isLoading={isSaving}>Simpan</Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          {formError && <Alert variant="error">{formError}</Alert>}
-          <Input
-            label="Sisa seat baru"
-            name="seat_sisa_baru"
-            type="number"
-            min="0"
-            max={overview.seat_sisa_maks}
-            value={nilai}
-            onChange={(e) => setNilai(e.target.value)}
-          />
-          {overview.seat_sisa !== overview.seat_sisa_maks && (
-            <button type="button" className="text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900" onClick={() => setNilai(String(overview.seat_sisa_maks))}>
-              Isi sesuai booking ({overview.seat_sisa_maks})
-            </button>
-          )}
-          <Textarea
-            label="Alasan"
-            name="alasan_seat"
-            required
-            maxLength={500}
-            value={alasan}
-            onChange={(e) => setAlasan(e.target.value)}
-            placeholder="mis. 2 seat terjual langsung tanpa booking"
-          />
-        </div>
-      </Modal>
 
       <Modal
         isOpen={isTampilOpen}
@@ -258,7 +184,7 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
             placeholder="10"
           />
           {overview.seat_tampil != null && (
-            <button type="button" className="text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900" onClick={() => simpanTampil(true)} disabled={isSavingTampil}>
+            <button type="button" className={`text-xs ${linkClass}`} onClick={() => simpanTampil(true)} disabled={isSavingTampil}>
               Matikan
             </button>
           )}

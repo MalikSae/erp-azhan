@@ -478,7 +478,7 @@ func main() {
 		scheduleEdit.Post("/schedules", scheduleHandler.CreateSchedule)
 		scheduleEdit.Put("/schedules/{id}", scheduleHandler.UpdateSchedule)
 		scheduleEdit.Put("/schedules/{id}/status", scheduleHandler.UpdateScheduleStatus)
-		scheduleEdit.Put("/schedules/{id}/seat", scheduleHandler.UpdateScheduleSeat)
+		scheduleEdit.Post("/schedules/{id}/seat/samakan", scheduleHandler.SamakanScheduleSeat)
 		scheduleEdit.Put("/schedules/{id}/seat-tampil", scheduleHandler.UpdateScheduleSeatTampil)
 		scheduleEdit.Delete("/schedules/{id}", scheduleHandler.DeleteSchedule)
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/schedules/{id}/perlengkapan", perlengkapanHandler.GetScheduleSet)

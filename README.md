@@ -262,7 +262,7 @@ Kelompok rute di bawah `/api/admin/`:
 |---|---|
 | Identitas | `users`, `brands`, `bank-accounts` |
 | Master data | `hotels`, `airlines`, `airports`, `categories`, `itineraries` |
-| Paket | `schedules` (termasuk `/status`, `/seat`, `/perlengkapan`) |
+| Paket | `schedules` (termasuk `/status`, `/seat`, `/seat/samakan`, `/seat-tampil`, `/perlengkapan`) |
 | Jamaah dan dokumen | `jamaah`, `jamaah/{id}/dokumen`, `dokumen/{id}/status` |
 | Booking | `bookings` (draft, finalize, status, seat-block, diskon, cashback, refund, progress, pax) |
 | Pembayaran | `payments`, `bookings/{id}/payments`, `payments/{id}/status` |

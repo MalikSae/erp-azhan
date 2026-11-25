@@ -44,7 +44,7 @@ func TestAlasanUbahKuota(t *testing.T) {
 	if got := alasanUbahKuota(45, 50); got != "Ubah kuota seat lewat edit paket: 45 menjadi 50" {
 		t.Fatalf("dapat %q", got)
 	}
-	if len([]rune(alasanUbahKuota(99999, 100000))) > maxAlasanSeat {
+	if len([]rune(alasanUbahKuota(99999, 100000))) > 500 { // schedule_seat_adjustments.reason VARCHAR(500)
 		t.Fatal("keterangan melebihi lebar kolom reason")
 	}
 }

@@ -342,47 +342,24 @@ func (h *Handler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": resID, "status": resStatus})
 }
 
-// ─── Admin: Update Seat ───────────────────────────────────────────────────────
+// ─── Admin: Samakan Seat ──────────────────────────────────────────────────────
 
-// UpdateScheduleSeat godoc
-// PUT /api/admin/schedules/{id}/seat
-// Body: {"seat_sisa": int}
+// SamakanScheduleSeat godoc
+// POST /api/admin/schedules/{id}/seat/samakan
+// Mengisi seat_sisa = seat_total − seat dipegang booking. Tidak ada isian angka: semua seat
+// terpakai wajib punya booking di ERP.
 // Response 200: {"id": ..., "seat_sisa": ...}
-func (h *Handler) UpdateScheduleSeat(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SamakanScheduleSeat(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
-
-	var req UpdateSeatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
-		return
-	}
-
-	brandID := identity.GetBrandID(r.Context())
-	// Ambil seat_total existing untuk validasi range
-	seatTotal, err := h.repo.GetSeatTotal(r.Context(), id, brandID)
+	sisa, err := h.repo.SamakanSeat(r.Context(), id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()))
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
-
-	if req.SeatSisa < 0 || req.SeatSisa > seatTotal {
-		writeError(w, http.StatusBadRequest, "Sisa seat harus antara 0 dan total seat.")
-		return
-	}
-
-	if err := validateMaxLen("reason", strings.TrimSpace(req.Reason), maxAlasanSeat); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if err := h.repo.UpdateSeat(r.Context(), id, req.SeatSisa, req.ExpectedSeatSisa, brandID, req.Reason, identity.GetAdminUserID(r.Context())); err != nil {
-		handleRepoError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "seat_sisa": req.SeatSisa})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "seat_sisa": sisa})
 }
 
 // UpdateScheduleSeatTampil godoc

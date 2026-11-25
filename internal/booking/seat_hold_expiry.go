@@ -53,14 +53,25 @@ func (r *Repository) releaseSingleSeatHold(ctx context.Context, bookingID int64)
 		return false, fmt.Errorf("begin tx for booking %d: %w", bookingID, err)
 	}
 	defer tx.Rollback()
+	released, err := releaseSingleSeatHoldTx(ctx, tx, bookingID)
+	if err != nil || !released {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit release hold on booking %d: %w", bookingID, err)
+	}
+	return true, nil
+}
 
+// releaseSingleSeatHoldTx melepas hold kedaluwarsa satu booking di dalam transaksi pemanggil.
+func releaseSingleSeatHoldTx(ctx context.Context, tx *sql.Tx, bookingID int64) (bool, error) {
 	var isSeatBlocked bool
 	var seatHoldExpiresAt sql.NullTime
 	var scheduleID int64
 	var seatCount int
 	var status string
 
-	err = tx.QueryRowContext(ctx, `
+	err := tx.QueryRowContext(ctx, `
 		SELECT is_seat_blocked, seat_hold_expires_at, schedule_id, seat_count, status
 		FROM bookings
 		WHERE id=?
@@ -86,10 +97,6 @@ func (r *Repository) releaseSingleSeatHold(ctx context.Context, bookingID int64)
 		bookingID,
 	); err != nil {
 		return false, fmt.Errorf("clear hold on booking %d: %w", bookingID, err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return false, fmt.Errorf("commit release hold on booking %d: %w", bookingID, err)
 	}
 	return true, nil
 }

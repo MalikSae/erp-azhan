@@ -12,20 +12,21 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Sisa seat setelah ubah kuota = kuota baru − seat dipegang booking (tanpa seat di luar booking).
 func TestCapacityChangePreservesAllocatedSeats(t *testing.T) {
 	for _, tc := range []struct {
-		name                         string
-		total, remaining, next, want int
-		invalid                      bool
+		name                 string
+		dipegang, next, want int
+		invalid              bool
 	}{
-		{"content edit after booking", 45, 44, 45, 44, false},
-		{"increase capacity", 45, 35, 50, 40, false},
-		{"reduce to allocation", 45, 35, 10, 0, false},
-		{"below allocation", 45, 35, 9, 0, true},
-		{"corrupt remaining", 45, 46, 45, 0, true},
+		{"content edit after booking", 1, 45, 44, false},
+		{"increase capacity", 10, 50, 40, false},
+		{"reduce to allocation", 10, 10, 0, false},
+		{"below allocation", 10, 9, 0, true},
+		{"zero capacity", 0, 0, 0, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := remainingAfterCapacityChange(tc.total, tc.remaining, tc.next)
+			got, err := remainingAfterCapacityChange(tc.dipegang, tc.next)
 			if (err != nil) != tc.invalid || got != tc.want {
 				t.Fatalf("got %d, %v; want %d invalid=%v", got, err, tc.want, tc.invalid)
 			}

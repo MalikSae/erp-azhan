@@ -680,7 +680,7 @@ const ScheduleDetailPage = ({ tab = 'detail' }) => {
 
           <Surface>
             <Section title="Kuota Seat">
-              <SeatManagement scheduleId={schedule.id} bookingCount={schedule.booking_count} canEdit={canEdit} />
+              <SeatManagement scheduleId={schedule.id} canEdit={canEdit} />
             </Section>
           </Surface>
         </div>

@@ -1,6 +1,7 @@
 -- Local UI test fixtures only. Source: https://hanahajiumroh.com/ (2026-10-01).
 -- Source values: names, departure dates, starting prices, hotels, benefits.
--- Synthetic: return dates, room upgrades, seats, promo, and two duration variants.
+-- Synthetic: return dates, room upgrades, promo, and two duration variants.
+-- Seat: sisa seat selalu sama dengan kuota (tanpa booking di luar sistem); kesan sisa sedikit lewat seat_tampil.
 -- Idempotent: only inserts missing fixture schedules (by name) for Hana; no updates/deletes.
 SET NAMES utf8mb4;
 START TRANSACTION;
@@ -12,12 +13,12 @@ SELECT n.name, IF(n.name IN ('Royal Andalus','Andalus As-Salam','Shaza Regency')
  UNION ALL SELECT 'Sofwah Tower' UNION ALL SELECT 'Shaza Regency'
 ) n WHERE @hana IS NOT NULL AND NOT EXISTS (SELECT 1 FROM hotels h WHERE h.name=n.name);
 INSERT INTO schedules (
- brand_id,jadwal_nama,status,is_direct_flight,seat_total,seat_sisa,
+ brand_id,jadwal_nama,status,is_direct_flight,seat_total,seat_sisa,seat_tampil,
  maskapai_id,berangkat_tanggal,pulang_tanggal,hotel_mekkah_id,hotel_madinah_id,
  harga_quad,harga_triple,harga_double,include_items,exclude_items,
  nominal_komisi_langsung,nominal_bonus_pembinaan
 )
-SELECT @hana,n.name,'published',1,45,n.remaining,
+SELECT @hana,n.name,'published',1,45,45,NULLIF(n.remaining,45),
  (SELECT id FROM airlines WHERE name='SAUDIA' LIMIT 1),n.depart,DATE_ADD(n.depart,INTERVAL n.nights DAY),
  (SELECT id FROM hotels WHERE name=n.mekkah LIMIT 1),(SELECT id FROM hotels WHERE name=n.madinah LIMIT 1),
  n.price,n.price+2000000,n.price+4000000,
@@ -35,7 +36,7 @@ FROM (
 ) n WHERE @hana IS NOT NULL AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.brand_id=@hana AND s.jadwal_nama=n.name);
 SELECT ROW_COUNT() AS inserted_schedules;
 COMMIT;
-SELECT id,jadwal_nama,berangkat_tanggal,pulang_tanggal,harga_quad,seat_total,seat_sisa,status
+SELECT id,jadwal_nama,berangkat_tanggal,pulang_tanggal,harga_quad,seat_total,seat_sisa,seat_tampil,status
 FROM schedules WHERE brand_id=@hana AND JSON_SEARCH(exclude_items, 'one', 'DATA TESTING%') IS NOT NULL ORDER BY berangkat_tanggal;
 
 

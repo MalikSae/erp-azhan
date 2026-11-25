@@ -338,7 +338,7 @@ type UpdateStatusRequest struct {
 // SeatAdjustment adalah satu baris riwayat penyesuaian sisa seat manual.
 type SeatAdjustment struct {
 	ID         int64     `json:"id"`
-	Jenis      string    `json:"jenis"` // sisa | tampil; untuk tampil, 0 = nonaktif
+	Jenis      string    `json:"jenis"` // kuota (sisa sebelum/sesudah ubah kuota) | tampil (0 = nonaktif)
 	SeatBefore int       `json:"seat_before"`
 	SeatAfter  int       `json:"seat_after"`
 	Reason     string    `json:"reason"`
@@ -346,16 +346,15 @@ type SeatAdjustment struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// SeatOverview merangkum seat sebuah paket untuk halaman rekonsiliasi.
-// SeatDiLuarBooking = seat_total - seat_sisa - seat_dialokasikan: seat terpakai yang
-// tidak punya booking (impor, penjualan offline). Negatif berarti seat_sisa lebih besar
-// dari seharusnya (seat dipegang booking tetapi belum dikurangkan).
+// SeatOverview merangkum seat sebuah paket. Tidak ada booking di luar sistem, jadi sisa seat yang
+// sah selalu SeatSesuaiBooking = seat_total − seat_dialokasikan; SeatCocok false menandai selisih
+// (bug atau data lama) yang bisa diperbaiki lewat POST /schedules/{id}/seat/samakan.
 type SeatOverview struct {
 	SeatTotal         int              `json:"seat_total"`
 	SeatSisa          int              `json:"seat_sisa"`
 	SeatDialokasikan  int              `json:"seat_dialokasikan"`
-	SeatDiLuarBooking int              `json:"seat_di_luar_booking"`
-	SeatSisaMaks      int              `json:"seat_sisa_maks"`
+	SeatSesuaiBooking int              `json:"seat_sesuai_booking"`
+	SeatCocok         bool             `json:"seat_cocok"`
 	SeatTampil        *int             `json:"seat_tampil"`
 	Adjustments       []SeatAdjustment `json:"adjustments"`
 }
@@ -372,11 +371,4 @@ func SeatTampilPublik(seatTampil *int, seatSisa int) int {
 		return *seatTampil
 	}
 	return seatSisa
-}
-
-// UpdateSeatRequest adalah payload untuk PUT /api/admin/schedules/{id}/seat.
-type UpdateSeatRequest struct {
-	ExpectedSeatSisa *int   `json:"expected_seat_sisa"`
-	Reason           string `json:"reason"`
-	SeatSisa         int    `json:"seat_sisa"`
 }

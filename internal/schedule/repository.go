@@ -543,58 +543,68 @@ func (r *Repository) GetSeatTotal(ctx context.Context, id int64, brandID *int64)
 	return seatTotal, nil
 }
 
-// UpdateSeat mengupdate kolom seat_sisa saja (range dasar sudah dicek handler) dan
-// mencatat riwayatnya di schedule_seat_adjustments beserta pelakunya (SM-03).
-func (r *Repository) UpdateSeat(ctx context.Context, id int64, seatSisa int, expected *int, brandID *int64, reason string, actorID int64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	owner, current, err := updateSeatTx(ctx, tx, id, seatSisa, expected, brandID, reason, actorID)
-	if err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	log.Printf("[AUDIT] schedule_seat_adjustment id=%d brand=%d before=%d after=%d by=%d reason=%q", id, owner, current, seatSisa, actorID, strings.TrimSpace(reason))
-	return nil
+// sqlQuerier: *sql.DB atau *sql.Tx.
+type sqlQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// updateSeatTx menjalankan penyesuaian di dalam transaksi pemanggil; mengembalikan
-// brand pemilik dan sisa seat sebelum diubah.
-func updateSeatTx(ctx context.Context, tx *sql.Tx, id int64, seatSisa int, expected *int, brandID *int64, reason string, actorID int64) (owner int64, current int, err error) {
-	reason = strings.TrimSpace(reason)
-	if expected == nil || reason == "" {
-		return 0, 0, fmt.Errorf("%w: sisa seat sebelumnya dan alasan penyesuaian wajib diisi", ErrConflict)
+// seatDipegangBooking: jumlah seat yang dipegang booking paket. Sisa seat yang sah selalu
+// seat_total dikurangi angka ini; tidak ada seat terpakai tanpa booking.
+func seatDipegangBooking(ctx context.Context, q sqlQuerier, scheduleID int64) (int, error) {
+	var n int
+	err := q.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(seat_count),0) FROM bookings WHERE schedule_id=? AND is_seat_blocked=1 AND status <> 'batal'`,
+		scheduleID).Scan(&n)
+	return n, err
+}
+
+// SamakanSeat mengisi seat_sisa = seat_total − seat dipegang booking (minimal 0). Hanya untuk
+// memperbaiki sisa seat yang tidak cocok dengan booking; dicatat di log server.
+func (r *Repository) SamakanSeat(ctx context.Context, id int64, brandID *int64, actorID int64) (int, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
 	}
+	defer tx.Rollback()
+	owner, before, after, err := samakanSeatTx(ctx, tx, id, brandID)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	if before != after {
+		log.Printf("[AUDIT] schedule_seat_samakan id=%d brand=%d before=%d after=%d by=%d", id, owner, before, after, actorID)
+	}
+	return after, nil
+}
+
+func samakanSeatTx(ctx context.Context, tx *sql.Tx, id int64, brandID *int64) (owner int64, before, after int, err error) {
 	var total int
-	if err := tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &current, &owner); err != nil {
-		return 0, 0, err
+	err = tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &before, &owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, 0, 0, err
 	}
 	if brandID != nil && owner != *brandID {
-		return 0, 0, ErrNotFound
+		return 0, 0, 0, ErrNotFound
 	}
-	if current != *expected {
-		return 0, 0, fmt.Errorf("%w: seat berubah, muat ulang paket", ErrConflict)
+	dipegang, err := seatDipegangBooking(ctx, tx, id)
+	if err != nil {
+		return 0, 0, 0, err
 	}
-	var allocated int
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(seat_count),0) FROM bookings WHERE schedule_id=? AND is_seat_blocked=1 AND status <> 'batal'`, id).Scan(&allocated); err != nil {
-		return 0, 0, err
+	after = total - dipegang
+	if after < 0 {
+		after = 0
 	}
-	if seatSisa < 0 || seatSisa > total-allocated {
-		return 0, 0, fmt.Errorf("%w: sisa seat melampaui kapasitas setelah alokasi booking", ErrConflict)
+	if after != before {
+		if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, after, id); err != nil {
+			return 0, 0, 0, err
+		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, seatSisa, id); err != nil {
-		return 0, 0, err
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO schedule_seat_adjustments (schedule_id, admin_user_id, seat_before, seat_after, reason) VALUES (?,?,?,?,?)`,
-		id, nullInt64(actorID), current, seatSisa, reason); err != nil {
-		return 0, 0, fmt.Errorf("catat riwayat penyesuaian seat: %w", err)
-	}
-	return owner, current, nil
+	return owner, before, after, nil
 }
 
 // UpdateSeatTampil menyimpan angka scarcity (nil = nonaktif) dan mencatatnya di riwayat seat
@@ -665,8 +675,11 @@ func (r *Repository) SeatOverview(ctx context.Context, id int64, brandID *int64)
 	if err != nil {
 		return nil, fmt.Errorf("schedule.SeatOverview: %w", err)
 	}
-	o.SeatDiLuarBooking = o.SeatTotal - o.SeatSisa - o.SeatDialokasikan
-	o.SeatSisaMaks = o.SeatTotal - o.SeatDialokasikan
+	o.SeatSesuaiBooking = o.SeatTotal - o.SeatDialokasikan
+	if o.SeatSesuaiBooking < 0 {
+		o.SeatSesuaiBooking = 0
+	}
+	o.SeatCocok = o.SeatSisa == o.SeatSesuaiBooking
 	if seatTampil.Valid {
 		v := int(seatTampil.Int64)
 		o.SeatTampil = &v
@@ -1126,15 +1139,18 @@ func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *Sched
 			return fmt.Errorf("%w: brand paket yang memiliki booking tidak dapat diubah", ErrConflict)
 		}
 	}
-	var err error
-	inp.SeatSisa, err = remainingAfterCapacityChange(oldTotal, oldRemaining, inp.SeatTotal)
+	dipegang, err := seatDipegangBooking(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	inp.SeatSisa, err = remainingAfterCapacityChange(dipegang, inp.SeatTotal)
 	if err != nil {
 		return err
 	}
 	// Ubah kuota seat lewat form edit ikut tercatat di riwayat penyesuaian seat, tanpa isian alasan.
 	if inp.SeatTotal != oldTotal {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO schedule_seat_adjustments (schedule_id, admin_user_id, seat_before, seat_after, reason) VALUES (?,?,?,?,?)`,
+			`INSERT INTO schedule_seat_adjustments (schedule_id, jenis, admin_user_id, seat_before, seat_after, reason) VALUES (?,'kuota',?,?,?,?)`,
 			id, nullInt64(inp.ActorID), oldRemaining, inp.SeatSisa, alasanUbahKuota(oldTotal, inp.SeatTotal)); err != nil {
 			return fmt.Errorf("catat riwayat ubah kuota seat: %w", err)
 		}
