@@ -385,6 +385,40 @@ func (h *Handler) UpdateScheduleSeat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "seat_sisa": req.SeatSisa})
 }
 
+// UpdateScheduleSeatTampil godoc
+// PUT /api/admin/schedules/{id}/seat-tampil
+// Body: {"seat_tampil": int|null}; null mematikan scarcity. Hanya label publik, seat_sisa tidak berubah.
+// Response 200: {"id": ..., "seat_tampil": ...}
+func (h *Handler) UpdateScheduleSeatTampil(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	var req UpdateSeatTampilRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	seatTotal, err := h.repo.GetSeatTotal(r.Context(), id, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	if req.SeatTampil != nil && (*req.SeatTampil < 1 || *req.SeatTampil > seatTotal) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Angka tampil harus antara 1 dan %d.", seatTotal))
+		return
+	}
+
+	if err := h.repo.UpdateSeatTampil(r.Context(), id, req.SeatTampil, brandID, identity.GetAdminUserID(r.Context())); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "seat_tampil": req.SeatTampil})
+}
+
 // GetScheduleSeat godoc
 // GET /api/admin/schedules/{id}/seat
 // Response 200: SeatOverview (ringkasan seat + riwayat penyesuaian terakhir)

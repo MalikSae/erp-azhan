@@ -32,6 +32,7 @@ const selectFull = `
 		s.is_direct_flight,
 		s.seat_total,
 		s.seat_sisa,
+		s.seat_tampil,
 		s.maskapai_id,
 		COALESCE(a.name, '') AS maskapai_name,
 		a.logo_url AS maskapai_logo,
@@ -596,15 +597,68 @@ func updateSeatTx(ctx context.Context, tx *sql.Tx, id int64, seatSisa int, expec
 	return owner, current, nil
 }
 
+// UpdateSeatTampil menyimpan angka scarcity (nil = nonaktif) dan mencatatnya di riwayat seat
+// dengan jenis 'tampil' (0 = nonaktif). Tidak menyentuh seat_sisa.
+func (r *Repository) UpdateSeatTampil(ctx context.Context, id int64, seatTampil *int, brandID *int64, actorID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := updateSeatTampilTx(ctx, tx, id, seatTampil, brandID, actorID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func updateSeatTampilTx(ctx context.Context, tx *sql.Tx, id int64, seatTampil *int, brandID *int64, actorID int64) error {
+	var total int
+	var current sql.NullInt64
+	var owner int64
+	err := tx.QueryRowContext(ctx, `SELECT seat_total, seat_tampil, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &current, &owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if brandID != nil && owner != *brandID {
+		return ErrNotFound
+	}
+	if seatTampil != nil && (*seatTampil < 1 || *seatTampil > total) {
+		return fmt.Errorf("%w: kuota paket berubah, muat ulang paket", ErrConflict)
+	}
+	before := int(current.Int64) // NULL → 0
+	after := 0
+	var seatTampilDB any
+	if seatTampil != nil {
+		after = *seatTampil
+		seatTampilDB = after
+	}
+	if before == after {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_tampil=? WHERE id=?`, seatTampilDB, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO schedule_seat_adjustments (schedule_id, jenis, admin_user_id, seat_before, seat_after, reason) VALUES (?, 'tampil', ?, ?, ?, ?)`,
+		id, nullInt64(actorID), before, after, "Angka tampil di publik"); err != nil {
+		return fmt.Errorf("catat riwayat angka tampil: %w", err)
+	}
+	return nil
+}
+
 // SeatOverview mengambil ringkasan seat dan 20 riwayat penyesuaian terakhir.
 // brandID non-nil membatasi ke paket milik brand itu (ErrNotFound bila bukan).
 func (r *Repository) SeatOverview(ctx context.Context, id int64, brandID *int64) (*SeatOverview, error) {
 	var o SeatOverview
+	var seatTampil sql.NullInt64
 	err := r.db.QueryRowContext(ctx, `
-		SELECT s.seat_total, s.seat_sisa,
+		SELECT s.seat_total, s.seat_sisa, s.seat_tampil,
 		       COALESCE((SELECT SUM(b.seat_count) FROM bookings b WHERE b.schedule_id=s.id AND b.is_seat_blocked=1 AND b.status <> 'batal'),0)
 		FROM schedules s WHERE s.id=? AND (? IS NULL OR s.brand_id=?)`, id, brandID, brandID).
-		Scan(&o.SeatTotal, &o.SeatSisa, &o.SeatDialokasikan)
+		Scan(&o.SeatTotal, &o.SeatSisa, &seatTampil, &o.SeatDialokasikan)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -613,9 +667,13 @@ func (r *Repository) SeatOverview(ctx context.Context, id int64, brandID *int64)
 	}
 	o.SeatDiLuarBooking = o.SeatTotal - o.SeatSisa - o.SeatDialokasikan
 	o.SeatSisaMaks = o.SeatTotal - o.SeatDialokasikan
+	if seatTampil.Valid {
+		v := int(seatTampil.Int64)
+		o.SeatTampil = &v
+	}
 
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT a.id, a.seat_before, a.seat_after, a.reason, u.email, a.created_at
+		SELECT a.id, a.jenis, a.seat_before, a.seat_after, a.reason, u.email, a.created_at
 		FROM schedule_seat_adjustments a LEFT JOIN admin_users u ON u.id=a.admin_user_id
 		WHERE a.schedule_id=? ORDER BY a.id DESC LIMIT 20`, id)
 	if err != nil {
@@ -626,7 +684,7 @@ func (r *Repository) SeatOverview(ctx context.Context, id int64, brandID *int64)
 	for rows.Next() {
 		var a SeatAdjustment
 		var email sql.NullString
-		if err := rows.Scan(&a.ID, &a.SeatBefore, &a.SeatAfter, &a.Reason, &email, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Jenis, &a.SeatBefore, &a.SeatAfter, &a.Reason, &email, &a.CreatedAt); err != nil {
 			return nil, fmt.Errorf("schedule.SeatOverview scan: %w", err)
 		}
 		if email.Valid {
@@ -901,12 +959,13 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 		bonusPembinaan sql.NullFloat64
 		itineraryID    sql.NullInt64
 		includeJSON    []byte
+		seatTampil     sql.NullInt64
 		excludeJSON    []byte
 	)
 
 	err := rows.Scan(
 		&s.ID, &s.BrandID, &categoryID, &categoryName, &categorySlug, &categoryBadge,
-		&s.JadwalNama, &s.Status, &s.Views, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa,
+		&s.JadwalNama, &s.Status, &s.Views, &s.IsDirectFlight, &s.SeatTotal, &s.SeatSisa, &seatTampil,
 		&maskapaiID, &maskapaiName, &maskapaiLogo,
 		&s.BerangkatTanggal, &s.BerangkatJam, &s.BerangkatKodePenerbangan,
 		&s.BerangkatBandaraAsal, &s.BerangkatBandaraTujuan,
@@ -922,6 +981,10 @@ func scanRow(rows *sql.Rows) (*Schedule, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("schedule.scanRow: %w", err)
+	}
+	if seatTampil.Valid {
+		v := int(seatTampil.Int64)
+		s.SeatTampil = &v
 	}
 
 	if categoryID.Valid {

@@ -57,7 +57,9 @@ type Schedule struct {
 	IsDirectFlight     bool         `json:"is_direct_flight"`
 	SeatTotal          int          `json:"seat_total"`
 	SeatSisa           int          `json:"seat_sisa"`
-	BookingCount       int          `json:"booking_count"`
+	// SeatTampil: angka scarcity yang diisi admin; nil = nonaktif. Hanya label publik.
+	SeatTampil   *int `json:"seat_tampil"`
+	BookingCount int  `json:"booking_count"`
 	// KomisiAktif: jumlah baris komisi aktif dari booking jadwal ini. Hanya diisi pada detail jadwal, untuk
 	// peringatan saat tanggal berangkat diubah (ketersediaan komisi mengikuti tanggal berangkat).
 	KomisiAktif int `json:"komisi_aktif"`
@@ -115,10 +117,15 @@ type PublicSchedule struct {
 	Category           *CategoryRef `json:"category"`
 	JadwalNama         string       `json:"jadwal_nama"`
 	// Views: hitungan internal, tidak dikirim ke publik.
-	Views                    int            `json:"-"`
-	IsDirectFlight           bool           `json:"is_direct_flight"`
-	SeatTotal                int            `json:"seat_total"`
-	SeatSisa                 int            `json:"seat_sisa"`
+	Views          int  `json:"-"`
+	IsDirectFlight bool `json:"is_direct_flight"`
+	SeatTotal      int  `json:"seat_total"`
+	SeatSisa       int  `json:"seat_sisa"`
+	// SeatTampil: angka seat untuk tampilan publik, LEAST(seat_tampil, seat_sisa); sama dengan seat_sisa
+	// bila scarcity nonaktif. Hanya label: logika booking tetap memakai seat_sisa.
+	SeatTampil int `json:"seat_tampil"`
+	// scarcityAktif: angka tampil lebih kecil dari sisa ril; label status menjadi Hampir penuh.
+	scarcityAktif            bool
 	Maskapai                 *MaskapaiRef   `json:"maskapai"`
 	BerangkatTanggal         string         `json:"berangkat_tanggal"`
 	BerangkatJam             string         `json:"berangkat_jam"`
@@ -163,6 +170,8 @@ func (s *Schedule) ToPublic() *PublicSchedule {
 		IsDirectFlight:           s.IsDirectFlight,
 		SeatTotal:                s.SeatTotal,
 		SeatSisa:                 s.SeatSisa,
+		SeatTampil:               SeatTampilPublik(s.SeatTampil, s.SeatSisa),
+		scarcityAktif:            s.SeatTampil != nil && *s.SeatTampil < s.SeatSisa,
 		Maskapai:                 s.Maskapai,
 		BerangkatTanggal:         s.BerangkatTanggal,
 		BerangkatJam:             s.BerangkatJam,
@@ -329,6 +338,7 @@ type UpdateStatusRequest struct {
 // SeatAdjustment adalah satu baris riwayat penyesuaian sisa seat manual.
 type SeatAdjustment struct {
 	ID         int64     `json:"id"`
+	Jenis      string    `json:"jenis"` // sisa | tampil; untuk tampil, 0 = nonaktif
 	SeatBefore int       `json:"seat_before"`
 	SeatAfter  int       `json:"seat_after"`
 	Reason     string    `json:"reason"`
@@ -346,7 +356,22 @@ type SeatOverview struct {
 	SeatDialokasikan  int              `json:"seat_dialokasikan"`
 	SeatDiLuarBooking int              `json:"seat_di_luar_booking"`
 	SeatSisaMaks      int              `json:"seat_sisa_maks"`
+	SeatTampil        *int             `json:"seat_tampil"`
 	Adjustments       []SeatAdjustment `json:"adjustments"`
+}
+
+// UpdateSeatTampilRequest adalah payload untuk PUT /api/admin/schedules/{id}/seat-tampil.
+// SeatTampil nil = scarcity dimatikan.
+type UpdateSeatTampilRequest struct {
+	SeatTampil *int `json:"seat_tampil"`
+}
+
+// SeatTampilPublik mengembalikan angka seat untuk publik: LEAST(seatTampil, seatSisa), atau seatSisa bila nonaktif.
+func SeatTampilPublik(seatTampil *int, seatSisa int) int {
+	if seatTampil != nil && *seatTampil < seatSisa {
+		return *seatTampil
+	}
+	return seatSisa
 }
 
 // UpdateSeatRequest adalah payload untuk PUT /api/admin/schedules/{id}/seat.

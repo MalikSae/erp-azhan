@@ -35,6 +35,12 @@ export async function updateScheduleSeat(id, seatSisa, expectedSeatSisa, reason)
   return response.data;
 }
 
+// seatTampil null mematikan angka tampil di publik.
+export async function updateScheduleSeatTampil(id, seatTampil) {
+  const response = await client.put(`/api/admin/schedules/${id}/seat-tampil`, { seat_tampil: seatTampil });
+  return response.data;
+}
+
 export async function deleteSchedule(id) {
   const response = await client.delete(`/api/admin/schedules/${id}`);
   return response.data;

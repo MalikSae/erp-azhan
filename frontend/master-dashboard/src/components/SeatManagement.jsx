@@ -4,7 +4,9 @@ import Input from 'shared/ui/Input';
 import Textarea from 'shared/ui/Textarea';
 import Button from 'shared/ui/Button';
 import Alert from 'shared/ui/Alert';
-import { getScheduleSeat, updateScheduleSeat } from '../api/schedules';
+import { getScheduleSeat, updateScheduleSeat, updateScheduleSeatTampil } from '../api/schedules';
+
+const teksTampil = (n) => (n ? `${n} seat` : 'Mati');
 
 const formatWaktu = (iso) => new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
 
@@ -18,6 +20,10 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
   const [alasan, setAlasan] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [isTampilOpen, setIsTampilOpen] = useState(false);
+  const [nilaiTampil, setNilaiTampil] = useState('');
+  const [tampilError, setTampilError] = useState(null);
+  const [isSavingTampil, setIsSavingTampil] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +77,37 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
     }
   };
 
+  // Angka tampil di publik (scarcity): hanya label, tidak mengubah sisa seat.
+  const angkaTampil = overview.seat_tampil == null ? null : Math.min(overview.seat_tampil, overview.seat_sisa);
+
+  const bukaTampil = () => {
+    setNilaiTampil(overview.seat_tampil == null ? '' : String(overview.seat_tampil));
+    setTampilError(null);
+    setIsTampilOpen(true);
+  };
+
+  const simpanTampil = async (matikan = false) => {
+    let angka = null;
+    if (!matikan && nilaiTampil !== '') {
+      angka = Number(nilaiTampil);
+      if (!Number.isInteger(angka) || angka < 1 || angka > overview.seat_total) {
+        setTampilError(`Angka tampil harus antara 1 dan ${overview.seat_total}.`);
+        return;
+      }
+    }
+    setIsSavingTampil(true);
+    setTampilError(null);
+    try {
+      await updateScheduleSeatTampil(scheduleId, angka);
+      setIsTampilOpen(false);
+      await load();
+    } catch (err) {
+      setTampilError(err.response?.data?.error || 'Angka tampil gagal disimpan. Coba lagi.');
+    } finally {
+      setIsSavingTampil(false);
+    }
+  };
+
   return (
     <div className="space-y-4 font-body">
       <div className="grid grid-cols-2 gap-3 divide-x divide-neutral-200">
@@ -97,6 +134,17 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
       )}
 
       <div className="pt-2 border-t border-neutral-200 text-xs text-neutral-600 space-y-1.5">
+        <div className="flex justify-between gap-2">
+          <span>Seat tampil:</span>
+          <span className="flex items-center gap-2">
+            <span className="font-semibold text-neutral-900">{angkaTampil == null ? 'Sesuai sisa seat' : `${angkaTampil} seat`}</span>
+            {canEdit && (
+              <button type="button" className="font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900" onClick={bukaTampil}>
+                Ubah
+              </button>
+            )}
+          </span>
+        </div>
         <div className="flex justify-between">
           <span>Total Booking Terdaftar:</span>
           <span className="font-semibold text-neutral-900">{bookingCount || 0} booking</span>
@@ -131,10 +179,14 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
             {overview.adjustments.map(a => (
               <li key={a.id} className="p-2 bg-neutral-50 border border-neutral-200 rounded-md">
                 <div className="flex justify-between gap-2">
-                  <span className="font-semibold text-neutral-900">{a.seat_before} → {a.seat_after}</span>
+                  <span className="font-semibold text-neutral-900">
+                    {a.jenis === 'tampil'
+                      ? `Seat tampil: ${teksTampil(a.seat_before)} → ${teksTampil(a.seat_after)}`
+                      : `${a.seat_before} → ${a.seat_after}`}
+                  </span>
                   <span className="text-neutral-500">{formatWaktu(a.created_at)}</span>
                 </div>
-                <div className="mt-0.5">{a.reason}</div>
+                {a.jenis !== 'tampil' && <div className="mt-0.5">{a.reason}</div>}
                 <div className="mt-0.5 text-neutral-500">oleh {a.admin_email || 'akun yang sudah dihapus'}</div>
               </li>
             ))}
@@ -178,6 +230,38 @@ const SeatManagement = ({ scheduleId, bookingCount, canEdit = true }) => {
             onChange={(e) => setAlasan(e.target.value)}
             placeholder="mis. 2 seat terjual langsung tanpa booking"
           />
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isTampilOpen}
+        onClose={() => !isSavingTampil && setIsTampilOpen(false)}
+        title="Seat Tampil"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setIsTampilOpen(false)} disabled={isSavingTampil}>Batal</Button>
+            <Button variant="primary" onClick={() => simpanTampil()} isLoading={isSavingTampil}>Simpan</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {tampilError && <Alert variant="error">{tampilError}</Alert>}
+          <Input
+            label="Angka tampil"
+            name="seat_tampil"
+            type="number"
+            min="1"
+            max={overview.seat_total}
+            value={nilaiTampil}
+            onChange={(e) => setNilaiTampil(e.target.value)}
+            placeholder="10"
+          />
+          {overview.seat_tampil != null && (
+            <button type="button" className="text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900" onClick={() => simpanTampil(true)} disabled={isSavingTampil}>
+              Matikan
+            </button>
+          )}
         </div>
       </Modal>
     </div>

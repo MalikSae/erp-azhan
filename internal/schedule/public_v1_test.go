@@ -148,7 +148,7 @@ func TestPackageV1JSONShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, key := range []string{
-		"id", "brand_id", "jadwal_nama", "berangkat_tanggal", "seat_total", "seat_sisa", "harga_quad",
+		"id", "brand_id", "jadwal_nama", "berangkat_tanggal", "seat_total", "seat_sisa", "seat_tampil", "harga_quad",
 		"journey_type", "tier", "visibility", "duration_days", "price_from",
 		"registration_status",
 	} {

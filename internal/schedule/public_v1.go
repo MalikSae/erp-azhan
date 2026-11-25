@@ -185,7 +185,7 @@ func newPackageV1(s *PublicSchedule, k Klasifikasi, batas string) PackageV1 {
 		Visibility:         visibilityVisible,
 		DurationDays:       durationDays(s.BerangkatTanggal, s.PulangTanggal),
 		PriceFrom:          priceFrom(s),
-		RegistrationStatus: registrationStatus(s.SeatTotal, s.SeatSisa, s.BerangkatTanggal, batas),
+		RegistrationStatus: statusRegistrasiPublik(s, batas),
 		Lokasi:             []LokasiPaket{},
 	}
 }
