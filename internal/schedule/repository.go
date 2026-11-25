@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"erp-azhan/api/internal/benefit"
+	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/itinerary"
 	"erp-azhan/api/internal/shared"
 	"errors"
@@ -538,9 +539,8 @@ func ubahStatusTx(ctx context.Context, tx *sql.Tx, id int64, status string, bran
 		return ErrNotFound
 	}
 	if status == StatusArchived && lama != StatusArchived && berangkat >= hariIni {
-		var aktif int
-		if err := tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM bookings WHERE schedule_id=? AND status IN ('baru','dp','lunas')`, id).Scan(&aktif); err != nil {
+		aktif, err := booking.HitungAktif(ctx, tx, id)
+		if err != nil {
 			return fmt.Errorf("schedule: hitung booking aktif: %w", err)
 		}
 		if aktif > 0 {
@@ -1211,8 +1211,8 @@ func ubahTanggalBerangkatTx(ctx context.Context, tx *sql.Tx, id int64, lama stri
 	if inp.BerangkatTanggal == lama {
 		return nil
 	}
-	var aktif int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id=? AND status IN ('baru','dp','lunas')`, id).Scan(&aktif); err != nil {
+	aktif, err := booking.HitungAktif(ctx, tx, id)
+	if err != nil {
 		return fmt.Errorf("schedule: hitung booking aktif: %w", err)
 	}
 	if aktif == 0 {
@@ -1242,9 +1242,7 @@ func ubahTanggalBerangkatTx(ctx context.Context, tx *sql.Tx, id int64, lama stri
 
 // CountActiveBookings menghitung booking aktif (baru/dp/lunas) pada paket (MP-09).
 func (r *Repository) CountActiveBookings(ctx context.Context, scheduleID int64) (int, error) {
-	var n int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id=? AND status IN ('baru','dp','lunas')`, scheduleID).Scan(&n)
-	return n, err
+	return booking.HitungAktif(ctx, r.db, scheduleID)
 }
 
 // HotelCity mengembalikan kota hotel; ErrNotFound bila hotel tidak ada (MP-03).

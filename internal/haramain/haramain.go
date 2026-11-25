@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/shared"
 )
 
@@ -292,9 +293,7 @@ func Ubah(ctx context.Context, q querier, id, adminID int64, in Input) error {
 	}
 	// Paket lokasi fields changed: bump linked pakets for the public updated_since filter.
 	if lama.Nama != in.Nama || lama.Kota != in.Kota || lama.FotoURL != in.FotoURL || lama.Aktif != in.Aktif {
-		if _, err := q.ExecContext(ctx, `
-			UPDATE schedules s JOIN schedule_lokasi sl ON sl.schedule_id = s.id
-			SET s.updated_at = NOW() WHERE sl.tempat_id = ?`, id); err != nil {
+		if err := schedule.TandaiDiubahLewatLokasi(ctx, q, id); err != nil {
 			return err
 		}
 	}

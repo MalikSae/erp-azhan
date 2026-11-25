@@ -12,19 +12,19 @@ Ditunda: bukan celah keamanan dan belum ada rilis production. Perbaikan: antarmu
 
 ### Grup menu Paket (dicatat 2026-11-25, review alur Paket)
 
-Menulis ke tabel modul lain (paling berisiko):
+Sudah diperbaiki (2026-11-25):
 
-- `internal/manasik/manasik.go`: absensi mengubah `booking_pax.progress_manasik` langsung. Kolom yang sama juga diubah modul booking dari Detail Booking.
-- `internal/haramain/haramain.go`: mengubah `schedules.updated_at` lewat `schedule_lokasi`.
+- Absensi manasik menulis penanda lewat `booking.CatatProgressManasik`, bukan `UPDATE booking_pax` sendiri.
+- Haramain menandai paket berubah lewat `schedule.TandaiDiubahLewatLokasi`, bukan `UPDATE schedules` sendiri.
+- Hitungan booking aktif di schedule memakai `booking.HitungAktif`; manifest memakai `booking.SQLStatusAktif`.
 
-Membaca tabel modul lain:
+Masih membaca tabel modul lain (hanya baca, ditunda):
 
-- `internal/schedule/repository.go`: `bookings` (cek booking aktif, seat dipegang), `transaksi_komisi`, `brands`, serta cek keberadaan hotel, maskapai, itinerary, bandara.
-- `internal/manifest`: `bookings`, `booking_pax`, `jamaah`, `airlines`.
-- `internal/manasik`: `bookings`, `jamaah`, `customer_accounts`, `brands`.
+- `internal/schedule/repository.go`: `transaksi_komisi`, `brands`, cek keberadaan hotel, maskapai, itinerary, bandara. Seat dipegang lewat `shared.SeatDipegangBooking`.
+- `internal/manifest`: join `bookings`, `booking_pax`, `jamaah`, `airlines`.
+- `internal/manasik`: join `bookings`, `jamaah`, `customer_accounts`, `brands`; aturan `bookingBerlaku` (booking baru dengan hold kedaluwarsa tidak dihitung) masih ditulis di manasik.
 - `internal/category`, `internal/hotel`, `internal/airline`, `internal/airport`: menghitung `schedules` sebelum hapus.
-
-Perbaikan: modul booking menyediakan fungsi untuk status booking aktif dan seat dipegang (sekarang literal `'baru','dp','lunas'` tersebar), dan absensi manasik memanggil fungsi milik booking.
+- Modul booking sendiri masih menulis literal `'baru','dp','lunas'` di `repository.go`.
 
 ## Kode berulang di backend (dicatat 2026-11-25)
 

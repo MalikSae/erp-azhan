@@ -235,7 +235,10 @@ func (h *Handler) Absensi(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Pax dan hadir wajib diisi.")
 		return
 	}
-	if err := CatatHadir(r.Context(), h.db, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), req.PaxID, *req.Hadir, h.now()); err != nil {
+	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
+		return CatatHadir(r.Context(), tx, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), req.PaxID, *req.Hadir, h.now())
+	})
+	if err != nil {
 		tulisGalat(w, err)
 		return
 	}

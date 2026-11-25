@@ -155,6 +155,18 @@ func ubahLokasi(ctx context.Context, q lokasiQuerier, scheduleID int64, ids []in
 	return nil
 }
 
+// TandaiDiubahLewatLokasi bumps schedules.updated_at of every paket linked to a Jelajah Haramain place,
+// so the public updated_since filter picks them up after the place's shown fields change.
+// Called by the haramain module; schedules stays written only by this module.
+func TandaiDiubahLewatLokasi(ctx context.Context, q interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}, tempatID int64) error {
+	_, err := q.ExecContext(ctx, `
+		UPDATE schedules s JOIN schedule_lokasi sl ON sl.schedule_id = s.id
+		SET s.updated_at = NOW() WHERE sl.tempat_id = ?`, tempatID)
+	return err
+}
+
 // lokasiIDsJadwal returns the linked tempat ids of a paket in admin order (inactive included); [] when none.
 func lokasiIDsJadwal(ctx context.Context, q rowsQuerier, scheduleID int64) ([]int64, error) {
 	rows, err := q.QueryContext(ctx, `SELECT tempat_id FROM schedule_lokasi WHERE schedule_id = ? ORDER BY urutan, tempat_id`, scheduleID)
