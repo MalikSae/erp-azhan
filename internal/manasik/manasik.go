@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 var (
@@ -20,9 +22,11 @@ var (
 	// ErrSudahDimulai: paket tidak bisa dilepas setelah manasik dimulai, supaya data absensi tetap utuh.
 	ErrSudahDimulai = errors.New("manasik sudah dimulai, paket tidak bisa dilepas lagi")
 	// ErrAdaAbsensi: manasik yang sudah punya jamaah tercatat hadir tidak bisa dihapus.
-	ErrAdaAbsensi = errors.New("manasik tidak bisa dihapus karena sudah ada jamaah yang tercatat hadir")
+	ErrAdaAbsensi = errors.New("Manasik sudah punya absensi")
 	// ErrAbsensiBelumDibuka: absensi baru bisa diisi mulai hari manasik.
 	ErrAbsensiBelumDibuka = errors.New("absensi baru bisa diisi mulai hari manasik")
+	// ErrPaketSudahBermanasik: paket sudah terkait ke manasik lain (PK manasik_jadwal = schedule_id).
+	ErrPaketSudahBermanasik = errors.New("Paket sudah punya manasik")
 )
 
 // ErrValidasi membawa pesan yang aman ditampilkan ke admin.
@@ -355,9 +359,19 @@ func Buat(ctx context.Context, q querier, scope *int64, adminID int64, in Input,
 	return id, nil
 }
 
+// kaitkan mengaitkan paket ke manasik. Paket yang sudah punya manasik ditolak (ErrPaketSudahBermanasik), bukan dilewati.
 func kaitkan(ctx context.Context, q querier, manasikID int64, scheduleIDs []int64) error {
+	seen := map[int64]bool{}
 	for _, sid := range scheduleIDs {
-		if _, err := q.ExecContext(ctx, `INSERT IGNORE INTO manasik_jadwal (schedule_id, manasik_id) VALUES (?, ?)`, sid, manasikID); err != nil {
+		if seen[sid] {
+			continue
+		}
+		seen[sid] = true
+		if _, err := q.ExecContext(ctx, `INSERT INTO manasik_jadwal (schedule_id, manasik_id) VALUES (?, ?)`, sid, manasikID); err != nil {
+			var me *mysql.MySQLError
+			if errors.As(err, &me) && me.Number == 1062 {
+				return ErrPaketSudahBermanasik
+			}
 			return err
 		}
 	}
@@ -427,24 +441,28 @@ func LepasPaket(ctx context.Context, q querier, id int64, scope *int64, schedule
 	return err
 }
 
-// Hapus menghapus manasik beserta kaitan paket dan jawaban kehadirannya. Ditolak bila manasik sudah dimulai dan ada
-// jamaah paketnya yang tercatat hadir.
+// adaAbsensi: ada jamaah paket manasik yang sudah ditandai "sudah manasik". Penanda bisa diisi dari Detail Booking
+// sebelum hari manasik, jadi tidak bergantung pada jendela absensi.
+func adaAbsensi(ctx context.Context, q querier, id int64) (bool, error) {
+	var ada bool
+	err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM manasik_jadwal mj
+			JOIN bookings b ON b.schedule_id = mj.schedule_id
+			JOIN booking_pax bp ON bp.booking_id = b.id
+		WHERE mj.manasik_id = ? AND `+paxManasik+` AND bp.progress_manasik)`, id).Scan(&ada)
+	return ada, err
+}
+
+// Hapus menghapus manasik beserta kaitan paket dan jawaban kehadirannya. Ditolak bila sudah ada absensi.
 func Hapus(ctx context.Context, q querier, id int64, scope *int64, now time.Time) error {
-	m, err := ambilAdmin(ctx, q, id, scope)
+	if _, err := ambilAdmin(ctx, q, id, scope); err != nil {
+		return err
+	}
+	ada, err := adaAbsensi(ctx, q, id)
 	if err != nil {
 		return err
 	}
-	if m.AbsensiTerbuka(now) {
-		var ada bool
-		if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM manasik_jadwal mj
-				JOIN bookings b ON b.schedule_id = mj.schedule_id
-				JOIN booking_pax bp ON bp.booking_id = b.id
-			WHERE mj.manasik_id = ? AND `+paxManasik+` AND bp.progress_manasik)`, id).Scan(&ada); err != nil {
-			return err
-		}
-		if ada {
-			return ErrAdaAbsensi
-		}
+	if ada {
+		return ErrAdaAbsensi
 	}
 	_, err = q.ExecContext(ctx, `DELETE FROM manasik WHERE id = ?`, id)
 	return err
@@ -545,6 +563,7 @@ type Detail struct {
 	Jamaah         []JamaahManasik `json:"jamaah"`
 	SudahDimulai   bool            `json:"sudah_dimulai"`
 	AbsensiTerbuka bool            `json:"absensi_terbuka"`
+	AdaAbsensi     bool            `json:"ada_absensi"` // true: manasik tidak bisa dihapus
 }
 
 // AmbilDetail memuat manasik, paket, rekap, dan daftar jamaahnya.
@@ -558,6 +577,9 @@ func AmbilDetail(ctx context.Context, q querier, id int64, scope *int64, now tim
 		return nil, err
 	}
 	if d.Paket, err = PaketManasik(ctx, q, id); err != nil {
+		return nil, err
+	}
+	if d.AdaAbsensi, err = adaAbsensi(ctx, q, id); err != nil {
 		return nil, err
 	}
 	rows, err := q.QueryContext(ctx, `

@@ -113,7 +113,6 @@ const ManasikFormPage = () => {
               rows={6}
               value={form.agenda}
               onChange={ubah('agenda')}
-              helpText="Satu butir per baris."
               placeholder={'08.00 Pembukaan\n09.00 Praktik thawaf dan sa\'i'}
             />
           </div>
@@ -147,7 +146,7 @@ const ManasikFormPage = () => {
         <FormAside>
           <SidebarSection>
             <Button className="w-full" onClick={simpan} isLoading={isSaving} disabled={!isEdit && scheduleIds.length === 0}>
-              {isEdit ? 'Simpan Perubahan' : 'Simpan Manasik'}
+              Simpan
             </Button>
           </SidebarSection>
         </FormAside>

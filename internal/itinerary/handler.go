@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
@@ -171,12 +172,26 @@ func (h *Handler) validateCategory(w http.ResponseWriter, r *http.Request, categ
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
+// maksTeks: panjang kolom itineraries.title, itinerary_days.title, dan itinerary_days.location (migrasi 001).
+const maksTeks = 255
+
 // validateItineraryInput menjalankan semua validasi sesuai urutan gate yang ditentukan.
 // Mengembalikan false jika ada error — response sudah ditulis ke w.
 func validateItineraryInput(w http.ResponseWriter, rawTitle string, days []DayRequest) bool {
-	// Gate 1: title wajib
-	if strings.TrimSpace(rawTitle) == "" {
-		writeError(w, http.StatusBadRequest, "Title wajib diisi.")
+	// Gate 1: judul wajib
+	title := strings.TrimSpace(rawTitle)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Judul wajib diisi.")
+		return false
+	}
+	// Gate 2: panjang judul
+	if utf8.RuneCountInString(title) > maksTeks {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Judul maksimal %d karakter.", maksTeks))
+		return false
+	}
+	// Gate 3: itinerary master minimal 1 hari (itinerary khusus paket tidak memakai gate ini)
+	if len(days) == 0 {
+		writeError(w, http.StatusBadRequest, "Itinerary minimal 1 hari.")
 		return false
 	}
 	if err := ValidateDays(days); err != nil {
@@ -195,6 +210,10 @@ func ValidateDays(days []DayRequest) error {
 		// Judul atau rute/lokasi hari wajib (format baru memakai rute sebagai judul hari)
 		if strings.TrimSpace(d.Title) == "" && strings.TrimSpace(d.Location) == "" {
 			return fmt.Errorf("rute/lokasi hari ke-%d wajib diisi", n)
+		}
+		// Panjang kolom itinerary_days.title dan location
+		if utf8.RuneCountInString(d.Title) > maksTeks || utf8.RuneCountInString(d.Location) > maksTeks {
+			return fmt.Errorf("rute/lokasi hari ke-%d maksimal %d karakter", n, maksTeks)
 		}
 		// Activities minimal 1 elemen
 		if len(d.Activities) == 0 {

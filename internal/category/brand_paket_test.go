@@ -30,7 +30,7 @@ func TestPaketDiLuarBrand(t *testing.T) {
 			t.Fatalf("%s: dapat %d, mau %d", label, n, mau)
 		}
 	}
-	cek("semua brand", nil, 0)
+	cek("tanpa brand: semua paket tertinggal", nil, 1)
 	cek("brand paket tetap ada", []int64{brand}, 0)
 	cek("brand paket tetap ada bersama brand lain", []int64{brand, brand + 999_999}, 0)
 	cek("brand paket dilepas", []int64{brand + 999_999}, 1)

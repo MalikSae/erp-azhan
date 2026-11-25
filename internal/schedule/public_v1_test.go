@@ -198,4 +198,10 @@ func TestNormalizeKlasifikasi(t *testing.T) {
 	if _, err := normalizeKlasifikasi("umrah"); err == nil {
 		t.Error("journey_type tidak dikenal harus gagal")
 	}
+	// Form paket ERP hanya umroh.
+	for _, j := range []string{JourneyHaji, JourneyWisataHalal} {
+		if _, err := normalizeKlasifikasi(j); err == nil || err.Error() != "Jenis perjalanan tidak valid" {
+			t.Errorf("journey %s: err=%v, mau Jenis perjalanan tidak valid", j, err)
+		}
+	}
 }

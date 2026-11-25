@@ -10,28 +10,16 @@ import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import ActionMenu from 'shared/ui/ActionMenu';
+import Input from 'shared/ui/Input';
 import { listSchedulesAdmin, deleteSchedule, updateScheduleStatus } from '../api/schedules';
 import { listBrandOptions } from '../api/brands';
 import { AuthContext } from '../context/AuthContext';
-
-const STATUS_LABEL = { published: 'Published', draft: 'Draft', archived: 'Archived' };
+import { STATUS_LABEL, formatTanggalPendek, formatRupiah } from '../utils/paketFormat';
 
 // Nada Badge per status paket (satu gaya status, lihat Badge.jsx).
 const StatusBadge = ({ status }) => {
   if (!STATUS_LABEL[status]) return <span className="text-xs text-neutral-400 font-body">-</span>;
   return <Badge variant={status}>{STATUS_LABEL[status]}</Badge>;
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-};
-
-const formatCurrency = (amount) => {
-  if (amount === undefined || amount === null) return '-';
-  return 'Rp ' + amount.toLocaleString('id-ID');
 };
 
 const getMinPrice = (row) => {
@@ -312,7 +300,7 @@ const SchedulesPage = () => {
         <div>
           <div className="flex items-center gap-1.5 text-sm leading-snug font-body text-neutral-700 whitespace-nowrap">
             <CalendarDays className="w-3.5 h-3.5 text-neutral-400" strokeWidth={1.75} />
-            {formatDate(row.berangkat_tanggal)}
+            {formatTanggalPendek(row.berangkat_tanggal)}
           </div>
           {isScheduleDeparted(row) ? (
             <div className="mt-0.5 text-xs font-body text-neutral-400">Sudah berangkat</div>
@@ -335,11 +323,7 @@ const SchedulesPage = () => {
       const sisa = row.seat_sisa !== null && row.seat_sisa !== undefined ? Number(row.seat_sisa) : null;
       if (sisa === null) return <span className="text-xs text-neutral-400 font-body">-</span>;
       if (sisa <= 0) {
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-heading bg-neutral-900 text-white">
-            Penuh
-          </span>
-        );
+        return <Badge variant="neutral">Penuh</Badge>;
       }
       const filled = Math.max(0, total - sisa);
       const urgent = isScheduleUrgent(row);
@@ -358,7 +342,7 @@ const SchedulesPage = () => {
     if (key === 'harga') {
       const minPrice = getMinPrice(row);
       if (minPrice <= 0) return <span className="text-xs text-neutral-400 font-body">-</span>;
-      return <span className="text-sm font-semibold text-neutral-900 font-body whitespace-nowrap">{formatCurrency(minPrice)}</span>;
+      return <span className="text-sm font-semibold text-neutral-900 font-body whitespace-nowrap">{formatRupiah(minPrice)}</span>;
     }
 
     if (key === 'aksi') {
@@ -369,18 +353,14 @@ const SchedulesPage = () => {
           { label: 'Edit', icon: Pencil, tooltip: 'Edit Paket', onClick: () => navigate(`/schedules/${row.id}/edit`) },
           { label: 'Duplikat', icon: Copy, tooltip: 'Buat paket baru dari paket ini', onClick: () => navigate(`/schedules/new?from=${row.id}`) },
           ...statusItems(row),
-          {
+          // API hanya menghapus paket draft tanpa booking; paket lain diarsipkan.
+          ...(!hasBookings && row.status === 'draft' ? [{
             label: 'Hapus',
             icon: Trash2,
             danger: true,
             tooltip: 'Hapus Paket',
-            // API hanya menghapus paket draft yang belum pernah tayang; paket lain diarsipkan.
-            disabled: hasBookings || row.status !== 'draft',
-            disabledTooltip: hasBookings
-              ? `Tidak bisa dihapus, memiliki ${row.booking_count} booking jamaah`
-              : 'Hanya paket draft yang bisa dihapus. Arsipkan paket ini.',
             onClick: () => handleDeleteClick(row.id),
-          },
+          }] : []),
         ] : []),
       ];
       return <ActionMenu items={menuItems} align="right" />;
@@ -412,7 +392,7 @@ const SchedulesPage = () => {
           data={rows}
           itemsPerPage={15}
           onRowClick={(row) => navigate(`/schedules/${row.id}`)}
-          emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak saat ini.' : (canEdit ? 'Belum ada paket. Klik "+ Tambah Paket" untuk menambahkan.' : 'Belum ada paket untuk brand ini.')}
+          emptyMessage={activeTab === 'urgent' ? 'Tidak ada paket mendesak.' : 'Belum ada paket.'}
           searchPlaceholder="Cari nama paket, brand, atau maskapai..."
           toolbarActions={
             <div className="flex flex-wrap items-center gap-2">
@@ -476,28 +456,21 @@ const SchedulesPage = () => {
           </p>
 
           <div className="bg-neutral-100 border border-neutral-200 rounded-md p-3 text-center">
-            <span className="text-xs text-neutral-500 block mb-1">Kode Konfirmasi:</span>
+            <span className="text-xs text-neutral-500 block mb-1">Kode konfirmasi</span>
             <span className="font-mono text-xl font-semibold tracking-widest text-neutral-800 select-all">
               {confirmCode}
             </span>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-neutral-700 mb-1">
-              Ketik ulang kode di atas:
-            </label>
-            <input
-              type="text"
-              value={inputConfirmCode}
-              onChange={(e) => setInputConfirmCode(e.target.value)}
-             
-              className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-md focus:outline-none focus:ring-1 focus:ring-danger-500 focus:border-danger-500 font-mono tracking-wider text-neutral-900 bg-white"
-              autoFocus
-            />
-            <p className="text-xs text-neutral-500 mt-1">
-              Ketik persis sama termasuk huruf besar/kecil
-            </p>
-          </div>
+          <Input
+            label="Ketik ulang kode"
+            name="confirm_code"
+            className="!mb-0"
+            value={inputConfirmCode}
+            onChange={(e) => setInputConfirmCode(e.target.value)}
+            autoComplete="off"
+            autoFocus
+          />
         </div>
       </Modal>
     </div>

@@ -179,9 +179,8 @@ const ManifestPaket = ({ scheduleId }) => {
             aside={adaPax && (
               <div className="flex items-center gap-3">
                 {jejakUnduh && <span className="hidden sm:inline text-xs font-body text-neutral-500">{jejakUnduh}</span>}
-                <Button onClick={unduh} disabled={mengunduh}>
-                  <Download size={16} strokeWidth={1.75} />
-                  <span>{mengunduh ? 'Mengunduh…' : 'Unduh manifest'}</span>
+                <Button onClick={unduh} isLoading={mengunduh} icon={<Download size={16} strokeWidth={1.75} />}>
+                  Unduh manifest
                 </Button>
               </div>
             )}
@@ -212,8 +211,8 @@ const ManifestPaket = ({ scheduleId }) => {
                 maxLength={2000}
               />
               {berubah && (
-                <Button variant="secondary" className="w-full justify-center" onClick={simpan} disabled={menyimpan}>
-                  {menyimpan ? 'Menyimpan…' : 'Simpan'}
+                <Button variant="secondary" className="w-full justify-center" onClick={simpan} isLoading={menyimpan}>
+                  Simpan
                 </Button>
               )}
             </div>

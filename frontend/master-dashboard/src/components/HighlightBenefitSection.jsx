@@ -6,6 +6,7 @@ import Badge from 'shared/ui/Badge';
 import BenefitIcon from 'shared/ui/BenefitIcon';
 import Button from 'shared/ui/Button';
 import CustomDropdown from 'shared/ui/CustomDropdown';
+import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import BenefitFormModal from './BenefitFormModal';
 
 // Jumlah benefit per paket, sama dengan backend (benefit.JumlahPerPaket).
@@ -66,11 +67,24 @@ export default function HighlightBenefitSection({ brandId, value = [], onChange,
     onChange(baru);
   };
 
-  // Benefit baru masuk ke master brand, lalu langsung dipilih bila masih ada tempat.
+  const pilih = (b) => {
+    if (!penuh && !terpilih.has(b.id)) onChange([...value, { id: b.id, teks: b.teks, ikon: b.ikon, is_active: b.is_active !== false }]);
+  };
+
+  // Benefit baru masuk ke master brand, lalu langsung dipilih bila masih ada tempat. Teks yang sama dengan
+  // benefit yang sudah ada (tanpa beda huruf besar/kecil) memilih benefit itu, bukan membuat yang baru.
   const simpanBaru = async ({ teks, ikon: kunci }) => {
+    const kunciTeks = teks.trim().toLowerCase();
+    const ada = opsi.find((o) => (o.teks || '').trim().toLowerCase() === kunciTeks);
+    if (ada) {
+      pilih(ada);
+      setModalBuka(false);
+      return;
+    }
+    // Server mengembalikan benefit lama bila teksnya sudah ada.
     const b = await createBenefitOption({ brand_id: Number(brandId), teks, ikon: kunci });
-    setOpsi((lama) => [...lama, b]);
-    if (!penuh) onChange([...value, { id: b.id, teks: b.teks, ikon: b.ikon, is_active: true }]);
+    setOpsi((lama) => (lama.some((o) => o.id === b.id) ? lama : [...lama, b]));
+    pilih(b);
     setModalBuka(false);
   };
 
@@ -118,23 +132,28 @@ export default function HighlightBenefitSection({ brandId, value = [], onChange,
         </div>
       )}
 
-      {!penuh && !gagalMuat && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <CustomDropdown
-            label="Tambah dari daftar benefit"
-            className="!mb-0"
-            value=""
-            onChange={(v) => tambah(v?.target ? v.target.value : v)}
-            disabled={!siapPilih || sisaOpsi.length === 0}
-            placeholder={memuat ? 'Memuat benefit...' : sisaOpsi.length === 0 ? 'Semua benefit sudah dipilih' : '-- Pilih benefit --'}
-            options={sisaOpsi.map((b) => ({ value: b.id, label: b.teks }))}
-          />
-          <div className="flex items-end">
-            <Button variant="dashed" className="w-full" onClick={() => setModalBuka(true)} disabled={!siapPilih || ikon.length === 0}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              <span>Buat benefit baru</span>
-            </Button>
-          </div>
+      {memuat && <LoadingSpinner />}
+
+      {!penuh && siapPilih && (sisaOpsi.length > 0 || ikon.length > 0) && (
+        <div className={`grid grid-cols-1 gap-3 ${sisaOpsi.length > 0 && ikon.length > 0 ? 'md:grid-cols-2' : ''}`}>
+          {sisaOpsi.length > 0 && (
+            <CustomDropdown
+              label="Tambah dari daftar benefit"
+              className="!mb-0"
+              value=""
+              onChange={(v) => tambah(v?.target ? v.target.value : v)}
+              placeholder="Pilih benefit"
+              options={sisaOpsi.map((b) => ({ value: b.id, label: b.teks }))}
+            />
+          )}
+          {ikon.length > 0 && (
+            <div className="flex items-end">
+              <Button variant="dashed" className="w-full" onClick={() => setModalBuka(true)}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span>Buat benefit baru</span>
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

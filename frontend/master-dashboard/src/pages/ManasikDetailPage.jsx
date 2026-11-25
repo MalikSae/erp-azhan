@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Check, ExternalLink } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import Button from 'shared/ui/Button';
 import Badge from 'shared/ui/Badge';
@@ -8,6 +8,7 @@ import Alert from 'shared/ui/Alert';
 import Modal from 'shared/ui/Modal';
 import Table from 'shared/ui/Table';
 import Input from 'shared/ui/Input';
+import Checkbox from 'shared/ui/Checkbox';
 import CustomDropdown from 'shared/ui/CustomDropdown';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import EmptyState from 'shared/ui/EmptyState';
@@ -153,7 +154,7 @@ const ManasikDetailPage = () => {
     { header: 'Paket', key: 'nama' },
     { header: 'Berangkat', key: 'berangkat_tanggal' },
     { header: 'Jamaah', key: 'jumlah_jamaah', align: 'right' },
-    ...(bisaUbah && !data.sudah_dimulai ? [{ header: '', key: 'aksi', align: 'right' }] : []),
+    ...(bisaUbah && !data.sudah_dimulai && data.paket.length > 1 ? [{ header: '', key: 'aksi', align: 'right' }] : []),
   ];
   const selPaket = (p, key) => {
     if (key === 'nama') {
@@ -186,8 +187,8 @@ const ManasikDetailPage = () => {
     }
     if (key === 'paket') return <span className="text-neutral-700">{namaPaket[j.schedule_id] || '-'}</span>;
     if (key === 'jawaban') {
-      if (j.jawaban === true) return <Check size={16} className="text-neutral-900" aria-label="Konfirmasi hadir" />;
-      if (j.jawaban === false) return <span className="text-sm text-neutral-500">Tidak hadir</span>;
+      if (j.jawaban === true) return <Badge variant="success">Hadir</Badge>;
+      if (j.jawaban === false) return <Badge variant="neutral">Tidak hadir</Badge>;
       return <span className="text-neutral-400" aria-label="Belum konfirmasi">–</span>;
     }
     if (key === 'hadir') {
@@ -195,14 +196,14 @@ const ManasikDetailPage = () => {
       if (data.absensi_terbuka && bisaUbah) {
         return (
           <label className="flex cursor-pointer items-start gap-2">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-300 accent-primary-500"
-              checked={j.hadir}
-              disabled={mencatat === j.pax_id}
-              onChange={() => catatHadir(j)}
-              aria-label={`Hadir ${j.nama}`}
-            />
+            <span className="flex h-5 items-center">
+              <Checkbox
+                checked={j.hadir}
+                disabled={mencatat === j.pax_id}
+                onChange={() => catatHadir(j)}
+                ariaLabel={`Hadir ${j.nama}`}
+              />
+            </span>
             <span className="min-w-0">
               <span className="block text-sm text-neutral-900">{j.hadir ? 'Hadir' : 'Belum hadir'}</span>
               {catatan && <span className="block text-xs text-neutral-500">{catatan}</span>}
@@ -230,9 +231,18 @@ const ManasikDetailPage = () => {
         meta={[`${tanggalPanjang(m.tanggal)}, ${jam(m.jam_mulai)}–${jam(m.jam_selesai)} WIB`, m.tempat, data.brand_nama]}
       >
         {bisaUbah && (
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={() => navigate(`/manasik/${id}/ubah`)}>Ubah</Button>
-            <Button variant="danger-outline" onClick={() => { setModalError(null); setKonfirmasiHapus(true); }}>Hapus</Button>
+            {!data.ada_absensi && (
+              <Button
+                variant="danger-outline"
+                className="w-9 !px-0"
+                icon={<Trash2 size={16} />}
+                aria-label="Hapus manasik"
+                title="Hapus manasik"
+                onClick={() => { setModalError(null); setKonfirmasiHapus(true); }}
+              />
+            )}
           </div>
         )}
       </PageHeader>

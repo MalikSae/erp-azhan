@@ -99,10 +99,19 @@ func (h *Handler) ListIkon(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, DaftarIkon)
 }
 
-// CreateBenefit POST /api/admin/benefits
-// Dipakai juga oleh POST /api/admin/schedules/benefit-options (izin schedule.edit): admin paket boleh
-// menambah benefit baru dari form paket, tetapi tidak mengubah atau menonaktifkan yang sudah ada.
+// CreateBenefit POST /api/admin/benefits (master): teks kembar ditolak 409.
 func (h *Handler) CreateBenefit(w http.ResponseWriter, r *http.Request) {
+	h.buatBenefit(w, r, false)
+}
+
+// CreateOpsi POST /api/admin/schedules/benefit-options (izin schedule.edit): admin paket boleh menambah
+// benefit baru dari form paket, tetapi tidak mengubah atau menonaktifkan yang sudah ada. Teks yang sama
+// dengan benefit aktif brand itu mengembalikan benefit tersebut (200), supaya form langsung memakainya.
+func (h *Handler) CreateOpsi(w http.ResponseWriter, r *http.Request) {
+	h.buatBenefit(w, r, true)
+}
+
+func (h *Handler) buatBenefit(w http.ResponseWriter, r *http.Request, pakaiYangAda bool) {
 	var req CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Data tidak valid.")
@@ -116,6 +125,17 @@ func (h *Handler) CreateBenefit(w http.ResponseWriter, r *http.Request) {
 	brandID, ok := brandTujuan(w, r, req.BrandID)
 	if !ok {
 		return
+	}
+	if pakaiYangAda {
+		ada, err := h.repo.AktifBerteks(r.Context(), brandID, teks)
+		if err != nil {
+			handleRepoError(w, err)
+			return
+		}
+		if ada != nil {
+			writeJSON(w, http.StatusOK, ada)
+			return
+		}
 	}
 	b, err := h.repo.Create(r.Context(), brandID, teks, ikon)
 	if err != nil {

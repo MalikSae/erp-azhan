@@ -10,8 +10,10 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("category tidak ditemukan")
+	ErrNotFound      = errors.New("kategori tidak ditemukan")
 	ErrSlugDuplicate = errors.New("slug kategori sudah digunakan")
+	// ErrDipakai: kategori masih dipakai paket sehingga tidak bisa dihapus (409).
+	ErrDipakai = errors.New("Tidak bisa dihapus, masih dipakai oleh paket umroh.")
 )
 
 type Repository struct {
@@ -216,9 +218,9 @@ func (r *Repository) Create(ctx context.Context, req CreateCategoryRequest) (*Ca
 var ErrConflict = errors.New("perubahan kategori ditolak")
 
 // ErrForbidden: admin yang terikat satu brand mencoba mengubah kategori yang bukan khusus brand-nya (403).
-var ErrForbidden = errors.New("kategori ini dipakai brand lain atau berlaku untuk semua brand; hanya admin holding yang dapat mengubahnya")
+var ErrForbidden = errors.New("Kategori ini dipakai brand lain.")
 
-// BrandIDs mengembalikan brand yang ditautkan ke kategori. Kosong berarti kategori berlaku untuk semua brand.
+// BrandIDs mengembalikan brand yang ditautkan ke kategori. Kategori wajib punya brand; kosong hanya untuk data lama.
 func (r *Repository) BrandIDs(ctx context.Context, id int64) ([]int64, error) {
 	var ada bool
 	if err := r.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM package_categories WHERE id = ?)", id).Scan(&ada); err != nil {
@@ -232,7 +234,7 @@ func (r *Repository) BrandIDs(ctx context.Context, id int64) ([]int64, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []int64
+	out := []int64{}
 	for rows.Next() {
 		var b int64
 		if err := rows.Scan(&b); err != nil {
@@ -244,12 +246,12 @@ func (r *Repository) BrandIDs(ctx context.Context, id int64) ([]int64, error) {
 }
 
 // paketDiLuarBrandTx menghitung paket yang memakai kategori ini tetapi brand-nya tidak ada di daftar brand
-// baru. Daftar kosong berarti kategori berlaku untuk semua brand, jadi tidak ada paket yang tertinggal.
+// baru. Kategori wajib punya brand: daftar kosong berarti semua paket kategori ini tertinggal.
 func paketDiLuarBrandTx(ctx context.Context, tx *sql.Tx, id int64, brandIDs []int64) (int, error) {
-	if len(brandIDs) == 0 {
-		return 0, nil
+	q := "SELECT COUNT(*) FROM schedules WHERE category_id = ?"
+	if len(brandIDs) > 0 {
+		q += " AND brand_id NOT IN (?" + strings.Repeat(",?", len(brandIDs)-1) + ")"
 	}
-	q := "SELECT COUNT(*) FROM schedules WHERE category_id = ? AND brand_id NOT IN (?" + strings.Repeat(",?", len(brandIDs)-1) + ")"
 	args := make([]any, 0, len(brandIDs)+1)
 	args = append(args, id)
 	for _, b := range brandIDs {
@@ -341,7 +343,7 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 	if count > 0 {
-		return fmt.Errorf("tidak bisa dihapus, masih dipakai oleh %d paket umroh", count)
+		return ErrDipakai
 	}
 
 	res, err := r.db.ExecContext(ctx, "DELETE FROM package_categories WHERE id = ?", id)

@@ -153,15 +153,24 @@ func TestLokasiPaket(t *testing.T) {
 		t.Fatalf("hapus lokasi salah: %v", got)
 	}
 
-	// Validation against the master: unknown id rejected, inactive allowed (stays linked).
-	if pesanLokasi(validasiLokasi(ctx, tx, []int64{a, 999999999})) == "" {
+	// Validation against the master: unknown id rejected; inactive only when already linked to the same paket.
+	if pesanLokasi(validasiLokasi(ctx, tx, sched, []int64{a, 999999999})) == "" {
 		t.Error("id tidak ada harus ditolak")
 	}
-	if pesanLokasi(validasiLokasi(ctx, tx, []int64{a, a})) == "" {
+	if pesanLokasi(validasiLokasi(ctx, tx, sched, []int64{a, a})) == "" {
 		t.Error("dobel harus ditolak")
 	}
-	if err := validasiLokasi(ctx, tx, []int64{a, mati, b}); err != nil {
-		t.Errorf("lokasi sah ditolak: %v", err)
+	if got := pesanLokasi(validasiLokasi(ctx, tx, 0, []int64{a, mati, b})); got != "Lokasi tidak aktif" {
+		t.Errorf("tempat nonaktif di paket baru: pesan %q, mau Lokasi tidak aktif", got)
+	}
+	if got := pesanLokasi(validasiLokasi(ctx, tx, sched, []int64{a, mati, b})); got != "Lokasi tidak aktif" {
+		t.Errorf("tempat nonaktif yang belum ditautkan: pesan %q, mau Lokasi tidak aktif", got)
+	}
+	if err := gantiLokasi(ctx, tx, sched, []int64{mati}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validasiLokasi(ctx, tx, sched, []int64{a, mati, b}); err != nil {
+		t.Errorf("tempat nonaktif yang sudah ditautkan ditolak: %v", err)
 	}
 
 	// Options: active only, master order.

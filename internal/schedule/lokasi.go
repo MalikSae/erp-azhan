@@ -70,8 +70,9 @@ func cekDaftarLokasi(ids []int64) error {
 	return nil
 }
 
-// validasiLokasi checks the list and that every id exists in haramain_tempat (inactive allowed: stays linked).
-func validasiLokasi(ctx context.Context, q rowsQuerier, ids []int64) error {
+// validasiLokasi checks the list and that every id exists in haramain_tempat. An inactive tempat is accepted
+// only when it is already linked to that paket (scheduleID; 0 for a new paket).
+func validasiLokasi(ctx context.Context, q rowsQuerier, scheduleID int64, ids []int64) error {
 	if err := cekDaftarLokasi(ids); err != nil {
 		return err
 	}
@@ -79,20 +80,33 @@ func validasiLokasi(ctx context.Context, q rowsQuerier, ids []int64) error {
 		return nil
 	}
 	ph, args := placeholderID(ids)
-	rows, err := q.QueryContext(ctx, `SELECT id FROM haramain_tempat WHERE id IN (`+ph+`)`, args...)
+	args = append([]any{scheduleID}, args...)
+	rows, err := q.QueryContext(ctx, `
+		SELECT t.aktif OR EXISTS (SELECT 1 FROM schedule_lokasi sl WHERE sl.schedule_id = ? AND sl.tempat_id = t.id)
+		FROM haramain_tempat t WHERE t.id IN (`+ph+`)`, args...)
 	if err != nil {
 		return fmt.Errorf("schedule.validasiLokasi: %w", err)
 	}
 	defer rows.Close()
-	n := 0
+	n, nonaktif := 0, false
 	for rows.Next() {
+		var boleh bool
+		if err := rows.Scan(&boleh); err != nil {
+			return fmt.Errorf("schedule.validasiLokasi scan: %w", err)
+		}
 		n++
+		if !boleh {
+			nonaktif = true
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("schedule.validasiLokasi: %w", err)
 	}
 	if n != len(ids) {
 		return LokasiError("Lokasi tidak ditemukan")
+	}
+	if nonaktif {
+		return LokasiError("Lokasi tidak aktif")
 	}
 	return nil
 }
@@ -239,8 +253,8 @@ func opsiLokasi(ctx context.Context, q rowsQuerier) ([]LokasiPaket, error) {
 }
 
 // ValidasiLokasi checks a paket's lokasi_ids against the master.
-func (r *Repository) ValidasiLokasi(ctx context.Context, ids []int64) error {
-	return validasiLokasi(ctx, r.db, ids)
+func (r *Repository) ValidasiLokasi(ctx context.Context, scheduleID int64, ids []int64) error {
+	return validasiLokasi(ctx, r.db, scheduleID, ids)
 }
 
 // LokasiPublik loads active locations of several pakets in one query.
@@ -249,8 +263,8 @@ func (r *Repository) LokasiPublik(ctx context.Context, scheduleIDs []int64) (map
 }
 
 // lokasiSah validates lokasi_ids; user errors are written as 400.
-func (h *Handler) lokasiSah(ctx context.Context, w http.ResponseWriter, ids []int64) bool {
-	err := h.repo.ValidasiLokasi(ctx, ids)
+func (h *Handler) lokasiSah(ctx context.Context, w http.ResponseWriter, scheduleID int64, ids []int64) bool {
+	err := h.repo.ValidasiLokasi(ctx, scheduleID, ids)
 	if err == nil {
 		return true
 	}

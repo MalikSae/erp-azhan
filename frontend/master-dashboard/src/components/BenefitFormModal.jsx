@@ -66,8 +66,8 @@ export default function BenefitFormModal({ isOpen, onClose, awal, ikon = [], onS
           onChange={(e) => setTeks([...e.target.value.trimStart()].slice(0, MAKS_TEKS_BENEFIT).join(''))}
           // Enter menyimpan benefit, bukan form lain yang mungkin membungkus jendela ini.
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); simpan(); } }}
-          placeholder="Mis. Hotel dekat Haram"
-          helpText={`Tampil di app dan web. Sisa ${Math.max(sisa, 0)} dari ${MAKS_TEKS_BENEFIT} karakter.`}
+          placeholder="Hotel dekat Haram"
+          helpText={`Sisa ${Math.max(sisa, 0)} karakter`}
         />
         <BenefitIconPicker required value={kunci} onChange={setKunci} options={ikon} />
       </div>

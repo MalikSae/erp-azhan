@@ -385,16 +385,18 @@ func main() {
 		// (SPEK-AKSES-PENGGUNA-2026-11-25). Alias penjaga yang sering dipakai:
 		masterView := r.With(identity.RequirePermission("masterdata.view"))
 		masterEdit := r.With(identity.RequirePermission("masterdata.edit"))
+		// Daftar master yang dibaca form paket: admin paket (schedule.edit) tanpa izin master ikut boleh membaca.
+		masterRead := r.With(identity.RequireAnyPermission("masterdata.view", "schedule.edit"))
 
 		// Hotels
-		masterView.Get("/hotels", hotelHandler.ListHotels)
-		masterView.Get("/hotels/cities", hotelHandler.ListCities)
+		masterRead.Get("/hotels", hotelHandler.ListHotels)
+		masterRead.Get("/hotels/cities", hotelHandler.ListCities)
 		masterEdit.Post("/hotels", hotelHandler.CreateHotel)
 		masterEdit.Put("/hotels/{id}", hotelHandler.UpdateHotel)
 		masterEdit.Delete("/hotels/{id}", hotelHandler.DeleteHotel)
 
 		// Airlines
-		masterView.Get("/airlines", airlineHandler.ListAirlines)
+		masterRead.Get("/airlines", airlineHandler.ListAirlines)
 		masterEdit.Post("/airlines", airlineHandler.CreateAirline)
 		masterEdit.Put("/airlines/{id}", airlineHandler.UpdateAirline)
 		masterEdit.Delete("/airlines/{id}", airlineHandler.DeleteAirline)
@@ -406,14 +408,14 @@ func main() {
 		masterEdit.Delete("/benefits/{id}", benefitHandler.DeleteBenefit)
 
 		// Airports
-		masterView.Get("/airports", airportHandler.ListAirports)
+		masterRead.Get("/airports", airportHandler.ListAirports)
 		masterEdit.Post("/airports", airportHandler.CreateAirport)
 		masterEdit.Put("/airports/{id}", airportHandler.UpdateAirport)
 		masterEdit.Delete("/airports/{id}", airportHandler.DeleteAirport)
 
 		// Categories
-		masterView.Get("/categories", categoryHandler.ListCategories)
-		masterView.Get("/categories/{id}", categoryHandler.GetCategory)
+		masterRead.Get("/categories", categoryHandler.ListCategories)
+		masterRead.Get("/categories/{id}", categoryHandler.GetCategory)
 		masterEdit.Post("/categories", categoryHandler.CreateCategory)
 		masterEdit.Put("/categories/{id}", categoryHandler.UpdateCategory)
 		masterEdit.Delete("/categories/{id}", categoryHandler.DeleteCategory)
@@ -456,8 +458,8 @@ func main() {
 		r.Post("/media/upload", mediaHandler.UploadMedia)
 
 		// Itineraries
-		masterView.Get("/itineraries", itineraryHandler.ListItineraries)
-		masterView.Get("/itineraries/{id}", itineraryHandler.GetItinerary)
+		masterRead.Get("/itineraries", itineraryHandler.ListItineraries)
+		masterRead.Get("/itineraries/{id}", itineraryHandler.GetItinerary)
 		masterEdit.Post("/itineraries", itineraryHandler.CreateItinerary)
 		masterEdit.Put("/itineraries/{id}", itineraryHandler.UpdateItinerary)
 		masterEdit.Delete("/itineraries/{id}", itineraryHandler.DeleteItinerary)
@@ -470,7 +472,7 @@ func main() {
 		// master, tetapi tidak mengubah atau menonaktifkan yang sudah ada. Didaftarkan sebelum /schedules/{id};
 		// chi mendahulukan segmen statis, jadi "benefit-options" tidak terbaca sebagai id.
 		scheduleView.Get("/schedules/benefit-options", benefitHandler.ListOpsi)
-		scheduleEdit.Post("/schedules/benefit-options", benefitHandler.CreateBenefit)
+		scheduleEdit.Post("/schedules/benefit-options", benefitHandler.CreateOpsi)
 		// Lokasi Dikunjungi: active Jelajah Haramain places; static segment, registered before /schedules/{id}.
 		scheduleView.Get("/schedules/lokasi-options", scheduleHandler.ListLokasiOptions)
 		scheduleView.Get("/schedules/{id}", scheduleHandler.GetScheduleAdmin)

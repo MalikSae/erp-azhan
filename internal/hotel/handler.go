@@ -3,10 +3,12 @@ package hotel
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
@@ -70,16 +72,11 @@ func (h *Handler) CreateHotel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.PhotoURL != nil && strings.TrimSpace(*req.PhotoURL) == "" {
-		req.PhotoURL = nil
-	}
-	if req.VideoURL != nil && strings.TrimSpace(*req.VideoURL) == "" {
-		req.VideoURL = nil
-	}
-	if (req.PhotoURL != nil && !shared.ValidMediaURL(*req.PhotoURL)) || (req.VideoURL != nil && !shared.ValidMediaURL(*req.VideoURL)) {
-		writeError(w, http.StatusBadRequest, "Foto atau video harus berkas unggahan atau URL http(s).")
+	photo, video, ok := validateMedia(w, req.PhotoURL, req.VideoURL)
+	if !ok {
 		return
 	}
+	req.PhotoURL, req.VideoURL = photo, video
 
 	hotel, err := h.repo.Create(r.Context(), name, city, starRating, distanceM, req.PhotoURL, req.VideoURL)
 	if err != nil {
@@ -111,16 +108,11 @@ func (h *Handler) UpdateHotel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.PhotoURL != nil && strings.TrimSpace(*req.PhotoURL) == "" {
-		req.PhotoURL = nil
-	}
-	if req.VideoURL != nil && strings.TrimSpace(*req.VideoURL) == "" {
-		req.VideoURL = nil
-	}
-	if (req.PhotoURL != nil && !shared.ValidMediaURL(*req.PhotoURL)) || (req.VideoURL != nil && !shared.ValidMediaURL(*req.VideoURL)) {
-		writeError(w, http.StatusBadRequest, "Foto atau video harus berkas unggahan atau URL http(s).")
+	photo, video, ok := validateMedia(w, req.PhotoURL, req.VideoURL)
+	if !ok {
 		return
 	}
+	req.PhotoURL, req.VideoURL = photo, video
 
 	hotel, err := h.repo.Update(r.Context(), id, name, city, starRating, distanceM, req.PhotoURL, req.VideoURL)
 	if err != nil {
@@ -150,25 +142,59 @@ func (h *Handler) DeleteHotel(w http.ResponseWriter, r *http.Request) {
 
 // --- Validation -------------------------------------------------------------
 
+// Panjang kolom hotels (migrasi 001, 005, 058).
+const (
+	maksNama     = 255
+	maksKota     = 100
+	maksMediaURL = 500
+)
+
+// validateMedia: foto dan video opsional; kosong menjadi nil. Jika ok=false, response sudah ditulis.
+func validateMedia(w http.ResponseWriter, photo, video *string) (*string, *string, bool) {
+	if photo != nil && strings.TrimSpace(*photo) == "" {
+		photo = nil
+	}
+	if video != nil && strings.TrimSpace(*video) == "" {
+		video = nil
+	}
+	if (photo != nil && utf8.RuneCountInString(*photo) > maksMediaURL) || (video != nil && utf8.RuneCountInString(*video) > maksMediaURL) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("URL foto atau video maksimal %d karakter.", maksMediaURL))
+		return nil, nil, false
+	}
+	if (photo != nil && !shared.ValidMediaURL(*photo)) || (video != nil && !shared.ValidMediaURL(*video)) {
+		writeError(w, http.StatusBadRequest, "Foto atau video harus berkas unggahan atau URL http(s).")
+		return nil, nil, false
+	}
+	return photo, video, true
+}
+
 // validateHotelInput menjalankan semua validasi hotel sesuai urutan yang ditentukan.
 // Mengembalikan (normalizedName, normalizedCity, starRating, distanceM, ok).
 // Jika ok=false, response error sudah ditulis ke w.
 func validateHotelInput(w http.ResponseWriter, rawName, rawCity string, starRating *int, distanceM *int) (string, string, *int, *int, bool) {
-	// Gate 1: name wajib
+	// Gate 1: nama wajib
 	if strings.TrimSpace(rawName) == "" {
-		writeError(w, http.StatusBadRequest, "Name wajib diisi.")
+		writeError(w, http.StatusBadRequest, "Nama wajib diisi.")
 		return "", "", nil, nil, false
 	}
 
-	// Gate 2: normalisasi name
+	// Gate 2: normalisasi dan panjang nama
 	name := strings.ToUpper(strings.TrimSpace(rawName))
+	if utf8.RuneCountInString(name) > maksNama {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Nama maksimal %d karakter.", maksNama))
+		return "", "", nil, nil, false
+	}
 
-	// Gate 3: city wajib
+	// Gate 3: kota wajib
 	if strings.TrimSpace(rawCity) == "" {
-		writeError(w, http.StatusBadRequest, "City wajib diisi.")
+		writeError(w, http.StatusBadRequest, "Kota wajib diisi.")
 		return "", "", nil, nil, false
 	}
 	city := strings.TrimSpace(rawCity)
+	if utf8.RuneCountInString(city) > maksKota {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Kota maksimal %d karakter.", maksKota))
+		return "", "", nil, nil, false
+	}
 
 	// Gate 4: star_rating range
 	if starRating != nil && (*starRating < 1 || *starRating > 5) {

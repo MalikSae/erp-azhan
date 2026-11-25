@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import EmptyState from 'shared/ui/EmptyState';
+import Alert from 'shared/ui/Alert';
 import { getScheduleManasik } from '../api/schedules';
 import { tanggalPendek } from './PilihPaketManasik';
 
@@ -9,15 +10,17 @@ const jam = (hhmm) => (hhmm || '').replace(':', '.');
 // Ringkasan manasik paket di halaman detail paket. Manasik dikelola di menu Manasik; di sini hanya tautan ke detailnya.
 const ManasikPaketRingkas = ({ scheduleId, bolehLihat }) => {
   const [manasik, setManasik] = useState(undefined);
+  const [gagal, setGagal] = useState(null);
 
   useEffect(() => {
     let batal = false;
     getScheduleManasik(scheduleId)
-      .then((d) => { if (!batal) setManasik(d.manasik); })
-      .catch(() => { if (!batal) setManasik(null); });
+      .then((d) => { if (!batal) { setManasik(d.manasik); setGagal(null); } })
+      .catch((err) => { if (!batal) setGagal(err.response?.data?.error || 'Gagal memuat manasik.'); });
     return () => { batal = true; };
   }, [scheduleId]);
 
+  if (gagal) return <Alert variant="error">{gagal}</Alert>;
   if (manasik === undefined) return null;
   if (!manasik) {
     return (

@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { AlertCircle } from 'lucide-react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import PageHeader from 'shared/ui/PageHeader';
-import FormField from 'shared/ui/FormField';
 import Input from 'shared/ui/Input';
 import Textarea from 'shared/ui/Textarea';
 import CustomDropdown from 'shared/ui/CustomDropdown';
@@ -12,8 +10,9 @@ import Toggle from 'shared/ui/Toggle';
 import FormLayout, { FormSection, SidebarSection, FormAside } from 'shared/ui/FormLayout';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
+import FileInput from 'shared/ui/FileInput';
 
-import { getSchedule, createSchedule, updateSchedule } from '../api/schedules';
+import { getSchedule, createSchedule, updateSchedule, updateScheduleStatus } from '../api/schedules';
 import {
   listPerlengkapanItems,
   getCategoryPerlengkapan,
@@ -32,6 +31,9 @@ import { listItineraries, getItinerary } from '../api/itineraries';
 import ItineraryDaysEditor, { emptyDay, normalizeDays, daysToPayload, validateDays } from '../components/ItineraryDaysEditor';
 import { listBrandOptions } from '../api/brands';
 import { uploadMediaWithOptions } from '../api/media';
+import FlightLegFields from '../components/paket/FlightLegFields';
+import { parseTransit, buildTransit } from '../utils/paketTransit';
+import { STATUS_OPTIONS, assetUrl } from '../utils/paketFormat';
 
 // Nama field yang dipakai backend di awal pesan error ("harga_quad wajib ...").
 const SERVER_ERROR_FIELDS = new Set([
@@ -49,6 +51,14 @@ const serverErrorField = (msg) => {
   if (/highlight benefit|^benefit(_ids)? /.test(msg || '')) return 'benefit_ids';
   if (/(^|\s)lokasi\b/i.test(msg || '')) return 'lokasi_ids';
   return null;
+};
+
+// Tautan di ringkasan galat: fokus ke field bermasalah (id field, atau name bila id tidak ada).
+const fokusField = (field) => {
+  const el = document.getElementById(field) || document.querySelector(`[name="${field}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: 'center' });
+  el.focus({ preventScroll: true });
 };
 
 const SECTION_LINKS = [
@@ -146,7 +156,6 @@ const ScheduleFormPage = () => {
     pulang_kode_penerbangan: '',
     pulang_bandara_asal: '',
     pulang_bandara_tujuan: '',
-    transit_bandara: '',
     transit_items_berangkat: [{ bandara: '', durasi: '' }],
     transit_items_pulang: [{ bandara: '', durasi: '' }],
     hotel_mekkah_id: '',
@@ -228,51 +237,6 @@ const ScheduleFormPage = () => {
           }
           const safeArray = (arr) => (Array.isArray(arr) && arr.length > 0) ? arr : [''];
 
-          const parseTransitData = (raw) => {
-            if (!raw || !raw.trim()) {
-              return {
-                berangkat: [{ bandara: '', durasi: '' }],
-                pulang: [{ bandara: '', durasi: '' }]
-              };
-            }
-
-            let rawBerangkat = '';
-            let rawPulang = '';
-
-            if (raw.includes('Berangkat:') || raw.includes('Pulang:')) {
-              const parts = raw.split('|');
-              parts.forEach(part => {
-                const trimmed = part.trim();
-                if (trimmed.startsWith('Berangkat:')) {
-                  rawBerangkat = trimmed.replace('Berangkat:', '').trim();
-                } else if (trimmed.startsWith('Pulang:')) {
-                  rawPulang = trimmed.replace('Pulang:', '').trim();
-                }
-              });
-            } else {
-              rawBerangkat = raw;
-            }
-
-            const parseList = (str) => {
-              if (!str || !str.trim()) return [{ bandara: '', durasi: '' }];
-              const segments = str.split(';');
-              const items = segments.map(seg => {
-                const trimmed = seg.trim();
-                if (trimmed.includes(',')) {
-                  const p = trimmed.split(',');
-                  return { bandara: p[0].trim(), durasi: (p.slice(1).join(',').match(/\d+/) || [''])[0] };
-                }
-                return { bandara: trimmed, durasi: '' };
-              }).filter(i => i.bandara || i.durasi);
-              return items.length > 0 ? items : [{ bandara: '', durasi: '' }];
-            };
-
-            return {
-              berangkat: parseList(rawBerangkat),
-              pulang: parseList(rawPulang)
-            };
-          };
-
           const parseInitialFlightCode = (rawCode, airlineCode) => {
             if (!rawCode) {
               return { isCustom: false, flightNo: '', fullValue: '' };
@@ -309,7 +273,7 @@ const ScheduleFormPage = () => {
           setPulangFlightNo(parsedPulang.flightNo);
           setPulangIsCustom(parsedPulang.isCustom);
 
-          const parsedTransit = parseTransitData(scheduleData.transit_bandara);
+          const parsedTransit = parseTransit(scheduleData.transit_bandara);
           const initialTransitHotelIDs = (scheduleData.transit_hotels || []).map(th => th.hotel_id);
 
           const loadedForm = {
@@ -338,7 +302,6 @@ const ScheduleFormPage = () => {
             pulang_kode_penerbangan: parsedPulang.fullValue || scheduleData.pulang_kode_penerbangan || '',
             pulang_bandara_asal: scheduleData.pulang_bandara_asal || '',
             pulang_bandara_tujuan: scheduleData.pulang_bandara_tujuan || '',
-            transit_bandara: scheduleData.transit_bandara || '',
             transit_items_berangkat: parsedTransit.berangkat,
             transit_items_pulang: parsedTransit.pulang,
             hotel_mekkah_id: scheduleData.hotel_mekkah?.id || scheduleData.hotel_mekkah_id || '',
@@ -522,66 +485,8 @@ const ScheduleFormPage = () => {
 
 
 
-  // Handler Transit Keberangkatan
-  const handleAddTransitBerangkat = () => {
-    setFormData(prev => ({
-      ...prev,
-      transit_items_berangkat: [...(prev.transit_items_berangkat || []), { bandara: '', durasi: '' }]
-    }));
-  };
-
-  const handleRemoveTransitBerangkat = (index) => {
-    setFormData(prev => {
-      const current = prev.transit_items_berangkat || [];
-      if (current.length <= 1) return prev;
-      return {
-        ...prev,
-        transit_items_berangkat: current.filter((_, i) => i !== index)
-      };
-    });
-  };
-
-  const handleTransitBerangkatChange = (index, field, value) => {
-    setFormData(prev => {
-      const current = [...(prev.transit_items_berangkat || [])];
-      if (!current[index]) current[index] = { bandara: '', durasi: '' };
-      current[index] = { ...current[index], [field]: value };
-      return {
-        ...prev,
-        transit_items_berangkat: current
-      };
-    });
-  };
-
-  // Handler Transit Kepulangan
-  const handleAddTransitPulang = () => {
-    setFormData(prev => ({
-      ...prev,
-      transit_items_pulang: [...(prev.transit_items_pulang || []), { bandara: '', durasi: '' }]
-    }));
-  };
-
-  const handleRemoveTransitPulang = (index) => {
-    setFormData(prev => {
-      const current = prev.transit_items_pulang || [];
-      if (current.length <= 1) return prev;
-      return {
-        ...prev,
-        transit_items_pulang: current.filter((_, i) => i !== index)
-      };
-    });
-  };
-
-  const handleTransitPulangChange = (index, field, value) => {
-    setFormData(prev => {
-      const current = [...(prev.transit_items_pulang || [])];
-      if (!current[index]) current[index] = { bandara: '', durasi: '' };
-      current[index] = { ...current[index], [field]: value };
-      return {
-        ...prev,
-        transit_items_pulang: current
-      };
-    });
+  const handleTransitChange = (leg, items) => {
+    setFormData(prev => ({ ...prev, [`transit_items_${leg}`]: items }));
   };
 
   const handleBrosurUpload = async (e) => {
@@ -684,21 +589,11 @@ const ScheduleFormPage = () => {
     });
   };
 
-  const handleBerangkatFlightNoChange = (e) => {
-    const num = e.target.value.replace(/\D/g, '').slice(0, 5);
-    setBerangkatFlightNo(num);
+  const handleFlightNoChange = (leg, num) => {
+    (leg === 'berangkat' ? setBerangkatFlightNo : setPulangFlightNo)(num);
     setFormData(prev => ({
       ...prev,
-      berangkat_kode_penerbangan: currentAirlineCode ? (currentAirlineCode + num) : num
-    }));
-  };
-
-  const handlePulangFlightNoChange = (e) => {
-    const num = e.target.value.replace(/\D/g, '').slice(0, 5);
-    setPulangFlightNo(num);
-    setFormData(prev => ({
-      ...prev,
-      pulang_kode_penerbangan: currentAirlineCode ? (currentAirlineCode + num) : num
+      [`${leg}_kode_penerbangan`]: currentAirlineCode ? (currentAirlineCode + num) : num
     }));
   };
 
@@ -795,25 +690,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         setFieldErrors(errors); setFormError('Periksa isian berikut.'); return;
       }
 
-      const validBerangkat = (formData.transit_items_berangkat || [])
-        .map(t => ({ bandara: t.bandara?.trim() || '', durasi: t.durasi?.trim() || '' }))
-        .filter(t => t.bandara || t.durasi);
-
-      const validPulang = (formData.transit_items_pulang || [])
-        .map(t => ({ bandara: t.bandara?.trim() || '', durasi: t.durasi?.trim() || '' }))
-        .filter(t => t.bandara || t.durasi);
-
-      let transitParts = [];
-      if (validBerangkat.length > 0) {
-        const strB = validBerangkat.map(t => t.durasi ? `${t.bandara}, ${t.durasi} Jam` : t.bandara).join('; ');
-        transitParts.push(`Berangkat: ${strB}`);
-      }
-      if (validPulang.length > 0) {
-        const strP = validPulang.map(t => t.durasi ? `${t.bandara}, ${t.durasi} Jam` : t.bandara).join('; ');
-        transitParts.push(`Pulang: ${strP}`);
-      }
-
-      const finalTransit = transitParts.join(' | ');
+      const finalTransit = buildTransit({ berangkat: formData.transit_items_berangkat, pulang: formData.transit_items_pulang });
 
       const finalBerangkatKode = (!berangkatIsCustom && currentAirlineCode)
         ? (berangkatFlightNo ? currentAirlineCode + berangkatFlightNo : '')
@@ -829,7 +706,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         jadwal_nama: (formData.jadwal_nama || '').trim(),
         brand_id: parseInt(formData.brand_id, 10),
         category_id: formData.category_id ? parseInt(formData.category_id, 10) : null,
-        ...(isEditMode && formData.status === formData.status_awal ? {} : { status: formData.status || 'draft' }),
+        // Edit: status lewat PUT /status setelah paket tersimpan (PUT paket mengabaikan status).
+        ...(isEditMode ? {} : { status: formData.status || 'draft' }),
         ...(butuhAlasanTanggal ? { alasan_ubah_tanggal: (formData.alasan_ubah_tanggal || '').trim() } : {}),
         journey_type: formData.journey_type || 'umroh',
         is_direct_flight: !!formData.is_direct_flight,
@@ -870,8 +748,29 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
       };
 
       let savedId = id;
+      // Data yang sudah tersimpan di server: simpan ulang dari form ini tidak boleh tertolak karena nilai awal lama.
+      const sinkronTersimpan = (extra = {}) => setFormData(prev => ({
+        ...prev,
+        expected_seat_total: seatTotalNum,
+        berangkat_tanggal_awal: prev.berangkat_tanggal,
+        alasan_ubah_tanggal: '',
+        ...extra,
+      }));
       if (isEditMode) {
         await updateSchedule(id, payload);
+        if (formData.status !== formData.status_awal) {
+          try {
+            await updateScheduleStatus(id, formData.status);
+          } catch (err) {
+            const sebab = err.response?.data?.error;
+            sinkronTersimpan();
+            setFormError(`Paket tersimpan, tetapi status gagal diubah${sebab ? `: ${sebab}` : '.'}`);
+            const field = serverErrorField(sebab);
+            if (field) setFieldErrors({ [field]: sebab });
+            return;
+          }
+          sinkronTersimpan({ status_awal: formData.status });
+        }
       } else {
         const created = await createSchedule(payload);
         savedId = created?.id;
@@ -894,7 +793,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
           submittedRef.current = true;
           if (isEditMode) {
             setPeringatanSimpan(pesan);
-            setFormData(prev => ({ ...prev, status_awal: prev.status, berangkat_tanggal_awal: prev.berangkat_tanggal, alasan_ubah_tanggal: '' }));
+            sinkronTersimpan({ status_awal: formData.status });
             window.scrollTo({ top: 0, behavior: 'smooth' });
           } else {
             navigate(`/schedules/${savedId}/edit`, { replace: true, state: { peringatanSimpan: pesan } });
@@ -908,7 +807,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         state: { successMessage: `Paket "${namaPaket}" ${isEditMode ? 'diperbarui' : 'ditambahkan'}.` },
       });
     } catch (err) {
-      const message = err.response?.data?.error || `Gagal ${isEditMode ? 'mengupdate' : 'menyimpan'} paket.`;
+      const message = err.response?.data?.error || 'Paket gagal disimpan. Coba lagi.';
       setFormError(message);
       const field = serverErrorField(message);
       if (field) setFieldErrors({ [field]: message });
@@ -971,29 +870,22 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
         onBack={() => navigate('/schedules')}
       />
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} className="space-y-6">
         {peringatanSimpan && (
-          <Alert variant="warning" onClose={() => setPeringatanSimpan(null)} className="mb-4">{peringatanSimpan}</Alert>
+          <Alert variant="warning" onClose={() => setPeringatanSimpan(null)}>{peringatanSimpan}</Alert>
         )}
         {formError && (
-          <div
-            ref={errorRef}
-            tabIndex={-1}
-            role="alert"
-            aria-labelledby="package-errors"
-            className="mb-5 flex gap-3 rounded-xl border border-danger-200 bg-danger-50 p-4 font-body focus:outline-none"
-          >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger-600" strokeWidth={2} aria-hidden="true" />
-            <div className="min-w-0">
-              <h2 id="package-errors" className="font-heading text-sm font-semibold leading-5 text-danger-800">{formError}</h2>
+          <div ref={errorRef} tabIndex={-1} className="focus:outline-none">
+            <Alert variant="error">
+              <p className="font-medium">{formError}</p>
               {Object.keys(fieldErrors).length > 0 && (
-                <ul className="mt-1.5 space-y-1">
+                <ul className="mt-1 space-y-1">
                   {Object.entries(fieldErrors).map(([field, message]) => (
-                    <li key={field} className="text-sm leading-5 text-danger-700">
+                    <li key={field}>
                       <a
-                        className="underline decoration-danger-300 underline-offset-2 hover:text-danger-900 hover:decoration-danger-600"
+                        className="underline underline-offset-2"
                         href={`#${field}`}
-                        onClick={e => { e.preventDefault(); document.getElementById(field)?.focus(); }}
+                        onClick={e => { e.preventDefault(); fokusField(field); }}
                       >
                         {message}
                       </a>
@@ -1001,7 +893,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   ))}
                 </ul>
               )}
-            </div>
+            </Alert>
           </div>
         )}
         <FormLayout tabs={SECTION_LINKS}>
@@ -1042,7 +934,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {/* Brand */}
-                  <div>
+                  <div id="brand_id" tabIndex={-1} className="focus:outline-none">
                     <CustomDropdown
                       label="Brand"
                       className="!mb-0"
@@ -1154,7 +1046,6 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     onChange={handleCurrencyChange}
                     placeholder={bawaanBrand ? `Ikut brand: ${formatCurrency(bawaanBrand.minimal_dp) || '0'}` : 'Ikut brand'}
                     inputMode="numeric"
-                    helpText="Isi 0 untuk tanpa DP."
                   />
                 </div>
 
@@ -1184,7 +1075,6 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       inputMode="numeric"
                     />
                   </div>
-                  <p className="text-xs text-neutral-500 font-body">Isi 0 untuk tanpa komisi.</p>
                 </div>
                   </>
                 )}
@@ -1198,6 +1088,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                     label="Maskapai"
                     className="!mb-0"
                     name="maskapai_id"
+                    id="maskapai_id"
                     error={fieldErrors.maskapai_id}
                     value={formData.maskapai_id}
                     onChange={(e) => handleMaskapaiChange(e.target.value)}
@@ -1221,12 +1112,19 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 {/* Divider */}
                 <div className="border-t border-neutral-200" />
 
-                {/* Bagian 2: Penerbangan Berangkat */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-neutral-600 text-sm font-semibold font-heading">
-                    <span>Berangkat</span>
-                  </div>
-
+                <FlightLegFields
+                  leg="berangkat"
+                  data={formData}
+                  errors={fieldErrors}
+                  onFieldChange={handleChange}
+                  onTimeChange={handleTimeChange}
+                  kodeMaskapai={currentAirlineCode}
+                  kodeKhusus={berangkatIsCustom}
+                  nomor={berangkatFlightNo}
+                  onNomorChange={(num) => handleFlightNoChange('berangkat', num)}
+                  airportOptions={airportDropdownOptions}
+                  onTransitChange={(items) => handleTransitChange('berangkat', items)}
+                >
                   {butuhAlasanTanggal && (
                     <div className="space-y-3">
                       <Alert variant="warning">
@@ -1249,308 +1147,25 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   )}
 
                   {formData.komisi_aktif > 0 && formData.berangkat_tanggal_awal && formData.berangkat_tanggal !== formData.berangkat_tanggal_awal && (
-                    <Alert variant="warning">
-                      {formData.komisi_aktif} komisi agen ikut bergeser tanggal cairnya. Komisi yang sudah dicairkan bisa
-                      membuat saldo agen minus.
-                    </Alert>
+                    <Alert variant="warning">{formData.komisi_aktif} komisi agen ikut bergeser tanggal cairnya.</Alert>
                   )}
+                </FlightLegFields>
 
-                  {/* Baris 1: Waktu & Kode Penerbangan */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Input
-                      label="Tanggal berangkat"
-                      className="!mb-0"
-                      type="date"
-                      name="berangkat_tanggal"
-                    error={fieldErrors.berangkat_tanggal}
-                      value={formData.berangkat_tanggal}
-                      onChange={handleChange}
-                      required
-                    />
-                    <Input
-                      label="Jam berangkat"
-                      className="!mb-0"
-                      type="text"
-                      name="berangkat_jam"
-                    error={fieldErrors.berangkat_jam}
-                      value={formData.berangkat_jam}
-                      onChange={handleTimeChange}
-                      placeholder="09:00"
-                    />
-                    {!berangkatIsCustom && currentAirlineCode ? (
-                      <div>
-                        <label className="mb-1.5 block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">
-                          Kode penerbangan
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex h-9 items-center px-3 rounded-l-lg border border-r-0 border-neutral-300 bg-neutral-50 text-neutral-700 font-mono font-semibold text-sm select-none">
-                            {currentAirlineCode}
-                          </span>
-                          <input
-                            type="text"
-                            name="berangkat_flight_no"
-                            value={berangkatFlightNo}
-                            onChange={handleBerangkatFlightNoChange}
-                            placeholder="822"
-                            maxLength={5}
-                            inputMode="numeric"
-                            className="h-9 flex-1 min-w-0 block w-full px-3 rounded-none rounded-r-lg border border-neutral-300 focus:outline-none focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <Input
-                        label="Kode penerbangan"
-                        className="!mb-0"
-                        name="berangkat_kode_penerbangan"
-                    error={fieldErrors.berangkat_kode_penerbangan}
-                        value={formData.berangkat_kode_penerbangan}
-                        onChange={handleChange}
-                        placeholder="SV 822"
-                      />
-                    )}
-                  </div>
-
-                  {/* Baris 2: Bandara Asal & Tujuan */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <AutocompleteInput
-                      label="Bandara asal"
-                      className="!mb-0"
-                      name="berangkat_bandara_asal"
-                      value={formData.berangkat_bandara_asal}
-                      onChange={(e) => setFormData(prev => ({ ...prev, berangkat_bandara_asal: e.target.value }))}
-                      onSelect={(opt) => setFormData(prev => ({ ...prev, berangkat_bandara_asal: opt?.value || '' }))}
-                      placeholder="Cari bandara"
-                      options={airportDropdownOptions}
-                    />
-                    <AutocompleteInput
-                      label="Bandara tujuan akhir"
-                      className="!mb-0"
-                      name="berangkat_bandara_tujuan"
-                      value={formData.berangkat_bandara_tujuan}
-                      onChange={(e) => setFormData(prev => ({ ...prev, berangkat_bandara_tujuan: e.target.value }))}
-                      onSelect={(opt) => setFormData(prev => ({ ...prev, berangkat_bandara_tujuan: opt?.value || '' }))}
-                      placeholder="Cari bandara"
-                      options={airportDropdownOptions}
-                    />
-                  </div>
-
-                  {/* Transit Keberangkatan */}
-                  {!formData.is_direct_flight && (
-                    <div className="pt-2 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-neutral-700 font-heading flex items-center gap-1.5">
-                          <span>Transit</span>
-                        </span>
-                      </div>
-
-                      <div className="space-y-3">
-                        {(formData.transit_items_berangkat || [{ bandara: '', durasi: '' }]).map((item, idx) => (
-                          <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-end gap-3 pb-2.5 border-b border-neutral-100 last:border-b-0">
-                            <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <div className="sm:col-span-2">
-                                <AutocompleteInput
-                                  label={`Bandara transit ${formData.transit_items_berangkat.length > 1 ? `#${idx + 1}` : ''}`}
-                                  className="!mb-0"
-                                  name={`transit_berangkat_${idx}`}
-                                  value={item.bandara}
-                                  onChange={(e) => handleTransitBerangkatChange(idx, 'bandara', e.target.value)}
-                                  onSelect={(opt) => handleTransitBerangkatChange(idx, 'bandara', opt?.value || '')}
-                                  placeholder="Cari bandara"
-                                  options={airportDropdownOptions}
-                                />
-                              </div>
-                              <div>
-                                <Input
-                                  label="Durasi (jam)"
-                                  className="!mb-0"
-                                  value={item.durasi}
-                                  onChange={(e) => handleTransitBerangkatChange(idx, 'durasi', e.target.value.replace(/\D/g, '').slice(0, 3))}
-                                  inputMode="numeric"
-                                  placeholder="2"
-                                />
-                              </div>
-                            </div>
-
-                            {(formData.transit_items_berangkat || []).length > 1 && (
-                              <Button variant="danger-outline" className="shrink-0"
-                                onClick={() => handleRemoveTransitBerangkat(idx)}
-                                title="Hapus"
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span className="sm:hidden">Hapus</span>
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-
-                        <Button variant="dashed" className="w-full"
-                          onClick={handleAddTransitBerangkat}
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                          </svg>
-                          <span>Tambah transit</span>
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Divider */}
                 <div className="border-t border-neutral-200" />
 
-                {/* Bagian 3: Penerbangan Pulang */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-neutral-600 text-sm font-semibold font-heading">
-                    <span>Pulang</span>
-                  </div>
-
-                  {/* Baris 1: Waktu & Kode Penerbangan */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Input
-                      label="Tanggal pulang"
-                      className="!mb-0"
-                      type="date"
-                      name="pulang_tanggal"
-                    error={fieldErrors.pulang_tanggal}
-                      value={formData.pulang_tanggal}
-                      onChange={handleChange}
-                      required
-                    />
-                    <Input
-                      label="Jam pulang"
-                      className="!mb-0"
-                      type="text"
-                      name="pulang_jam"
-                    error={fieldErrors.pulang_jam}
-                      value={formData.pulang_jam}
-                      onChange={handleTimeChange}
-                      placeholder="15:30"
-                    />
-                    {!pulangIsCustom && currentAirlineCode ? (
-                      <div>
-                        <label className="mb-1.5 block min-h-5 text-sm font-medium leading-5 text-neutral-800 font-body">
-                          Kode penerbangan
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex h-9 items-center px-3 rounded-l-lg border border-r-0 border-neutral-300 bg-neutral-50 text-neutral-700 font-mono font-semibold text-sm select-none">
-                            {currentAirlineCode}
-                          </span>
-                          <input
-                            type="text"
-                            name="pulang_flight_no"
-                            value={pulangFlightNo}
-                            onChange={handlePulangFlightNoChange}
-                            placeholder="823"
-                            maxLength={5}
-                            inputMode="numeric"
-                            className="h-9 flex-1 min-w-0 block w-full px-3 rounded-none rounded-r-lg border border-neutral-300 focus:outline-none focus:border-primary-500 text-sm font-mono text-neutral-900 bg-white placeholder:text-neutral-400"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <Input
-                        label="Kode penerbangan"
-                        className="!mb-0"
-                        name="pulang_kode_penerbangan"
-                    error={fieldErrors.pulang_kode_penerbangan}
-                        value={formData.pulang_kode_penerbangan}
-                        onChange={handleChange}
-                        placeholder="SV 823"
-                      />
-                    )}
-                  </div>
-
-                  {/* Baris 2: Bandara Asal & Tujuan */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <AutocompleteInput
-                      label="Bandara asal"
-                      className="!mb-0"
-                      name="pulang_bandara_asal"
-                      value={formData.pulang_bandara_asal}
-                      onChange={(e) => setFormData(prev => ({ ...prev, pulang_bandara_asal: e.target.value }))}
-                      onSelect={(opt) => setFormData(prev => ({ ...prev, pulang_bandara_asal: opt?.value || '' }))}
-                      placeholder="Cari bandara"
-                      options={airportDropdownOptions}
-                    />
-                    <AutocompleteInput
-                      label="Bandara tujuan akhir"
-                      className="!mb-0"
-                      name="pulang_bandara_tujuan"
-                      value={formData.pulang_bandara_tujuan}
-                      onChange={(e) => setFormData(prev => ({ ...prev, pulang_bandara_tujuan: e.target.value }))}
-                      onSelect={(opt) => setFormData(prev => ({ ...prev, pulang_bandara_tujuan: opt?.value || '' }))}
-                      placeholder="Cari bandara"
-                      options={airportDropdownOptions}
-                    />
-                  </div>
-
-                  {/* Transit Kepulangan */}
-                  {!formData.is_direct_flight && (
-                    <div className="pt-2 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-neutral-700 font-heading flex items-center gap-1.5">
-                          <span>Transit</span>
-                        </span>
-                      </div>
-
-                      <div className="space-y-3">
-                        {(formData.transit_items_pulang || [{ bandara: '', durasi: '' }]).map((item, idx) => (
-                          <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-end gap-3 pb-2.5 border-b border-neutral-100 last:border-b-0">
-                            <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <div className="sm:col-span-2">
-                                <AutocompleteInput
-                                  label={`Bandara transit ${formData.transit_items_pulang.length > 1 ? `#${idx + 1}` : ''}`}
-                                  className="!mb-0"
-                                  name={`transit_pulang_${idx}`}
-                                  value={item.bandara}
-                                  onChange={(e) => handleTransitPulangChange(idx, 'bandara', e.target.value)}
-                                  onSelect={(opt) => handleTransitPulangChange(idx, 'bandara', opt?.value || '')}
-                                  placeholder="Cari bandara"
-                                  options={airportDropdownOptions}
-                                />
-                              </div>
-                              <div>
-                                <Input
-                                  label="Durasi (jam)"
-                                  className="!mb-0"
-                                  value={item.durasi}
-                                  onChange={(e) => handleTransitPulangChange(idx, 'durasi', e.target.value.replace(/\D/g, '').slice(0, 3))}
-                                  inputMode="numeric"
-                                  placeholder="3"
-                                />
-                              </div>
-                            </div>
-
-                            {(formData.transit_items_pulang || []).length > 1 && (
-                              <Button variant="danger-outline" className="shrink-0"
-                                onClick={() => handleRemoveTransitPulang(idx)}
-                                title="Hapus"
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span className="sm:hidden">Hapus</span>
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-
-                        <Button variant="dashed" className="w-full"
-                          onClick={handleAddTransitPulang}
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                          </svg>
-                          <span>Tambah transit</span>
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <FlightLegFields
+                  leg="pulang"
+                  data={formData}
+                  errors={fieldErrors}
+                  onFieldChange={handleChange}
+                  onTimeChange={handleTimeChange}
+                  kodeMaskapai={currentAirlineCode}
+                  kodeKhusus={pulangIsCustom}
+                  nomor={pulangFlightNo}
+                  onNomorChange={(num) => handleFlightNoChange('pulang', num)}
+                  airportOptions={airportDropdownOptions}
+                  onTransitChange={(items) => handleTransitChange('pulang', items)}
+                />
               </div>
             </FormSection>
 
@@ -1563,7 +1178,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       label="Hotel Mekkah"
                       className="!mb-0"
                       name="hotel_mekkah_id"
-                    error={fieldErrors.hotel_mekkah_id}
+                      id="hotel_mekkah_id"
+                      error={fieldErrors.hotel_mekkah_id}
                       value={formData.hotel_mekkah_id}
                       onChange={(e) => handleChange({ target: { name: 'hotel_mekkah_id', value: e.target.value } })}
                       onSelect={(opt) => handleChange({ target: { name: 'hotel_mekkah_id', value: opt ? opt.value : '' } })}
@@ -1579,6 +1195,8 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       label="Hotel Madinah"
                       className="!mb-0"
                       name="hotel_madinah_id"
+                      id="hotel_madinah_id"
+                      error={fieldErrors.hotel_madinah_id}
                       value={formData.hotel_madinah_id}
                       onChange={(e) => handleChange({ target: { name: 'hotel_madinah_id', value: e.target.value } })}
                       onSelect={(opt) => handleChange({ target: { name: 'hotel_madinah_id', value: opt ? opt.value : '' } })}
@@ -1838,43 +1456,31 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                   className="!mb-0"
                   value={formData.status}
                   onChange={(val) => handleChange({ target: { name: 'status', value: val } })}
-                  options={[
-                    { value: 'draft', label: 'Draft' },
-                    { value: 'published', label: 'Published' },
-                    { value: 'archived', label: 'Archived' }
-                  ]}
+                  options={STATUS_OPTIONS}
                 />
               </SidebarSection>
 
               <SidebarSection title="Gambar Utama">
-              <div>
-                {formData.brosur_url ? (
-                  <div className="space-y-3">
-                    <div className="border border-neutral-200 rounded-xl p-1 bg-white overflow-hidden flex justify-center">
-                      <img
-                        src={formData.brosur_url.startsWith('/') ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:9090'}${formData.brosur_url}` : formData.brosur_url}
-                        alt="Preview gambar utama"
-                        className="max-w-full h-auto max-h-52 object-contain rounded"
-                      />
-                    </div>
-                    <label className="flex items-center justify-center gap-2 px-4 py-2 w-full bg-white border border-neutral-300 rounded-lg text-xs font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer transition-colors text-center">
-                        <span>{isUploadingBrosur ? 'Mengunggah...' : 'Ganti gambar'}</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
-                    </label>
-                  </div>
-                ) : (
-                  <div className="flex justify-center px-4 pt-6 pb-6 border-2 border-neutral-300 border-dashed rounded-xl hover:border-primary-400 transition-colors bg-neutral-50">
-                    <div className="space-y-2 text-center">
-                      <div className="text-xs text-neutral-600">
-                        <label htmlFor="brosur-upload" className="cursor-pointer font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900">
-                          <span>{isUploadingBrosur ? 'Mengunggah...' : 'Unggah gambar'}</span>
-                          <input id="brosur-upload" name="brosur-upload" type="file" className="sr-only" accept="image/*" onChange={handleBrosurUpload} disabled={isUploadingBrosur} />
-                        </label>
-                        <p className="text-xs text-neutral-400 mt-0.5">JPG, PNG, WebP</p>
-                      </div>
-                    </div>
+              <div className="space-y-3">
+                {formData.brosur_url && (
+                  <div className="border border-neutral-200 rounded-xl p-1 bg-white overflow-hidden flex justify-center">
+                    <img
+                      src={assetUrl(formData.brosur_url)}
+                      alt="Preview gambar utama"
+                      className="max-w-full h-auto max-h-52 object-contain rounded"
+                    />
                   </div>
                 )}
+                <FileInput
+                  name="brosur-upload"
+                  accept="image/*"
+                  className="!mb-0"
+                  showPreview={false}
+                  onChange={handleBrosurUpload}
+                  isUploading={isUploadingBrosur}
+                  uploadingText="Mengunggah"
+                  placeholder={formData.brosur_url ? 'Ganti gambar' : 'JPG, PNG, WebP'}
+                />
               </div>
             </SidebarSection>
 
@@ -1886,7 +1492,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 disabled={isUploadingBrosur}
                 className="w-full justify-center"
               >
-                {isSubmitting ? 'Menyimpan...' : 'Simpan'}
+                Simpan
               </Button>
             </SidebarSection>
             </FormAside>

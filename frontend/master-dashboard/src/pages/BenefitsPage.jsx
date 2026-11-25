@@ -123,10 +123,8 @@ export default function BenefitsPage() {
       return <ActionMenu align="right" items={[
         { label: 'Ubah', icon: Pencil, onClick: () => setForm({ id: row.id, teks: row.teks, ikon: row.ikon }) },
         { label: row.is_active ? 'Nonaktifkan' : 'Aktifkan', icon: Power, onClick: () => ubahAktif(row) },
-        {
-          label: 'Hapus', icon: Trash2, danger: true, onClick: () => setHapus(row),
-          disabled: row.dipakai > 0, disabledTooltip: 'Masih dipakai paket. Nonaktifkan saja.',
-        },
+        // Benefit yang masih dipakai paket hanya bisa dinonaktifkan.
+        ...(row.dipakai > 0 ? [] : [{ label: 'Hapus', icon: Trash2, danger: true, onClick: () => setHapus(row) }]),
       ]} />;
     }
     return row[key] ?? '-';
@@ -148,7 +146,7 @@ export default function BenefitsPage() {
         itemsPerPage={20}
         searchPlaceholder="Cari teks benefit..."
         loading={loading}
-        emptyMessage={siapMuat ? 'Belum ada benefit. Tambahkan benefit untuk dipilih di form paket.' : 'Pilih brand untuk melihat daftar benefit.'}
+        emptyMessage={siapMuat ? 'Belum ada benefit.' : 'Pilih brand.'}
         toolbarLeading={
           isHolding ? (
             <div role="group" aria-label="Brand">
@@ -179,7 +177,7 @@ export default function BenefitsPage() {
         }
       >
         <p className="text-sm text-neutral-700">
-          Hapus benefit “{hapus?.teks}”? Benefit yang masih dipakai paket tidak bisa dihapus; nonaktifkan saja supaya tidak muncul lagi di pilihan paket baru.
+          Hapus benefit “{hapus?.teks}”?
         </p>
       </Modal>
     </div>

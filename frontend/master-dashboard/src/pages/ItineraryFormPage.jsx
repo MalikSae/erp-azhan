@@ -125,11 +125,11 @@ const ItineraryFormPage = () => {
         <FormLayout>
           <FormSection id="sec-dasar" title="Informasi Dasar">
             <Input
-              label="Judul Itinerary"
+              label="Judul itinerary"
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
               required
-              placeholder="mis. Umroh Reguler 9 Hari"
+              placeholder="Umroh Reguler 9 Hari"
               className="!mb-0"
             />
           </FormSection>
@@ -139,50 +139,41 @@ const ItineraryFormPage = () => {
           </FormSection>
 
           <FormAside>
-            <SidebarSection title="Simpan">
-              <div className="space-y-3">
-                <p className="text-xs text-neutral-500 font-body">
-                  Itinerary ini bisa dipilih pada banyak paket keberangkatan.
-                </p>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  isLoading={isSubmitting}
-                  disabled={isSubmitting}
-                  className="w-full justify-center"
-                >
-                  {isSubmitting ? 'Menyimpan...' : (isEditMode ? 'Perbarui Itinerary' : 'Simpan Itinerary')}
-                </Button>
-              </div>
-            </SidebarSection>
-
             <SidebarSection title="Kategori">
               <CustomDropdown
                 className="!mb-0"
                 value={formData.category_id}
                 onChange={(val) => setFormData(prev => ({ ...prev, category_id: val }))}
-                placeholder="-- Semua kategori --"
+                placeholder="Semua kategori"
                 options={[
-                  { value: '', label: '-- Semua kategori --' },
+                  { value: '', label: 'Semua kategori' },
                   ...categories.map(c => ({ value: String(c.id), label: c.name })),
                 ]}
               />
-              <p className="mt-2 text-xs text-neutral-500 font-body">
-                Itinerary muncul sebagai pilihan pada paket dengan kategori ini.
-              </p>
             </SidebarSection>
 
             <SidebarSection title="Ringkasan">
               <dl className="space-y-2 text-xs font-body">
                 <div className="flex items-center justify-between">
                   <dt className="text-neutral-500">Durasi</dt>
-                  <dd className="text-sm font-semibold text-neutral-900">{formData.days.length} hari</dd>
+                  <dd className="text-sm font-semibold text-neutral-900 tabular-nums">{formData.days.length} hari</dd>
                 </div>
                 <div className="flex items-center justify-between">
                   <dt className="text-neutral-500">Total poin kegiatan</dt>
-                  <dd className="text-sm font-semibold text-neutral-900">{totalActivities}</dd>
+                  <dd className="text-sm font-semibold text-neutral-900 tabular-nums">{totalActivities}</dd>
                 </div>
               </dl>
+            </SidebarSection>
+
+            <SidebarSection>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={isSubmitting}
+                className="w-full justify-center"
+              >
+                Simpan
+              </Button>
             </SidebarSection>
           </FormAside>
         </FormLayout>

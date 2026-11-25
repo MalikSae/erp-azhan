@@ -83,7 +83,7 @@ const ItineraryDaysEditor = ({ days, onChange }) => {
     <div className="space-y-6">
       {days.length === 0 && (
         <p className="text-sm text-neutral-500 font-body">
-          Belum ada hari perjalanan. Tambahkan hari pertama untuk mulai menyusun jadwal.
+          Belum ada hari.
         </p>
       )}
 
@@ -104,7 +104,7 @@ const ItineraryDaysEditor = ({ days, onChange }) => {
             label="Lokasi"
             value={day.location}
             onChange={(e) => handleDayChange(dayIndex, 'location', e.target.value)}
-            placeholder="mis. Makkah – Madinah"
+            placeholder="Makkah – Madinah"
             required
             className="!mb-0"
           />
@@ -117,7 +117,7 @@ const ItineraryDaysEditor = ({ days, onChange }) => {
                   <Textarea
                     value={act.text}
                     onChange={(e) => handleActivityChange(dayIndex, actIndex, 'text', e.target.value)}
-                    placeholder="mis. Sarapan pagi lalu berkumpul di lobby"
+                    placeholder="Sarapan pagi lalu berkumpul di lobby"
                     rows={2}
                     className="!mb-0"
                   />
@@ -128,7 +128,7 @@ const ItineraryDaysEditor = ({ days, onChange }) => {
                 />
               </div>
             ))}
-            <AddButton onClick={() => handleAddActivity(dayIndex)}>Tambah Poin Kegiatan</AddButton>
+            <AddButton onClick={() => handleAddActivity(dayIndex)}>Tambah poin kegiatan</AddButton>
             <p className="text-xs text-neutral-500 font-body">
               Satu poin per kotak. Tebalkan kata dengan **tanda bintang dua**.
             </p>
@@ -137,7 +137,7 @@ const ItineraryDaysEditor = ({ days, onChange }) => {
       ))}
 
       <AddButton onClick={handleAddDay}>
-        {days.length === 0 ? 'Tambah Hari Pertama' : 'Tambah Hari'}
+        {days.length === 0 ? 'Tambah hari pertama' : 'Tambah hari'}
       </AddButton>
     </div>
   );

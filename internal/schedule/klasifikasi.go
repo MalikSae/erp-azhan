@@ -3,6 +3,7 @@ package schedule
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -38,8 +39,10 @@ type KlasifikasiInput struct {
 	JourneyType string
 }
 
+// validJourneyType: form paket ERP hanya untuk umroh. Nilai lain (haji, wisata_halal) tetap dikenal saat
+// dibaca, tetapi tidak diterima saat menulis.
 func validJourneyType(s string) bool {
-	return s == JourneyUmroh || s == JourneyHaji || s == JourneyWisataHalal
+	return s == JourneyUmroh
 }
 
 // normalizeKlasifikasi memvalidasi isian klasifikasi dari form. journey kosong berarti
@@ -50,7 +53,7 @@ func normalizeKlasifikasi(journey string) (*KlasifikasiInput, error) {
 		return nil, nil
 	}
 	if !validJourneyType(journey) {
-		return nil, fmt.Errorf("journey_type tidak valid, pilih umroh, haji, atau wisata_halal")
+		return nil, errors.New("Jenis perjalanan tidak valid")
 	}
 	return &KlasifikasiInput{JourneyType: journey}, nil
 }
