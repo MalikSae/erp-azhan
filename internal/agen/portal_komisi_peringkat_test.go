@@ -104,6 +104,12 @@ func TestPeringkatPortalAgen(t *testing.T) {
 	if p.Saya.Peringkat == nil || *p.Saya.Peringkat != 2 || p.Saya.PaxClosing != 2 {
 		t.Errorf("posisi saya bulan: %+v", p.Saya)
 	}
+	if p.Saya.Target == nil || p.Saya.Target.Peringkat != 1 || p.Saya.Target.KurangPax != 1 {
+		t.Errorf("target saya bulan: %+v", p.Saya.Target)
+	}
+	if p.Teratas[0].Saya || p.Teratas[0].Peringkat != 1 {
+		t.Errorf("#1 bukan juara: %+v", p.Teratas[0])
+	}
 	if len(p.Teratas) != 2 || p.Teratas[0].PaxClosing != 3 || !p.Teratas[1].Saya || p.Teratas[1].Kota == nil || *p.Teratas[1].Kota != "Depok" {
 		t.Errorf("teratas bulan: %+v", p.Teratas)
 	}
@@ -125,7 +131,7 @@ func TestPeringkatPortalAgen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Saya.Peringkat != nil || p.Saya.PaxClosing != 0 {
+	if p.Saya.Peringkat != nil || p.Saya.PaxClosing != 0 || p.Saya.Target != nil {
 		t.Errorf("tanpa pax: %+v", p.Saya)
 	}
 
@@ -140,6 +146,19 @@ func TestPeringkatPortalAgen(t *testing.T) {
 	}
 	if len(p.Teratas) != MaksPeringkatPortal+1 || !p.Teratas[MaksPeringkatPortal].Saya || *p.Saya.Peringkat != 12 || p.JumlahAgen != 12 {
 		t.Errorf("di luar 10 besar: jumlah %d, saya %+v, akhir %+v", p.JumlahAgen, p.Saya, p.Teratas[len(p.Teratas)-1])
+	}
+	// Peringkat bersama: juara dan 10 agen ramai sama-sama 3 pax = #1; saya 2 pax = #12, target #1 kurang 1.
+	for _, b := range p.Teratas[:MaksPeringkatPortal] {
+		if b.Peringkat != 1 || b.PaxClosing != 3 {
+			t.Errorf("seri 3 pax harus #1: %+v", b)
+		}
+	}
+	if p.Saya.Target == nil || p.Saya.Target.Peringkat != 1 || p.Saya.Target.KurangPax != 1 {
+		t.Errorf("target di luar 10 besar: %+v", p.Saya.Target)
+	}
+	// Juara sendiri: tanpa target.
+	if pj, err := peringkatPortalAgen(ctx, tx, juara, "tahun", now); err != nil || pj.Saya.Peringkat == nil || *pj.Saya.Peringkat != 1 || pj.Saya.Target != nil {
+		t.Errorf("juara tahun: %+v %v", pj, err)
 	}
 	for _, b := range p.Teratas[:MaksPeringkatPortal] {
 		if b.Saya {

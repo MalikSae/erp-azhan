@@ -31,31 +31,41 @@ Hanya jadwal brand agen yang `published` dan belum berangkat, dengan nilai efekt
 Admin punya peringkat agen (`peringkatAgen`, kartu 10 agen terbaik); agen tidak tahu posisinya.
 
 ### Keputusan
-- Tampil: **10 teratas + posisi sendiri**. Bila agen di luar 10 besar, barisnya ditambahkan di bawah daftar.
+- Tampil: **10 baris pertama + baris sendiri**. Bila baris sendiri di luar 10 baris pertama dan nomornya lebih besar dari nomor baris terakhir, diberi pemisah "···". Tanpa tetangga di atas/bawah agen.
 - Ukuran: **pax closing** (sama dengan admin: jamaah lunas dari komisi langsung + repeat order, komisi aktif, paket berkomisi 0 tidak terhitung).
 - Periode: pilihan **Bulan ini** dan **Tahun ini** (WIB, berdasarkan tanggal komisi tercatat). Bawaan Bulan ini.
-- Urutan seri: komisi lebih besar, lalu nama (sama dengan admin). Nilai komisi tidak ditampilkan.
-- Lingkup: brand agen sendiri.
+- **Peringkat bersama** (keputusan 2026-11-25, grilling skala): pax sama = nomor sama, nomor berikutnya melompat (1, 2, 2, 4). Komisi lebih besar lalu nama hanya mengatur urutan tampil. Nilai komisi tidak ditampilkan.
+- Lingkup: brand agen sendiri. "dari N agen" = agen aktif dengan minimal 1 pax di periode itu.
+- Angka memakai titik ribuan ("#1.248 dari 2.140 agen").
+
+### Pesan motivasi
+- Baris atas blok posisi: "Butuh N pax lagi untuk naik ke #X". N = selisih ke kelompok tepat di atas; menyamai mereka = ikut memegang #X.
+- Peringkat #1: label "Posisi Anda", tanpa pesan. Tanpa pax: "Posisi Anda" + "Butuh 1 pax untuk masuk peringkat".
+- Blok posisi selalu dua baris (dilarang tiga baris bertumpuk). Layar sempit: ikon dan kotak pax disembunyikan (pax tampil di baris sendiri pada daftar).
+- Kartu dashboard tanpa pesan motivasi.
+
+### Podium
+- Tiga baris pertama menurut urutan tampil, disusun kiri-tengah-kanan = baris ke-2, ke-1, ke-3. Tinggi alas per posisi tampil; cincin dan medali per nomor (seri #1 = dua emas).
+- Avatar memakai foto profil agen (GET /api/portal/agen/peringkat/{akun_id}/foto, hanya agen aktif sebrand), inisial bila tanpa foto atau gagal dimuat.
 
 ### Aturan tambahan (disetujui bersama rencana)
-- Agen nonaktif tidak masuk daftar agen dan tidak dihitung dalam "dari N agen" (pilihan yang tidak bisa dipilih disembunyikan). Admin tetap melihat badge Nonaktif.
+- Agen nonaktif tidak masuk daftar agen dan tidak dihitung (pilihan yang tidak bisa dipilih disembunyikan). Admin tetap melihat badge Nonaktif.
 - Nama tampil: nama lengkap dan kota domisili, tanpa kode referral.
-- Agen dengan 0 pax closing di periode itu: "Belum masuk peringkat", tanpa nomor.
 
 ### Kontrak ERP
 `GET /api/portal/agen/peringkat?periode=bulan|tahun` (RequireAgenAktif) →
 ```json
 {
   "periode": "bulan", "dari": "2026-11-01", "sampai": "2026-11-25",
-  "jumlah_agen": 37,
-  "saya": { "peringkat": 4, "pax_closing": 6 },
-  "teratas": [{ "peringkat": 1, "nama": "Hannah", "kota": "Kota Cirebon", "pax_closing": 12, "saya": false }]
+  "jumlah_agen": 2140,
+  "saya": { "peringkat": 1248, "pax_closing": 3, "target": { "peringkat": 1241, "kurang_pax": 2 } },
+  "teratas": [{ "peringkat": 1, "akun_id": 7374, "nama": "Hannah", "kota": "Kota Cirebon", "ada_foto": true, "pax_closing": 41, "saya": false }]
 }
 ```
-`saya.peringkat` null bila 0 pax. `teratas` maksimal 10, `[]` bila kosong.
+`saya.peringkat` null bila 0 pax; `saya.target` null saat #1 atau tanpa pax. `teratas` = 10 baris pertama + baris sendiri bila di luar, `[]` bila kosong.
 
 ### Tampilan
-- Web: kartu "Peringkat" di dashboard `/akun` (posisi sendiri) → halaman `/akun/agen/peringkat` (pilihan periode, 10 teratas, baris sendiri disorot).
+- Web: kartu "Peringkat bulan ini" di dashboard `/akun` → halaman `/akun/agen/peringkat` (pilihan periode, blok posisi, podium, daftar).
 - App: kartu yang sama di tab Akun → layar `akun/peringkat`.
 
 ## 3. Urutan kerja

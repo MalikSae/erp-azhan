@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"time"
 
@@ -76,9 +77,17 @@ func komisiPaketAgen(ctx context.Context, q querier, akunID int64) ([]KomisiPake
 const MaksPeringkatPortal = 10
 
 type PeringkatSaya struct {
-	// Peringkat null bila agen belum punya pax closing di periode itu ("Belum masuk peringkat").
+	// Peringkat null bila agen belum punya pax closing di periode itu ("Butuh 1 pax untuk masuk peringkat").
 	Peringkat  *int `json:"peringkat"`
 	PaxClosing int  `json:"pax_closing"`
+	// Target: kelompok tepat di atas agen; null bila sudah #1 atau belum masuk peringkat.
+	Target *TargetPeringkat `json:"target"`
+}
+
+// TargetPeringkat: menyamai pax kelompok tepat di atas berarti ikut memegang nomor itu (peringkat bersama).
+type TargetPeringkat struct {
+	Peringkat int `json:"peringkat"`
+	KurangPax int `json:"kurang_pax"`
 }
 
 type PeringkatBaris struct {
@@ -116,8 +125,10 @@ func rentangPeriode(periode string, now time.Time) (string, string, error) {
 	return "", "", ErrPeriodePeringkat
 }
 
-// peringkatPortalAgen: peringkat pax closing agen aktif satu brand (ukuran dan urutan sama dengan peringkatAgen admin).
-// Agen nonaktif dan agen tanpa pax closing tidak diberi nomor. Nama tampil tanpa kode referral.
+// peringkatPortalAgen: peringkat pax closing agen aktif satu brand. Ukuran sama dengan admin (pax closing dari
+// komisi langsung + repeat order), nomor memakai peringkat bersama: pax sama = nomor sama, nomor berikutnya melompat
+// (1, 2, 2, 4). Komisi lebih besar lalu nama hanya mengatur urutan tampil. Agen nonaktif dan tanpa pax tidak diberi
+// nomor. Tampil maksimal 10 baris pertama ditambah baris agen sendiri; nama tanpa kode referral.
 func peringkatPortalAgen(ctx context.Context, q querier, akunID int64, periode string, now time.Time) (*PeringkatPortal, error) {
 	if periode == "" {
 		periode = "bulan"
@@ -134,27 +145,46 @@ func peringkatPortalAgen(ctx context.Context, q querier, akunID int64, periode s
 	if err != nil {
 		return nil, err
 	}
-	p := &PeringkatPortal{Periode: periode, Dari: dari, Sampai: sampai, Teratas: []PeringkatBaris{}}
-	var baris []PeringkatBaris
-	ids := []int64{}
+	aktif := make([]PeringkatItem, 0, len(semua))
 	for _, it := range semua {
-		if it.StatusAgen != "aktif" || it.PaxClosing <= 0 {
-			continue
-		}
-		b := PeringkatBaris{Peringkat: len(baris) + 1, AkunID: it.AkunID, Nama: it.NamaLengkap, PaxClosing: it.PaxClosing, Saya: it.AkunID == akunID}
-		baris = append(baris, b)
-		ids = append(ids, it.AkunID)
-		if b.Saya {
-			n := b.Peringkat
-			p.Saya = PeringkatSaya{Peringkat: &n, PaxClosing: b.PaxClosing}
+		if it.StatusAgen == "aktif" && it.PaxClosing > 0 {
+			aktif = append(aktif, it)
 		}
 	}
-	p.JumlahAgen = len(baris)
-	// Kota hanya untuk baris yang tampil: 10 teratas dan baris agen sendiri.
+	sort.SliceStable(aktif, func(i, j int) bool {
+		if aktif[i].PaxClosing != aktif[j].PaxClosing {
+			return aktif[i].PaxClosing > aktif[j].PaxClosing
+		}
+		if aktif[i].TotalKomisi != aktif[j].TotalKomisi {
+			return aktif[i].TotalKomisi > aktif[j].TotalKomisi
+		}
+		return aktif[i].NamaLengkap < aktif[j].NamaLengkap
+	})
+
+	p := &PeringkatPortal{Periode: periode, Dari: dari, Sampai: sampai, JumlahAgen: len(aktif), Teratas: []PeringkatBaris{}}
+	baris := make([]PeringkatBaris, len(aktif))
+	for i, it := range aktif {
+		nomor := i + 1
+		if i > 0 && it.PaxClosing == aktif[i-1].PaxClosing {
+			nomor = baris[i-1].Peringkat
+		}
+		baris[i] = PeringkatBaris{Peringkat: nomor, AkunID: it.AkunID, Nama: it.NamaLengkap, PaxClosing: it.PaxClosing, Saya: it.AkunID == akunID}
+		if baris[i].Saya {
+			p.Saya = PeringkatSaya{Peringkat: &nomor, PaxClosing: it.PaxClosing}
+			// Kelompok tepat di atas: baris terakhir sebelum kelompok sendiri.
+			for k := i - 1; k >= 0; k-- {
+				if baris[k].PaxClosing > it.PaxClosing {
+					p.Saya.Target = &TargetPeringkat{Peringkat: baris[k].Peringkat, KurangPax: baris[k].PaxClosing - it.PaxClosing}
+					break
+				}
+			}
+		}
+	}
+	// Kota dan foto hanya untuk baris yang tampil: 10 pertama dan baris agen sendiri.
 	for i := range baris {
 		if i < MaksPeringkatPortal || baris[i].Saya {
 			var foto sql.NullString
-			if err := q.QueryRowContext(ctx, `SELECT NULLIF(TRIM(domisili), ''), foto_url FROM customer_accounts WHERE id = ?`, ids[i]).Scan(&baris[i].Kota, &foto); err != nil {
+			if err := q.QueryRowContext(ctx, `SELECT NULLIF(TRIM(domisili), ''), foto_url FROM customer_accounts WHERE id = ?`, baris[i].AkunID).Scan(&baris[i].Kota, &foto); err != nil {
 				return nil, fmt.Errorf("agen: kota peringkat: %w", err)
 			}
 			baris[i].AdaFoto = FotoPortalURL.MatchString(foto.String)
