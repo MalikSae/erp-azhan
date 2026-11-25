@@ -43,6 +43,27 @@ func TestIsiUntukJenisKelamin(t *testing.T) {
 	}
 }
 
+func TestPerluJenisKelamin(t *testing.T) {
+	semua := []perlengkapan.SetItem{{Nama: "Koper", Untuk: "semua"}}
+	khusus := []perlengkapan.SetItem{{Nama: "Koper", Untuk: "semua"}, {Nama: "Kain ihram", Untuk: "pria"}}
+	cases := []struct {
+		set  []perlengkapan.SetItem
+		jk   string
+		mau  bool
+		nama string
+	}{
+		{khusus, "", true, "khusus, kosong"},
+		{khusus, "L", false, "khusus, terisi"},
+		{semua, "", false, "semua, kosong"},
+		{nil, "", false, "tanpa set"},
+	}
+	for _, c := range cases {
+		if got := perluJenisKelamin(c.set, c.jk); got != c.mau {
+			t.Errorf("%s: %v, mau %v", c.nama, got, c.mau)
+		}
+	}
+}
+
 func TestAlurPerlengkapanPelanggan(t *testing.T) {
 	_, tx := testdb.Tx(t)
 	ctx := context.Background()
@@ -70,18 +91,32 @@ func TestAlurPerlengkapanPelanggan(t *testing.T) {
 	}
 
 	// Jamaah di luar booking atau bayi ditolak, dan tidak ada yang tersimpan (semua atau tidak sama sekali).
-	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{j1, asing}); !errors.Is(err, errJamaahBukanBooking) {
+	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{j1, asing}, nil); !errors.Is(err, errJamaahBukanBooking) {
 		t.Errorf("jamaah asing: %v", err)
 	}
-	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{bayi}); !errors.Is(err, errJamaahBukanBooking) {
+	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{bayi}, nil); !errors.Is(err, errJamaahBukanBooking) {
 		t.Errorf("bayi: %v", err)
 	}
 
-	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{j1}); err != nil {
+	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{j1}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{j1}); !errors.Is(err, errSudahDiajukan) {
+	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{j1}, nil); !errors.Is(err, errSudahDiajukan) {
 		t.Errorf("ajukan ganda: %v", err)
+	}
+	// Paket punya barang khusus pria/wanita: jamaah tanpa jenis kelamin ditandai dan pengajuannya ditolak,
+	// sama dengan penyerahan di dashboard. Setelah diisi, pengajuan diterima.
+	setKhusus := []perlengkapan.SetItem{{Nama: "Koper", Qty: 1, Untuk: "semua"}, {Nama: "Mukena", Qty: 1, Untuk: "wanita"}}
+	testdb.Exec(t, tx, `UPDATE jamaah SET jenis_kelamin = NULL WHERE id=?`, j2)
+	if daftar, _ = daftarPerlengkapan(ctx, tx, b, setKhusus); !daftar[1].PerluJenisKelamin {
+		t.Errorf("jamaah tanpa jenis kelamin harus ditandai: %+v", daftar[1])
+	}
+	if err := ajukanPerlengkapanTx(ctx, tx, akun, b, []int64{j2}, setKhusus); !errors.Is(err, errJenisKelaminKosong) {
+		t.Errorf("ajukan tanpa jenis kelamin: %v", err)
+	}
+	testdb.Exec(t, tx, `UPDATE jamaah SET jenis_kelamin = 'P' WHERE id=?`, j2)
+	if daftar, _ = daftarPerlengkapan(ctx, tx, b, setKhusus); daftar[1].PerluJenisKelamin || len(daftar[1].Isi) != 2 || daftar[1].Status != "belum" {
+		t.Errorf("setelah jenis kelamin diisi: %+v", daftar[1])
 	}
 	// Konfirmasi sebelum diserahkan ditolak.
 	if err := terimaPerlengkapanTx(ctx, tx, akun, b, j1); !errors.Is(err, errBelumDiserahkan) {
