@@ -835,7 +835,7 @@ func (h *Handler) BatalkanPerlengkapan(w http.ResponseWriter, r *http.Request) {
 
 	brandID := identity.GetBrandID(r.Context())
 
-	b, err := h.repo.BatalkanPerlengkapan(r.Context(), id, paxID, brandID)
+	b, err := h.repo.BatalkanPerlengkapan(r.Context(), id, paxID, brandID, identity.GetAdminUserID(r.Context()))
 	if err != nil {
 		handleRepoError(w, err)
 		return
@@ -878,7 +878,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrSeatSudahDiblokir):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, ErrTemplatePerlengkapanBelumDiatur):
-		writeError(w, http.StatusBadRequest, "Template set perlengkapan belum diatur untuk brand ini.")
+		writeError(w, http.StatusBadRequest, "Isi perlengkapan paket ini belum diatur.")
 	case errors.Is(err, ErrPerlengkapanSudahDiberikan):
 		writeError(w, http.StatusBadRequest, "Perlengkapan untuk booking ini sudah pernah diberikan.")
 	case errors.Is(err, ErrPerlengkapanSudahDiterima):

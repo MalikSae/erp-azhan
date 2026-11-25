@@ -77,7 +77,7 @@ const PengajuanPerlengkapanPage = () => {
     setNotice(null);
     try {
       await serahkanPerlengkapan(row.booking_id, row.pax_id);
-      setNotice(`Perlengkapan ${row.nama_jamaah} diserahkan. Jamaah akan diminta mengonfirmasi penerimaan di app.`);
+      setNotice(`Perlengkapan ${row.nama_jamaah} diserahkan.`);
       await load();
     } catch (error) {
       setErrorMessage(error.response?.data?.error || 'Gagal menyerahkan perlengkapan.');

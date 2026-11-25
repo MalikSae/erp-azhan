@@ -1376,7 +1376,7 @@ func returPerlengkapanPaxTx(ctx context.Context, tx *sql.Tx, brandID, paxID int6
 	}
 	if kembalikanStok {
 		for _, l := range logs {
-			if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(brandID), l.itemID, l.qty, "retur", "booking_pax", uint64(paxID)); err != nil {
+			if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(brandID), l.itemID, l.qty, "retur", "booking_pax", uint64(paxID), 0); err != nil {
 				return fmt.Errorf("booking: kembalikan stok perlengkapan pax %d: %w", paxID, err)
 			}
 		}
@@ -1481,7 +1481,7 @@ func (r *Repository) cancelPaxTx(ctx context.Context, tx *sql.Tx, bookingID int6
 
 		if bookingStatus == "baru" || bookingStatus == "draft" {
 			for _, l := range logs {
-				if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), l.ItemID, l.Qty, "retur", "booking_pax", uint64(paxID)); err != nil {
+				if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), l.ItemID, l.Qty, "retur", "booking_pax", uint64(paxID), 0); err != nil {
 					return fmt.Errorf("booking.CancelPax restore stok: %w", err)
 				}
 			}
@@ -2496,9 +2496,9 @@ func scanBookingRow(rows *sql.Rows) (*Booking, error) {
 func tolakPerlengkapanUntukStatus(status string) string {
 	switch status {
 	case "draft":
-		return "booking masih draft, selesaikan booking sebelum menyerahkan perlengkapan"
+		return "Booking masih draft."
 	case "batal":
-		return "booking sudah dibatalkan, perlengkapan tidak dapat diserahkan"
+		return "Booking sudah batal."
 	}
 	return ""
 }
@@ -2641,7 +2641,7 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 		setItems = append(setItems, setItemRow{ItemID: it.ItemID, Qty: it.Qty})
 	}
 	if needGender {
-		return nil, bizErr("jenis kelamin jamaah belum diisi; lengkapi dulu karena paket ini punya perlengkapan khusus pria/wanita")
+		return nil, bizErr("Jenis kelamin jamaah belum diisi.")
 	}
 	if len(setItems) == 0 {
 		return nil, ErrTemplatePerlengkapanBelumDiatur
@@ -2675,7 +2675,7 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 	// 5. Potong stok dan catat ke logs
 	for _, item := range setItems {
 		butuh := item.Qty
-		if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), item.ItemID, -butuh, "distribusi", "booking_pax", uint64(paxID)); err != nil {
+		if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), item.ItemID, -butuh, "distribusi", "booking_pax", uint64(paxID), adminID); err != nil {
 			return nil, fmt.Errorf("booking.MarkPerlengkapanDiberikan potong stok: %w", err)
 		}
 
@@ -2711,7 +2711,7 @@ func (r *Repository) MarkPerlengkapanDiberikan(ctx context.Context, bookingID in
 }
 
 // BatalkanPerlengkapan membatalkan status perlengkapan pax dan mengembalikan stok item (jika booking_status baru/draft).
-func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, paxID int64, brandID *int64) (*Booking, error) {
+func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, paxID int64, brandID *int64, adminID int64) (*Booking, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("booking.BatalkanPerlengkapan tx: %w", err)
@@ -2785,7 +2785,7 @@ func (r *Repository) BatalkanPerlengkapan(ctx context.Context, bookingID int64, 
 
 	// 4. Kembalikan stok (karena ini aksi eksplisit pembatalan distribusi/undo)
 	for _, l := range logs {
-		err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), l.ItemID, l.Qty, "retur", "booking_pax", uint64(paxID))
+		err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), l.ItemID, l.Qty, "retur", "booking_pax", uint64(paxID), adminID)
 		if err != nil {
 			return nil, fmt.Errorf("booking.BatalkanPerlengkapan restore stok: %w", err)
 		}

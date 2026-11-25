@@ -343,7 +343,7 @@ func (h *Handler) setError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrInvalidInput):
 		h.sendError(w, http.StatusBadRequest, pesanInputTidakValid(err))
 	default:
-		h.sendError(w, http.StatusInternalServerError, "Gagal memproses isi perlengkapan.")
+		h.serverError(w, err, "Gagal memproses isi perlengkapan.")
 	}
 }
 

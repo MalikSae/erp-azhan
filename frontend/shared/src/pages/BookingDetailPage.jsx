@@ -1017,7 +1017,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
                   }
 
                   if (key === "status") {
-                    if (pax.pax_type === 'infant') return <span className="text-xs text-neutral-400 font-body">N/A</span>;
+                    if (pax.pax_type === 'infant') return <span className="text-xs text-neutral-400 font-body">-</span>;
                     // Alur app: diajukan akun -> diserahkan petugas -> diterima (dikonfirmasi akun).
                     if (pax.perlengkapan_diterima_at) return <DotText tone="success">Diterima</DotText>;
                     if (pax.perlengkapan_status === 'sudah_diberikan') return <DotText tone="warning">Menunggu konfirmasi</DotText>;
@@ -1541,16 +1541,15 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
       <Modal
         isOpen={isBatalkanModalOpen}
         onClose={() => setIsBatalkanModalOpen(false)}
-        title="Konfirmasi Pembatalan Distribusi Perlengkapan"
+        title="Batalkan Penyerahan"
       >
         <p className="text-neutral-600 font-body text-sm mb-6">
-          Apakah Anda yakin ingin membatalkan distribusi perlengkapan untuk jamaah {selectedPaxForCancelPerlengkapan?.nama_jamaah || 'ini'}?
-          Stok barang akan dikembalikan ke inventaris.
+          Batalkan penyerahan perlengkapan {selectedPaxForCancelPerlengkapan?.nama_jamaah || 'jamaah ini'}?
         </p>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setIsBatalkanModalOpen(false)}>Batal</Button>
           <Button variant="danger" disabled={perlengkapanLoading} onClick={handleBatalkanPerlengkapan}>
-            {perlengkapanLoading ? "Memproses..." : "Ya, Batalkan"}
+            {perlengkapanLoading ? "Memproses..." : "Batalkan"}
           </Button>
         </div>
       </Modal>
