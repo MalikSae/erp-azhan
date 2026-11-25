@@ -296,6 +296,7 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
         ["No BPJS / Asuransi", jamaah.no_asuransi_bpjs],
       ],
       paspor: [
+        ["Nama di Paspor", jamaah.nama_paspor],
         ["Nomor Paspor", jamaah.no_paspor],
         ["Kantor Imigrasi Penerbit", jamaah.tempat_paspor_keluar],
         ["Tanggal Dikeluarkan", jamaah.tanggal_paspor_keluar ? formatTanggal(jamaah.tanggal_paspor_keluar) : ""],
@@ -415,6 +416,9 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
 
           <Section title="Dokumen Paspor">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
+              <div className="md:col-span-2">
+                <InfoItem label="Nama di Paspor" value={jamaah.nama_paspor} />
+              </div>
               <InfoItem label="Nomor Paspor" value={jamaah.no_paspor} />
               <InfoItem label="Kantor Imigrasi Penerbit" value={jamaah.tempat_paspor_keluar} />
               <InfoItem label="Tanggal Dikeluarkan (Issued Date)" value={formatTanggal(jamaah.tanggal_paspor_keluar)} />

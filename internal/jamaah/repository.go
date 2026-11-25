@@ -208,7 +208,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 
 // GetByID mengambil jamaah lengkap, verify brand match untuk scoped admin.
 func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Jamaah, error) {
-	q := `SELECT id, brand_id, COALESCE(id_jamaah, ''), kode_jamaah, nama_lengkap, jenis_kelamin, nama_ayah_kandung, nik, tempat_lahir,
+	q := `SELECT id, brand_id, COALESCE(id_jamaah, ''), kode_jamaah, nama_lengkap, nama_paspor, jenis_kelamin, nama_ayah_kandung, nik, tempat_lahir,
 		DATE_FORMAT(tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
 		no_paspor, tempat_paspor_keluar,
 		DATE_FORMAT(tanggal_paspor_keluar, '%Y-%m-%d') AS tanggal_paspor_keluar,
@@ -230,7 +230,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 
 	var j Jamaah
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(
-		&j.ID, &j.BrandID, &j.IDJamaah, &j.KodeJamaah, &j.NamaLengkap, &j.JenisKelamin, &j.NamaAyahKandung, &j.NIK, &j.TempatLahir,
+		&j.ID, &j.BrandID, &j.IDJamaah, &j.KodeJamaah, &j.NamaLengkap, &j.NamaPaspor, &j.JenisKelamin, &j.NamaAyahKandung, &j.NIK, &j.TempatLahir,
 		&j.TanggalLahir,
 		&j.NoPaspor, &j.TempatPasporKeluar, &j.TanggalPasporKeluar,
 		&j.PasporBerlakuSampai,
@@ -275,14 +275,14 @@ func (r *Repository) Create(ctx context.Context, brandID int64, req *CreateJamaa
 	}
 
 	const q = `INSERT INTO jamaah (
-		brand_id, id_jamaah, kode_jamaah, nama_lengkap, jenis_kelamin, nama_ayah_kandung, nik, tempat_lahir, tanggal_lahir,
+		brand_id, id_jamaah, kode_jamaah, nama_lengkap, nama_paspor, jenis_kelamin, nama_ayah_kandung, nik, tempat_lahir, tanggal_lahir,
 		no_paspor, tempat_paspor_keluar, tanggal_paspor_keluar, paspor_berlaku_sampai,
 		no_hp, email, pekerjaan, pendidikan_terakhir, penjamin_kesehatan, no_asuransi_bpjs,
 		alamat, kota, catatan, status, emergency_nama, emergency_nik, emergency_hp, emergency_hubungan, emergency_alamat
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	res, err := tx.ExecContext(ctx, q,
-		brandID, idJamaah, kodeJamaah, req.NamaLengkap, req.JenisKelamin, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
+		brandID, idJamaah, kodeJamaah, req.NamaLengkap, req.NamaPaspor, req.JenisKelamin, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
 		req.NoPaspor, req.TempatPasporKeluar, req.TanggalPasporKeluar, req.PasporBerlakuSampai,
 		req.NoHP, req.Email, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan, req.NoAsuransiBPJS,
 		req.Alamat, req.Kota, req.Catatan, status, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
@@ -336,14 +336,14 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 	}
 
 	const q = `UPDATE jamaah SET
-		brand_id=?, nama_lengkap=?, jenis_kelamin=?, nama_ayah_kandung=?, nik=?, tempat_lahir=?, tanggal_lahir=?,
+		brand_id=?, nama_lengkap=?, nama_paspor=?, jenis_kelamin=?, nama_ayah_kandung=?, nik=?, tempat_lahir=?, tanggal_lahir=?,
 		no_paspor=?, tempat_paspor_keluar=?, tanggal_paspor_keluar=?, paspor_berlaku_sampai=?,
 		no_hp=?, email=?, pekerjaan=?, pendidikan_terakhir=?, penjamin_kesehatan=?, no_asuransi_bpjs=?,
 		alamat=?, kota=?, catatan=?, status=?, emergency_nama=?, emergency_nik=?, emergency_hp=?, emergency_hubungan=?, emergency_alamat=?
 		WHERE id=?`
 
 	_, err = r.db.ExecContext(ctx, q,
-		finalBrandID, req.NamaLengkap, req.JenisKelamin, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
+		finalBrandID, req.NamaLengkap, req.NamaPaspor, req.JenisKelamin, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
 		req.NoPaspor, req.TempatPasporKeluar, req.TanggalPasporKeluar, req.PasporBerlakuSampai,
 		req.NoHP, req.Email, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan, req.NoAsuransiBPJS,
 		req.Alamat, req.Kota, req.Catatan, status, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,

@@ -47,6 +47,7 @@ import (
 	"erp-azhan/api/internal/pengumuman"
 	"erp-azhan/api/internal/perlengkapan"
 	"erp-azhan/api/internal/rbac"
+	"erp-azhan/api/internal/manifest"
 	"erp-azhan/api/internal/schedule"
 	"erp-azhan/api/internal/selfbooking"
 	"erp-azhan/api/internal/shared"
@@ -113,7 +114,7 @@ func main() {
 		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Brand-Id"},
-		ExposedHeaders:   []string{"Link"},
+		ExposedHeaders:   []string{"Link", "Content-Disposition"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -141,6 +142,7 @@ func main() {
 
 	scheduleRepo := schedule.NewRepository(db)
 	scheduleHandler := schedule.NewHandler(scheduleRepo)
+	manifestHandler := manifest.NewHandler(db)
 	// Paket yang tanggal berangkatnya sudah lewat diarsipkan otomatis: sekali saat API menyala, lalu tiap 24 jam.
 	go schedule.JalankanArsipOtomatis(context.Background(), scheduleRepo, 24*time.Hour)
 
@@ -510,6 +512,12 @@ func main() {
 		r.With(identity.RequirePermission("perlengkapan.view")).Get("/schedules/{id}/perlengkapan", perlengkapanHandler.GetScheduleSet)
 		scheduleEdit.Put("/schedules/{id}/perlengkapan", perlengkapanHandler.PutScheduleSet)
 		scheduleView.Get("/schedules/{id}/manasik", manasikHandler.UntukPaket)
+
+		// Manifest paket: PNR, pemeriksaan data pax, unduh .xlsx (SPEK-MANIFEST-PAKET-2026-11-25).
+		manifestKelola := r.With(identity.RequirePermission("manifest.manage"))
+		manifestKelola.Get("/schedules/{id}/manifest", manifestHandler.Detail)
+		manifestKelola.Put("/schedules/{id}/manifest", manifestHandler.Simpan)
+		manifestKelola.Get("/schedules/{id}/manifest/unduh", manifestHandler.Unduh)
 
 		// Manasik: satu manasik untuk satu atau lebih paket, rekap kehadiran, dan absensi hari-H.
 		manasikView := r.With(identity.RequirePermission("manasik.view"))

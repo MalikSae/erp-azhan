@@ -11,6 +11,7 @@ type Jamaah struct {
 	IDJamaah             string    `json:"id_jamaah"`
 	KodeJamaah           string    `json:"kode_jamaah"`
 	NamaLengkap          string    `json:"nama_lengkap"`
+	NamaPaspor           *string   `json:"nama_paspor"`
 	JenisKelamin         *string   `json:"jenis_kelamin"`
 	NamaAyahKandung      *string   `json:"nama_ayah_kandung"`
 	NIK                  *string   `json:"nik"`
@@ -71,6 +72,7 @@ type JamaahListItem struct {
 type CreateJamaahRequest struct {
 	BrandID             *int64  `json:"brand_id"`
 	NamaLengkap         string  `json:"nama_lengkap"`
+	NamaPaspor          *string `json:"nama_paspor"`
 	JenisKelamin        *string `json:"jenis_kelamin"`
 	NamaAyahKandung     *string `json:"nama_ayah_kandung"`
 	NIK                 *string `json:"nik"`

@@ -76,6 +76,7 @@ function AppRoutes() {
           <Route path="/schedules" element={<RequireAccess perm="schedule.view"><SchedulesPage /></RequireAccess>} />
           <Route path="/schedules/new" element={<RequireAccess perm="schedule.edit"><ScheduleFormPage /></RequireAccess>} />
           <Route path="/schedules/:id" element={<RequireAccess perm="schedule.view"><ScheduleDetailPage /></RequireAccess>} />
+          <Route path="/schedules/:id/manifest" element={<RequireAccess perm="manifest.manage"><ScheduleDetailPage tab="manifest" /></RequireAccess>} />
           <Route path="/schedules/:id/edit" element={<RequireAccess perm="schedule.edit"><ScheduleFormPage /></RequireAccess>} />
           <Route path="/manasik" element={<RequireAccess perm="manasik.view"><ManasikPage /></RequireAccess>} />
           <Route path="/manasik/baru" element={<RequireAccess perm="manasik.edit"><ManasikFormPage /></RequireAccess>} />
