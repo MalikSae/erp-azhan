@@ -97,7 +97,7 @@ func (h *Handler) canReadAdminFile(r *http.Request, category, name string) bool 
 	canonical := "/api/admin/media/" + category + "/" + name
 	legacy := "/uploads/" + category + "/" + name
 	var allowed bool
-	err := h.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM media_uploads WHERE path=? AND brand_id=?) OR EXISTS(SELECT 1 FROM dokumen_jamaah d JOIN jamaah j ON j.id=d.jamaah_id WHERE d.file_url IN (?,?) AND j.brand_id=?) OR EXISTS(SELECT 1 FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN schedules s ON s.id=b.schedule_id WHERE p.bukti_url IN (?,?) AND s.brand_id=?)`, canonical, *brand, canonical, legacy, *brand, canonical, legacy, *brand).Scan(&allowed)
+	err := h.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM media_uploads WHERE path=? AND brand_id=?) OR EXISTS(SELECT 1 FROM dokumen_jamaah d JOIN jamaah j ON j.id=d.jamaah_id WHERE d.file_url IN (?,?) AND j.brand_id=?) OR EXISTS(SELECT 1 FROM dokumen_jamaah_versions v JOIN dokumen_jamaah d ON d.id=v.dokumen_id JOIN jamaah j ON j.id=d.jamaah_id WHERE v.file_url IN (?,?) AND j.brand_id=?) OR EXISTS(SELECT 1 FROM payments p JOIN bookings b ON b.id=p.booking_id JOIN schedules s ON s.id=b.schedule_id WHERE p.bukti_url IN (?,?) AND s.brand_id=?)`, canonical, *brand, canonical, legacy, *brand, canonical, legacy, *brand, canonical, legacy, *brand).Scan(&allowed)
 	return err == nil && allowed
 }
 

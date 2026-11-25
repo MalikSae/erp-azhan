@@ -58,5 +58,11 @@ func Portal(t *testing.T) *sql.DB {
 			t.Fatal(err)
 		}
 	}
+	// Kolom jejak verifikasi dari migrasi 162, tanpa foreign key (tabel sementara tidak mendukungnya).
+	for _, table := range []string{"dokumen_jamaah", "dokumen_jamaah_versions"} {
+		if _, err = db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN verified_by BIGINT UNSIGNED NULL, ADD COLUMN verified_at DATETIME NULL`); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return db
 }

@@ -167,10 +167,12 @@ func (h *Handler) canViewCategory(r *http.Request, category, name string) bool {
 	if category != "dokumen-jamaah" || !hasAnyPermission(ctx, buktiViewPerms) {
 		return false
 	}
-	// Tanpa dokumen.view: hanya berkas yang bukan dokumen identitas jamaah (mis. bukti transfer).
+	// Tanpa dokumen.view: hanya berkas yang bukan dokumen identitas jamaah, termasuk versi lamanya
+	// (mis. bukti transfer).
 	var dokumen bool
-	err := h.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dokumen_jamaah WHERE file_url IN (?,?))`,
-		"/api/admin/media/"+category+"/"+name, "/uploads/"+category+"/"+name).Scan(&dokumen)
+	canonical, legacy := "/api/admin/media/"+category+"/"+name, "/uploads/"+category+"/"+name
+	err := h.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dokumen_jamaah WHERE file_url IN (?,?)) OR EXISTS(SELECT 1 FROM dokumen_jamaah_versions WHERE file_url IN (?,?))`,
+		canonical, legacy, canonical, legacy).Scan(&dokumen)
 	return err == nil && !dokumen
 }
 

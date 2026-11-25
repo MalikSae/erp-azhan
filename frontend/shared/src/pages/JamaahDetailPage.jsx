@@ -6,7 +6,7 @@ import { listKaitanLog } from "../api/agen";
 const formatDate = (v) => (!v ? "-" : new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(v)));
 import PerubahanJamaahPanel from "../components/PerubahanJamaahPanel";
 import { listDokumen, upsertDokumen } from "../api/dokumen";
-import { uploadMedia, openProtectedMedia, protectedMediaErrorMessage } from "../api/media";
+import { uploadMedia } from "../api/media";
 import { listBookings } from "../api/bookings";
 import { listBrandOptions } from "../api/brands";
 import PageHeader from "../components/ui/PageHeader";
@@ -21,17 +21,11 @@ import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Table from "../components/ui/Table";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import Textarea from "../components/ui/Textarea";
-import DocumentReview from "../components/DocumentReview";
-import { Eye, Upload, ExternalLink, RefreshCw, Save, Printer } from "lucide-react";
+import Modal from "../components/ui/Modal";
+import DocumentReview, { StatusDokumen } from "../components/DocumentReview";
+import { Eye, Upload, RefreshCw, Save, Printer } from "lucide-react";
 import { STATUS_AGEN } from "../utils/agen";
 import { printJamaah } from "../utils/printJamaah";
-
-// Label status dokumen jamaah (nilai dari API: submitted | approved | rejected).
-const STATUS_DOKUMEN = {
-  submitted: { label: "Menunggu verifikasi", warna: "text-warning-600" },
-  approved: { label: "Disetujui", warna: "text-success-600" },
-  rejected: { label: "Ditolak", warna: "text-danger-600" },
-};
 
 const DOKUMEN_TYPES = [
   { key: "pas_foto", label: "Pas Foto" },
@@ -42,6 +36,7 @@ const DOKUMEN_TYPES = [
   { key: "akte_lahir", label: "Akte Lahir" },
   { key: "vaksin_meningitis", label: "Vaksin Meningitis" },
 ];
+const labelDokumen = (jenis) => DOKUMEN_TYPES.find((t) => t.key === jenis)?.label || jenis;
 
 const formatRupiah = (angka) => {
   if (!angka && angka !== 0) return "-";
@@ -120,7 +115,8 @@ const AGEN_STATUS_STYLE = {
 // bolehLihatPerubahan: pengguna memegang izin jamaah.perubahan.approve, sehingga riwayat perubahan data dan
 // pengajuan yang menunggu untuk jamaah ini bisa ditampilkan dan diputuskan dari halaman ini.
 // bolehGantiAgen: izin agen.kaitan.edit, menampilkan tombol "Ganti" agen tempat jamaah terikat.
-export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan = false, bolehGantiAgen = false }) => {
+// bolehUbahDokumen: izin dokumen.edit, menampilkan Unggah/Ganti/Tinjau di Dokumen Digital.
+export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan = false, bolehGantiAgen = false, bolehUbahDokumen = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,6 +156,9 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
 
   const [activeUploadJenis, setActiveUploadJenis] = useState(null);
   const [uploadingJenis, setUploadingJenis] = useState(null);
+  // Dokumen yang dibuka di dialog tinjau (id), dan jenis approved yang menunggu konfirmasi ganti.
+  const [tinjauId, setTinjauId] = useState(null);
+  const [konfirmasiGanti, setKonfirmasiGanti] = useState(null);
 
   const fetchAllData = async () => {
     try {
@@ -230,25 +229,20 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
       const fileUrl = await uploadMedia(file, "dokumen-jamaah");
       await upsertDokumen(id, { jenis: activeUploadJenis, file_url: fileUrl });
 
-      setSuccess(`Dokumen ${activeUploadJenis.replace('_', ' ')} berhasil diunggah.`);
+      setSuccess(`Dokumen ${labelDokumen(activeUploadJenis)} diunggah.`);
       const updatedDocs = await listDokumen(id);
       setDokumenList(updatedDocs || []);
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal mengunggah dokumen");
+      setError(err.response?.data?.error || "Dokumen gagal diunggah.");
     } finally {
       setUploadingJenis(null);
       setActiveUploadJenis(null);
     }
   };
 
-  const bukaDokumen = async (url) => {
-    setError(null);
-    setSuccess(null);
-    try {
-      await openProtectedMedia(url);
-    } catch (err) {
-      setError(protectedMediaErrorMessage(err));
-    }
+  const gantiDokumen = (existing) => {
+    if (existing.status === "approved") setKonfirmasiGanti(existing.jenis);
+    else handleTriggerUpload(existing.jenis);
   };
 
   // ─── Catatan Actions ──────────────────────────────────────────────────────────
@@ -382,8 +376,8 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
           hint={bookings.length > 0 ? "Lihat riwayat di bawah" : "Belum ada booking"}
         />
         <SummaryItem
-          label="Dokumen terunggah"
-          value={`${dokumenList.filter((d) => d.file_url).length}/${DOKUMEN_TYPES.length}`}
+          label="Dokumen disetujui"
+          value={`${dokumenList.filter((d) => d.file_url && d.status === "approved").length}/${DOKUMEN_TYPES.length}`}
         />
         <SummaryItem
           label="Akun portal"
@@ -519,45 +513,45 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
                 const hasFile = Boolean(existing && existing.file_url);
                 const isUploading = uploadingJenis === docType.key;
 
+                const linkDokumen = "inline-flex items-center gap-1 text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900";
+
                 return (
-                  <div key={docType.key} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-2">
-                    <div>
+                  <div key={docType.key} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
                       <span className="text-sm font-medium font-body text-neutral-800 block">
                         {docType.label}
                       </span>
-                      <span className={`text-xs font-body block ${hasFile ? (STATUS_DOKUMEN[existing.status]?.warna || "text-neutral-500") : "text-neutral-500"}`}>
-                        {hasFile ? (STATUS_DOKUMEN[existing.status]?.label || existing.status) : "Belum Diunggah"}
-                      </span>
+                      <StatusDokumen status={hasFile ? existing.status : null} />
+                      {hasFile && existing.status === "rejected" && existing.rejection_reason && (
+                        <p className="text-xs text-neutral-500 font-body line-clamp-2 break-words">{existing.rejection_reason}</p>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {hasFile && existing.status !== "approved" && <DocumentReview document={existing} onChanged={updated => setDokumenList(previous => previous.map(doc => doc.id === updated.id ? updated : doc))} />}
+                    <div className="flex items-center gap-3 shrink-0">
                       {hasFile && (
                         <button
                           type="button"
-                          onClick={() => bukaDokumen(existing.file_url)}
-                          className="p-1.5 text-neutral-500 hover:text-primary-600 rounded transition-colors"
-                          title="Lihat Dokumen"
+                          onClick={() => setTinjauId(existing.id)}
+                          className="p-1.5 text-neutral-500 hover:text-neutral-900 rounded transition-colors"
+                          title="Lihat dokumen"
+                          aria-label={`Lihat ${docType.label}`}
                         >
-                          <ExternalLink size={16} />
+                          <Eye size={16} />
                         </button>
                       )}
-
-                      <Button
-                        type="button"
-                        variant={hasFile ? "ghost" : "secondary"}
-                        size="sm"
-                        disabled={isUploading}
-                        onClick={() => handleTriggerUpload(docType.key)}
-                        className="text-xs px-2.5 py-1 flex items-center gap-1"
-                      >
-                        {isUploading ? (
-                          <RefreshCw size={12} className="animate-spin" />
-                        ) : (
-                          <Upload size={12} />
-                        )}
-                        <span>{hasFile ? "Ganti" : "Upload"}</span>
-                      </Button>
+                      {bolehUbahDokumen && isUploading && <RefreshCw size={16} className="animate-spin text-neutral-500" aria-label="Mengunggah" />}
+                      {bolehUbahDokumen && !isUploading && hasFile && existing.status === "submitted" && (
+                        <Button type="button" variant="secondary" size="sm" onClick={() => setTinjauId(existing.id)}>Tinjau</Button>
+                      )}
+                      {bolehUbahDokumen && !isUploading && hasFile && existing.status !== "submitted" && (
+                        <button type="button" className={linkDokumen} disabled={uploadingJenis !== null} onClick={() => gantiDokumen(existing)}>Ganti</button>
+                      )}
+                      {bolehUbahDokumen && !isUploading && !hasFile && (
+                        <button type="button" className={linkDokumen} disabled={uploadingJenis !== null} onClick={() => handleTriggerUpload(docType.key)}>
+                          <Upload size={14} />
+                          <span>Unggah</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -665,6 +659,34 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
           onSaved={() => { muatUlangJamaah(); muatLogKaitan(); setSuccess("Agen jamaah berhasil diganti dan tercatat di riwayat."); }}
         />
       )}
+
+      {(() => {
+        const ditinjau = dokumenList.find((d) => d.id === tinjauId) || null;
+        return (
+          <DocumentReview
+            document={ditinjau}
+            label={ditinjau ? labelDokumen(ditinjau.jenis) : ""}
+            bolehUbah={bolehUbahDokumen}
+            onClose={() => setTinjauId(null)}
+            onChanged={(updated) => setDokumenList((previous) => previous.map((doc) => (doc.id === updated.id ? updated : doc)))}
+          />
+        );
+      })()}
+
+      <Modal
+        isOpen={Boolean(konfirmasiGanti)}
+        onClose={() => setKonfirmasiGanti(null)}
+        title="Ganti dokumen?"
+        size="sm"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setKonfirmasiGanti(null)}>Batal</Button>
+            <Button onClick={() => { const jenis = konfirmasiGanti; setKonfirmasiGanti(null); handleTriggerUpload(jenis); }}>Ganti</Button>
+          </>
+        )}
+      >
+        <p className="text-sm text-neutral-700 font-body">Persetujuan {konfirmasiGanti ? labelDokumen(konfirmasiGanti) : ""} akan dibatalkan.</p>
+      </Modal>
 
     </div>
   );
