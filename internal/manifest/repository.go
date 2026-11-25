@@ -117,10 +117,11 @@ func Ambil(ctx context.Context, q querier, scheduleID int64, scope *int64) (*Man
 
 // SimpanInfo menyimpan PNR dan detail penerbangan paket.
 func SimpanInfo(ctx context.Context, q querier, scheduleID int64, scope *int64, adminID int64, in InputInfo) error {
-	if err := in.rapikan(); err != nil {
+	// Gate berurutan: paket harus ada (dan dalam brand admin) dulu, baru isian divalidasi.
+	if _, err := ambilPaket(ctx, q, scheduleID, scope); err != nil {
 		return err
 	}
-	if _, err := ambilPaket(ctx, q, scheduleID, scope); err != nil {
+	if err := in.rapikan(); err != nil {
 		return err
 	}
 	_, err := q.ExecContext(ctx, `

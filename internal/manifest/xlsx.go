@@ -16,7 +16,7 @@ type kolom struct {
 	isi   func(no int, p Pax) string
 }
 
-// sheetManifest adalah satu sheet: nama, kolom, dan baris judul grup (judul di atas beberapa kolom).
+// sheetManifest adalah satu sheet: nama dan kolom tabel pax.
 type sheetManifest struct {
 	nama  string
 	kolom []kolom
@@ -149,13 +149,8 @@ func lebarKolom(s sheetManifest, pax []Pax) []float64 {
 
 // kolomDariAkhir: kolom awal (1-based) rentang di ujung kanan yang lebar gabungannya mencapai minimal.
 func kolomDariAkhir(lebar []float64, minimal float64) int {
-	return kolomDariAkhirSebelum(lebar, len(lebar)+1, minimal)
-}
-
-// kolomDariAkhirSebelum: kolom awal (1-based) rentang yang berakhir tepat sebelum kolom batas.
-func kolomDariAkhirSebelum(lebar []float64, batas int, minimal float64) int {
 	total := 0.0
-	for c := batas - 2; c >= 0; c-- {
+	for c := len(lebar) - 1; c >= 0; c-- {
 		total += lebar[c]
 		if total >= minimal {
 			return c + 1
@@ -164,6 +159,7 @@ func kolomDariAkhirSebelum(lebar []float64, batas int, minimal float64) int {
 	return 1
 }
 
+// sel: nama sel Excel dari nomor kolom dan baris (1-based), mis. (3, 4) → "C4".
 func sel(kol, baris int) string {
 	nama, _ := excelize.CoordinatesToCellName(kol, baris)
 	return nama

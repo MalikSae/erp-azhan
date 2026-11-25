@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import Button from 'shared/ui/Button';
@@ -10,6 +10,7 @@ import Table from 'shared/ui/Table';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { Surface, Section, TableCard } from 'shared/ui/DetailLayout';
 import { getManifest, simpanManifest, unduhManifest } from '../api/manifest';
+import { AuthContext } from '../context/AuthContext';
 
 // Tab Manifest di Detail Paket (Fase 1): PNR dan detail penerbangan, pemeriksaan data pax, unduh .xlsx.
 
@@ -51,6 +52,9 @@ const KOLOM = [
 ];
 
 const ManifestPaket = ({ scheduleId }) => {
+  const { hasPermission } = useContext(AuthContext);
+  // Tautan ke Detail Jamaah hanya untuk admin yang boleh membukanya; selain itu teks biasa.
+  const bolehLihatJamaah = hasPermission('jamaah.view');
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [form, setForm] = useState({ pnr: '', detail_penerbangan: '' });
@@ -111,9 +115,13 @@ const ManifestPaket = ({ scheduleId }) => {
       case 'nama':
         return (
           <div className="min-w-0">
-            <Link to={`/jamaah/${row.jamaah_id}`} className="font-medium text-neutral-900 hover:text-primary-600">
-              {namaTampil(row)}
-            </Link>
+            {bolehLihatJamaah ? (
+              <Link to={`/jamaah/${row.jamaah_id}`} className="font-medium text-neutral-900 hover:text-primary-600">
+                {namaTampil(row)}
+              </Link>
+            ) : (
+              <span className="font-medium text-neutral-900">{namaTampil(row)}</span>
+            )}
             <div className="flex items-center gap-2 text-xs text-neutral-500">
               <span className="font-mono">{row.kode_booking || `#${row.booking_id}`}</span>
               {row.status_booking === 'baru' && <Badge variant="warning">Belum DP</Badge>}
@@ -138,7 +146,13 @@ const ManifestPaket = ({ scheduleId }) => {
           <Badge variant="success">Lengkap</Badge>
         ) : (
           <div className="flex flex-col items-start gap-1">
-            {row.masalah.map((m) => <Badge key={m} variant="danger">{m}</Badge>)}
+            {row.masalah.map((m) => (bolehLihatJamaah ? (
+              <Link key={m} to={`/jamaah/${row.jamaah_id}`} className="hover:opacity-80">
+                <Badge variant="warning">{m}</Badge>
+              </Link>
+            ) : (
+              <Badge key={m} variant="warning">{m}</Badge>
+            )))}
           </div>
         );
       default:
@@ -147,6 +161,9 @@ const ManifestPaket = ({ scheduleId }) => {
   };
 
   const adaPax = data.pax.length > 0;
+  const jejakUnduh = data.terakhir_unduh
+    ? `Terakhir diunduh ${data.terakhir_unduh.nama}, ${waktuPendek(data.terakhir_unduh.waktu)}`
+    : '';
 
   return (
     <div className="space-y-6">
@@ -161,11 +178,7 @@ const ManifestPaket = ({ scheduleId }) => {
             title={`Pax ${data.pax.length}`}
             aside={adaPax && (
               <div className="flex items-center gap-3">
-                {data.terakhir_unduh && (
-                  <span className="hidden sm:inline text-xs font-body text-neutral-500">
-                    Terakhir diunduh {data.terakhir_unduh.nama}, {waktuPendek(data.terakhir_unduh.waktu)}
-                  </span>
-                )}
+                {jejakUnduh && <span className="hidden sm:inline text-xs font-body text-neutral-500">{jejakUnduh}</span>}
                 <Button onClick={unduh} disabled={mengunduh}>
                   <Download size={16} strokeWidth={1.75} />
                   <span>{mengunduh ? 'Mengunduh…' : 'Unduh manifest'}</span>
@@ -175,11 +188,7 @@ const ManifestPaket = ({ scheduleId }) => {
           >
             <Table columns={KOLOM} data={data.pax} renderCell={renderCell} emptyMessage="Belum ada pax." />
           </TableCard>
-          {data.terakhir_unduh && (
-            <p className="sm:hidden text-xs font-body text-neutral-500">
-              Terakhir diunduh {data.terakhir_unduh.nama}, {waktuPendek(data.terakhir_unduh.waktu)}
-            </p>
-          )}
+          {jejakUnduh && <p className="sm:hidden text-xs font-body text-neutral-500">{jejakUnduh}</p>}
         </div>
 
         <Surface className="order-first lg:order-none">
