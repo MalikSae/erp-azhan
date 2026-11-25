@@ -26,6 +26,17 @@ Masih membaca tabel modul lain (hanya baca, ditunda):
 - `internal/category`, `internal/hotel`, `internal/airline`, `internal/airport`: menghitung `schedules` sebelum hapus.
 - Modul booking sendiri masih menulis literal `'baru','dp','lunas'` di `repository.go`.
 
+### Grup menu Inventory (dicatat 2026-11-25, review alur Inventory)
+
+Ditunda atas keputusan user; perilaku sudah benar, hanya batas modul:
+
+- `internal/perlengkapan/set.go`: menulis `schedules.perlengkapan_custom`; membaca `schedules`, `package_categories`, `category_brands`.
+- `internal/perlengkapan/pengajuan.go`, `mutasi.go`, `repository.go`: join `booking_pax`, `bookings`, `schedules`, `jamaah`, `customer_accounts`, `admin_users`, `brands`.
+- `internal/booking/repository.go` (penyerahan): membaca set paket/kategori/global dan mengunci `perlengkapan_stok` langsung; hanya perubahan stok yang lewat `perlengkapan.ApplyBrandDelta`. Urutan set paket → kategori → global ditulis dua kali (booking dan `set.go`).
+- `internal/customer/perlengkapan_pelanggan.go`: menulis `booking_pax` (ajukan, terima) dan membaca `brands`.
+
+Perbaikan: `perlengkapan` menyediakan `IsiUntukPax(scheduleID, gender)` dan `KunciStok`; booking menyediakan fungsi ajukan/terima perlengkapan untuk customer.
+
 ## Kode berulang di backend (dicatat 2026-11-25)
 
 - `writeError`/`writeJSON` didefinisikan ulang di hampir tiap paket, dengan nama berbeda (`tulisGalat`, `galatTulis`, `handleRepoError`).

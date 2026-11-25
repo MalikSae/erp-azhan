@@ -1349,6 +1349,9 @@ func paxAktifBerperlengkapanTx(ctx context.Context, tx *sql.Tx, bookingID int64)
 	return ids, nil
 }
 
+// sqlResetPerlengkapanPax: isian SET yang mengosongkan seluruh jejak perlengkapan pax yang dibatalkan.
+const sqlResetPerlengkapanPax = `perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL`
+
 // returPerlengkapanPaxTx menghapus log perlengkapan satu pax. kembalikanStok: stok brand dikembalikan lebih
 // dulu (hanya untuk booking yang belum dibayar: baru atau draft).
 func returPerlengkapanPaxTx(ctx context.Context, tx *sql.Tx, brandID, paxID int64, kembalikanStok bool) error {
@@ -1454,49 +1457,16 @@ func (r *Repository) cancelPaxTx(ctx context.Context, tx *sql.Tx, bookingID int6
 
 	// 2.5 Handle Perlengkapan
 	if perlengkapanStatus == "sudah_diberikan" {
-		qLog := `SELECT perlengkapan_item_id, qty FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ? FOR UPDATE`
-		rows, err := tx.QueryContext(ctx, qLog, paxID)
-		if err != nil {
-			return fmt.Errorf("booking.CancelPax get logs: %w", err)
-		}
-
-		type logRow struct {
-			ItemID uint64
-			Qty    int
-		}
-		var logs []logRow
-		for rows.Next() {
-			var l logRow
-			if err := rows.Scan(&l.ItemID, &l.Qty); err != nil {
-				rows.Close()
-				return fmt.Errorf("booking.CancelPax scan log: %w", err)
-			}
-			logs = append(logs, l)
-		}
-		errLog := rows.Err()
-		rows.Close()
-		if errLog != nil {
-			return fmt.Errorf("booking.CancelPax baca log: %w", errLog)
-		}
-
-		if bookingStatus == "baru" || bookingStatus == "draft" {
-			for _, l := range logs {
-				if err := perlengkapan.ApplyBrandDelta(ctx, tx, uint64(scheduleBrandID), l.ItemID, l.Qty, "retur", "booking_pax", uint64(paxID), 0); err != nil {
-					return fmt.Errorf("booking.CancelPax restore stok: %w", err)
-				}
-			}
-		}
-
-		if _, err := tx.ExecContext(ctx, "DELETE FROM booking_pax_perlengkapan_logs WHERE booking_pax_id = ?", paxID); err != nil {
-			return fmt.Errorf("booking.CancelPax delete logs: %w", err)
+		if err := returPerlengkapanPaxTx(ctx, tx, scheduleBrandID, paxID, bookingStatus == "baru" || bookingStatus == "draft"); err != nil {
+			return err
 		}
 	}
 
 	// 3. Update status pax
 	if bookingStatus == "baru" || bookingStatus == "draft" {
-		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE id = ?`, paxID)
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, ` + sqlResetPerlengkapanPax + ` WHERE id = ?`, paxID)
 	} else {
-		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE id = ?`, paxID)
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', ` + sqlResetPerlengkapanPax + ` WHERE id = ?`, paxID)
 	}
 	if err != nil {
 		return fmt.Errorf("booking.CancelPax update status: %w", err)
@@ -1544,9 +1514,9 @@ func (r *Repository) cancelPaxTx(ctx context.Context, tx *sql.Tx, bookingID int6
 				return err
 			}
 		}
-		qBatalSisa := `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE booking_id = ? AND pax_status = 'aktif'`
+		qBatalSisa := `UPDATE booking_pax SET pax_status = 'batal', ` + sqlResetPerlengkapanPax + ` WHERE booking_id = ? AND pax_status = 'aktif'`
 		if kembalikanStok {
-			qBatalSisa = `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE booking_id = ? AND pax_status = 'aktif'`
+			qBatalSisa = `UPDATE booking_pax SET pax_status = 'batal', harga_pax = 0, ` + sqlResetPerlengkapanPax + ` WHERE booking_id = ? AND pax_status = 'aktif'`
 		}
 		if _, err := tx.ExecContext(ctx, qBatalSisa, bookingID); err != nil {
 			return fmt.Errorf("booking.CancelPax batalkan pax tersisa: %w", err)
@@ -1784,7 +1754,7 @@ func updateBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64, new
 				return err
 			}
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', perlengkapan_status = 'belum_diberikan', perlengkapan_tanggal = NULL, perlengkapan_metode = NULL, perlengkapan_diajukan_at = NULL, perlengkapan_diajukan_oleh = NULL, perlengkapan_diserahkan_at = NULL, perlengkapan_diserahkan_oleh = NULL, perlengkapan_diserahkan_nama = NULL, perlengkapan_diterima_at = NULL, perlengkapan_diterima_oleh = NULL WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID)
+		_, err = tx.ExecContext(ctx, `UPDATE booking_pax SET pax_status = 'batal', ` + sqlResetPerlengkapanPax + ` WHERE booking_id = ? AND pax_status = 'aktif'`, bookingID)
 		if err != nil {
 			return fmt.Errorf("booking.UpdateStatus cancel pax: %w", err)
 		}

@@ -9,6 +9,8 @@ type PerlengkapanItem struct {
 	PhotoURL  *string   `json:"photo_url"`
 	QtyPerSet int       `json:"qty_per_set"`
 	CreatedAt time.Time `json:"created_at"`
+	// BisaDihapus hanya diisi di daftar item: false bila item dipakai di set, punya stok, atau punya riwayat.
+	BisaDihapus *bool `json:"bisa_dihapus,omitempty"`
 }
 
 // CreateItemRequest adalah payload untuk POST /api/admin/perlengkapan-items.

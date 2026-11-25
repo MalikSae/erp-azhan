@@ -149,7 +149,7 @@ func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, ErrInUse) {
-			h.sendError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai di set atau stok.")
+			h.sendError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai atau punya riwayat stok.")
 			return
 		}
 		h.serverError(w, err, "Gagal menghapus item perlengkapan.")
