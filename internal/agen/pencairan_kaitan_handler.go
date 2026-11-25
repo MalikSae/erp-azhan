@@ -95,6 +95,16 @@ func (h *Handler) ListPencairanAdmin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// RingkasanPencairan GET /api/admin/pencairan/ringkasan?brand_id=
+func (h *Handler) RingkasanPencairan(w http.ResponseWriter, r *http.Request) {
+	s, err := h.repo.RingkasanPencairan(r.Context(), adminBrandScope(r))
+	if err != nil {
+		handlePencairanKaitanError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s)
+}
+
 // SetujuiPencairan POST /api/admin/pencairan/{id}/setujui {bukti_transfer_keluar_url}
 func (h *Handler) SetujuiPencairan(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r, "id")

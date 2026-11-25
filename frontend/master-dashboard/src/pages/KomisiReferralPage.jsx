@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Clock3, CheckCircle2, XCircle, Banknote, Eye } from 'lucide-react';
 import {
   listPencairanAdmin,
+  ringkasanPencairanAdmin,
   setujuiPencairan,
   tolakPencairan,
   EVENT_PENCAIRAN_KOMISI,
@@ -43,6 +44,8 @@ const Row = ({ label, children }) => (
   </div>
 );
 
+const RINGKASAN_KOSONG = { pending: 0, pending_nominal: 0, disetujui: 0, dicairkan: 0, ditolak: 0 };
+
 // Screen C1 — Persetujuan Pencairan lintas brand (agen-azhan.md §5 poin 11).
 // Menyetujui wajib mengunggah bukti transfer keluar; saldo dicek ulang di
 // server. Pajak diproses di luar sistem (D7).
@@ -52,6 +55,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
   const [brandId, setBrandId] = useState('');
   const [brands, setBrands] = useState([]);
   const [allItems, setAllItems] = useState([]);
+  const [stats, setStats] = useState(RINGKASAN_KOSONG);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
@@ -69,7 +73,12 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
     setLoading(true);
     setError('');
     try {
-      setAllItems((await listPencairanAdmin({ status: '', brandId })) || []);
+      const [list, ringkasan] = await Promise.all([
+        listPencairanAdmin({ status: '', brandId }),
+        ringkasanPencairanAdmin({ brandId }),
+      ]);
+      setAllItems(list || []);
+      setStats({ ...RINGKASAN_KOSONG, ...ringkasan });
     } catch {
       setError('Pengajuan pencairan gagal dimuat. Coba lagi.');
     } finally {
@@ -82,20 +91,11 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId]);
 
-  // Ringkasan memakai semua status (mengikuti filter brand); tabel disaring menurut status.
+  // Ringkasan dari server (semua status, mengikuti filter brand); tabel disaring menurut status.
   const items = useMemo(
     () => allItems.filter((row) => status === 'semua' || row.status === status),
     [allItems, status]
   );
-  const stats = useMemo(() => {
-    const by = (st) => allItems.filter((row) => row.status === st);
-    const sum = (list) => list.reduce((t, row) => t + (Number(row.nominal_diajukan) || 0), 0);
-    return {
-      pending: by('pending').length, pendingNominal: sum(by('pending')),
-      disetujui: by('disetujui').length, dicairkan: sum(by('disetujui')),
-      ditolak: by('ditolak').length,
-    };
-  }, [allItems]);
 
   const open = (row) => {
     setSelected(row);
@@ -229,7 +229,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
 
       {!loading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatTile icon={Clock3} variant="warning" value={stats.pending} label="Menunggu" hint={money(stats.pendingNominal)} />
+          <StatTile icon={Clock3} variant="warning" value={stats.pending} label="Menunggu" hint={money(stats.pending_nominal)} />
           <StatTile icon={CheckCircle2} variant="success" value={stats.disetujui} label="Disetujui" />
           <StatTile icon={XCircle} variant="danger" value={stats.ditolak} label="Ditolak" />
           <StatTile icon={Banknote} variant="primary" value={money(stats.dicairkan)} label="Total dicairkan" />

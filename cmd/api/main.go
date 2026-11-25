@@ -659,6 +659,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(identity.RequirePermission("agen.payout.approve"))
 			r.Get("/pencairan", agenHandler.ListPencairanAdmin)
+			r.Get("/pencairan/ringkasan", agenHandler.RingkasanPencairan)
 			r.Post("/pencairan/{id}/setujui", agenHandler.SetujuiPencairan)
 			r.Post("/pencairan/{id}/tolak", agenHandler.TolakPencairan)
 		})

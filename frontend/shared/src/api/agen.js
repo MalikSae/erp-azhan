@@ -101,6 +101,14 @@ export async function listPencairanAdmin({ status, brandId } = {}) {
   return data || [];
 }
 
+// Jumlah dan nominal per status, dihitung di server (daftar dibatasi 500 baris).
+export async function ringkasanPencairanAdmin({ brandId } = {}) {
+  const params = {};
+  if (brandId) params.brand_id = brandId;
+  const { data } = await client.get('/api/admin/pencairan/ringkasan', { params });
+  return data;
+}
+
 export async function setujuiPencairan(id, buktiTransferKeluarUrl) {
   const { data } = await client.post(`/api/admin/pencairan/${id}/setujui`, {
     bukti_transfer_keluar_url: buktiTransferKeluarUrl,
