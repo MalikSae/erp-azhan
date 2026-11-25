@@ -519,6 +519,7 @@ func main() {
 		r.With(identity.RequirePermission("dokumen.view")).Get("/jamaah/{jamaah_id}/dokumen", dokumenHandler.ListDokumen)
 		r.With(identity.RequirePermission("dokumen.edit")).Post("/jamaah/{jamaah_id}/dokumen", dokumenHandler.UpsertDokumen)
 		r.With(identity.RequirePermission("dokumen.edit")).Put("/dokumen/{id}/status", dokumenHandler.UpdateDokumenStatus)
+		r.With(identity.RequirePermission("dokumen.view")).Get("/dokumen/{id}/riwayat", dokumenHandler.RiwayatDokumen)
 
 		// Bookings
 		bookingView := r.With(identity.RequirePermission("booking.view"))

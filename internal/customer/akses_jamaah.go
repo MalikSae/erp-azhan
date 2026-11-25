@@ -10,7 +10,8 @@ import (
 // Jamaah dipakai ulang lintas akun lewat NIK + nama, jadi memiliki booking yang memuat seorang jamaah
 // belum berarti berhak atas data lengkapnya. Akses penuh hanya untuk akun pembuat jamaah
 // (jamaah.dibuat_oleh_akun_id) dan akun yang tertaut ke jamaah itu (aktivasi). Akun lain mendapat akses terbatas: nama, NIK tersamar, jenis pax, dan
-// angka kelengkapan; tidak boleh mengubah data; hanya boleh mengunggah jenis dokumen yang belum ada.
+// angka kelengkapan; tidak boleh mengubah data; hanya boleh mengunggah jenis dokumen yang belum ada atau
+// yang ditolak (keputusan 25 November 2026).
 
 // sqlAksesPenuh: ekspresi SQL bernilai benar bila akun adalah pembuat jamaah, atau akun itu tertaut ke
 // jamaah tersebut (customer_accounts.jamaah_id, lahir dari aktivasi; keputusan 18 November 2026: jamaah

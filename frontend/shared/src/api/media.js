@@ -45,9 +45,22 @@ export function protectedMediaPath(url) {
 
 // Muat berkas media terlindungi sebagai blob URL untuk ditampilkan di dalam komponen sendiri (mis. modal verifikasi).
 // Pemanggil wajib memanggil URL.revokeObjectURL(objectUrl) setelah selesai.
+// Alamat tidak sah diperlakukan seperti jawaban 404 server, supaya pemanggil cukup memakai
+// protectedMediaErrorMessage(err).
+function invalidPathError() {
+  const err = new Error('Berkas tidak ditemukan.');
+  err.response = { status: 404 };
+  return err;
+}
+
+// Pesan galat memuat berkas terlindungi: alamat tidak sah atau 404 dibedakan dari galat lain/jaringan.
+export function protectedMediaErrorMessage(err) {
+  return err?.response?.status === 404 ? 'Berkas tidak ditemukan.' : 'Berkas belum dapat dibuka. Coba lagi.';
+}
+
 export async function loadProtectedMedia(url) {
   const normalizedUrl = protectedMediaPath(url);
-  if (!normalizedUrl) throw new Error('Alamat berkas tidak sah.');
+  if (!normalizedUrl) throw invalidPathError();
   const response = await client.get(normalizedUrl, { responseType: 'blob' });
   const blob = response.data;
   return { objectUrl: URL.createObjectURL(blob), type: blob.type || '', name: String(normalizedUrl).split('/').pop() || 'berkas' };
@@ -59,7 +72,7 @@ export async function loadProtectedMedia(url) {
 // Berkas tidak pernah diakses lewat URL publik.
 export async function openProtectedMedia(url, title_) {
   const normalizedUrl = protectedMediaPath(url);
-  if (!normalizedUrl) throw new Error('Alamat berkas tidak sah.');
+  if (!normalizedUrl) throw invalidPathError();
   const response = await client.get(normalizedUrl, { responseType: 'blob' });
   const blob = response.data;
   const objectUrl = URL.createObjectURL(blob);

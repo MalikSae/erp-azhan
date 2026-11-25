@@ -63,3 +63,39 @@ func TestHitungWajibDisetujuiHanyaApproved(t *testing.T) {
 		t.Fatalf("semua disetujui = %d/%d, want 3/3", setuju, total)
 	}
 }
+
+// Keputusan 2026-11-25: unggah dokumen oleh pelanggan dibuka setelah booking minimal DP.
+func TestBolehUnggahDokumenMinimalDP(t *testing.T) {
+	for status, want := range map[string]bool{
+		"draft": false, "baru": false, "batal": false, "": false,
+		"dp": true, "lunas": true, "dokumen_lengkap": true, "siap_berangkat": true,
+	} {
+		if got := bolehUnggahDokumen(status); got != want {
+			t.Errorf("bolehUnggahDokumen(%q) = %v, want %v", status, got, want)
+		}
+	}
+}
+
+// Keputusan 2026-11-25: akses terbatas boleh mengganti dokumen ditolak; menunggu verifikasi hanya akses penuh;
+// disetujui tidak bisa diganti siapa pun.
+func TestPutuskanGantiDokumen(t *testing.T) {
+	cases := []struct {
+		status string
+		penuh  bool
+		want   keputusanGanti
+	}{
+		{"", false, gantiBoleh},
+		{"", true, gantiBoleh},
+		{"rejected", false, gantiBoleh},
+		{"rejected", true, gantiBoleh},
+		{"submitted", true, gantiBoleh},
+		{"submitted", false, gantiMenungguVerifikasi},
+		{"approved", true, gantiSudahDisetujui},
+		{"approved", false, gantiSudahDisetujui},
+	}
+	for _, c := range cases {
+		if got := putuskanGantiDokumen(c.status, c.penuh); got != c.want {
+			t.Errorf("putuskanGantiDokumen(%q, penuh=%v) = %v, want %v", c.status, c.penuh, got, c.want)
+		}
+	}
+}
