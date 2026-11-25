@@ -22,7 +22,7 @@ import Table from "../components/ui/Table";
 import CustomDropdown from "../components/ui/CustomDropdown";
 import Textarea from "../components/ui/Textarea";
 import Modal from "../components/ui/Modal";
-import DocumentReview, { StatusDokumen } from "../components/DocumentReview";
+import DocumentReview, { StatusDokumen, linkDokumenClass } from "../components/DocumentReview";
 import { Eye, Upload, RefreshCw, Save, Printer } from "lucide-react";
 import { STATUS_AGEN } from "../utils/agen";
 import { printJamaah } from "../utils/printJamaah";
@@ -513,7 +513,6 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
                 const hasFile = Boolean(existing && existing.file_url);
                 const isUploading = uploadingJenis === docType.key;
 
-                const linkDokumen = "inline-flex items-center gap-1 text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900";
 
                 return (
                   <div key={docType.key} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
@@ -544,10 +543,10 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
                         <Button type="button" variant="secondary" size="sm" onClick={() => setTinjauId(existing.id)}>Tinjau</Button>
                       )}
                       {bolehUbahDokumen && !isUploading && hasFile && existing.status !== "submitted" && (
-                        <button type="button" className={linkDokumen} disabled={uploadingJenis !== null} onClick={() => gantiDokumen(existing)}>Ganti</button>
+                        <button type="button" className={linkDokumenClass} disabled={uploadingJenis !== null} onClick={() => gantiDokumen(existing)}>Ganti</button>
                       )}
                       {bolehUbahDokumen && !isUploading && !hasFile && (
-                        <button type="button" className={linkDokumen} disabled={uploadingJenis !== null} onClick={() => handleTriggerUpload(docType.key)}>
+                        <button type="button" className={linkDokumenClass} disabled={uploadingJenis !== null} onClick={() => handleTriggerUpload(docType.key)}>
                           <Upload size={14} />
                           <span>Unggah</span>
                         </button>

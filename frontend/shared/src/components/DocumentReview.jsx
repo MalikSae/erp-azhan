@@ -40,7 +40,9 @@ export function jejakPeninjau(doc) {
   return `${aksi}${oleh}, ${waktuSingkat(doc.verified_at)}`;
 }
 
-const linkClass = 'text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900';
+// Gaya tautan teks kecil (design-system §3), dipakai juga oleh kartu Dokumen Digital di Detail Jamaah.
+export const linkDokumenClass = 'inline-flex items-center gap-1 text-xs font-medium text-neutral-900 underline underline-offset-2 decoration-neutral-300 hover:decoration-neutral-900';
+const linkClass = linkDokumenClass;
 
 function Pratinjau({ preview }) {
   const { objectUrl, type, name } = preview;
@@ -124,7 +126,8 @@ export default function DocumentReview({ document, label, bolehUbah = false, onC
 
   // Satu aksi utama (Setujui); Tolak sekunder membuka kolom alasan.
   let footer = null;
-  if (bisaTinjau) {
+  // Setujui/Tolak baru tampil setelah berkas termuat (disembunyikan, bukan dinonaktifkan).
+  if (bisaTinjau && preview) {
     footer = menolak ? (
       <>
         <Button variant="secondary" onClick={() => { setMenolak(false); setError(''); }} disabled={busy}>Batal</Button>
@@ -132,8 +135,8 @@ export default function DocumentReview({ document, label, bolehUbah = false, onC
       </>
     ) : (
       <>
-        <Button variant="secondary" onClick={() => { setMenolak(true); setError(''); }} disabled={busy || !preview}>Tolak</Button>
-        <Button onClick={() => save('approved')} isLoading={busy} disabled={!preview}>Setujui</Button>
+        <Button variant="secondary" onClick={() => { setMenolak(true); setError(''); }} disabled={busy}>Tolak</Button>
+        <Button onClick={() => save('approved')} isLoading={busy}>Setujui</Button>
       </>
     );
   }
