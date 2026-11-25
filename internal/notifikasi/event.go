@@ -241,3 +241,19 @@ func Tahapan(ctx context.Context, q Querier, bookingID, paxID int64, kunci strin
 		bookingID)
 	catat("tahapan", err)
 }
+
+// ProspekBaru: akun yang daftar lewat tautan agen membuat booking (spek prospek agen). Penerima: agen aktif yang
+// mengikat akun itu (customer_accounts.direkrut_oleh_akun_id). Booking buatan agen sendiri tidak dikabarkan.
+func ProspekBaru(ctx context.Context, q Execer, bookingID int64) {
+	_, err := q.ExecContext(ctx, `INSERT IGNORE INTO notifikasi (akun_id, jenis, judul, isi, ref_tipe, ref_id, kunci)
+		SELECT a.direkrut_oleh_akun_id, ?, 'Prospek baru', LEFT(CONCAT(a.nama_lengkap, ' · ', s.jadwal_nama), 300), ?, b.id,
+		       CONCAT('prospek:', b.id)
+		FROM bookings b
+		JOIN customer_accounts a ON a.id = b.customer_account_id
+		JOIN customer_accounts ag ON ag.id = a.direkrut_oleh_akun_id AND ag.status_agen = 'aktif' AND ag.dihapus_at IS NULL
+		JOIN schedules s ON s.id = b.schedule_id
+		WHERE b.id = ? AND b.status = 'baru'
+		  AND (b.dibuat_oleh_agen_akun_id IS NULL OR b.dibuat_oleh_agen_akun_id <> a.direkrut_oleh_akun_id)`,
+		JenisProspekBaru, RefAgen, bookingID)
+	catat("prospek baru", err)
+}

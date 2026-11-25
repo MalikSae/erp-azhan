@@ -243,3 +243,65 @@ func TestDokumenAkunTertaut(t *testing.T) {
 		t.Errorf("hold kedaluwarsa: %+v", d)
 	}
 }
+
+// Komisi tersedia (H+3) dikabarkan juga bila booking dibatalkan setelah lunas (K20: komisinya tetap di saldo).
+// Komisi yang sudah dibatalkan (booking turun dari lunas) tidak dikabarkan.
+func TestKomisiTersediaBookingBatalSetelahLunas(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	hari := time.Now().In(ZonaWIB).Format("2006-01-02")
+	berangkat := time.Now().In(ZonaWIB).AddDate(0, 0, -3).Format("2006-01-02")
+	jadwal, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: berangkat})
+	agen := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenKomisiTersediaQzp", StatusAgen: "aktif"})
+
+	komisi := func(status string, batal bool) {
+		j := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "JamaahKomisi" + status + "Qzp", Direkrut: agen})
+		b, pax := testdb.NewBookingPax(t, tx, jadwal, status, 1000, testdb.Pax{JamaahID: j})
+		dibatalkan := any(nil)
+		if batal {
+			dibatalkan = time.Now()
+		}
+		testdb.Exec(t, tx, `INSERT INTO transaksi_komisi (brand_id, akun_penerima_id, jamaah_sumber_id, booking_id, booking_pax_id, jenis, nominal, dibatalkan_at)
+			VALUES (?,?,?,?,?,'langsung',500000,?)`, brand, agen, j, b, pax[0], dibatalkan)
+	}
+	komisi("lunas", false)
+	komisi("batal", false) // dibatalkan setelah lunas: komisi tetap
+	komisi("dp", true)     // turun dari lunas: komisi batal
+
+	for i := 0; i < 2; i++ {
+		if err := komisiTersedia(ctx, tx, hari); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d := daftarJenis(t, tx, agen)[JenisKomisiTersedia]; len(d) != 2 {
+		t.Errorf("komisi tersedia: ingin 2 (lunas dan batal setelah lunas), dapat %d: %+v", len(d), d)
+	}
+}
+
+// Pengingat hold 3 jam juga ke agen perekrut akun pemesan (prospek agen), tidak untuk booking buatan agen itu sendiri.
+func TestHoldSeatAgenPerekrut(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	now := time.Now()
+	jadwal, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-06-01"})
+	agen := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AgenHoldQzp", StatusAgen: "aktif"})
+	pemesan := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "PemesanHoldQzp", Direkrut: agen})
+	booking := func(buatanAgen any) {
+		j := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "JamaahHoldQzp"})
+		b, _ := testdb.NewBookingPax(t, tx, jadwal, "baru", 1000, testdb.Pax{JamaahID: j})
+		testdb.Exec(t, tx, `UPDATE bookings SET customer_account_id=?, seat_hold_expires_at=?, dibuat_oleh_agen_akun_id=? WHERE id=?`, pemesan, now.Add(2*time.Hour), buatanAgen, b)
+	}
+	booking(nil)
+	booking(agen)
+	for i := 0; i < 2; i++ {
+		if err := holdSeat(ctx, tx, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d := daftarJenis(t, tx, agen)[JenisProspekHold]; len(d) != 1 || d[0].Judul != "Hold berakhir 3 jam lagi" {
+		t.Errorf("hold agen: %+v", d)
+	}
+	if d := daftarJenis(t, tx, pemesan)[JenisHoldSeat]; len(d) != 2 {
+		t.Errorf("hold pemesan tetap: %+v", d)
+	}
+}

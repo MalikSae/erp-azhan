@@ -13,6 +13,7 @@ import (
 
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/mailer"
+	"erp-azhan/api/internal/notifikasi"
 	"erp-azhan/api/internal/shared"
 
 	"github.com/go-sql-driver/mysql"
@@ -280,6 +281,10 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 		}
 		// Email hanya untuk booking baru; jawaban ulang (retry idempoten) tidak mengirim ulang.
 		h.notifyBookingCreated(account, req.ScheduleID, resp)
+		// Agen yang mengikat akun ini mendapat "Prospek baru" (spek prospek agen).
+		if h.repo != nil && h.repo.db != nil {
+			notifikasi.ProspekBaru(r.Context(), h.repo.db, resp.Booking.BookingID)
+		}
 	}
 
 	shared.WriteJSON(w, http.StatusOK, resp)

@@ -41,6 +41,8 @@ const (
 	JenisPencairanDiproses   = "pencairan_diproses"
 	JenisPencairanDitolak    = "pencairan_ditolak"
 	JenisAgenBinaan          = "agen_binaan"
+	JenisProspekBaru         = "prospek_baru"
+	JenisProspekHold         = "prospek_hold"
 	JenisPengumuman          = "pengumuman"
 	JenisTahapan             = "tahapan"
 )

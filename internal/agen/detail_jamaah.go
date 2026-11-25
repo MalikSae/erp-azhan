@@ -50,7 +50,7 @@ type DetailJamaahAgen struct {
 	Jenis        string             `json:"jenis"`
 	KodeBooking  string             `json:"kode_booking"`
 	Berangkat    string             `json:"berangkat"` // YYYY-MM-DD
-	Status       string             `json:"status"`    // dp | lunas | berangkat
+	Status       string             `json:"status"`    // belum_dp | dp | lunas | berangkat
 	Pembayaran   *PembayaranJamaah  `json:"pembayaran"`
 	Kelengkapan  *KelengkapanJamaah `json:"kelengkapan"`
 	Tahapan      []tahapan.Tahap    `json:"tahapan"` // lima tahap umroh, sama dengan yang dilihat jamaah
@@ -103,7 +103,7 @@ func detailJamaahAgen(ctx context.Context, q querier, akunID, bookingID, jamaahI
 		JOIN schedules s ON s.id = b.schedule_id
 		JOIN brands br ON br.id = s.brand_id
 		LEFT JOIN booking_checkout c ON c.booking_id = b.id
-		WHERE j.id = ? AND j.direkrut_oleh_akun_id = ? AND `+bookingTercatat, bookingID, jamaahID, akunID).
+		WHERE j.id = ? AND `+sqlJamaahAgen, bookingID, jamaahID, akunID, akunID).
 		Scan(&d.Nama, &nik, &noHP, &dibuatOleh, &d.Paket, &jenis, &d.KodeBooking, &d.Berangkat, &d.Status, &totalHarga,
 			&tenggat, &paxType, &progVisa, &progManasik, &perlStatus, &dataTerisi, &dataTotal)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -129,6 +129,9 @@ func detailJamaahAgen(ctx context.Context, q querier, akunID, bookingID, jamaahI
 		d.WhatsAppURL = "https://wa.me/" + noHP
 	}
 
+	if d.Status == "baru" {
+		d.Status = "belum_dp"
+	}
 	if d.Berangkat != "" && d.Berangkat <= hariIni {
 		d.Status = "berangkat"
 	} else {

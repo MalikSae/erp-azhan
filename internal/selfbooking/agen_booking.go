@@ -33,13 +33,17 @@ type JamaahSayaItem struct {
 	JenisKelamin *string `json:"jenis_kelamin"`
 }
 
+// maksJamaahSaya: batas daftar Jamaah Saya. Pemilih di web memuat semuanya sekali lalu menyaring di klien,
+// jadi batasnya harus jauh di atas jumlah jamaah satu agen (dulu 50: jamaah ke-51 tidak bisa dipilih).
+const maksJamaahSaya = 1000
+
 // ListJamaahSaya: jamaah yang terkunci ke agen ini (direkrut_oleh_akun_id = agen).
 func (r *Repository) ListJamaahSaya(ctx context.Context, agenAkunID int64, cari string) ([]JamaahSayaItem, error) {
 	like := "%" + strings.TrimSpace(cari) + "%"
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, nama_lengkap, no_hp, jenis_kelamin FROM jamaah
 		WHERE direkrut_oleh_akun_id = ? AND (? = '%%' OR nama_lengkap LIKE ?)
-		ORDER BY nama_lengkap LIMIT 50`, agenAkunID, like, like)
+		ORDER BY nama_lengkap LIMIT ?`, agenAkunID, like, like, maksJamaahSaya)
 	if err != nil {
 		return nil, fmt.Errorf("jamaah saya: %w", err)
 	}

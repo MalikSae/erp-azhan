@@ -19,7 +19,8 @@ Bila terjadi konflik, dokumen ini yang menang untuk prinsip dan pola; glosarium 
 
 ## Kapitalisasi
 
-- **Title Case** untuk judul halaman, judul section, dan menu/navigasi. Contoh: "Tambah Jamaah", "Dokumen Paspor", "Booking Saya".
+- **Title Case** untuk judul halaman, judul section, dan menu/navigasi. Contoh: "Tambah Jamaah", "Dokumen Paspor", "Booking".
+- **Menu portal akun (web azhan-booking dan app):** daftar transaksi "Booking", daftar orang "Jamaah", tanpa akhiran "Saya"/"Data" (spek `docs/spek/SPEK-MENU-JAMAAH-ISTILAH-2026-11-25.md`).
 - **Sentence case** untuk label field, placeholder, teks bantuan, pesan, dan tombol. Contoh: "Nama lengkap", "Pilih brand", "Simpan".
 - `UPPERCASE` dilarang kecuali kode (hex) dan inisial avatar.
 - Judul dan label tanpa titik. Kalimat penjelas diakhiri titik.

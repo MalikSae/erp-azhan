@@ -61,6 +61,21 @@ func holdSeat(ctx context.Context, db Execer, now time.Time) error {
 		WHERE b.status = 'baru' AND b.is_seat_blocked AND b.customer_account_id IS NOT NULL
 		  AND b.seat_hold_expires_at > ? AND b.seat_hold_expires_at <= ?`,
 		JenisHoldSeat, RefBooking, now, now.Add(3*time.Hour))
+	if err != nil {
+		return err
+	}
+	// Agen perekrut akun pemesan juga diingatkan (prospek agen), kecuali booking buatan agen itu sendiri.
+	_, err = db.ExecContext(ctx, `INSERT IGNORE INTO notifikasi (akun_id, jenis, judul, isi, ref_tipe, ref_id, kunci)
+		SELECT a.direkrut_oleh_akun_id, ?, 'Hold berakhir 3 jam lagi', LEFT(CONCAT(a.nama_lengkap, ' · ', s.jadwal_nama), 300), ?, b.id,
+		       CONCAT('hold-agen:', b.id, ':', DATE_FORMAT(b.seat_hold_expires_at, '%Y%m%d%H%i'))
+		FROM bookings b
+		JOIN schedules s ON s.id = b.schedule_id
+		JOIN customer_accounts a ON a.id = b.customer_account_id
+		JOIN customer_accounts ag ON ag.id = a.direkrut_oleh_akun_id AND ag.status_agen = 'aktif' AND ag.dihapus_at IS NULL
+		WHERE b.status = 'baru' AND b.is_seat_blocked
+		  AND (b.dibuat_oleh_agen_akun_id IS NULL OR b.dibuat_oleh_agen_akun_id <> a.direkrut_oleh_akun_id)
+		  AND b.seat_hold_expires_at > ? AND b.seat_hold_expires_at <= ?`,
+		JenisProspekHold, RefAgen, now, now.Add(3*time.Hour))
 	return err
 }
 
@@ -117,7 +132,9 @@ func berangkat(ctx context.Context, db Execer, hari string) error {
 
 // komisiTersedia: komisi aktif (bukan cashback) yang mulai bisa dicairkan, yaitu H+3 setelah tanggal
 // berangkat (komisi.SQLTersediaMulai). Jendela 3 hari menutup jeda bila server sempat mati, tanpa
-// membanjiri agen dengan komisi lama.
+// membanjiri agen dengan komisi lama. Status booking tidak disaring, sama dengan saldo (komisi.HitungSaldo):
+// booking yang dibatalkan setelah lunas tetap memberi komisi (K20), sedangkan turun dari lunas membatalkan
+// komisinya lewat dibatalkan_at.
 func komisiTersedia(ctx context.Context, db Execer, hari string) error {
 	_, err := db.ExecContext(ctx, `INSERT IGNORE INTO notifikasi (akun_id, jenis, judul, isi, ref_tipe, kunci)
 		SELECT t.akun_penerima_id, ?, 'Komisi tersedia', LEFT(CONCAT('Rp', FORMAT(t.nominal, 0, 'id_ID'), ' · ', j.nama_lengkap), 300), ?,
@@ -127,7 +144,7 @@ func komisiTersedia(ctx context.Context, db Execer, hari string) error {
 		JOIN schedules s ON s.id = b.schedule_id
 		JOIN booking_pax bp ON bp.id = t.booking_pax_id
 		JOIN jamaah j ON j.id = bp.jamaah_id
-		WHERE t.dibatalkan_at IS NULL AND t.jenis <> 'cashback' AND b.status = 'lunas'
+		WHERE t.dibatalkan_at IS NULL AND t.jenis <> 'cashback'
 		  AND DATE_ADD(s.berangkat_tanggal, INTERVAL 3 DAY) BETWEEN DATE_SUB(?, INTERVAL 3 DAY) AND ?`,
 		JenisKomisiTersedia, RefDompet, hari, hari)
 	return err
