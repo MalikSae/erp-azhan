@@ -14,6 +14,7 @@ import (
 
 	"erp-azhan/api/internal/customer"
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 type Handler struct {
@@ -23,38 +24,28 @@ type Handler struct {
 
 func NewHandler(db *sql.DB) *Handler { return &Handler{db: db, now: time.Now} }
 
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
 func tulisGalat(w http.ResponseWriter, err error) {
 	var val *ErrValidasi
 	switch {
 	case errors.As(err, &val):
-		writeError(w, http.StatusBadRequest, val.Pesan)
+		shared.WriteError(w, http.StatusBadRequest, val.Pesan)
 	case errors.Is(err, ErrTidakAda):
-		writeError(w, http.StatusNotFound, err.Error())
+		shared.WriteError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrBukanJamaah):
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrRSVPDitutup), errors.Is(err, ErrBelumAda), errors.Is(err, ErrSudahDimulai),
 		errors.Is(err, ErrAdaAbsensi), errors.Is(err, ErrAbsensiBelumDibuka), errors.Is(err, ErrPaketSudahBermanasik):
-		writeError(w, http.StatusConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] manasik: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal memproses manasik.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memproses manasik.")
 	}
 }
 
 func idParam(w http.ResponseWriter, r *http.Request, nama, label string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, nama), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, label+" tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, label+" tidak valid.")
 		return 0, false
 	}
 	return id, true
@@ -90,7 +81,7 @@ func (h *Handler) tulisDetail(w http.ResponseWriter, r *http.Request, id int64, 
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, status, d)
+	shared.WriteJSON(w, status, d)
 }
 
 // Daftar GET /api/admin/manasik?tab=akan_datang|selesai&brand_id=
@@ -100,7 +91,7 @@ func (h *Handler) Daftar(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	shared.WriteJSON(w, http.StatusOK, out)
 }
 
 // PaketTersedia GET /api/admin/manasik/paket-tersedia?brand_id=
@@ -110,7 +101,7 @@ func (h *Handler) PaketTersedia(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	shared.WriteJSON(w, http.StatusOK, out)
 }
 
 type buatRequest struct {
@@ -122,7 +113,7 @@ type buatRequest struct {
 func (h *Handler) Buat(w http.ResponseWriter, r *http.Request) {
 	var req buatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	var id int64
@@ -155,7 +146,7 @@ func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
 	}
 	var in Input
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if err := Ubah(r.Context(), h.db, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), in); err != nil {
@@ -188,7 +179,7 @@ func (h *Handler) TambahPaket(w http.ResponseWriter, r *http.Request) {
 		ScheduleIDs []int64 `json:"schedule_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
@@ -232,7 +223,7 @@ func (h *Handler) Absensi(w http.ResponseWriter, r *http.Request) {
 		Hadir *bool `json:"hadir"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PaxID <= 0 || req.Hadir == nil {
-		writeError(w, http.StatusBadRequest, "Pax dan hadir wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Pax dan hadir wajib diisi.")
 		return
 	}
 	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
@@ -256,7 +247,7 @@ func (h *Handler) UntukPaket(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"manasik": m})
+	shared.WriteJSON(w, http.StatusOK, map[string]any{"manasik": m})
 }
 
 // Booking GET /api/account/bookings/{id}/manasik
@@ -268,14 +259,14 @@ func (h *Handler) Booking(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := UntukBooking(r.Context(), h.db, acc.ID, id, h.now())
 	if errors.Is(err, ErrTidakAda) {
-		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	shared.WriteJSON(w, http.StatusOK, out)
 }
 
 type rsvpRequest struct {
@@ -292,13 +283,13 @@ func (h *Handler) RSVP(w http.ResponseWriter, r *http.Request) {
 	}
 	var req rsvpRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.JamaahID <= 0 || req.Hadir == nil {
-		writeError(w, http.StatusBadRequest, "Jamaah dan hadir wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Jamaah dan hadir wajib diisi.")
 		return
 	}
 	now := h.now()
 	err := SimpanRSVP(r.Context(), h.db, acc.ID, id, req.JamaahID, *req.Hadir, now)
 	if errors.Is(err, ErrTidakAda) {
-		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Booking tidak ditemukan.")
 		return
 	}
 	if err != nil {
@@ -310,5 +301,5 @@ func (h *Handler) RSVP(w http.ResponseWriter, r *http.Request) {
 		tulisGalat(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	shared.WriteJSON(w, http.StatusOK, out)
 }

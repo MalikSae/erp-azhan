@@ -11,6 +11,7 @@ import (
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/komisi"
+	"erp-azhan/api/internal/shared"
 )
 
 // Portal agen berbasis akun email (spek 10 butir 10): memakai sesi akun pelanggan (customer.RequireCustomer).
@@ -116,7 +117,7 @@ func rentangUjroh(ctx context.Context, q querier, brandID int64) (*UjrohPublik, 
 func (h *Handler) UjrohPublik(w http.ResponseWriter, r *http.Request) {
 	brandID, err := strconv.ParseInt(r.URL.Query().Get("brand_id"), 10, 64)
 	if err != nil || brandID <= 0 {
-		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 	u, err := rentangUjroh(r.Context(), h.repo.db, brandID)
@@ -124,5 +125,5 @@ func (h *Handler) UjrohPublik(w http.ResponseWriter, r *http.Request) {
 		handleError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, u)
+	shared.WriteJSON(w, http.StatusOK, u)
 }

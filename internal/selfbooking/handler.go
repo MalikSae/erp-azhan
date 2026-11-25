@@ -108,30 +108,30 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	account := customer.FromContext(r.Context())
 	if account == nil {
-		writeError(w, http.StatusUnauthorized, "Sesi berakhir. Masuk kembali.")
+		shared.WriteError(w, http.StatusUnauthorized, "Sesi berakhir. Masuk kembali.")
 		return
 	}
 	agenAktif := account.StatusAgen == "aktif"
 	if jalur == jalurPortalAgen && !agenAktif {
-		writeError(w, http.StatusForbidden, ErrBukanAgenAktif.Error())
+		shared.WriteError(w, http.StatusForbidden, ErrBukanAgenAktif.Error())
 		return
 	}
 	// Batas percobaan per akun dulu, lalu per IP. Ditolak di batas IP: jatah akun dikembalikan.
 	clientIP := getClientIP(r)
 	percobaanKey := strconv.FormatInt(account.ID, 10)
 	if !h.bookingAttempt.Take(percobaanKey) {
-		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
+		shared.WriteError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
 		return
 	}
 	if !h.bookingByIP.Take(clientIP) {
 		h.bookingAttempt.Refund(percobaanKey)
-		writeError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
+		shared.WriteError(w, http.StatusTooManyRequests, "Terlalu banyak permintaan booking, coba lagi dalam 1 jam.")
 		return
 	}
 	// Verifikasi email tidak diwajibkan untuk booking (keputusan 2026-10-28); email tetap dikirim dan statusnya tampil di akun.
 	var req BookingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if jalur == jalurPortalAgen {
@@ -157,19 +157,19 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 
 	// Gate 2: Brand ID
 	if req.BrandID <= 0 {
-		writeError(w, http.StatusBadRequest, "Brand wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Brand wajib diisi.")
 		return
 	}
 
 	// Gate 3: Schedule ID
 	if req.ScheduleID <= 0 {
-		writeError(w, http.StatusBadRequest, "Paket wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Paket wajib diisi.")
 		return
 	}
 
 	// Gate 3b: jamaah_id (Jamaah Saya) hanya untuk agen aktif.
 	if !agenAktif && adaJamaahID(&req) {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -182,13 +182,13 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 	pintasPIC := agenAktif && req.PemesanTidakIkut && req.PIC.JamaahID != nil
 	if (!pintasPIC && (req.PIC.NamaLengkap == "" || req.PIC.JenisKelamin == "")) ||
 		(req.PIC.NoHP == "" && !req.PemesanTidakIkut) || req.PIC.RoomType == "" {
-		writeError(w, http.StatusBadRequest, "Data jamaah utama tidak lengkap.")
+		shared.WriteError(w, http.StatusBadRequest, "Data jamaah utama tidak lengkap.")
 		return
 	}
 
 	// Gate 5: Room Type
 	if !tipeKamarValid(req.PIC.RoomType) {
-		writeError(w, http.StatusBadRequest, "Tipe kamar PIC tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Tipe kamar PIC tidak valid.")
 		return
 	}
 
@@ -200,30 +200,30 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 
 		pintas := agenAktif && a.JamaahID != nil
 		if (!pintas && (req.Anggota[i].NamaLengkap == "" || req.Anggota[i].JenisKelamin == "")) || req.Anggota[i].PaxType == "" {
-			writeError(w, http.StatusBadRequest, "Data anggota tidak lengkap.")
+			shared.WriteError(w, http.StatusBadRequest, "Data anggota tidak lengkap.")
 			return
 		}
 
 		if req.Anggota[i].PaxType == "reguler" {
 			if a.RoomType == nil || !tipeKamarValid(*a.RoomType) {
-				writeError(w, http.StatusBadRequest, "Tipe kamar reguler tidak valid.")
+				shared.WriteError(w, http.StatusBadRequest, "Tipe kamar reguler tidak valid.")
 				return
 			}
 		} else if req.Anggota[i].PaxType == "infant" {
 			if a.TanggalLahir == nil || *a.TanggalLahir == "" {
-				writeError(w, http.StatusBadRequest, "Tanggal lahir wajib untuk infant.")
+				shared.WriteError(w, http.StatusBadRequest, "Tanggal lahir wajib untuk infant.")
 				return
 			}
 			// Umur divalidasi repository menggunakan identitas yang tersimpan.
 		} else {
-			writeError(w, http.StatusBadRequest, "Jenis pax anggota tidak valid.")
+			shared.WriteError(w, http.StatusBadRequest, "Jenis pax anggota tidak valid.")
 			return
 		}
 	}
 
 	// Gate 7: Total Pax <= 9
 	if 1+len(req.Anggota) > 9 {
-		writeError(w, http.StatusBadRequest, "Maksimal jamaah dalam satu booking adalah 9.")
+		shared.WriteError(w, http.StatusBadRequest, "Maksimal jamaah dalam satu booking adalah 9.")
 		return
 	}
 
@@ -258,7 +258,7 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 
 	// Process
 	if msg := validateCheckout(&req, agenAktif); msg != "" {
-		writeError(w, http.StatusBadRequest, msg)
+		shared.WriteError(w, http.StatusBadRequest, msg)
 		return
 	}
 	book := h.book
@@ -282,7 +282,7 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 		h.notifyBookingCreated(account, req.ScheduleID, resp)
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	shared.WriteJSON(w, http.StatusOK, resp)
 }
 
 // adaJamaahID: ada pax yang memilih jamaah lewat jamaah_id.
@@ -303,16 +303,16 @@ func adaJamaahID(req *BookingRequest) bool {
 func tulisGalatBooking(w http.ResponseWriter, err error, portal bool) {
 	switch {
 	case errors.Is(err, ErrQuoteChanged), errors.Is(err, ErrRequestConflict), errors.Is(err, ErrBookingKedaluwarsa):
-		writeError(w, http.StatusConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, err.Error())
 	case adalahBentrokTransaksi(err):
-		writeError(w, http.StatusConflict, "Booking bentrok dengan permintaan lain. Coba lagi.")
+		shared.WriteError(w, http.StatusConflict, "Booking bentrok dengan permintaan lain. Coba lagi.")
 	case errors.Is(err, ErrBukanAgenAktif):
-		writeError(w, http.StatusForbidden, err.Error())
+		shared.WriteError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrBatasSeatAgen):
 		var be *BatasSeatAgenError
 		if errors.As(err, &be) {
 			// Sisa seat dikirim sebagai data juga, bukan hanya di dalam pesan, agar app bisa menampilkannya.
-			writeJSON(w, http.StatusTooManyRequests, map[string]any{
+			shared.WriteJSON(w, http.StatusTooManyRequests, map[string]any{
 				"error": err.Error(), "code": KodeBatasSeatAgen,
 				"batas_per_jadwal": be.BatasPerJadwal, "batas_total": be.BatasTotal,
 				"sisa_per_jadwal": be.SisaPerJadwal, "sisa_total": be.SisaTotal,
@@ -329,16 +329,16 @@ func tulisGalatBooking(w http.ResponseWriter, err error, portal bool) {
 		errors.Is(err, ErrNIKAgenBelumAda), errors.Is(err, ErrInputTidakValid),
 		errors.Is(err, ErrAkunTidakValid), errors.Is(err, ErrCutoffBooking),
 		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant), errors.Is(err, ErrInfantUnavailable), errors.Is(err, ErrInvalidDP):
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrNotFound):
 		if portal {
-			writeError(w, http.StatusNotFound, "Jadwal tidak ditemukan.")
+			shared.WriteError(w, http.StatusNotFound, "Jadwal tidak ditemukan.")
 			return
 		}
-		writeError(w, http.StatusNotFound, "Jadwal atau brand tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Jadwal atau brand tidak ditemukan.")
 	default:
 		log.Printf("[ERROR] ProcessBooking: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -353,35 +353,23 @@ func adalahBentrokTransaksi(err error) bool {
 func (h *Handler) lolosCaptcha(w http.ResponseWriter, ctx context.Context, token, clientIP string) bool {
 	token = strings.TrimSpace(token)
 	if h.captcha.required() && token == "" {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal. Coba lagi.")
+		shared.WriteError(w, http.StatusBadRequest, "Verifikasi keamanan gagal. Coba lagi.")
 		return false
 	}
 	valid, err := h.captcha.verify(ctx, token, clientIP)
 	if err != nil {
 		log.Printf("[ERROR] selfbooking captcha: %v", err)
-		writeError(w, http.StatusServiceUnavailable, "Verifikasi keamanan sedang tidak tersedia. Coba lagi.")
+		shared.WriteError(w, http.StatusServiceUnavailable, "Verifikasi keamanan sedang tidak tersedia. Coba lagi.")
 		return false
 	}
 	if !valid {
-		writeError(w, http.StatusBadRequest, "Verifikasi keamanan gagal. Coba lagi.")
+		shared.WriteError(w, http.StatusBadRequest, "Verifikasi keamanan gagal. Coba lagi.")
 		return false
 	}
 	return true
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}
-
 // writeErrorCode menambahkan "code" yang stabil agar frontend dapat menampilkan aksi yang sesuai.
 func writeErrorCode(w http.ResponseWriter, status int, msg, code string) {
-	writeJSON(w, status, map[string]string{"error": msg, "code": code})
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	shared.WriteJSON(w, status, map[string]string{"error": msg, "code": code})
 }

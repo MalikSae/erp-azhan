@@ -11,7 +11,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-sql-driver/mysql"
+
+	"erp-azhan/api/internal/shared"
 )
 
 // Handler menyimpan dependency untuk semua HTTP handler itinerary.
@@ -33,10 +34,10 @@ func (h *Handler) ListItineraries(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.List(r.Context())
 	if err != nil {
 		log.Printf("[ERROR] itinerary: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil data itinerary.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil data itinerary.")
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // ─── Get Detail ───────────────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ func (h *Handler) GetItinerary(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, it)
+	shared.WriteJSON(w, http.StatusOK, it)
 }
 
 // GetPublicItinerary godoc
@@ -72,7 +73,7 @@ func (h *Handler) GetPublicItinerary(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, it)
+	shared.WriteJSON(w, http.StatusOK, it)
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ func (h *Handler) GetPublicItinerary(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateItinerary(w http.ResponseWriter, r *http.Request) {
 	var req CreateItineraryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -99,7 +100,7 @@ func (h *Handler) CreateItinerary(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, it)
+	shared.WriteJSON(w, http.StatusCreated, it)
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -115,7 +116,7 @@ func (h *Handler) UpdateItinerary(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateItineraryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -131,7 +132,7 @@ func (h *Handler) UpdateItinerary(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, it)
+	shared.WriteJSON(w, http.StatusOK, it)
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -149,7 +150,7 @@ func (h *Handler) DeleteItinerary(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "berhasil dihapus"})
 }
 
 // validateCategory memastikan category_id (jika dikirim) ada di master kategori.
@@ -160,11 +161,11 @@ func (h *Handler) validateCategory(w http.ResponseWriter, r *http.Request, categ
 	exists, err := h.repo.CategoryExists(r.Context(), *categoryID)
 	if err != nil {
 		log.Printf("[ERROR] itinerary: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return false
 	}
 	if !exists {
-		writeError(w, http.StatusBadRequest, "Kategori tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Kategori tidak valid.")
 		return false
 	}
 	return true
@@ -181,21 +182,21 @@ func validateItineraryInput(w http.ResponseWriter, rawTitle string, days []DayRe
 	// Gate 1: judul wajib
 	title := strings.TrimSpace(rawTitle)
 	if title == "" {
-		writeError(w, http.StatusBadRequest, "Judul wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Judul wajib diisi.")
 		return false
 	}
 	// Gate 2: panjang judul
 	if utf8.RuneCountInString(title) > maksTeks {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Judul maksimal %d karakter.", maksTeks))
+		shared.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Judul maksimal %d karakter.", maksTeks))
 		return false
 	}
 	// Gate 3: itinerary master minimal 1 hari (itinerary khusus paket tidak memakai gate ini)
 	if len(days) == 0 {
-		writeError(w, http.StatusBadRequest, "Itinerary minimal 1 hari.")
+		shared.WriteError(w, http.StatusBadRequest, "Itinerary minimal 1 hari.")
 		return false
 	}
 	if err := ValidateDays(days); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 		return false
 	}
 	return true
@@ -236,15 +237,13 @@ func ValidateDays(days []DayRequest) error {
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	default:
-		// Tangkap MySQL FK constraint violation (error 1451)
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1451 {
-			writeError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh paket lain.")
+		if shared.IsFKDipakai(err) {
+			shared.WriteError(w, http.StatusConflict, "Tidak bisa dihapus, masih dipakai oleh paket lain.")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -255,20 +254,8 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	raw := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
-}
-
-// writeJSON menulis response JSON dengan Content-Type yang benar.
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-// writeError menulis response JSON error standar.
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
 }

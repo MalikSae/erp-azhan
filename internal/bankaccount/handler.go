@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
 )
@@ -34,10 +35,10 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repo.List(r.Context(), brandID, activeOnly)
 	if err != nil {
 		log.Printf("[ERROR] bankaccount.List: %v", err)
-		writeError(w, 500, "Gagal mengambil rekening.")
+		shared.WriteError(w, 500, "Gagal mengambil rekening.")
 		return
 	}
-	writeJSON(w, 200, items)
+	shared.WriteJSON(w, 200, items)
 }
 
 // PublicBankAccount hanya memuat field yang ditampilkan ke pelanggan (situs brand).
@@ -59,13 +60,13 @@ func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "Parameter brand wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Parameter brand wajib diisi.")
 		return
 	}
 	items, err := h.repo.List(r.Context(), &id, true)
 	if err != nil {
 		log.Printf("[ERROR] bankaccount.List: %v", err)
-		writeError(w, 500, "Gagal mengambil rekening.")
+		shared.WriteError(w, 500, "Gagal mengambil rekening.")
 		return
 	}
 	out := make([]PublicBankAccount, 0, len(items))
@@ -75,7 +76,7 @@ func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, PublicBankAccount{ID: a.ID, BankName: a.BankName, LogoURL: a.LogoURL, AccountNumber: a.AccountNumber, AccountHolder: a.AccountHolder})
 	}
-	writeJSON(w, 200, out)
+	shared.WriteJSON(w, 200, out)
 }
 
 func validate(req *UpsertRequest) bool {
@@ -87,11 +88,11 @@ func validate(req *UpsertRequest) bool {
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req UpsertRequest
 	if json.NewDecoder(r.Body).Decode(&req) != nil || !validate(&req) {
-		writeError(w, 400, "Brand, bank, nomor rekening, dan atas nama wajib diisi.")
+		shared.WriteError(w, 400, "Brand, bank, nomor rekening, dan atas nama wajib diisi.")
 		return
 	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil && req.BrandID != *scoped {
-		writeError(w, 403, "Anda hanya dapat mengelola rekening brand Anda sendiri.")
+		shared.WriteError(w, 403, "Anda hanya dapat mengelola rekening brand Anda sendiri.")
 		return
 	}
 	item, err := h.repo.Create(r.Context(), req)
@@ -99,66 +100,58 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		tulisGalatSimpan(w, "Create", err)
 		return
 	}
-	writeJSON(w, 201, item)
+	shared.WriteJSON(w, 201, item)
 }
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var req UpsertRequest
 	if id <= 0 || json.NewDecoder(r.Body).Decode(&req) != nil || !validate(&req) {
-		writeError(w, 400, "Data rekening tidak valid.")
+		shared.WriteError(w, 400, "Data rekening tidak valid.")
 		return
 	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
 		existing, getErr := h.repo.Get(r.Context(), id)
 		if getErr != nil || existing.BrandID != *scoped || req.BrandID != *scoped {
-			writeError(w, 404, "Rekening tidak ditemukan.")
+			shared.WriteError(w, 404, "Rekening tidak ditemukan.")
 			return
 		}
 	}
 	item, err := h.repo.Update(r.Context(), id, req)
 	if errors.Is(err, ErrNotFound) {
-		writeError(w, 404, "Rekening tidak ditemukan.")
+		shared.WriteError(w, 404, "Rekening tidak ditemukan.")
 		return
 	}
 	if err != nil {
 		tulisGalatSimpan(w, "Update", err)
 		return
 	}
-	writeJSON(w, 200, item)
+	shared.WriteJSON(w, 200, item)
 }
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, 400, "ID rekening tidak valid.")
+		shared.WriteError(w, 400, "ID rekening tidak valid.")
 		return
 	}
 	if scoped := identity.GetBrandID(r.Context()); scoped != nil {
 		existing, getErr := h.repo.Get(r.Context(), id)
 		if getErr != nil || existing.BrandID != *scoped {
-			writeError(w, 404, "Rekening tidak ditemukan.")
+			shared.WriteError(w, 404, "Rekening tidak ditemukan.")
 			return
 		}
 	}
 	if err := h.repo.Delete(r.Context(), id); errors.Is(err, ErrNotFound) {
-		writeError(w, 404, "Rekening tidak ditemukan.")
+		shared.WriteError(w, 404, "Rekening tidak ditemukan.")
 		return
 	} else if errors.Is(err, ErrDipakai) {
-		writeError(w, 409, ErrDipakai.Error())
+		shared.WriteError(w, 409, ErrDipakai.Error())
 		return
 	} else if err != nil {
 		log.Printf("[ERROR] bankaccount.Delete: %v", err)
-		writeError(w, 500, "Gagal menghapus rekening.")
+		shared.WriteError(w, 500, "Gagal menghapus rekening.")
 		return
 	}
-	writeJSON(w, 200, map[string]string{"message": "rekening dihapus"})
-}
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+	shared.WriteJSON(w, 200, map[string]string{"message": "rekening dihapus"})
 }
 
 // tulisGalatSimpan membedakan nomor rekening kembar (409) dari gangguan database (500, tercatat di log).
@@ -166,9 +159,9 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func tulisGalatSimpan(w http.ResponseWriter, aksi string, err error) {
 	var me *mysql.MySQLError
 	if errors.As(err, &me) && me.Number == 1062 {
-		writeError(w, 409, "Nomor rekening sudah digunakan.")
+		shared.WriteError(w, 409, "Nomor rekening sudah digunakan.")
 		return
 	}
 	log.Printf("[ERROR] bankaccount.%s: %v", aksi, err)
-	writeError(w, 500, "Gagal menyimpan rekening.")
+	shared.WriteError(w, 500, "Gagal menyimpan rekening.")
 }

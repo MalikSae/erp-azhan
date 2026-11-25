@@ -166,7 +166,7 @@ func writeRateLimitError(w http.ResponseWriter, retryAfter time.Duration) {
 	}
 
 	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
-	writeJSON(w, http.StatusTooManyRequests, map[string]any{
+	shared.WriteJSON(w, http.StatusTooManyRequests, map[string]any{
 		"error":               "terlalu banyak percobaan, coba lagi setelah waktu tunggu selesai",
 		"retry_after_seconds": retryAfterSeconds,
 	})
@@ -183,7 +183,7 @@ func decodeAuthBody(w http.ResponseWriter, r *http.Request, v any) error {
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := decodeAuthBody(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
@@ -191,7 +191,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// supaya kredensial tetap bekerja walau pengguna mengetik huruf kapital.
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if req.Email == "" || req.Password == "" {
-		writeError(w, http.StatusBadRequest, "Email dan kata sandi wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Email dan kata sandi wajib diisi.")
 		return
 	}
 
@@ -213,7 +213,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	fail := func(reason string) {
 		log.Printf("[AUDIT] login_failed ip=%s email=%s reason=%s", clientIP, maskEmail(req.Email), reason)
-		writeError(w, http.StatusUnauthorized, "Email atau kata sandi salah.")
+		shared.WriteError(w, http.StatusUnauthorized, "Email atau kata sandi salah.")
 	}
 	if len(req.Password) > 72 { // batas bcrypt; jangan biarkan input panjang membuang CPU
 		fail("bad_password")
@@ -228,7 +228,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		if h.loginIP != nil {
 			h.loginIP.Refund(clientIP)
 		}
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	// Selalu jalankan bcrypt (hash tiruan untuk email tak dikenal/nonaktif) agar waktu jawab sama.
@@ -261,25 +261,25 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		access.Roles, access.Permissions, access.PermVersion)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateAccessToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 
 	refreshToken, refreshJTI, refreshExp, err := GenerateRefreshToken(user.ID)
 	if err != nil {
 		log.Printf("[ERROR] identity.Login GenerateRefreshToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 	if err := h.repo.SaveRefreshToken(r.Context(), refreshJTI, user.ID, refreshExp); err != nil {
 		log.Printf("[ERROR] identity.Login SaveRefreshToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 
 	ttl := int(getAccessTTL().Seconds())
 
-	writeJSON(w, http.StatusOK, TokenResponse{
+	shared.WriteJSON(w, http.StatusOK, TokenResponse{
 		UserID:       user.ID,
 		DisplayName:  user.DisplayName,
 		Email:        user.Email,
@@ -312,34 +312,34 @@ func maskEmail(email string) string {
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
 	if err := decodeAuthBody(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if strings.TrimSpace(req.RefreshToken) == "" {
-		writeError(w, http.StatusBadRequest, "Sesi wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Sesi wajib diisi.")
 		return
 	}
 
 	adminUserID, jti, err := ParseRefreshToken(req.RefreshToken)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
+		shared.WriteError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
 		return
 	}
 
 	user, err := h.repo.GetByID(r.Context(), adminUserID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "User tidak ditemukan.")
+			shared.WriteError(w, http.StatusUnauthorized, "User tidak ditemukan.")
 			return
 		}
 		log.Printf("[ERROR] identity.Refresh GetByID: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 
 	if !user.IsActive {
-		writeError(w, http.StatusUnauthorized, "User tidak ditemukan.")
+		shared.WriteError(w, http.StatusUnauthorized, "User tidak ditemukan.")
 		return
 	}
 
@@ -347,19 +347,19 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	refreshToken, refreshJTI, refreshExp, err := GenerateRefreshToken(user.ID)
 	if err != nil {
 		log.Printf("[ERROR] identity.Refresh GenerateRefreshToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 	if err := h.repo.RotasiRefreshToken(r.Context(), jti, user.ID, refreshJTI, refreshExp); err != nil {
 		switch {
 		case errors.Is(err, ErrRefreshDipakaiUlang):
 			log.Printf("[WARN] identity.Refresh token lama dipakai ulang, semua sesi user=%d dicabut", user.ID)
-			writeError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
+			shared.WriteError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
 		case errors.Is(err, ErrRefreshTidakValid):
-			writeError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
+			shared.WriteError(w, http.StatusUnauthorized, "Sesi tidak valid, masuk kembali.")
 		default:
 			log.Printf("[ERROR] identity.Refresh RotasiRefreshToken: %v", err)
-			writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+			shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		}
 		return
 	}
@@ -369,19 +369,19 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		access.Roles, access.Permissions, access.PermVersion)
 	if err != nil {
 		log.Printf("[ERROR] identity.Refresh GenerateAccessToken: %v", err)
-		writeError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
+		shared.WriteError(w, http.StatusInternalServerError, "Sesi gagal dibuat.")
 		return
 	}
 
 	ttl := int(getAccessTTL().Seconds())
 
-	writeJSON(w, http.StatusOK, TokenResponse{
-		UserID:      user.ID,
-		DisplayName: user.DisplayName,
-		Email:       user.Email,
-		Role:        access.Role,
-		Roles:       access.Roles,
-		Permissions: access.Permissions,
+	shared.WriteJSON(w, http.StatusOK, TokenResponse{
+		UserID:       user.ID,
+		DisplayName:  user.DisplayName,
+		Email:        user.Email,
+		Role:         access.Role,
+		Roles:        access.Roles,
+		Permissions:  access.Permissions,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    ttl,
@@ -402,23 +402,13 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		if _, jti, err := ParseRefreshToken(token); err == nil {
 			if err := h.repo.RevokeRefreshToken(r.Context(), jti); err != nil {
 				log.Printf("[ERROR] identity.Logout RevokeRefreshToken: %v", err)
-				writeError(w, http.StatusInternalServerError, "Gagal keluar. Coba lagi.")
+				shared.WriteError(w, http.StatusInternalServerError, "Gagal keluar. Coba lagi.")
 				return
 			}
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "logout berhasil"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "logout berhasil"})
 }
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}

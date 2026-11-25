@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"erp-azhan/api/internal/shared"
 )
 
 type contextKey string
@@ -22,25 +24,25 @@ func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			writeError(w, http.StatusUnauthorized, "Unauthorized.")
+			shared.WriteError(w, http.StatusUnauthorized, "Unauthorized.")
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := ValidateAccessClaims(tokenString)
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, "Unauthorized.")
+			shared.WriteError(w, http.StatusUnauthorized, "Unauthorized.")
 			return
 		}
 		// Cek ringan status user (cache 30 detik): akun nonaktif atau izin yang berubah tidak
 		// menunggu access token kedaluwarsa. 401 membuat klien me-refresh token.
 		ok, err := statusCache.allow(r.Context(), claims)
 		if err != nil {
-			writeError(w, http.StatusServiceUnavailable, "Layanan sementara tidak tersedia, coba lagi.")
+			shared.WriteError(w, http.StatusServiceUnavailable, "Layanan sementara tidak tersedia, coba lagi.")
 			return
 		}
 		if !ok {
-			writeError(w, http.StatusUnauthorized, "Unauthorized.")
+			shared.WriteError(w, http.StatusUnauthorized, "Unauthorized.")
 			return
 		}
 
@@ -59,7 +61,7 @@ func RequirePermission(perm string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !HasPermission(r.Context(), perm) {
-				writeError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
+				shared.WriteError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -78,7 +80,7 @@ func RequireAnyPermission(perms ...string) func(http.Handler) http.Handler {
 					return
 				}
 			}
-			writeError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
+			shared.WriteError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
 		})
 	}
 }
@@ -91,7 +93,7 @@ func RequireHoldingPermission(perm string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !HasPermission(r.Context(), perm) || GetBrandID(r.Context()) != nil {
-				writeError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
+				shared.WriteError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk aksi ini.")
 				return
 			}
 			next.ServeHTTP(w, r)

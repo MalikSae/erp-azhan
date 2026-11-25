@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 // GetBatasSeat GET /api/admin/agen/{akunID}/batas-seat: batas hold seat yang berlaku, seat yang sedang
@@ -21,7 +22,7 @@ func (h *Handler) GetBatasSeat(w http.ResponseWriter, r *http.Request) {
 		handleBatasSeatError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, b)
+	shared.WriteJSON(w, http.StatusOK, b)
 }
 
 // UbahBatasSeat PUT /api/admin/agen/{akunID}/batas-seat {per_jadwal, total, alasan} (izin agen.edit).
@@ -33,7 +34,7 @@ func (h *Handler) UbahBatasSeat(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UbahBatasSeatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
@@ -47,15 +48,15 @@ func (h *Handler) UbahBatasSeat(w http.ResponseWriter, r *http.Request) {
 		handleBatasSeatError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, b)
+	shared.WriteJSON(w, http.StatusOK, b)
 }
 
 func handleBatasSeatError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrBatasSeatTidakValid), errors.Is(err, ErrAlasanBatasWajib):
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrBatasSeatSama):
-		writeError(w, http.StatusConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, err.Error())
 	default:
 		handleError(w, err)
 	}

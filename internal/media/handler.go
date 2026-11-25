@@ -3,7 +3,6 @@ package media
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -196,18 +195,18 @@ func (h *Handler) ServeProtected(w http.ResponseWriter, r *http.Request) {
 	category := chi.URLParam(r, "category")
 	filename := chi.URLParam(r, "filename")
 	if _, ok := protectedCategories[category]; !ok || !safeFilename(filename) {
-		writeError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
 		return
 	}
 	if !h.canViewCategory(r, category, filename) || !h.canReadAdminFile(r, category, filename) {
-		writeError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
 		return
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	path := filepath.Join(".", "uploads", category, filename)
 	if info, err := os.Stat(path); err != nil || info.IsDir() {
-		writeError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Berkas tidak ditemukan.")
 		return
 	}
 	http.ServeFile(w, r, path)
@@ -222,28 +221,28 @@ func safeFilename(name string) bool {
 func (h *Handler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 	if ip := shared.ClientIP(r); h.adminIP != nil {
 		if !h.adminIP.Take(ip) {
-			writeError(w, http.StatusTooManyRequests, "Terlalu banyak unggahan, coba lagi nanti.")
+			shared.WriteError(w, http.StatusTooManyRequests, "Terlalu banyak unggahan, coba lagi nanti.")
 			return
 		}
 	}
 	// Batasi body SEBELUM FormValue mem-parse multipart.
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadBytes+multipartOverhead)
 	if err := r.ParseMultipartForm(MaxUploadBytes); err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, "Ukuran file terlalu besar (maksimal 10MB).")
+		shared.WriteError(w, http.StatusRequestEntityTooLarge, "Ukuran file terlalu besar (maksimal 10MB).")
 		return
 	}
 	category := r.FormValue("category")
 	if strings.TrimSpace(category) == "" {
-		writeError(w, http.StatusBadRequest, "Category wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Category wajib diisi.")
 		return
 	}
 	perms, known := adminUploadCategoryPerms[category]
 	if !validCategoryRegex.MatchString(category) || !known {
-		writeError(w, http.StatusBadRequest, "Category tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Category tidak valid.")
 		return
 	}
 	if !hasAnyPermission(r.Context(), perms) {
-		writeError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk mengunggah ke kategori ini.")
+		shared.WriteError(w, http.StatusForbidden, "Anda tidak memiliki izin untuk mengunggah ke kategori ini.")
 		return
 	}
 
@@ -258,7 +257,7 @@ func (h *Handler) UploadPortalMedia(w http.ResponseWriter, r *http.Request) {
 	ip := shared.ClientIP(r)
 	if h.customerIP != nil {
 		if !h.customerIP.Take(ip) {
-			writeError(w, http.StatusTooManyRequests, "Terlalu banyak unggahan, coba lagi dalam 1 jam.")
+			shared.WriteError(w, http.StatusTooManyRequests, "Terlalu banyak unggahan, coba lagi dalam 1 jam.")
 			return
 		}
 	}
@@ -268,7 +267,7 @@ func (h *Handler) UploadPortalMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadBytes+multipartOverhead)
 	if err := r.ParseMultipartForm(MaxUploadBytes); err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, "Ukuran file terlalu besar (maksimal 10MB).")
+		shared.WriteError(w, http.StatusRequestEntityTooLarge, "Ukuran file terlalu besar (maksimal 10MB).")
 		return
 	}
 	// Foto ulasan Jelajah Haramain bersifat publik; selebihnya (dokumen, bukti bayar) terlindungi.
@@ -285,16 +284,16 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	// 2. Get the file
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "File tidak ditemukan dalam request.")
+		shared.WriteError(w, http.StatusBadRequest, "File tidak ditemukan dalam request.")
 		return
 	}
 	defer file.Close()
 	if header.Size > MaxUploadBytes {
-		writeError(w, http.StatusRequestEntityTooLarge, "Ukuran file terlalu besar (maksimal 10MB).")
+		shared.WriteError(w, http.StatusRequestEntityTooLarge, "Ukuran file terlalu besar (maksimal 10MB).")
 		return
 	}
 	if quotaKey != "" && h.customerQuota != nil && !h.customerQuota.reserve(quotaKey, header.Size) {
-		writeError(w, http.StatusTooManyRequests, "Kuota unggahan harian akun Anda sudah habis, coba lagi besok atau hubungi admin.")
+		shared.WriteError(w, http.StatusTooManyRequests, "Kuota unggahan harian akun Anda sudah habis, coba lagi besok atau hubungi admin.")
 		return
 	}
 
@@ -302,7 +301,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	buffer := make([]byte, 512)
 	n, err := file.Read(buffer)
 	if err != nil && err != io.EOF {
-		writeError(w, http.StatusInternalServerError, "Gagal membaca file.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal membaca file.")
 		return
 	}
 
@@ -315,13 +314,13 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 		ext = ".pdf"
 	}
 	if ext == "" {
-		writeError(w, http.StatusBadRequest, "File harus berupa JPG, PNG, WEBP, GIF, atau PDF.")
+		shared.WriteError(w, http.StatusBadRequest, "File harus berupa JPG, PNG, WEBP, GIF, atau PDF.")
 		return
 	}
 
 	// Rewind the file
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		writeError(w, http.StatusInternalServerError, "Gagal memproses file.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memproses file.")
 		return
 	}
 	// Gambar: dimensi dibaca dari header (tanpa mendekode piksel). Gambar yang mengaku raksasa ditolak agar
@@ -332,11 +331,11 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 			batas = shared.MaxLogoPixels
 		}
 		if err := shared.CekDimensiGambar(file, batas); err != nil {
-			writeError(w, http.StatusBadRequest, "Gambar rusak atau dimensinya terlalu besar.")
+			shared.WriteError(w, http.StatusBadRequest, "Gambar rusak atau dimensinya terlalu besar.")
 			return
 		}
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			writeError(w, http.StatusInternalServerError, "Gagal memproses file.")
+			shared.WriteError(w, http.StatusInternalServerError, "Gagal memproses file.")
 			return
 		}
 	}
@@ -348,25 +347,25 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	// 4. Create folder if not exists
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		fmt.Printf("Gagal membuat direktori upload: %v\n", err)
-		writeError(w, http.StatusInternalServerError, "Gagal memproses gambar.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memproses gambar.")
 		return
 	}
 
 	finalPath := filepath.Join(uploadDir, newFileName)
 	destination, err := os.OpenFile(finalPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
 		return
 	}
 	if _, err := io.Copy(destination, file); err != nil {
 		destination.Close()
 		_ = os.Remove(finalPath)
-		writeError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
 		return
 	}
 	if err := destination.Close(); err != nil {
 		_ = os.Remove(finalPath)
-		writeError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
 		return
 	}
 
@@ -383,7 +382,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 			var brand int64
 			if err := h.db.QueryRowContext(r.Context(), `SELECT brand_id FROM jamaah WHERE id=?`, id).Scan(&brand); err != nil {
 				_ = os.Remove(finalPath)
-				writeError(w, 500, "Gagal memeriksa pemilik berkas.")
+				shared.WriteError(w, 500, "Gagal memeriksa pemilik berkas.")
 				return
 			}
 			brandID = brand
@@ -392,7 +391,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 		}
 		if _, err := h.db.ExecContext(r.Context(), `INSERT INTO media_uploads(path,brand_id,jamaah_id,admin_user_id,customer_account_id) VALUES(?,?,?,?,?)`, publicURL, brandID, jamaahID, adminID, customerID); err != nil {
 			_ = os.Remove(finalPath)
-			writeError(w, 500, "Gagal mencatat pemilik berkas.")
+			shared.WriteError(w, 500, "Gagal mencatat pemilik berkas.")
 			return
 		}
 	}
@@ -402,17 +401,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	_ = isImage
 
 	// 8. Success
-	writeJSON(w, http.StatusCreated, response)
+	shared.WriteJSON(w, http.StatusCreated, response)
 }
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}

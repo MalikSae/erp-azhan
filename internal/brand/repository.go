@@ -5,7 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
+
+	"erp-azhan/api/internal/shared"
 )
 
 var ErrNotFound = errors.New("brand tidak ditemukan")
@@ -238,7 +239,7 @@ func (r *Repository) Delete(ctx context.Context, id uint64) error {
 	const q = `DELETE FROM brands WHERE id = ?`
 	res, err := r.db.ExecContext(ctx, q, id)
 	if err != nil {
-		if strings.Contains(err.Error(), "1451") {
+		if shared.IsFKDipakai(err) {
 			return ErrInUse
 		}
 		return fmt.Errorf("brand.Delete Exec: %w", err)

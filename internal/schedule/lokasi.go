@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
+
+	"erp-azhan/api/internal/shared"
 )
 
 // Lokasi Dikunjungi (migration 148): Jelajah Haramain places picked per paket, ordered by admin.
@@ -282,11 +284,11 @@ func (h *Handler) lokasiSah(ctx context.Context, w http.ResponseWriter, schedule
 	}
 	var le LokasiError
 	if errors.As(err, &le) {
-		writeError(w, http.StatusBadRequest, le.Error())
+		shared.WriteError(w, http.StatusBadRequest, le.Error())
 		return false
 	}
 	log.Printf("[ERROR] schedule: validasi lokasi: %v", err)
-	writeError(w, http.StatusInternalServerError, "Gagal memeriksa lokasi.")
+	shared.WriteError(w, http.StatusInternalServerError, "Gagal memeriksa lokasi.")
 	return false
 }
 
@@ -297,8 +299,8 @@ func (h *Handler) ListLokasiOptions(w http.ResponseWriter, r *http.Request) {
 	items, err := opsiLokasi(r.Context(), h.repo.db)
 	if err != nil {
 		log.Printf("[ERROR] schedule: opsi lokasi: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal memuat lokasi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal memuat lokasi.")
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }

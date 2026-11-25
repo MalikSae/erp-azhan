@@ -10,6 +10,7 @@ import (
 
 	"erp-azhan/api/internal/identity"
 	"erp-azhan/api/internal/media"
+	"erp-azhan/api/internal/shared"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -55,20 +56,20 @@ func (h *Handler) ListDokumen(w http.ResponseWriter, r *http.Request) {
 	// Verify jamaah exists and belongs to brand
 	exists, err := h.repo.JamaahExistsForBrand(r.Context(), jamaahID, brandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan atau bukan milik brand Anda.")
+		shared.WriteError(w, http.StatusNotFound, "Jamaah tidak ditemukan atau bukan milik brand Anda.")
 		return
 	}
 
 	items, err := h.repo.ListByJamaahID(r.Context(), jamaahID, brandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Gagal mengambil data dokumen.")
+		shared.WriteError(w, http.StatusInternalServerError, "Gagal mengambil data dokumen.")
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // ─── Upsert ───────────────────────────────────────────────────────────────────
@@ -83,18 +84,18 @@ func (h *Handler) UpsertDokumen(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateDokumenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if !validJenis[req.Jenis] {
-		writeError(w, http.StatusBadRequest, "Jenis dokumen tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Jenis dokumen tidak valid.")
 		return
 	}
 
 	req.FileURL = strings.TrimSpace(req.FileURL)
 	if req.FileURL == "" {
-		writeError(w, http.StatusBadRequest, "File wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "File wajib diisi.")
 		return
 	}
 
@@ -103,11 +104,11 @@ func (h *Handler) UpsertDokumen(w http.ResponseWriter, r *http.Request) {
 	// Verify jamaah
 	exists, err := h.repo.JamaahExistsForBrand(r.Context(), jamaahID, brandID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 	if !exists {
-		writeError(w, http.StatusNotFound, "Jamaah tidak valid atau bukan milik brand Anda.")
+		shared.WriteError(w, http.StatusNotFound, "Jamaah tidak valid atau bukan milik brand Anda.")
 		return
 	}
 
@@ -115,11 +116,11 @@ func (h *Handler) UpsertDokumen(w http.ResponseWriter, r *http.Request) {
 	if err := media.ValidateAdminUpload(r.Context(), h.repo.db, req.FileURL, jamaahID, identity.GetAdminUserID(r.Context())); err != nil {
 		var uploadErr *media.UploadError
 		if errors.As(err, &uploadErr) {
-			writeError(w, http.StatusBadRequest, uploadErr.Message)
+			shared.WriteError(w, http.StatusBadRequest, uploadErr.Message)
 			return
 		}
 		log.Printf("[ERROR] dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
 
@@ -128,7 +129,7 @@ func (h *Handler) UpsertDokumen(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, d) // 200 OK karena bisa jadi update/replace
+	shared.WriteJSON(w, http.StatusOK, d) // 200 OK karena bisa jadi update/replace
 }
 
 // ─── Update Status ────────────────────────────────────────────────────────────
@@ -143,21 +144,21 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateDokumenStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	if !validStatuses[req.Status] {
-		writeError(w, http.StatusBadRequest, "Status tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Status tidak valid.")
 		return
 	}
 	req.RejectionReason = strings.TrimSpace(req.RejectionReason)
 	if req.Version <= 0 {
-		writeError(w, 400, "Versi dokumen wajib diisi.")
+		shared.WriteError(w, 400, "Versi dokumen wajib diisi.")
 		return
 	}
 	if req.Status == "rejected" && (req.RejectionReason == "" || len(req.RejectionReason) > 500) {
-		writeError(w, 400, "Alasan penolakan wajib diisi, maksimal 500 karakter.")
+		shared.WriteError(w, 400, "Alasan penolakan wajib diisi, maksimal 500 karakter.")
 		return
 	}
 	if req.Status != "rejected" {
@@ -173,7 +174,7 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Status == "submitted" && current.Status != "approved" {
-		writeError(w, http.StatusConflict, "Dokumen belum disetujui.")
+		shared.WriteError(w, http.StatusConflict, "Dokumen belum disetujui.")
 		return
 	}
 
@@ -182,7 +183,7 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, updated)
+	shared.WriteJSON(w, http.StatusOK, updated)
 }
 
 // ─── Riwayat ──────────────────────────────────────────────────────────────────
@@ -204,7 +205,7 @@ func (h *Handler) RiwayatDokumen(w http.ResponseWriter, r *http.Request) {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // ─── Error handling ───────────────────────────────────────────────────────────
@@ -212,13 +213,13 @@ func (h *Handler) RiwayatDokumen(w http.ResponseWriter, r *http.Request) {
 func handleRepoError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrVersionConflict):
-		writeError(w, http.StatusConflict, "Dokumen sudah berubah. Muat ulang halaman.")
+		shared.WriteError(w, http.StatusConflict, "Dokumen sudah berubah. Muat ulang halaman.")
 	case errors.Is(err, ErrNotFound):
-		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
+		shared.WriteError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	default:
 		// Teks galat database tidak dikirim ke klien; cukup dicatat di log.
 		log.Printf("[ERROR] dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
+		shared.WriteError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 	}
 }
 
@@ -228,18 +229,8 @@ func parseID(w http.ResponseWriter, r *http.Request, param string) (int64, bool)
 	raw := chi.URLParam(r, param)
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "ID tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "ID tidak valid.")
 		return 0, false
 	}
 	return id, true
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
 }

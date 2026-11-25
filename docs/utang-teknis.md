@@ -39,11 +39,17 @@ Perbaikan: `perlengkapan` menyediakan `IsiUntukPax(scheduleID, gender)` dan `Kun
 
 ## Kode berulang di backend (dicatat 2026-11-25)
 
-- `writeError`/`writeJSON` didefinisikan ulang di hampir tiap paket, dengan nama berbeda (`tulisGalat`, `galatTulis`, `handleRepoError`).
-- Blok tangkap MySQL 1451 disalin di hotel, airline, airport, itinerary, category, schedule.
-- `internal/schedule/handler.go` dan `repository.go` mencampur CRUD, seat, tanggal, benefit, lokasi, dan publik. Pecah per alasan berubah (mis. `seat.go`, `tanggal.go`).
+Sudah diperbaiki (2026-11-25):
 
-Perbaikan: helper bersama di `internal/shared`.
+- `shared.WriteJSON`/`shared.WriteError` menggantikan salinan lokal di 26 paket.
+- `shared.IsFKDipakai` dan `shared.IsMySQLErr` menggantikan blok tangkap 1451 di hotel, airline, airport, itinerary, category, schedule, jamaah, benefit, haramain, brand, adminuser.
+- `internal/schedule` dipecah: `seat.go`, `status.go`, `tanggal.go`, `publik.go`, `master_cek.go`, `benefit_paket.go`.
+
+Masih tersisa:
+
+- `booking`, `customer`, `perlengkapan` masih punya `writeJSON`/`writeError` dan blok 1451 sendiri; ditunda karena sedang diubah sesi review Inventory. `customer.writeJSON` menambah `Cache-Control: no-store`, jadi butuh varian sendiri.
+- Penerjemah galat per modul (`tulisGalat`, `handleRepoError`) tetap per modul karena isinya memetakan galat sentinel milik modul itu.
+- Blok tangkap MySQL 1062 (duplikat) masih ditulis manual di beberapa modul; bisa memakai `shared.IsMySQLErr(err, 1062)`.
 
 ## Kode berulang di dashboard (dicatat 2026-11-25)
 

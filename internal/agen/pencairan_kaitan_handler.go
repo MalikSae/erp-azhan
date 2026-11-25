@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 // Bukti transfer keluar hanya boleh hasil upload admin ke kategori media
@@ -20,15 +21,15 @@ var buktiKeluarURL = regexp.MustCompile(`^/api/admin/media/payment-proofs/([0-9a
 func handlePencairanKaitanError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrBukanAgenAktif):
-		writeError(w, http.StatusForbidden, err.Error())
+		shared.WriteError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, ErrPencairanMinimal), errors.Is(err, ErrPencairanTidakBulat), errors.Is(err, ErrPencairanMelebihi),
 		errors.Is(err, ErrRekeningTidakLengkap), errors.Is(err, ErrAgenTidakValid),
 		errors.Is(err, ErrKaitanTidakBerubah), errors.Is(err, ErrKaitanModeTidakSah):
-		writeError(w, http.StatusBadRequest, err.Error())
+		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrPencairanMasihPending), errors.Is(err, ErrPencairanBukanPending),
 		errors.Is(err, ErrSaldoTidakCukup), errors.Is(err, ErrKaitanTanpaAgenAdaKomisi), errors.Is(err, ErrKomisiSudahDicairkan), errors.Is(err, ErrKaitanAkunSiklus),
 		errors.Is(err, ErrKaitanSudahKomisi):
-		writeError(w, http.StatusConflict, err.Error())
+		shared.WriteError(w, http.StatusConflict, err.Error())
 	default:
 		handleError(w, err)
 	}
@@ -43,14 +44,14 @@ func (h *Handler) GetPencairan(w http.ResponseWriter, r *http.Request) {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	shared.WriteJSON(w, http.StatusOK, p)
 }
 
 // AjukanPencairan POST /api/portal/agen/pencairan
 func (h *Handler) AjukanPencairan(w http.ResponseWriter, r *http.Request) {
 	var req AjukanPencairanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	agenID := identity.GetCustomerAccountID(r.Context())
@@ -60,7 +61,7 @@ func (h *Handler) AjukanPencairan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[AUDIT] pencairan_diajukan id=%d agen_id=%d nominal=%.0f", id, agenID, req.Nominal)
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "message": "pengajuan pencairan dikirim"})
+	shared.WriteJSON(w, http.StatusCreated, map[string]any{"id": id, "message": "pengajuan pencairan dikirim"})
 }
 
 // BuktiPencairanPortal GET /api/portal/agen/pencairan/{id}/bukti
@@ -76,7 +77,7 @@ func (h *Handler) BuktiPencairanPortal(w http.ResponseWriter, r *http.Request) {
 	}
 	m := buktiKeluarURL.FindStringSubmatch(url)
 	if m == nil {
-		writeError(w, http.StatusNotFound, ErrNotFound.Error())
+		shared.WriteError(w, http.StatusNotFound, ErrNotFound.Error())
 		return
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
@@ -92,7 +93,7 @@ func (h *Handler) ListPencairanAdmin(w http.ResponseWriter, r *http.Request) {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // RingkasanPencairan GET /api/admin/pencairan/ringkasan?brand_id=
@@ -102,7 +103,7 @@ func (h *Handler) RingkasanPencairan(w http.ResponseWriter, r *http.Request) {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s)
+	shared.WriteJSON(w, http.StatusOK, s)
 }
 
 // SetujuiPencairan POST /api/admin/pencairan/{id}/setujui {bukti_transfer_keluar_url}
@@ -115,11 +116,11 @@ func (h *Handler) SetujuiPencairan(w http.ResponseWriter, r *http.Request) {
 		BuktiURL string `json:"bukti_transfer_keluar_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	if !buktiKeluarURL.MatchString(strings.TrimSpace(req.BuktiURL)) {
-		writeError(w, http.StatusBadRequest, "Bukti transfer keluar wajib diunggah.")
+		shared.WriteError(w, http.StatusBadRequest, "Bukti transfer keluar wajib diunggah.")
 		return
 	}
 	if !validasiBuktiAdmin(w, r, h.repo.db, strings.TrimSpace(req.BuktiURL), "payment-proofs") {
@@ -131,7 +132,7 @@ func (h *Handler) SetujuiPencairan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[AUDIT] pencairan_disetujui id=%d admin_id=%d", id, adminID)
-	writeJSON(w, http.StatusOK, map[string]string{"message": "pencairan disetujui"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "pencairan disetujui"})
 }
 
 // TolakPencairan POST /api/admin/pencairan/{id}/tolak {alasan}
@@ -150,7 +151,7 @@ func (h *Handler) TolakPencairan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[AUDIT] pencairan_ditolak id=%d admin_id=%d", id, adminID)
-	writeJSON(w, http.StatusOK, map[string]string{"message": "pencairan ditolak"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "pencairan ditolak"})
 }
 
 // ─── C4 (Admin Master) ───────────────────────────────────────────────────────
@@ -162,7 +163,7 @@ func (h *Handler) CariJamaahKaitan(w http.ResponseWriter, r *http.Request) {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // LogKaitan GET /api/admin/kaitan-agen/{jamaahID}/log
@@ -176,7 +177,7 @@ func (h *Handler) LogKaitan(w http.ResponseWriter, r *http.Request) {
 		handlePencairanKaitanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, items)
+	shared.WriteJSON(w, http.StatusOK, items)
 }
 
 // GantiKaitan PUT /api/admin/kaitan-agen/{jamaahID}
@@ -187,12 +188,12 @@ func (h *Handler) GantiKaitan(w http.ResponseWriter, r *http.Request) {
 	}
 	var req GantiKaitanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 	req.Alasan = strings.TrimSpace(req.Alasan)
 	if n := utf8.RuneCountInString(req.Alasan); n < 5 || n > 1000 {
-		writeError(w, http.StatusBadRequest, "Alasan wajib diisi (5–1000 karakter).")
+		shared.WriteError(w, http.StatusBadRequest, "Alasan wajib diisi (5–1000 karakter).")
 		return
 	}
 	adminID := identity.GetAdminUserID(r.Context())
@@ -201,5 +202,5 @@ func (h *Handler) GantiKaitan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[AUDIT] kaitan_diganti jamaah_id=%d mode=%s admin_id=%d", id, req.Mode, adminID)
-	writeJSON(w, http.StatusOK, map[string]string{"message": "kaitan agen diganti"})
+	shared.WriteJSON(w, http.StatusOK, map[string]string{"message": "kaitan agen diganti"})
 }

@@ -7,10 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-sql-driver/mysql"
-
 	"erp-azhan/api/internal/akses"
 	"erp-azhan/api/internal/identity"
+	"erp-azhan/api/internal/shared"
 )
 
 var (
@@ -177,11 +176,6 @@ func checkEmailFree(ctx context.Context, tx *sql.Tx, email string, excludeID uin
 	return nil
 }
 
-func isMySQLErr(err error, code uint16) bool {
-	var myErr *mysql.MySQLError
-	return errors.As(err, &myErr) && myErr.Number == code
-}
-
 // izinDisimpan mengembalikan izin yang akan disimpan: kosong untuk Super Admin.
 func izinDisimpan(in UpsertInput) []string {
 	if in.Akses == akses.SuperAdmin {
@@ -229,7 +223,7 @@ func (r *Repository) Create(ctx context.Context, in UpsertInput, passwordHash st
 		VALUES (?, ?, ?, ?, ?, TRUE)`,
 		in.Email, in.DisplayName, in.NoHP, passwordHash, in.BrandID)
 	if err != nil {
-		if isMySQLErr(err, 1062) {
+		if shared.IsMySQLErr(err, 1062) {
 			return 0, ErrDuplicateEmail
 		}
 		return 0, fmt.Errorf("adminuser.Create insert: %w", err)
@@ -296,7 +290,7 @@ func (r *Repository) Update(ctx context.Context, id uint64, in UpsertInput) erro
 		UPDATE admin_users SET email = ?, display_name = ?, no_hp = ?, brand_id = ?
 		WHERE id = ?`,
 		in.Email, in.DisplayName, in.NoHP, in.BrandID, id); err != nil {
-		if isMySQLErr(err, 1062) {
+		if shared.IsMySQLErr(err, 1062) {
 			return ErrDuplicateEmail
 		}
 		return fmt.Errorf("adminuser.Update profil: %w", err)
@@ -415,7 +409,7 @@ func (r *Repository) Delete(ctx context.Context, id uint64, actorID uint64) erro
 	}
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM admin_users WHERE id = ?`, id); err != nil {
-		if isMySQLErr(err, 1451) {
+		if shared.IsFKDipakai(err) {
 			return ErrHasHistory
 		}
 		return fmt.Errorf("adminuser.Delete: %w", err)
