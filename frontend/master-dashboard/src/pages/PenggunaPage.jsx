@@ -14,8 +14,8 @@ import ActionMenu from 'shared/ui/ActionMenu';
 import SegmentedTabs from 'shared/ui/SegmentedTabs';
 import { AuthContext } from '../context/AuthContext';
 import { listAdminUsers, setAdminUserStatus, resetAdminUserPassword } from '../api/adminUsers';
-import { listRoles } from '../api/roles';
 import { errMsg, StatusChip, AksesChip } from '../components/penggunaUi';
+import { AKSES_LABEL, SUPER_ADMIN } from '../constants/izinAkses';
 
 const FILTERS = [
   { value: 'aktif', label: 'Aktif' },
@@ -23,7 +23,7 @@ const FILTERS = [
   { value: 'semua', label: 'Semua' },
 ];
 
-// Daftar Pengguna (SPEK-PENGGUNA-ORGANISASI §6). Satu orang = satu Pengguna;
+// Daftar Pengguna (SPEK-AKSES-PENGGUNA-2026-11-25 §6). Satu orang = satu Pengguna;
 // pembuatan & perubahan lewat form halaman penuh (/users/new, /users/:id).
 const PenggunaPage = () => {
   const navigate = useNavigate();
@@ -31,7 +31,6 @@ const PenggunaPage = () => {
   const { currentUserId } = useContext(AuthContext);
 
   const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
@@ -50,9 +49,8 @@ const PenggunaPage = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [usersData, rolesData] = await Promise.all([listAdminUsers(), listRoles()]);
+      const usersData = await listAdminUsers();
       setUsers(usersData || []);
-      setRoles(rolesData || []);
     } catch (error) {
       setErrorMessage(errMsg(error, 'Data pengguna gagal dimuat. Coba lagi.'));
     } finally {
@@ -68,26 +66,20 @@ const PenggunaPage = () => {
     if (location.state) window.history.replaceState({}, '');
   }, [location.state]);
 
-  const roleName = (slug) => roles.find(r => r.slug === slug)?.name || slug;
   const isSelf = (row) => currentUserId && Number(row.id) === Number(currentUserId);
 
   const stats = useMemo(() => {
     const aktif = users.filter(u => u.is_active);
     return {
       aktif: aktif.length,
-      holding: aktif.filter(u => u.brand_id === null || u.brand_id === undefined).length,
-      brand: aktif.filter(u => u.brand_id !== null && u.brand_id !== undefined).length,
+      superAdmin: aktif.filter(u => u.akses === SUPER_ADMIN).length,
+      tim: aktif.filter(u => u.akses !== SUPER_ADMIN).length,
       nonaktif: users.length - aktif.length,
     };
   }, [users]);
 
   const rows = useMemo(() => users
-    .filter(u => filter === 'semua' || (filter === 'aktif' ? u.is_active : !u.is_active))
-    // Kolom bantu pencarian: nama role & unit ikut bisa dicari.
-    .map(u => ({
-      ...u,
-      _cari: [...(u.roles || []).map(roleName), ...(u.keanggotaan || []).map(k => k.unit_nama)].join(' '),
-    })), [users, filter, roles]);
+    .filter(u => filter === 'semua' || (filter === 'aktif' ? u.is_active : !u.is_active)), [users, filter]);
 
   const handleStatus = async () => {
     setIsSavingStatus(true);
@@ -127,9 +119,8 @@ const PenggunaPage = () => {
 
   const columns = [
     { header: 'Nama', key: 'display_name' },
-    { header: 'Akses Brand', key: 'akses' },
-    { header: 'Role', key: 'roles' },
-    { header: 'Tim / Unit', key: 'keanggotaan' },
+    { header: 'Brand', key: 'cakupan' },
+    { header: 'Akses', key: 'akses' },
     { header: 'Status', key: 'status' },
     { header: 'Aksi', key: 'aksi' },
   ];
@@ -144,8 +135,8 @@ const PenggunaPage = () => {
       {!isLoading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatTile icon={Users} variant="primary" value={stats.aktif} label="Pengguna Aktif" />
-          <StatTile icon={ShieldCheck} variant="violet" value={stats.holding} label="Akses Holding" />
-          <StatTile icon={Building2} variant="info" value={stats.brand} label="Akses Brand" />
+          <StatTile icon={ShieldCheck} variant="violet" value={stats.superAdmin} label="Super Admin" />
+          <StatTile icon={Building2} variant="info" value={stats.tim} label="Tim" />
           <StatTile icon={UserX} variant="danger" value={stats.nonaktif} label="Nonaktif" />
         </div>
       )}
@@ -157,7 +148,7 @@ const PenggunaPage = () => {
           columns={columns}
           data={rows}
           itemsPerPage={10}
-          searchPlaceholder="Cari nama, email, role, atau tim..."
+          searchPlaceholder="Cari nama atau email"
           emptyMessage={filter === 'nonaktif' ? 'Tidak ada pengguna nonaktif.' : 'Belum ada pengguna.'}
           toolbarActions={(
             <SegmentedTabs
@@ -177,35 +168,13 @@ const PenggunaPage = () => {
                     {isSelf(row) && <span className="text-xs font-body text-neutral-400">(Anda)</span>}
                   </div>
                   <div className="text-xs font-body text-neutral-400 truncate">
-                    {row.jabatan ? `${row.jabatan} · ` : ''}{row.email}
+                    {row.email}
                   </div>
                 </div>
               );
             }
-            if (key === 'akses') return <AksesChip brandId={row.brand_id} brandName={row.brand_name} brandColor={row.brand_color} />;
-            if (key === 'roles') {
-              const list = row.roles || [];
-              if (list.length === 0) return <span className="text-xs text-neutral-400 font-body">—</span>;
-              return (
-                <span className="block max-w-56 text-sm font-body text-neutral-700">
-                  {list.map(roleName).join(', ')}
-                </span>
-              );
-            }
-            if (key === 'keanggotaan') {
-              const list = row.keanggotaan || [];
-              if (list.length === 0) return <span className="text-xs text-neutral-400 font-body">—</span>;
-              return (
-                <div className="max-w-60 space-y-0.5 text-sm font-body text-neutral-700">
-                  {list.map(k => (
-                    <div key={k.org_unit_id}>
-                      {k.unit_nama}
-                      {k.posisi === 'pemimpin' && <span className="text-xs text-neutral-400"> · Pemimpin</span>}
-                    </div>
-                  ))}
-                </div>
-              );
-            }
+            if (key === 'cakupan') return <AksesChip brandId={row.brand_id} brandName={row.brand_name} brandColor={row.brand_color} />;
+            if (key === 'akses') return <span className="font-body text-sm text-neutral-700">{AKSES_LABEL[row.akses] || AKSES_LABEL.tim}</span>;
             if (key === 'status') return <StatusChip active={row.is_active} />;
             if (key === 'aksi') {
               const menuItems = [
@@ -248,7 +217,7 @@ const PenggunaPage = () => {
             </p>
           ) : (
             <p className="text-sm font-body text-neutral-700">
-              <strong className="font-heading text-neutral-900">{statusTarget?.display_name}</strong> akan bisa login kembali dengan role dan akses yang tersimpan.
+              <strong className="font-heading text-neutral-900">{statusTarget?.display_name}</strong> bisa login kembali.
             </p>
           )}
           <div className="flex justify-end gap-3 pt-4 border-t border-neutral-200">

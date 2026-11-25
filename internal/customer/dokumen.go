@@ -13,7 +13,7 @@ import (
 )
 
 // Dokumen jamaah di portal pelanggan: pemesan melihat kelengkapan dokumen tiap jamaah di bookingnya
-// dan mengirim berkas (status submitted). Persetujuan tetap oleh admin lewat /api/admin/dokumen.
+// dan mengirim berkas (status submitted). Persetujuan tetap oleh admin lewat PUT /api/admin/dokumen/{id}/status.
 
 var labelDokumen = map[string]string{
 	"paspor":            "Paspor",
@@ -47,9 +47,14 @@ type paxDokumen struct {
 	JamaahID int64         `json:"jamaah_id"`
 	Nama     string        `json:"nama"`
 	PaxType  string        `json:"pax_type"`
-	// AksesTerbatas: akun bukan pembuat jamaah; hanya boleh mengunggah jenis yang belum ada berkasnya.
+	// AksesTerbatas: akun bukan pembuat jamaah; hanya boleh mengunggah jenis yang belum ada berkasnya
+	// atau yang ditolak (keputusan 2026-11-25).
 	AksesTerbatas bool     `json:"akses_terbatas"`
-	Dokumen  []dokumenItem `json:"dokumen"`
+	// WajibDisetujui dari WajibTotal: dokumen wajib yang sudah disetujui admin (keputusan 2026-11-25:
+	// hanya approved yang dihitung lengkap).
+	WajibDisetujui int           `json:"wajib_disetujui"`
+	WajibTotal     int           `json:"wajib_total"`
+	Dokumen        []dokumenItem `json:"dokumen"`
 }
 
 // susunDokumen menggabungkan daftar jenis (wajib lalu tambahan) dengan status yang sudah tersimpan.
@@ -70,6 +75,20 @@ func susunDokumen(paxType string, ada map[string]dokumenItem) []dokumenItem {
 		tambah(j, false)
 	}
 	return out
+}
+
+// hitungWajibDisetujui: jumlah dokumen wajib berstatus approved dan jumlah dokumen wajib.
+func hitungWajibDisetujui(items []dokumenItem) (disetujui, total int) {
+	for _, it := range items {
+		if !it.Wajib {
+			continue
+		}
+		total++
+		if it.Status == "approved" {
+			disetujui++
+		}
+	}
+	return disetujui, total
 }
 
 // Dokumen GET /api/account/bookings/{id}/dokumen
@@ -121,7 +140,8 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 		}
 		if jenis != "" {
 			it := dokumenItem{Status: status}
-			if penuh && alasan.Valid && strings.TrimSpace(alasan.String) != "" && status == "rejected" {
+			// Alasan penolakan tampil juga untuk akses terbatas: akun itu boleh mengganti dokumen yang ditolak.
+			if alasan.Valid && strings.TrimSpace(alasan.String) != "" && status == "rejected" {
 				s := alasan.String
 				it.RejectionReason = &s
 			}
@@ -137,6 +157,7 @@ func (o *Orders) Dokumen(w http.ResponseWriter, r *http.Request) {
 	for _, jid := range urut {
 		p := pax[jid]
 		p.Dokumen = susunDokumen(p.PaxType, ada[jid])
+		p.WajibDisetujui, p.WajibTotal = hitungWajibDisetujui(p.Dokumen)
 		out = append(out, *p)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"pax": out})
@@ -148,8 +169,42 @@ type kirimDokumenRequest struct {
 	FileURL  string `json:"file_url"`
 }
 
+// bolehUnggahDokumen: unggah dokumen oleh pelanggan dibuka setelah booking minimal DP (keputusan 2026-11-25).
+// dokumen_lengkap dan siap_berangkat adalah status lama sesudah lunas.
+func bolehUnggahDokumen(statusBooking string) bool {
+	switch statusBooking {
+	case "dp", "lunas", "dokumen_lengkap", "siap_berangkat":
+		return true
+	}
+	return false
+}
+
+type keputusanGanti int
+
+const (
+	gantiBoleh keputusanGanti = iota
+	gantiSudahDisetujui
+	gantiMenungguVerifikasi
+)
+
+// putuskanGantiDokumen: boleh tidaknya akun mengirim berkas untuk satu jenis dokumen (keputusan 2026-11-25).
+// statusAda kosong bila jenis itu belum punya berkas. Dokumen disetujui tidak bisa diganti siapa pun;
+// dokumen menunggu verifikasi hanya bisa diganti akun berakses penuh; dokumen ditolak bisa diganti semua akun.
+func putuskanGantiDokumen(statusAda string, aksesPenuh bool) keputusanGanti {
+	switch statusAda {
+	case "approved":
+		return gantiSudahDisetujui
+	case "submitted":
+		if !aksesPenuh {
+			return gantiMenungguVerifikasi
+		}
+	}
+	return gantiBoleh
+}
+
 // KirimDokumen POST /api/account/bookings/{id}/dokumen
-// Berkas harus unggahan akun ini (POST /api/account/media/upload). Dokumen yang sudah disetujui tidak bisa diganti.
+// Berkas harus unggahan akun ini (POST /api/account/media/upload). Status dokumen diperiksa dan berkas disimpan
+// dalam satu transaksi (baris dokumen dikunci), jadi persetujuan admin di tengah jalan tidak tertimpa.
 func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 	acc := FromContext(r.Context())
 	id, ok := bookingIDParam(w, r)
@@ -179,6 +234,10 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "Booking ini sudah dibatalkan atau kedaluwarsa.")
 		return
 	}
+	if !bolehUnggahDokumen(order.Status) {
+		writeError(w, http.StatusConflict, "Dokumen bisa diunggah setelah DP terverifikasi.")
+		return
+	}
 	if !order.bolehJamaah(req.JamaahID) {
 		writeError(w, http.StatusForbidden, pesanBukanDiriSendiri)
 		return
@@ -193,27 +252,41 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan di booking ini.")
 		return
 	}
+	tx, err := o.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		log.Printf("[ERROR] account kirim dokumen begin: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
+		return
+	}
+	defer tx.Rollback()
+	// Kunci jamaah lalu baris dokumen, urutan sama dengan dokumen.UpsertTx. UPDATE status oleh admin menunggu
+	// kunci ini dan gagal cek versi setelah berkas diganti, jadi keputusan di bawah tidak basi.
+	var jid int64
+	if err := tx.QueryRowContext(r.Context(), `SELECT id FROM jamaah WHERE id=? FOR UPDATE`, req.JamaahID).Scan(&jid); err != nil {
+		log.Printf("[ERROR] account kirim dokumen kunci jamaah: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
+		return
+	}
 	var status sql.NullString
-	if err := o.db.QueryRowContext(r.Context(), `SELECT status FROM dokumen_jamaah WHERE jamaah_id=? AND jenis=?`, req.JamaahID, req.Jenis).Scan(&status); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := tx.QueryRowContext(r.Context(), `SELECT status FROM dokumen_jamaah WHERE jamaah_id=? AND jenis=? FOR UPDATE`, req.JamaahID, req.Jenis).Scan(&status); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Printf("[ERROR] account kirim dokumen: %v", err)
 		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
 		return
 	}
-	// Akses terbatas: berkas yang sudah ada, apa pun statusnya, tidak boleh ditimpa.
-	if status.Valid {
-		penuh, err := aksesPenuhJamaah(r.Context(), o.db, acc.ID, req.JamaahID)
-		if err != nil {
+	penuh := true
+	if status.String == "submitted" {
+		if penuh, err = aksesPenuhJamaah(r.Context(), tx, acc.ID, req.JamaahID); err != nil {
 			log.Printf("[ERROR] account kirim dokumen akses: %v", err)
 			writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
 			return
 		}
-		if !penuh {
-			writeError(w, http.StatusForbidden, "Dokumen jamaah ini sudah ada. Hubungi admin untuk menggantinya.")
-			return
-		}
 	}
-	if status.Valid && status.String == "approved" {
-		writeError(w, http.StatusConflict, "Dokumen ini sudah disetujui. Hubungi kami bila perlu menggantinya.")
+	switch putuskanGantiDokumen(status.String, penuh) {
+	case gantiSudahDisetujui:
+		writeError(w, http.StatusConflict, "Dokumen ini sudah disetujui.")
+		return
+	case gantiMenungguVerifikasi:
+		writeError(w, http.StatusForbidden, "Dokumen ini sedang menunggu verifikasi.")
 		return
 	}
 	if err := media.ValidateCustomerUpload(r.Context(), o.db, req.FileURL, acc.ID); err != nil {
@@ -226,9 +299,20 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Permintaan gagal diproses. Coba lagi.")
 		return
 	}
-	d, err := o.dokumen.Upsert(r.Context(), req.JamaahID, &dokumen.CreateDokumenRequest{Jenis: req.Jenis, FileURL: req.FileURL})
+	docID, err := dokumen.UpsertTx(r.Context(), tx, req.JamaahID, &dokumen.CreateDokumenRequest{Jenis: req.Jenis, FileURL: req.FileURL})
 	if err != nil {
 		log.Printf("[ERROR] account kirim dokumen upsert: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("[ERROR] account kirim dokumen commit: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
+		return
+	}
+	d, err := o.dokumen.GetByID(r.Context(), docID, nil)
+	if err != nil {
+		log.Printf("[ERROR] account kirim dokumen baca ulang: %v", err)
 		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
 		return
 	}

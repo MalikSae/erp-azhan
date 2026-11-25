@@ -34,13 +34,13 @@ erp-azhan/
 │   ├── api/                 # Entry point backend API server
 │   └── seed-*/              # Seeder admin, hotel, maskapai, dan paket
 ├── internal/
-│   ├── adminuser/           # Pengguna admin/staff dan reset password
+│   ├── adminuser/           # Pengguna dashboard dan reset password
+│   ├── akses/               # Jenis akses (Super Admin, Tim) dan izin per pengguna
 │   ├── agen/                # Agen Syiar: pengajuan, persetujuan, pencairan, ganti kaitan (portal agen belum dipasang)
 │   ├── airline/ airport/ hotel/ category/ itinerary/   # Master data
 │   ├── bankaccount/         # Rekening transfer resmi per brand
 │   ├── booking/             # Booking (admin): status, diskon, progress, refund, cashback, perlengkapan
 │   ├── brand/               # Brand multi-brand dan resolusi domain
-│   ├── crmdeal/             # Pemrosesan deal dari CRM
 │   ├── customer/            # Akun pelanggan (email + password) dan pesanan pelanggan
 │   ├── dokumen/             # Dokumen jamaah (paspor, KTP, KK, dll)
 │   ├── identity/            # Login admin, JWT, dan pemeriksaan izin
@@ -48,10 +48,8 @@ erp-azhan/
 │   ├── komisi/              # Perhitungan komisi, cashback, dan saldo agen
 │   ├── mailer/              # Email transaksional (verifikasi, reset password, booking)
 │   ├── media/               # Upload dan akses berkas terlindungi
-│   ├── orgunit/             # Struktur organisasi
 │   ├── payment/             # Pembayaran, bukti transfer, verifikasi
 │   ├── perlengkapan/        # Inventori perlengkapan dan template set
-│   ├── rbac/                # Role dan permission
 │   ├── schedule/            # Paket/jadwal keberangkatan, seat, dan API publik v1
 │   ├── selfbooking/         # Checkout booking mandiri pelanggan
 │   └── shared/              # Konfigurasi, middleware, dan helper bersama
@@ -262,15 +260,14 @@ Kelompok rute di bawah `/api/admin/`:
 
 | Kelompok | Rute |
 |---|---|
-| Identitas dan organisasi | `users`, `roles`, `permissions`, `org-units`, `brands`, `bank-accounts` |
+| Identitas | `users`, `brands`, `bank-accounts` |
 | Master data | `hotels`, `airlines`, `airports`, `categories`, `itineraries` |
-| Paket | `schedules` (termasuk `/status`, `/seat`, `/perlengkapan`) |
+| Paket | `schedules` (termasuk `/status`, `/seat`, `/seat/samakan`, `/seat-tampil`, `/perlengkapan`) |
 | Jamaah dan dokumen | `jamaah`, `jamaah/{id}/dokumen`, `dokumen/{id}/status` |
 | Booking | `bookings` (draft, finalize, status, seat-block, diskon, cashback, refund, progress, pax) |
 | Pembayaran | `payments`, `bookings/{id}/payments`, `payments/{id}/status` |
 | Perlengkapan | `perlengkapan-items`, `-stok`, `-mutasi`, `-set-template` |
 | Agen Syiar | `agen`, `agen/pencairan`, `kaitan-agen` |
-| CRM | `crm/deals` |
 | Laporan | `analytics/transactions-30-days`, `analytics/pax-30-days` |
 | Media | `media/upload`, `media/{category}/{filename}` (berkas terlindungi) |
 

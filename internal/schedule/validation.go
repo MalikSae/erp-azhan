@@ -12,12 +12,13 @@ import (
 
 var ErrConflict = errors.New("perubahan paket ditolak")
 
-func remainingAfterCapacityChange(total, remaining, nextTotal int) (int, error) {
-	allocated := total - remaining
-	if remaining < 0 || remaining > total || nextTotal <= 0 || nextTotal < allocated {
+// remainingAfterCapacityChange: sisa seat setelah kuota diubah. Dihitung dari seat yang dipegang
+// booking, bukan dari sisa lama, karena tidak ada seat terpakai tanpa booking.
+func remainingAfterCapacityChange(dipegang, nextTotal int) (int, error) {
+	if dipegang < 0 || nextTotal <= 0 || nextTotal < dipegang {
 		return 0, fmt.Errorf("%w: kapasitas tidak boleh kurang dari seat teralokasi", ErrConflict)
 	}
-	return nextTotal - allocated, nil
+	return nextTotal - dipegang, nil
 }
 
 func validateDP(dp *float64, prices ...float64) error {
@@ -43,7 +44,6 @@ func validateDP(dp *float64, prices ...float64) error {
 const (
 	maxKodePenerbangan = 50
 	maxTransitBandara  = 255
-	maxAlasanSeat      = 500 // schedule_seat_adjustments.reason
 	maxAlasanTanggal   = 500 // schedule_tanggal_log.alasan
 )
 

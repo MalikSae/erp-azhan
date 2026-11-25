@@ -15,7 +15,6 @@ import {
   History, PackageCheck,
   UserCog,
   ChevronDown,
-  Network,
   UserCheck,
   UserRound,
   Wallet,
@@ -156,7 +155,6 @@ const Sidebar = ({ isOpen, closeDrawer }) => {
       items: [
         { name: 'Brand', path: '/brands', icon: Building2, perm: 'brand.edit' },
         { name: 'Pengguna', path: '/users', icon: UserCog, perm: 'user.admin' },
-        { name: 'Struktur Organisasi', path: '/organisasi', icon: Network, perm: 'user.admin' },
       ],
     },
   ];

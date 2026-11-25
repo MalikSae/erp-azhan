@@ -28,7 +28,9 @@ type BookingPax struct {
 	HargaPax                 float64 `json:"harga_pax"`
 	CountsForSeat            bool    `json:"counts_for_seat"`
 	PaxStatus                string  `json:"pax_status"`
+	// ProgressPaspor: dokumen paspor sudah disetujui admin. PasporTerunggah: berkas paspor ada, apa pun statusnya.
 	ProgressPaspor           bool    `json:"progress_paspor"`
+	PasporTerunggah          bool    `json:"paspor_terunggah"`
 	ProgressVisa             bool    `json:"progress_visa"`
 	ProgressSiskopatuh       bool    `json:"progress_siskopatuh"`
 	ProgressManasik          bool    `json:"progress_manasik"`
@@ -87,7 +89,7 @@ type Booking struct {
 	TotalDibayar float64 `json:"total_dibayar"`
 	TotalRefund  float64 `json:"total_refund"`
 	PerluRefund  bool    `json:"perlu_refund"`
-	// ProgressPaspor dihitung dinamis dari dokumen_jamaah
+	// ProgressPaspor dihitung dinamis dari dokumen_jamaah: true hanya bila paspor sudah disetujui admin
 	ProgressPaspor           bool              `json:"progress_paspor"`
 	ProgressVisa             bool              `json:"progress_visa"`
 	ProgressTiket            bool              `json:"progress_tiket"`

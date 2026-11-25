@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"erp-azhan/api/internal/identity"
-	"erp-azhan/api/internal/rbac"
+	"erp-azhan/api/internal/akses"
 )
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -54,17 +54,17 @@ func parseID(r *http.Request) (uint64, bool) {
 // writeRepoError memetakan error domain ke HTTP (satu tempat untuk semua aksi).
 func (h *Handler) writeRepoError(w http.ResponseWriter, err error, action string) {
 	switch {
-	case errors.Is(err, ErrNotFound), errors.Is(err, rbac.ErrUserNotFound):
+	case errors.Is(err, ErrNotFound), errors.Is(err, akses.ErrUserNotFound):
 		h.sendError(w, http.StatusNotFound, ErrNotFound.Error())
 	case errors.Is(err, ErrDuplicateEmail):
 		h.sendError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, ErrInvalidBrand), errors.Is(err, ErrInvalidKeanggotaan),
-		errors.Is(err, rbac.ErrNoRole), errors.Is(err, rbac.ErrUnknownRole), errors.Is(err, rbac.ErrScopeMismatch),
-		errors.Is(err, rbac.ErrUnitMismatch):
+	case errors.Is(err, ErrInvalidBrand),
+		errors.Is(err, akses.ErrJenisTidakSah), errors.Is(err, akses.ErrSuperAdminBrand),
+		errors.Is(err, akses.ErrTanpaIzin), errors.Is(err, akses.ErrIzinTidakSah):
 		h.sendError(w, http.StatusBadRequest, err.Error())
-	case rbac.IsConcurrencyErr(err):
-		h.sendError(w, http.StatusConflict, rbac.ErrConcurrentMsg)
-	case errors.Is(err, rbac.ErrLastSuperAdmin), errors.Is(err, ErrCannotDeleteSelf),
+	case akses.IsConcurrencyErr(err):
+		h.sendError(w, http.StatusConflict, akses.ErrConcurrentMsg)
+	case errors.Is(err, akses.ErrLastSuperAdmin), errors.Is(err, ErrCannotDeleteSelf),
 		errors.Is(err, ErrCannotDeactivateSelf), errors.Is(err, ErrHasHistory):
 		h.sendError(w, http.StatusConflict, err.Error())
 	default:
@@ -78,8 +78,8 @@ func validateUpsert(in *UpsertInput) string {
 	in.DisplayName = strings.TrimSpace(in.DisplayName)
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 	in.NoHP = normalizeOptional(in.NoHP)
-	in.Jabatan = normalizeOptional(in.Jabatan)
-	in.Roles = rbac.NormalizeSlugs(in.Roles)
+	in.Akses = strings.TrimSpace(in.Akses)
+	in.Permissions = akses.Normalize(in.Permissions)
 	if l := len([]rune(in.DisplayName)); l < 2 || l > 120 {
 		return "nama wajib 2–120 karakter"
 	}
@@ -88,15 +88,6 @@ func validateUpsert(in *UpsertInput) string {
 	}
 	if in.NoHP != nil && len(*in.NoHP) > 32 {
 		return "no. HP maksimal 32 karakter"
-	}
-	if in.Jabatan != nil && len([]rune(*in.Jabatan)) > 100 {
-		return "jabatan maksimal 100 karakter"
-	}
-	if len(in.Roles) == 0 {
-		return rbac.ErrNoRole.Error()
-	}
-	if in.Keanggotaan == nil {
-		in.Keanggotaan = []KeanggotaanInput{}
 	}
 	return ""
 }
@@ -126,7 +117,7 @@ func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
 	h.sendJSON(w, http.StatusOK, user)
 }
 
-// CreateUser: POST /api/admin/users — profil + role + keanggotaan, atomik.
+// CreateUser: POST /api/admin/users — profil + akses + izin, atomik.
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req CreateAdminUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -153,7 +144,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		h.writeRepoError(w, err, "CreateUser")
 		return
 	}
-	log.Printf("[AUDIT] user_created user_id=%d by=%d roles=%s", id, identity.GetAdminUserID(r.Context()), strings.Join(req.Roles, ","))
+	log.Printf("[AUDIT] user_created user_id=%d by=%d akses=%s izin=%s", id, identity.GetAdminUserID(r.Context()), req.Akses, strings.Join(req.Permissions, ","))
 	user, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
 		h.writeRepoError(w, err, "CreateUser")
@@ -162,7 +153,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	h.sendJSON(w, http.StatusCreated, user)
 }
 
-// UpdateUser: PUT /api/admin/users/{id} — atomik; R3/R4 ditegakkan.
+// UpdateUser: PUT /api/admin/users/{id} — atomik; A1–A7 ditegakkan.
 func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
@@ -182,7 +173,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		h.writeRepoError(w, err, "UpdateUser")
 		return
 	}
-	log.Printf("[AUDIT] user_updated user_id=%d by=%d", id, identity.GetAdminUserID(r.Context()))
+	log.Printf("[AUDIT] user_updated user_id=%d by=%d akses=%s izin=%s", id, identity.GetAdminUserID(r.Context()), req.Akses, strings.Join(req.Permissions, ","))
 	user, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
 		h.writeRepoError(w, err, "UpdateUser")
@@ -217,7 +208,7 @@ func (h *Handler) SetStatus(w http.ResponseWriter, r *http.Request) {
 	h.sendJSON(w, http.StatusOK, user)
 }
 
-// DeleteUser: DELETE /api/admin/users/{id} — hanya pengguna tanpa riwayat (R7).
+// DeleteUser: DELETE /api/admin/users/{id} — hanya pengguna tanpa riwayat.
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r)
 	if !ok {
@@ -297,13 +288,8 @@ func pesanPanjangPassword(password, label string) string {
 }
 
 // ChangeOwnPassword: PUT /api/admin/account/password
-// Hanya Admin Travel yang boleh mengubah password akunnya sendiri.
+// Semua pengguna boleh mengganti kata sandinya sendiri (A9).
 func (h *Handler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
-	if identity.GetRole(r.Context()) != "admin" || identity.GetBrandID(r.Context()) == nil {
-		h.sendError(w, http.StatusForbidden, "Hanya Admin Travel yang dapat mengubah kata sandi akunnya sendiri.")
-		return
-	}
-
 	var req ChangeOwnPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.sendError(w, http.StatusBadRequest, "Data tidak valid.")

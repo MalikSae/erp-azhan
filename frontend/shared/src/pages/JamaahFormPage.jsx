@@ -54,6 +54,7 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
     nik: "",
     tempat_lahir: "",
     tanggal_lahir: "",
+    nama_paspor: "",
     no_paspor: "",
     tempat_paspor_keluar: "",
     tanggal_paspor_keluar: "",
@@ -320,6 +321,15 @@ export const JamaahFormPage = ({ showBrandColumn = false }) => {
             {/* 2. DOKUMEN PASPOR */}
             <FormSection id="sec-paspor" title="Dokumen Paspor">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <Input
+                    label="Nama di paspor"
+                    name="nama_paspor"
+                    value={formData.nama_paspor || ''}
+                    onChange={handleChange}
+                    placeholder="SITI AMINAH BINTI ABDULLAH"
+                  />
+                </div>
                 <Input
                   label="Nomor paspor"
                   name="no_paspor"

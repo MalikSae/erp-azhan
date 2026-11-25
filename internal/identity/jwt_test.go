@@ -6,10 +6,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func TestAccessTokenCarriesCRMRole(t *testing.T) {
+func TestAccessTokenRoundTrip(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret-minimum-32-characters-long")
 	brandID := int64(7)
-	token, err := GenerateAccessToken(42, &brandID, "cs")
+	token, err := GenerateAccessToken(42, &brandID, "admin")
 	if err != nil {
 		t.Fatalf("GenerateAccessToken: %v", err)
 	}
@@ -17,7 +17,7 @@ func TestAccessTokenCarriesCRMRole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateToken: %v", err)
 	}
-	if userID != 42 || parsedBrandID == nil || *parsedBrandID != 7 || role != "cs" {
+	if userID != 42 || parsedBrandID == nil || *parsedBrandID != 7 || role != "admin" {
 		t.Fatalf("claims tidak sesuai: user=%d brand=%v role=%s", userID, parsedBrandID, role)
 	}
 }

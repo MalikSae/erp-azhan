@@ -37,13 +37,31 @@ func RestoreSeats(ctx context.Context, tx *sql.Tx, scheduleID int64, n int) erro
 	return err
 }
 
+// SeatDipegangBooking: jumlah seat yang dipegang booking paket (is_seat_blocked, bukan batal).
+// Tidak ada booking di luar sistem, jadi sisa seat yang sah selalu seat_total dikurangi angka ini.
+// Satu-satunya tempat rumus ini ditulis di Go; modul schedule memakainya lewat fungsi ini.
+func SeatDipegangBooking(ctx context.Context, q rowQuerier, scheduleID int64) (int, error) {
+	var n int
+	err := q.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(seat_count),0) FROM bookings WHERE schedule_id=? AND is_seat_blocked=1 AND status <> 'batal'`,
+		scheduleID).Scan(&n)
+	return n, err
+}
+
+// SimpanSeatCountTx menyamakan bookings.seat_count dengan jumlah kursi yang baru diambil booking,
+// supaya seat_sisa tetap seat_total − seat dipegang booking.
+func SimpanSeatCountTx(ctx context.Context, tx *sql.Tx, bookingID int64, n int) error {
+	_, err := tx.ExecContext(ctx, `UPDATE bookings SET seat_count=? WHERE id=?`, n, bookingID)
+	return err
+}
+
 // TodayWIB mengembalikan tanggal hari ini (YYYY-MM-DD) pada zona bisnis WIB.
 func TodayWIB() string {
 	return time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
 }
 
 // ScheduleClosedReason mengembalikan alasan bila paket tidak boleh menerima booking
-// baru dari admin atau CRM, atau "" bila boleh (SM-05): paket yang sudah diarsipkan,
+// baru dari admin, atau "" bila boleh (SM-05): paket yang sudah diarsipkan,
 // atau tanggal berangkatnya sudah lewat. Paket draft tetap boleh dipesan supaya
 // pra-pendaftaran sebelum terbit bisa dicatat. berangkat berformat YYYY-MM-DD.
 func ScheduleClosedReason(status, berangkat, today string) string {

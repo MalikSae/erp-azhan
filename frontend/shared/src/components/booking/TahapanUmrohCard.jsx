@@ -66,7 +66,7 @@ const TahapanUmrohCard = ({ booking, paxList, onTogglePax, onToggleTiket }) => (
               );
             }
             if (key === "perlengkapan") return <StatusPerlengkapan tahap={tahap.perlengkapan} />;
-            if (key === "paspor") return <StatusPaspor tahap={tahap.paspor} terunggah={Boolean(pax.progress_paspor)} />;
+            if (key === "paspor") return <StatusPaspor tahap={tahap.paspor} terunggah={Boolean(pax.paspor_terunggah)} />;
             if (key === "siskopatuh" || key === "visa") {
               const nilai = Boolean(pax[`progress_${key}`]);
               return (

@@ -37,6 +37,16 @@ func registrationStatus(seatTotal, seatSisa int, berangkat, batas string) string
 	return RegOpen
 }
 
+// statusRegistrasiPublik: status dari seat ril, kecuali scarcity aktif menjadikan paket yang masih
+// buka berlabel Hampir penuh. SOLD_OUT dan CLOSED tetap dari seat ril dan tanggal.
+func statusRegistrasiPublik(s *PublicSchedule, batas string) string {
+	status := registrationStatus(s.SeatTotal, s.SeatSisa, s.BerangkatTanggal, batas)
+	if status == RegOpen && s.scarcityAktif {
+		return RegAlmostFull
+	}
+	return status
+}
+
 // RegistrationStatus menurunkan status registrasi untuk tanggal hari ini (WIB).
 func RegistrationStatus(seatTotal, seatSisa int, berangkat string) string {
 	return registrationStatus(seatTotal, seatSisa, berangkat, batasPublikWIB())

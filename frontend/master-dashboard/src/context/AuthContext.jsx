@@ -4,19 +4,8 @@ import { getMyBrand } from 'shared';
 
 export const AuthContext = createContext();
 
-// Nama peran untuk tampilan (slug dari JWT -> label).
-export const ROLE_LABEL = {
-  super_admin_grup: 'Super Admin',
-  direktur: 'Direktur / Owner',
-  cmo: 'CMO',
-  marketing_lead: 'Marketing Lead',
-  marketing_member: 'Marketing Member',
-  product_manager: 'Product Manager',
-  admin_travel: 'Admin Brand',
-  admin_cabang: 'Admin Cabang',
-  cs: 'Customer Service',
-  finance: 'Finance',
-};
+// Jenis akses dari klaim JWT -> label tampilan.
+const AKSES_LABEL = { super_admin: 'Super Admin', tim: 'Tim' };
 
 function decodeJwtPayload(token) {
   try {
@@ -68,7 +57,7 @@ export const AuthProvider = ({ children }) => {
       email: payload.email || '',
       name: payload.display_name || (payload.email ? payload.email.split('@')[0] : ''),
       role: roles[0] || payload.role || '',
-      roleLabel: ROLE_LABEL[roles[0]] || (isHolding ? 'Holding' : 'Admin Brand'),
+      roleLabel: AKSES_LABEL[roles[0] || payload.role] || 'Tim',
     };
   }, [payload, currentUserId, roles, isHolding]);
 

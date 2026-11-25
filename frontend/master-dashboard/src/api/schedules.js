@@ -30,8 +30,15 @@ export async function getScheduleSeat(id) {
   return response.data;
 }
 
-export async function updateScheduleSeat(id, seatSisa, expectedSeatSisa, reason) {
-  const response = await client.put(`/api/admin/schedules/${id}/seat`, { seat_sisa: seatSisa, expected_seat_sisa: expectedSeatSisa, reason });
+// Mengisi sisa seat = kuota − seat dipegang booking (tanpa angka bebas).
+export async function samakanScheduleSeat(id) {
+  const response = await client.post(`/api/admin/schedules/${id}/seat/samakan`);
+  return response.data;
+}
+
+// seatTampil null mematikan angka tampil di publik.
+export async function updateScheduleSeatTampil(id, seatTampil) {
+  const response = await client.put(`/api/admin/schedules/${id}/seat-tampil`, { seat_tampil: seatTampil });
   return response.data;
 }
 

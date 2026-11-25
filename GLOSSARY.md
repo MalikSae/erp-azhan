@@ -33,6 +33,20 @@ _Hindari_: agen pengikat, perekrut, pengajak sebagai istilah tersendiri.
 
 **PIC**: pemesan yang ikut berangkat dalam satu booking, dicocokkan lewat NIK dan nama seperti jamaah lain.
 
+## Pengguna dashboard
+
+**Pengguna**: orang yang login ke dashboard ERP. Tabel `admin_users`. Bukan akun (itu pelanggan) dan bukan agen.
+_Hindari_: admin (untuk semua pengguna), pegawai, user.
+
+**Super Admin**: jenis akses pengguna yang memegang semua izin. Hanya untuk pengguna Holding. Sistem selalu punya minimal satu yang aktif.
+
+**Tim**: jenis akses pengguna yang izinnya dicentang per pengguna di form Pengguna. Bukan role, bukan divisi.
+_Hindari_: role, jabatan, divisi, struktur organisasi (semuanya dihapus 25 November 2026).
+
+**Izin**: kode di tabel `permissions` yang menjaga route (`RequirePermission`). Tim memegangnya lewat `user_permissions`. Izin baru tidak otomatis diberikan ke Tim. Spek: `docs/spek/SPEK-AKSES-PENGGUNA-2026-11-25.md`.
+
+**Templat akses**: pengisi cepat centang izin di form Pengguna (Admin Brand, Keuangan, Konten). Tidak tersimpan pada pengguna dan tidak mengikat.
+
 ## Pemesanan
 
 **Booking**: pemesanan satu jadwal untuk satu atau beberapa pax. Ada dua jalur: didaftarkan agen di portal agen, atau mandiri di web publik lewat link ref.
@@ -69,7 +83,7 @@ _Hindari_: block seat, blokir seat, kunci seat (block seat di industri berarti k
 
 **Kunci (kaitan)**: ikatan jamaah ke agen yang pertama membawanya. Seumur hidup. Hanya override admin yang memindahkan. Status `jamaah.kaitan_status`: `terikat_agen` atau `tanpa_agen` (`belum_ditentukan` digabung ke `tanpa_agen`, migrasi 158). Hanya jamaah baru yang terikat otomatis: `tanpa_agen`, kaitan belum pernah ditetapkan, dan belum ikut booking non-draft lain. Jamaah `tanpa_agen` lama hanya dikaitkan admin; pengaitan itu berlaku ke depan untuk komisi (booking yang sudah pernah lunas sebelumnya tetap tanpa komisi). (Keputusan 24 November 2026.) Pemilik kunci menerima komisi atas jamaah itu siapa pun yang memesan. Pengecualian (keputusan 12 November 2026): saat admin mengganti upline sebuah akun, jamaah yang booking pertamanya dibuat akun itu dan masih terikat ke upline lama ikut pindah ke upline baru (atau jadi tanpa agen bila upline dilepas). Komisi yang sudah tercatat tetap milik agen lama; kaitan yang dipilih admin per jamaah (jalur3) tidak ikut.
 
-**Klaim agen**: agen yang membawa booking berisi jamaah `tanpa_agen` lama, yang tidak terikat otomatis (`bookings.agen_klaim_akun_id`): akun agen yang memesan di portal agen, upline akun pemesan web, atau kode referral deal CRM. Booking admin tidak mencatat klaim, begitu pula pax diri agen. Tampil sebagai "Referral" di Detail Booking dengan tautan "Kaitkan ke agen"; admin yang memutuskan.
+**Klaim agen**: agen yang membawa booking berisi jamaah `tanpa_agen` lama, yang tidak terikat otomatis (`bookings.agen_klaim_akun_id`): akun agen yang memesan di portal agen atau upline akun pemesan web. Booking admin tidak mencatat klaim, begitu pula pax diri agen. Tampil sebagai "Referral" di Detail Booking dengan tautan "Kaitkan ke agen"; admin yang memutuskan.
 
 **Override admin**: pemindahan kunci jamaah atau pemasangan upline akun oleh Admin Master (izin `agen.kaitan.edit`), lewat modal "Ganti agen" di detail Jamaah dan "Ganti upline" di detail Akun. Halaman terpisah `/komisi/ganti-kaitan` (layar C4) sudah dihapus.
 

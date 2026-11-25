@@ -18,7 +18,7 @@ import (
 var ErrAgenTidakValid = errors.New("agen tidak ditemukan atau tidak aktif di brand ini")
 
 // Asal kaitan (kolom jamaah.kaitan_sumber, migrasi 064). Nilai kolom memakai penomoran jalur lama:
-// jalur1 = booking di portal agen, jalur2 = upline akun pemesan (web publik) atau kode referral di deal CRM,
+// jalur1 = booking di portal agen, jalur2 = upline akun pemesan (web publik),
 // jalur3 = ditetapkan admin. Semua sumber boleh diganti Admin Master lewat Ganti Kaitan.
 const (
 	SumberJalur1   = "jalur1"

@@ -1,10 +1,6 @@
-package crmdeal
+package shared
 
-import (
-	"testing"
-
-	"erp-azhan/api/internal/shared"
-)
+import "testing"
 
 func TestPhoneVariants(t *testing.T) {
 	tests := []struct {
@@ -16,9 +12,9 @@ func TestPhoneVariants(t *testing.T) {
 		{"0812 3456 7890", "6281234567890", "081234567890"},
 	}
 	for _, test := range tests {
-		canonical, local := shared.PhoneVariants(test.input)
+		canonical, local := PhoneVariants(test.input)
 		if canonical != test.canonical || local != test.local {
-			t.Fatalf("phoneVariants(%q) = %q, %q", test.input, canonical, local)
+			t.Fatalf("PhoneVariants(%q) = %q, %q", test.input, canonical, local)
 		}
 	}
 }

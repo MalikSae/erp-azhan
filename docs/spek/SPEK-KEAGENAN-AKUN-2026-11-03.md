@@ -2,7 +2,7 @@
 
 Tanggal: 3 November 2026 · Status: disetujui pemilik proyek dalam sesi diskusi 3 Nov 2026; implementasi belum dimulai
 Menggantikan sebagian: `agen-azhan.md` (tidak ada di repo; dirujuk oleh komentar kode), `docs/arsip/AUDIT-AGEN-UMROH-2026-09-28.md`
-Terkait: `SPEK-WEB-PUBLIK-CMS-2026-10-20.md` (web publik), `SPEK-RBAC-2026-10-02.md` (permission `agen.*`)
+Terkait: `SPEK-WEB-PUBLIK-CMS-2026-10-20.md` (web publik), `SPEK-AKSES-PENGGUNA-2026-11-25.md` (izin `agen.*`)
 
 ## 1. Tujuan dan ruang lingkup
 

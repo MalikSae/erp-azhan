@@ -31,7 +31,11 @@ func TestPctDokumen(t *testing.T) {
 	if got := pct(); got != 0 {
 		t.Fatalf("ditolak = %d, want 0", got)
 	}
-	tambah("pas_foto", "submitted")
+	tambah("pas_foto", "submitted") // menunggu verifikasi tidak dihitung (keputusan 2026-11-25)
+	if got := pct(); got != 0 {
+		t.Fatalf("menunggu verifikasi = %d, want 0", got)
+	}
+	testdb.Exec(t, tx, `UPDATE dokumen_jamaah SET status='approved' WHERE jamaah_id=? AND jenis='pas_foto'`, id)
 	if got := pct(); got != 14 {
 		t.Fatalf("1 dari 7 = %d, want 14", got)
 	}

@@ -23,6 +23,8 @@ import BenefitIcon from 'shared/ui/BenefitIcon';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import SeatManagement from '../components/SeatManagement';
 import ManasikPaketRingkas from '../components/ManasikPaketRingkas';
+import ManifestPaket from '../components/ManifestPaket';
+import SegmentedTabs from 'shared/ui/SegmentedTabs';
 import { LokasiTerpilihList } from '../components/LokasiDikunjungiSection';
 import { AuthContext } from '../context/AuthContext';
 import { getSchedule } from '../api/schedules';
@@ -260,11 +262,13 @@ const FacilityList = ({ title, items, icon: Icon, iconClass }) => (
 );
 
 
-const ScheduleDetailPage = () => {
+const ScheduleDetailPage = ({ tab = 'detail' }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { hasPermission } = useContext(AuthContext);
   const canEdit = hasPermission('schedule.edit');
+  const bolehManifest = hasPermission('manifest.manage');
+  const tabAktif = bolehManifest && tab === 'manifest' ? 'manifest' : 'detail';
 
   const [schedule, setSchedule] = useState(null);
   const [itinerary, setItinerary] = useState(null);
@@ -454,6 +458,15 @@ const ScheduleDetailPage = () => {
         </Button>
       </PageHeader>
 
+      {bolehManifest && (
+        <SegmentedTabs
+          tabs={[{ id: 'detail', label: 'Detail' }, { id: 'manifest', label: 'Manifest' }]}
+          value={tabAktif}
+          onChange={(t) => navigate(t === 'manifest' ? `/schedules/${id}/manifest` : `/schedules/${id}`)}
+        />
+      )}
+
+      {tabAktif === 'manifest' ? <ManifestPaket scheduleId={schedule.id} /> : (<>
       {/* Ringkasan: satu strip, bukan empat card */}
       <Surface className="grid grid-cols-3 divide-x divide-neutral-200">
         <SummaryItem label="Keberangkatan" value={formatDateShort(schedule.berangkat_tanggal)} hint={departureHint || undefined} />
@@ -667,11 +680,12 @@ const ScheduleDetailPage = () => {
 
           <Surface>
             <Section title="Kuota Seat">
-              <SeatManagement scheduleId={schedule.id} bookingCount={schedule.booking_count} canEdit={canEdit} />
+              <SeatManagement scheduleId={schedule.id} canEdit={canEdit} />
             </Section>
           </Surface>
         </div>
       </div>
+      </>)}
     </div>
   );
 };

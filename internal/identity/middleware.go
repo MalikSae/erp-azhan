@@ -3,11 +3,8 @@ package identity
 import (
 	"context"
 	"net/http"
-	"regexp"
 	"strings"
 )
-
-var crmPaymentPath = regexp.MustCompile(`^/api/admin/bookings/[0-9]+/payments$`)
 
 type contextKey string
 
@@ -56,21 +53,8 @@ func RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
-// RequireAdminRole mencegah akun CS mengakses endpoint operasional ERP di luar
-// gateway CRM. Wrapper transisi RBAC Fase 1: semua role non-CS lolos; penggantian
-// per-route ke RequirePermission dilakukan bertahap di Fase 2.
-func RequireAdminRole(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if GetRole(r.Context()) == "cs" {
-			writeError(w, http.StatusForbidden, "Akun CS hanya dapat mengakses modul CRM.")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 // RequirePermission memeriksa klaim perms pada access token (diisi saat
-// login/refresh dari tabel RBAC). Tanpa permission yang diminta → 403.
+// login/refresh dari internal/akses). Tanpa permission yang diminta → 403.
 func RequirePermission(perm string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,9 +68,9 @@ func RequirePermission(perm string) func(http.Handler) http.Handler {
 }
 
 // RequireHoldingPermission seperti RequirePermission, tetapi juga menolak token akun brand.
-// Dipakai untuk izin tingkat holding (user.admin: kelola user, role, struktur organisasi) yang
-// handlernya tidak memfilter brand. Hari ini izin itu hanya ada di role holding; penjaga ini
-// memastikan role brand yang keliru diberi izin itu tetap tidak bisa mengubah user holding.
+// Dipakai untuk izin tingkat holding (user.admin: kelola pengguna) yang handlernya tidak memfilter
+// brand. Izin itu hanya dimiliki Super Admin; penjaga ini lapis kedua bila token brand keliru
+// membawanya.
 func RequireHoldingPermission(perm string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -123,26 +107,6 @@ func GetRoles(ctx context.Context) []string {
 		return val
 	}
 	return nil
-}
-
-// RequireAdminOrCRMAccess keeps CS credentials out of the ERP backoffice while
-// allowing only the small ERP contract used by the CRM BFF.
-func RequireAdminOrCRMAccess(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if GetRole(r.Context()) != "cs" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		allowed := (r.Method == http.MethodGet && r.URL.Path == "/api/admin/my-brand") ||
-			(r.Method == http.MethodGet && r.URL.Path == "/api/admin/schedules") ||
-			(r.Method == http.MethodPost && r.URL.Path == "/api/admin/crm/deals") ||
-			(r.Method == http.MethodGet && crmPaymentPath.MatchString(r.URL.Path))
-		if !allowed {
-			writeError(w, http.StatusForbidden, "Akun CS hanya dapat mengakses modul CRM.")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // GetAdminUserID mengambil ID admin dari context

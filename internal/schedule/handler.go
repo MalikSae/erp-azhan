@@ -342,47 +342,58 @@ func (h *Handler) UpdateScheduleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": resID, "status": resStatus})
 }
 
-// ─── Admin: Update Seat ───────────────────────────────────────────────────────
+// ─── Admin: Samakan Seat ──────────────────────────────────────────────────────
 
-// UpdateScheduleSeat godoc
-// PUT /api/admin/schedules/{id}/seat
-// Body: {"seat_sisa": int}
+// SamakanScheduleSeat godoc
+// POST /api/admin/schedules/{id}/seat/samakan
+// Mengisi seat_sisa = seat_total − seat dipegang booking. Tidak ada isian angka: semua seat
+// terpakai wajib punya booking di ERP.
 // Response 200: {"id": ..., "seat_sisa": ...}
-func (h *Handler) UpdateScheduleSeat(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SamakanScheduleSeat(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	sisa, err := h.repo.SamakanSeat(r.Context(), id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()))
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "seat_sisa": sisa})
+}
+
+// UpdateScheduleSeatTampil godoc
+// PUT /api/admin/schedules/{id}/seat-tampil
+// Body: {"seat_tampil": int|null}; null mematikan scarcity. Hanya label publik, seat_sisa tidak berubah.
+// Response 200: {"id": ..., "seat_tampil": ...}
+func (h *Handler) UpdateScheduleSeatTampil(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
 
-	var req UpdateSeatRequest
+	var req UpdateSeatTampilRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
 
 	brandID := identity.GetBrandID(r.Context())
-	// Ambil seat_total existing untuk validasi range
 	seatTotal, err := h.repo.GetSeatTotal(r.Context(), id, brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return
 	}
-
-	if req.SeatSisa < 0 || req.SeatSisa > seatTotal {
-		writeError(w, http.StatusBadRequest, "Sisa seat harus antara 0 dan total seat.")
+	if req.SeatTampil != nil && (*req.SeatTampil < 1 || *req.SeatTampil > seatTotal) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Seat tampil harus antara 1 dan %d.", seatTotal))
 		return
 	}
 
-	if err := validateMaxLen("reason", strings.TrimSpace(req.Reason), maxAlasanSeat); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if err := h.repo.UpdateSeat(r.Context(), id, req.SeatSisa, req.ExpectedSeatSisa, brandID, req.Reason, identity.GetAdminUserID(r.Context())); err != nil {
+	if err := h.repo.UpdateSeatTampil(r.Context(), id, req.SeatTampil, brandID, identity.GetAdminUserID(r.Context())); err != nil {
 		handleRepoError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "seat_sisa": req.SeatSisa})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "seat_tampil": req.SeatTampil})
 }
 
 // GetScheduleSeat godoc

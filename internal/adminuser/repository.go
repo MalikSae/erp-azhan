@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"erp-azhan/api/internal/akses"
 	"erp-azhan/api/internal/identity"
-	"erp-azhan/api/internal/rbac"
 )
 
 var (
@@ -20,11 +20,10 @@ var (
 	ErrCannotDeleteSelf     = errors.New("tidak bisa menghapus akun sendiri")
 	ErrCannotDeactivateSelf = errors.New("tidak bisa menonaktifkan akun sendiri")
 	ErrHasHistory           = errors.New("pengguna ini punya riwayat transaksi/aktivitas — nonaktifkan saja, jangan dihapus")
-	ErrInvalidKeanggotaan   = errors.New("keanggotaan unit tidak valid")
 )
 
-// Repository mengelola agregat Pengguna: profil + role + keanggotaan unit.
-// Semua operasi tulis berjalan dalam SATU transaksi (SPEK §4.2).
+// Repository mengelola agregat Pengguna: profil + jenis akses + izin.
+// Semua operasi tulis berjalan dalam SATU transaksi.
 type Repository struct {
 	db *sql.DB
 }
@@ -36,24 +35,22 @@ func NewRepository(db *sql.DB) *Repository {
 // ─── Baca ─────────────────────────────────────────────────────────────────────
 
 const selectUser = `
-	SELECT u.id, COALESCE(u.display_name, ''), u.email, u.no_hp, u.jabatan,
-	       u.brand_id, b.name, b.primary_color, u.is_active, u.created_at
+	SELECT u.id, COALESCE(u.display_name, ''), u.email, u.no_hp,
+	       u.brand_id, b.name, b.primary_color, u.is_active, u.is_super_admin, u.created_at
 	FROM admin_users u
 	LEFT JOIN brands b ON u.brand_id = b.id`
 
 func scanUser(scan func(dest ...any) error) (*AdminUser, error) {
 	var u AdminUser
-	var noHP, jabatan, brandName, brandColor sql.NullString
+	var noHP, brandName, brandColor sql.NullString
 	var brandID sql.NullInt64
-	if err := scan(&u.ID, &u.DisplayName, &u.Email, &noHP, &jabatan,
-		&brandID, &brandName, &brandColor, &u.IsActive, &u.CreatedAt); err != nil {
+	var super bool
+	if err := scan(&u.ID, &u.DisplayName, &u.Email, &noHP,
+		&brandID, &brandName, &brandColor, &u.IsActive, &super, &u.CreatedAt); err != nil {
 		return nil, err
 	}
 	if noHP.Valid {
 		u.NoHP = &noHP.String
-	}
-	if jabatan.Valid {
-		u.Jabatan = &jabatan.String
 	}
 	if brandID.Valid {
 		bID := uint64(brandID.Int64)
@@ -65,14 +62,16 @@ func scanUser(scan func(dest ...any) error) (*AdminUser, error) {
 	if brandColor.Valid {
 		u.BrandColor = &brandColor.String
 	}
-	u.Roles = []string{}
-	u.Keanggotaan = []Keanggotaan{}
+	u.Akses = akses.Tim
+	if super {
+		u.Akses = akses.SuperAdmin
+	}
+	u.Permissions = []string{}
 	return &u, nil
 }
 
-// attachRelations mengisi Roles & Keanggotaan untuk sekumpulan pengguna dengan
-// dua query (bukan N+1).
-func (r *Repository) attachRelations(ctx context.Context, users []*AdminUser) error {
+// attachIzin mengisi Permissions pengguna Tim dengan satu query (bukan N+1).
+func (r *Repository) attachIzin(ctx context.Context, users []*AdminUser) error {
 	if len(users) == 0 {
 		return nil
 	}
@@ -80,47 +79,24 @@ func (r *Repository) attachRelations(ctx context.Context, users []*AdminUser) er
 	for _, u := range users {
 		byID[u.ID] = u
 	}
-
-	roleRows, err := r.db.QueryContext(ctx, `
-		SELECT ur.admin_user_id, ro.slug FROM user_roles ur
-		JOIN roles ro ON ro.id = ur.role_id ORDER BY ro.slug`)
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT up.admin_user_id, p.code FROM user_permissions up
+		JOIN permissions p ON p.id = up.permission_id ORDER BY p.code`)
 	if err != nil {
-		return fmt.Errorf("adminuser.attachRelations roles: %w", err)
+		return fmt.Errorf("adminuser.attachIzin: %w", err)
 	}
-	defer roleRows.Close()
-	for roleRows.Next() {
+	defer rows.Close()
+	for rows.Next() {
 		var uid uint64
-		var slug string
-		if err := roleRows.Scan(&uid, &slug); err != nil {
+		var code string
+		if err := rows.Scan(&uid, &code); err != nil {
 			return err
 		}
-		if u, ok := byID[uid]; ok {
-			u.Roles = append(u.Roles, slug)
+		if u, ok := byID[uid]; ok && u.Akses == akses.Tim {
+			u.Permissions = append(u.Permissions, code)
 		}
 	}
-	if err := roleRows.Err(); err != nil {
-		return err
-	}
-
-	memRows, err := r.db.QueryContext(ctx, `
-		SELECT m.admin_user_id, m.org_unit_id, o.nama, o.jenis, m.posisi
-		FROM org_member m JOIN org_unit o ON o.id = m.org_unit_id
-		ORDER BY o.jenis, o.urutan, o.nama`)
-	if err != nil {
-		return fmt.Errorf("adminuser.attachRelations keanggotaan: %w", err)
-	}
-	defer memRows.Close()
-	for memRows.Next() {
-		var uid uint64
-		var k Keanggotaan
-		if err := memRows.Scan(&uid, &k.OrgUnitID, &k.UnitNama, &k.Jenis, &k.Posisi); err != nil {
-			return err
-		}
-		if u, ok := byID[uid]; ok {
-			u.Keanggotaan = append(u.Keanggotaan, k)
-		}
-	}
-	return memRows.Err()
+	return rows.Err()
 }
 
 func (r *Repository) List(ctx context.Context) ([]AdminUser, error) {
@@ -141,7 +117,7 @@ func (r *Repository) List(ctx context.Context) ([]AdminUser, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if err := r.attachRelations(ctx, ptrs); err != nil {
+	if err := r.attachIzin(ctx, ptrs); err != nil {
 		return nil, err
 	}
 	users := make([]AdminUser, len(ptrs))
@@ -159,7 +135,7 @@ func (r *Repository) GetByID(ctx context.Context, id uint64) (*AdminUser, error)
 	if err != nil {
 		return nil, fmt.Errorf("adminuser.GetByID: %w", err)
 	}
-	if err := r.attachRelations(ctx, []*AdminUser{u}); err != nil {
+	if err := r.attachIzin(ctx, []*AdminUser{u}); err != nil {
 		return nil, err
 	}
 	return u, nil
@@ -201,99 +177,36 @@ func checkEmailFree(ctx context.Context, tx *sql.Tx, email string, excludeID uin
 	return nil
 }
 
-// replaceKeanggotaan mengganti seluruh keanggotaan pengguna. Unit wajib ada &
-// aktif; posisi wajib valid; satu unit tidak boleh muncul dua kali.
-// Jumlah pemimpin per unit & jumlah unit per orang sengaja TIDAK dibatasi (K2, K3).
-func replaceKeanggotaan(ctx context.Context, tx *sql.Tx, userID uint64, items []KeanggotaanInput) error {
-	// Keanggotaan yang SUDAH ada boleh dipertahankan walau unitnya kini
-	// nonaktif (supaya pengguna tetap bisa diedit); keanggotaan BARU wajib ke
-	// unit aktif (R9).
-	existing := map[int64]bool{}
-	exRows, err := tx.QueryContext(ctx, `SELECT org_unit_id FROM org_member WHERE admin_user_id = ?`, userID)
-	if err != nil {
-		return fmt.Errorf("adminuser.replaceKeanggotaan existing: %w", err)
-	}
-	for exRows.Next() {
-		var uid int64
-		if err := exRows.Scan(&uid); err != nil {
-			exRows.Close()
-			return err
-		}
-		existing[uid] = true
-	}
-	exRows.Close()
-
-	seen := make(map[int64]bool, len(items))
-	for _, it := range items {
-		if it.Posisi != "pemimpin" && it.Posisi != "anggota" {
-			return fmt.Errorf("%w: posisi harus pemimpin atau anggota", ErrInvalidKeanggotaan)
-		}
-		if seen[it.OrgUnitID] {
-			return fmt.Errorf("%w: unit yang sama dipilih dua kali", ErrInvalidKeanggotaan)
-		}
-		seen[it.OrgUnitID] = true
-		var nama string
-		var active bool
-		err := tx.QueryRowContext(ctx,
-			`SELECT nama, is_active FROM org_unit WHERE id = ? FOR SHARE`, it.OrgUnitID).Scan(&nama, &active)
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("%w: unit #%d tidak ditemukan", ErrInvalidKeanggotaan, it.OrgUnitID)
-		}
-		if err != nil {
-			return fmt.Errorf("adminuser.replaceKeanggotaan cek unit: %w", err)
-		}
-		if !active && !existing[it.OrgUnitID] {
-			return fmt.Errorf("%w: unit %q sudah nonaktif", ErrInvalidKeanggotaan, nama)
-		}
-	}
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM org_member WHERE admin_user_id = ?`, userID); err != nil {
-		return fmt.Errorf("adminuser.replaceKeanggotaan clear: %w", err)
-	}
-	for _, it := range items {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO org_member (admin_user_id, org_unit_id, posisi) VALUES (?, ?, ?)`,
-			userID, it.OrgUnitID, it.Posisi); err != nil {
-			return fmt.Errorf("adminuser.replaceKeanggotaan insert: %w", err)
-		}
-	}
-	return nil
-}
-
-func unitIDs(items []KeanggotaanInput) []int64 {
-	out := make([]int64, 0, len(items))
-	for _, it := range items {
-		out = append(out, it.OrgUnitID)
-	}
-	return out
-}
-
 func isMySQLErr(err error, code uint16) bool {
 	var myErr *mysql.MySQLError
 	return errors.As(err, &myErr) && myErr.Number == code
 }
 
-func sameSet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+// izinDisimpan mengembalikan izin yang akan disimpan: kosong untuk Super Admin.
+func izinDisimpan(in UpsertInput) []string {
+	if in.Akses == akses.SuperAdmin {
+		return []string{}
 	}
-	m := make(map[string]bool, len(a))
-	for _, s := range a {
-		m[s] = true
+	return akses.Normalize(in.Permissions)
+}
+
+// validasiAkses menegakkan A1–A5 terhadap akses brand yang akan disimpan.
+func validasiAkses(ctx context.Context, tx *sql.Tx, in UpsertInput, izin []string) error {
+	brandID := toInt64Ptr(in.BrandID)
+	if err := akses.ValidasiJenis(in.Akses, brandID); err != nil {
+		return err
 	}
-	for _, s := range b {
-		if !m[s] {
-			return false
-		}
+	if in.Akses == akses.SuperAdmin {
+		return nil
 	}
-	return true
+	return akses.ValidasiIzinTim(ctx, tx, izin, brandID)
 }
 
 // ─── Tulis (agregat, atomik) ─────────────────────────────────────────────────
 
-// Create membuat pengguna + role + keanggotaan dalam satu transaksi (R1–R3).
+// Create membuat pengguna beserta jenis akses dan izinnya dalam satu transaksi.
 func (r *Repository) Create(ctx context.Context, in UpsertInput, passwordHash string) (uint64, error) {
-	roles := rbac.NormalizeSlugs(in.Roles)
+	izin := izinDisimpan(in)
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -307,17 +220,14 @@ func (r *Repository) Create(ctx context.Context, in UpsertInput, passwordHash st
 	if err := validateBrand(ctx, tx, in.BrandID); err != nil {
 		return 0, err
 	}
-	if err := rbac.ValidateRolesScope(ctx, tx, roles, toInt64Ptr(in.BrandID)); err != nil {
-		return 0, err
-	}
-	if err := rbac.ValidateUnitsForRoles(ctx, tx, roles, toInt64Ptr(in.BrandID), unitIDs(in.Keanggotaan)); err != nil {
+	if err := validasiAkses(ctx, tx, in, izin); err != nil {
 		return 0, err
 	}
 
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO admin_users (email, display_name, no_hp, jabatan, password_hash, brand_id, is_active)
-		VALUES (?, ?, ?, ?, ?, ?, TRUE)`,
-		in.Email, in.DisplayName, in.NoHP, in.Jabatan, passwordHash, in.BrandID)
+		INSERT INTO admin_users (email, display_name, no_hp, password_hash, brand_id, is_active)
+		VALUES (?, ?, ?, ?, ?, TRUE)`,
+		in.Email, in.DisplayName, in.NoHP, passwordHash, in.BrandID)
 	if err != nil {
 		if isMySQLErr(err, 1062) {
 			return 0, ErrDuplicateEmail
@@ -329,10 +239,7 @@ func (r *Repository) Create(ctx context.Context, in UpsertInput, passwordHash st
 		return 0, fmt.Errorf("adminuser.Create id: %w", err)
 	}
 
-	if err := rbac.ReplaceUserRoles(ctx, tx, id, roles); err != nil {
-		return 0, err
-	}
-	if err := replaceKeanggotaan(ctx, tx, uint64(id), in.Keanggotaan); err != nil {
+	if err := akses.Ganti(ctx, tx, id, in.Akses, izin); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -341,12 +248,12 @@ func (r *Repository) Create(ctx context.Context, in UpsertInput, passwordHash st
 	return uint64(id), nil
 }
 
-// Update mengubah profil, akses brand, role, dan keanggotaan dalam satu
-// transaksi. R3 dicek terhadap akses brand BARU (menutup celah ubah akses
-// tanpa cek role). R4 dijaga bila Super Admin dicabut. Perubahan role atau
-// akses brand menaikkan perm_version dan mencabut sesi.
+// Update mengubah profil, akses brand, jenis akses, dan izin dalam satu
+// transaksi. Izin divalidasi terhadap akses brand BARU. A6 dijaga bila Super
+// Admin diturunkan. Perubahan akses atau akses brand menaikkan perm_version dan
+// mencabut sesi (A7).
 func (r *Repository) Update(ctx context.Context, id uint64, in UpsertInput) error {
-	roles := rbac.NormalizeSlugs(in.Roles)
+	izin := izinDisimpan(in)
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -371,39 +278,36 @@ func (r *Repository) Update(ctx context.Context, id uint64, in UpsertInput) erro
 	if err := validateBrand(ctx, tx, in.BrandID); err != nil {
 		return err
 	}
-	if err := rbac.ValidateRolesScope(ctx, tx, roles, toInt64Ptr(in.BrandID)); err != nil {
-		return err
-	}
-	if err := rbac.ValidateUnitsForRoles(ctx, tx, roles, toInt64Ptr(in.BrandID), unitIDs(in.Keanggotaan)); err != nil {
+	if err := validasiAkses(ctx, tx, in, izin); err != nil {
 		return err
 	}
 
-	current, err := rbac.UserRoleSlugs(ctx, tx, int64(id))
+	jenisLama, izinLama, err := akses.Pengguna(ctx, tx, int64(id))
 	if err != nil {
 		return err
 	}
-	if isActive && rbac.HasSlug(current, rbac.SuperAdminSlug) && !rbac.HasSlug(roles, rbac.SuperAdminSlug) {
-		if err := rbac.EnsureOtherActiveSuperAdmin(ctx, tx, int64(id)); err != nil {
+	if isActive && jenisLama == akses.SuperAdmin && in.Akses != akses.SuperAdmin {
+		if err := akses.EnsureOtherActiveSuperAdmin(ctx, tx, int64(id)); err != nil {
 			return err
 		}
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE admin_users SET email = ?, display_name = ?, no_hp = ?, jabatan = ?, brand_id = ?
+		UPDATE admin_users SET email = ?, display_name = ?, no_hp = ?, brand_id = ?
 		WHERE id = ?`,
-		in.Email, in.DisplayName, in.NoHP, in.Jabatan, in.BrandID, id); err != nil {
+		in.Email, in.DisplayName, in.NoHP, in.BrandID, id); err != nil {
 		if isMySQLErr(err, 1062) {
 			return ErrDuplicateEmail
 		}
 		return fmt.Errorf("adminuser.Update profil: %w", err)
 	}
 
-	roleChanged := !sameSet(current, roles)
+	aksesBerubah := jenisLama != in.Akses || !akses.SamaIzin(izinLama, izin)
 	brandChanged := oldBrand.Valid != (in.BrandID != nil) ||
 		(oldBrand.Valid && in.BrandID != nil && uint64(oldBrand.Int64) != *in.BrandID)
 
-	if roleChanged {
-		if err := rbac.ReplaceUserRoles(ctx, tx, int64(id), roles); err != nil {
+	if aksesBerubah {
+		if err := akses.Ganti(ctx, tx, int64(id), in.Akses, izin); err != nil {
 			return err
 		}
 	} else if brandChanged {
@@ -413,21 +317,17 @@ func (r *Repository) Update(ctx context.Context, id uint64, in UpsertInput) erro
 			return fmt.Errorf("adminuser.Update bump: %w", err)
 		}
 	}
-	if roleChanged || brandChanged {
+	if aksesBerubah || brandChanged {
 		if err := identity.RevokeAllRefreshTokensTx(ctx, tx, int64(id)); err != nil {
 			return err
 		}
-	}
-
-	if err := replaceKeanggotaan(ctx, tx, id, in.Keanggotaan); err != nil {
-		return err
 	}
 	return tx.Commit()
 }
 
 // SetStatus mengaktifkan/menonaktifkan pengguna (offboarding). Nonaktif:
-// tidak boleh diri sendiri (R5), tidak boleh Super Admin aktif terakhir (R4),
-// dan sesi dicabut + perm_version naik (R6) — semua dalam satu transaksi.
+// tidak boleh diri sendiri, tidak boleh Super Admin aktif terakhir (A6),
+// dan sesi dicabut + perm_version naik — semua dalam satu transaksi.
 func (r *Repository) SetStatus(ctx context.Context, id uint64, active bool, actorID uint64) error {
 	if !active && id == actorID {
 		return ErrCannotDeactivateSelf
@@ -439,9 +339,9 @@ func (r *Repository) SetStatus(ctx context.Context, id uint64, active bool, acto
 	}
 	defer tx.Rollback()
 
-	var isActive bool
+	var isActive, super bool
 	err = tx.QueryRowContext(ctx,
-		`SELECT is_active FROM admin_users WHERE id = ? FOR UPDATE`, id).Scan(&isActive)
+		`SELECT is_active, is_super_admin FROM admin_users WHERE id = ? FOR UPDATE`, id).Scan(&isActive, &super)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -453,12 +353,8 @@ func (r *Repository) SetStatus(ctx context.Context, id uint64, active bool, acto
 	}
 
 	if !active {
-		current, err := rbac.UserRoleSlugs(ctx, tx, int64(id))
-		if err != nil {
-			return err
-		}
-		if rbac.HasSlug(current, rbac.SuperAdminSlug) {
-			if err := rbac.EnsureOtherActiveSuperAdmin(ctx, tx, int64(id)); err != nil {
+		if super {
+			if err := akses.EnsureOtherActiveSuperAdmin(ctx, tx, int64(id)); err != nil {
 				return err
 			}
 		}
@@ -478,7 +374,7 @@ func (r *Repository) SetStatus(ctx context.Context, id uint64, active bool, acto
 	return tx.Commit()
 }
 
-// Delete menghapus permanen HANYA pengguna tanpa riwayat (R7). Riwayat
+// Delete menghapus permanen HANYA pengguna tanpa riwayat. Riwayat
 // dideteksi dari FK (MySQL 1451) — mencakup otomatis tabel baru di masa depan —
 // ditambah payments.verified_by yang ber-ON DELETE SET NULL (akan menghapus
 // jejak verifikasi bila tidak dicegah).
@@ -493,9 +389,9 @@ func (r *Repository) Delete(ctx context.Context, id uint64, actorID uint64) erro
 	}
 	defer tx.Rollback()
 
-	var isActive bool
+	var isActive, super bool
 	err = tx.QueryRowContext(ctx,
-		`SELECT is_active FROM admin_users WHERE id = ? FOR UPDATE`, id).Scan(&isActive)
+		`SELECT is_active, is_super_admin FROM admin_users WHERE id = ? FOR UPDATE`, id).Scan(&isActive, &super)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -503,12 +399,8 @@ func (r *Repository) Delete(ctx context.Context, id uint64, actorID uint64) erro
 		return fmt.Errorf("adminuser.Delete lock: %w", err)
 	}
 
-	current, err := rbac.UserRoleSlugs(ctx, tx, int64(id))
-	if err != nil {
-		return err
-	}
-	if isActive && rbac.HasSlug(current, rbac.SuperAdminSlug) {
-		if err := rbac.EnsureOtherActiveSuperAdmin(ctx, tx, int64(id)); err != nil {
+	if isActive && super {
+		if err := akses.EnsureOtherActiveSuperAdmin(ctx, tx, int64(id)); err != nil {
 			return err
 		}
 	}

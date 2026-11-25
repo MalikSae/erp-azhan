@@ -86,6 +86,12 @@ func main() {
 	for _, rec := range records {
 		totalProcessed++
 
+		// Tanpa booking di luar sistem: paket baru selalu mulai dengan sisa seat = kuota.
+		if rec.SeatSisa != 0 && rec.SeatSisa != rec.SeatTotal {
+			errorSkips = append(errorSkips, fmt.Sprintf("Baris %d: seat_sisa (%d) harus sama dengan seat_total (%d)", totalProcessed, rec.SeatSisa, rec.SeatTotal))
+			continue
+		}
+
 		// 1. Resolve brand_id
 		var brandID int
 		err := db.QueryRow("SELECT id FROM brands WHERE name = ?", rec.Brand).Scan(&brandID)
@@ -196,7 +202,7 @@ func main() {
 			)
 		`,
 			brandID, airlineID, hotelMekkahID, hotelMadinahID,
-			rec.JadwalNama, rec.SeatTotal, rec.SeatSisa,
+			rec.JadwalNama, rec.SeatTotal, rec.SeatTotal,
 			rec.BerangkatTanggal, bJam, bKode, rec.BerangkatBandaraAsal, rec.BerangkatBandaraTujuan,
 			rec.PulangTanggal, pJam, pKode, rec.PulangBandaraAsal, rec.PulangBandaraTujuan, rec.TransitBandara,
 			rec.HargaQuad, rec.HargaTriple, rec.HargaDouble,

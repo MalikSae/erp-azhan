@@ -1,6 +1,6 @@
 package adminuser
 
-// Integration test aturan Pengguna (SPEK-PENGGUNA-ORGANISASI §4 & §10).
+// Integration test aturan Pengguna (SPEK-AKSES-PENGGUNA-2026-11-25 §2).
 // Repository membuka transaksinya sendiri, jadi data uji dibuat sungguhan
 // lalu dibersihkan (email gotest.au.*@local.test; awalan per paket karena
 // paket uji berjalan paralel). Jalan hanya dengan
@@ -14,7 +14,7 @@ import (
 	"errors"
 	"testing"
 
-	"erp-azhan/api/internal/rbac"
+	"erp-azhan/api/internal/akses"
 	"erp-azhan/api/internal/testdb"
 )
 
@@ -39,15 +39,6 @@ func setup(t *testing.T) *fixture {
 	clean()
 	t.Cleanup(clean)
 	return &fixture{t: t, db: db, repo: NewRepository(db), ctx: context.Background()}
-}
-
-func (f *fixture) unit(nama string) int64 {
-	f.t.Helper()
-	var id int64
-	if err := f.db.QueryRow(`SELECT id FROM org_unit WHERE nama = ?`, nama).Scan(&id); err != nil {
-		f.t.Fatalf("unit %q: %v", nama, err)
-	}
-	return id
 }
 
 func (f *fixture) brand() *uint64 {
@@ -77,72 +68,154 @@ func (f *fixture) create(in UpsertInput) uint64 {
 	return id
 }
 
-func pengguna(email string, brandID *uint64, roles []string, k ...KeanggotaanInput) UpsertInput {
-	return UpsertInput{DisplayName: "Go Test", Email: email, BrandID: brandID, Roles: roles, Keanggotaan: k}
+func (f *fixture) sesi(id uint64) {
+	f.t.Helper()
+	if _, err := f.db.Exec(`INSERT INTO admin_refresh_tokens (jti, admin_user_id, expires_at)
+		VALUES (UUID(), ?, NOW() + INTERVAL 1 DAY)`, id); err != nil {
+		f.t.Fatal(err)
+	}
 }
 
-func tugas(unitID int64, posisi string) KeanggotaanInput {
-	return KeanggotaanInput{OrgUnitID: unitID, Posisi: posisi}
+func (f *fixture) sesiAktif(id uint64) int {
+	return f.count(`SELECT COUNT(*) FROM admin_refresh_tokens WHERE admin_user_id = ? AND revoked_at IS NULL`, id)
 }
 
-func TestIntegrasiT1BuatLengkap(t *testing.T) {
+func (f *fixture) versi(id uint64) int {
+	return f.count(`SELECT perm_version FROM admin_users WHERE id = ?`, id)
+}
+
+// tim membuat input pengguna Tim dengan izin yang diberikan.
+func tim(email string, brandID *uint64, izin ...string) UpsertInput {
+	return UpsertInput{DisplayName: "Go Test", Email: email, BrandID: brandID, Akses: akses.Tim, Permissions: izin}
+}
+
+func superAdmin(email string, brandID *uint64) UpsertInput {
+	return UpsertInput{DisplayName: "Go Test", Email: email, BrandID: brandID, Akses: akses.SuperAdmin}
+}
+
+func TestIntegrasiBuatTimMenyimpanIzin(t *testing.T) {
 	f := setup(t)
-	mg, bc := f.unit("Marketing & Growth"), f.unit("Brand & Community")
-	id := f.create(pengguna("gotest.au.t1@local.test", nil, []string{"cmo"},
-		tugas(mg, "pemimpin"), tugas(bc, "anggota")))
+	id := f.create(tim("gotest.au.t1@local.test", f.brand(), "booking.view", "booking.edit", "booking.view"))
 
 	u, err := f.repo.GetByID(f.ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(u.Roles) != 1 || u.Roles[0] != "cmo" {
-		t.Errorf("roles = %v, harap [cmo]", u.Roles)
+	if u.Akses != akses.Tim {
+		t.Errorf("akses = %q, harap tim", u.Akses)
 	}
-	if len(u.Keanggotaan) != 2 {
-		t.Errorf("keanggotaan = %d, harap 2", len(u.Keanggotaan))
-	}
-	if n := f.count(`SELECT COUNT(*) FROM org_member WHERE admin_user_id = ? AND org_unit_id = ? AND posisi = 'pemimpin'`, id, mg); n != 1 {
-		t.Errorf("pemimpin M&G = %d, harap 1", n)
+	if len(u.Permissions) != 2 || u.Permissions[0] != "booking.edit" || u.Permissions[1] != "booking.view" {
+		t.Errorf("izin = %v, harap [booking.edit booking.view]", u.Permissions)
 	}
 }
 
-func TestIntegrasiT2ScopeSalahTidakMeninggalkanData(t *testing.T) {
+func TestIntegrasiSuperAdminTanpaIzinTersimpan(t *testing.T) {
 	f := setup(t)
-	_, err := f.repo.Create(f.ctx, pengguna("gotest.au.t2@local.test", f.brand(), []string{"direktur"}), "hash-uji")
-	if !errors.Is(err, rbac.ErrScopeMismatch) {
-		t.Fatalf("err = %v, harap ErrScopeMismatch", err)
+	in := superAdmin("gotest.au.sa@local.test", nil)
+	in.Permissions = []string{"booking.view"}
+	id := f.create(in)
+
+	u, err := f.repo.GetByID(f.ctx, id)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if n := f.count(`SELECT COUNT(*) FROM admin_users WHERE email = 'gotest.au.t2@local.test'`); n != 0 {
-		t.Errorf("baris tercipta = %d, harap 0 (transaksi harus rollback)", n)
+	if u.Akses != akses.SuperAdmin || len(u.Permissions) != 0 {
+		t.Errorf("akses = %q izin = %v, harap super_admin tanpa izin tersimpan", u.Akses, u.Permissions)
+	}
+	if n := f.count(`SELECT COUNT(*) FROM user_permissions WHERE admin_user_id = ?`, id); n != 0 {
+		t.Errorf("user_permissions = %d, harap 0", n)
+	}
+	// Klaim token Super Admin memuat seluruh izin.
+	acc, err := akses.NewRepository(f.db).GetUserAccess(f.ctx, int64(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if semua := f.count(`SELECT COUNT(*) FROM permissions`); acc.Jenis != akses.SuperAdmin || len(acc.Permissions) != semua {
+		t.Errorf("klaim: jenis=%q izin=%d, harap super_admin dengan %d izin", acc.Jenis, len(acc.Permissions), semua)
 	}
 }
 
-func TestIntegrasiT3UbahAksesMembuatRoleTakSah(t *testing.T) {
+// Create yang ditolak tidak boleh meninggalkan baris (transaksi rollback).
+func TestIntegrasiAksesTakSahTidakMeninggalkanData(t *testing.T) {
 	f := setup(t)
-	id := f.create(pengguna("gotest.au.t3@local.test", nil, []string{"direktur"}))
-	err := f.repo.Update(f.ctx, id, pengguna("gotest.au.t3@local.test", f.brand(), []string{"direktur"}))
-	if !errors.Is(err, rbac.ErrScopeMismatch) {
-		t.Fatalf("err = %v, harap ErrScopeMismatch", err)
+	cases := []struct {
+		nama string
+		in   UpsertInput
+		want error
+	}{
+		{"super admin terikat brand", superAdmin("gotest.au.x1@local.test", f.brand()), akses.ErrSuperAdminBrand},
+		{"tim tanpa izin", tim("gotest.au.x2@local.test", nil), akses.ErrTanpaIzin},
+		{"izin khusus super admin", tim("gotest.au.x3@local.test", nil, "booking.view", "user.admin"), akses.ErrIzinTidakSah},
+		{"izin holding untuk brand", tim("gotest.au.x4@local.test", f.brand(), "booking.view", "schedule.edit"), akses.ErrIzinTidakSah},
+		{"kode tidak dikenal", tim("gotest.au.x5@local.test", nil, "tidak.ada"), akses.ErrIzinTidakSah},
+		{"jenis akses salah", UpsertInput{DisplayName: "Go Test", Email: "gotest.au.x6@local.test", Akses: "admin"}, akses.ErrJenisTidakSah},
+	}
+	for _, c := range cases {
+		if _, err := f.repo.Create(f.ctx, c.in, "hash-uji"); !errors.Is(err, c.want) {
+			t.Errorf("%s: err = %v, harap %v", c.nama, err, c.want)
+		}
+		if n := f.count(`SELECT COUNT(*) FROM admin_users WHERE email = ?`, c.in.Email); n != 0 {
+			t.Errorf("%s: baris tercipta = %d, harap 0", c.nama, n)
+		}
+	}
+	if n := f.count(`SELECT COUNT(*) FROM user_permissions up JOIN admin_users u ON u.id = up.admin_user_id
+		WHERE u.email LIKE ?`, emailUji); n != 0 {
+		t.Errorf("izin tersisa = %d, harap 0", n)
+	}
+}
+
+// Pindah ke akses brand divalidasi terhadap brand BARU; yang ditolak tidak mengubah apa pun.
+func TestIntegrasiUbahKeBrandDenganIzinHoldingDitolak(t *testing.T) {
+	f := setup(t)
+	id := f.create(tim("gotest.au.t3@local.test", nil, "schedule.edit"))
+	err := f.repo.Update(f.ctx, id, tim("gotest.au.t3@local.test", f.brand(), "schedule.edit"))
+	if !errors.Is(err, akses.ErrIzinTidakSah) {
+		t.Fatalf("err = %v, harap ErrIzinTidakSah", err)
 	}
 	if n := f.count(`SELECT COUNT(*) FROM admin_users WHERE id = ? AND brand_id IS NULL`, id); n != 1 {
 		t.Error("akses brand berubah padahal update ditolak")
 	}
 }
 
-func TestIntegrasiT4DuaPemimpinDanDuaTim(t *testing.T) {
+func TestIntegrasiUbahIzinMencabutSesi(t *testing.T) {
 	f := setup(t)
-	seo, cp := f.unit("SEO"), f.unit("Creative Production")
-	f.create(pengguna("gotest.au.t4a@local.test", nil, []string{"marketing_lead"}, tugas(seo, "pemimpin"), tugas(cp, "anggota")))
-	f.create(pengguna("gotest.au.t4b@local.test", nil, []string{"marketing_lead"}, tugas(seo, "pemimpin")))
-	if n := f.count(`SELECT COUNT(*) FROM org_member m JOIN admin_users u ON u.id = m.admin_user_id
-		WHERE m.org_unit_id = ? AND m.posisi = 'pemimpin' AND u.email LIKE ?`, seo, emailUji); n != 2 {
-		t.Errorf("pemimpin SEO = %d, harap 2", n)
+	id := f.create(tim("gotest.au.t5@local.test", nil, "booking.view"))
+	f.sesi(id)
+	awal := f.versi(id)
+
+	// Hanya profil yang berubah: sesi tetap, versi tetap.
+	sama := tim("gotest.au.t5@local.test", nil, "booking.view")
+	sama.DisplayName = "Go Test Dua"
+	if err := f.repo.Update(f.ctx, id, sama); err != nil {
+		t.Fatal(err)
+	}
+	if f.sesiAktif(id) != 1 || f.versi(id) != awal {
+		t.Fatalf("ubah profil saja: sesi=%d versi=%d, harap sesi 1 versi %d", f.sesiAktif(id), f.versi(id), awal)
+	}
+
+	if err := f.repo.Update(f.ctx, id, tim("gotest.au.t5@local.test", nil, "booking.view", "jamaah.view")); err != nil {
+		t.Fatal(err)
+	}
+	if f.sesiAktif(id) != 0 || f.versi(id) != awal+1 {
+		t.Fatalf("ubah izin: sesi=%d versi=%d, harap sesi 0 versi %d", f.sesiAktif(id), f.versi(id), awal+1)
+	}
+	u, _ := f.repo.GetByID(f.ctx, id)
+	if len(u.Permissions) != 2 {
+		t.Errorf("izin = %v, harap 2 izin", u.Permissions)
+	}
+
+	// Tim menjadi Super Admin: izin tersimpan dikosongkan.
+	if err := f.repo.Update(f.ctx, id, superAdmin("gotest.au.t5@local.test", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(`SELECT COUNT(*) FROM user_permissions WHERE admin_user_id = ?`, id); n != 0 {
+		t.Errorf("izin tersisa setelah jadi Super Admin = %d, harap 0", n)
 	}
 }
 
-func TestIntegrasiT6NonaktifkanDiriSendiri(t *testing.T) {
+func TestIntegrasiNonaktifkanDiriSendiri(t *testing.T) {
 	f := setup(t)
-	id := f.create(pengguna("gotest.au.t6@local.test", nil, []string{"direktur"}))
+	id := f.create(tim("gotest.au.t6@local.test", nil, "booking.view"))
 	if err := f.repo.SetStatus(f.ctx, id, false, id); !errors.Is(err, ErrCannotDeactivateSelf) {
 		t.Fatalf("err = %v, harap ErrCannotDeactivateSelf", err)
 	}
@@ -151,20 +224,16 @@ func TestIntegrasiT6NonaktifkanDiriSendiri(t *testing.T) {
 	}
 }
 
-func TestIntegrasiT7NonaktifMencabutSesi(t *testing.T) {
+func TestIntegrasiNonaktifMencabutSesi(t *testing.T) {
 	f := setup(t)
-	id := f.create(pengguna("gotest.au.t7@local.test", nil, []string{"direktur"}))
-	if _, err := f.db.Exec(`INSERT INTO admin_refresh_tokens (jti, admin_user_id, expires_at)
-		VALUES (UUID(), ?, NOW() + INTERVAL 1 DAY)`, id); err != nil {
-		t.Fatal(err)
-	}
-	var verSebelum int
-	_ = f.db.QueryRow(`SELECT perm_version FROM admin_users WHERE id = ?`, id).Scan(&verSebelum)
+	id := f.create(tim("gotest.au.t7@local.test", nil, "booking.view"))
+	f.sesi(id)
+	verSebelum := f.versi(id)
 
 	if err := f.repo.SetStatus(f.ctx, id, false, 0); err != nil {
 		t.Fatal(err)
 	}
-	if n := f.count(`SELECT COUNT(*) FROM admin_refresh_tokens WHERE admin_user_id = ? AND revoked_at IS NULL`, id); n != 0 {
+	if n := f.sesiAktif(id); n != 0 {
 		t.Errorf("refresh token aktif = %d, harap 0", n)
 	}
 	if n := f.count(`SELECT COUNT(*) FROM admin_users WHERE id = ? AND is_active = FALSE AND perm_version > ?`, id, verSebelum); n != 1 {
@@ -172,9 +241,9 @@ func TestIntegrasiT7NonaktifMencabutSesi(t *testing.T) {
 	}
 }
 
-func TestIntegrasiT8HapusPenggunaBerRiwayat(t *testing.T) {
+func TestIntegrasiHapusPenggunaBerRiwayat(t *testing.T) {
 	f := setup(t)
-	id := f.create(pengguna("gotest.au.t8@local.test", nil, []string{"direktur"}))
+	id := f.create(tim("gotest.au.t8@local.test", nil, "booking.view"))
 	var jamaahID int64
 	if err := f.db.QueryRow(`SELECT id FROM jamaah WHERE disetujui_agen_oleh IS NULL ORDER BY id LIMIT 1`).Scan(&jamaahID); err != nil {
 		t.Skipf("tidak ada jamaah untuk fixture riwayat: %v", err)
@@ -190,73 +259,18 @@ func TestIntegrasiT8HapusPenggunaBerRiwayat(t *testing.T) {
 	}
 }
 
-func TestIntegrasiT9HapusPenggunaTanpaRiwayat(t *testing.T) {
+func TestIntegrasiHapusPenggunaTanpaRiwayat(t *testing.T) {
 	f := setup(t)
-	id := f.create(pengguna("gotest.au.t9@local.test", nil, []string{"direktur"}, tugas(f.unit("Manajemen"), "anggota")))
+	id := f.create(tim("gotest.au.t9@local.test", nil, "booking.view"))
 	if err := f.repo.Delete(f.ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
 	for _, q := range []string{
 		`SELECT COUNT(*) FROM admin_users WHERE id = ?`,
-		`SELECT COUNT(*) FROM user_roles WHERE admin_user_id = ?`,
-		`SELECT COUNT(*) FROM org_member WHERE admin_user_id = ?`,
+		`SELECT COUNT(*) FROM user_permissions WHERE admin_user_id = ?`,
 	} {
 		if n := f.count(q, id); n != 0 {
 			t.Errorf("%s = %d, harap 0", q, n)
 		}
-	}
-}
-
-func TestIntegrasiKolomRoleLamaUntukGatewayCRM(t *testing.T) {
-	f := setup(t)
-	cases := []struct {
-		email string
-		roles []string
-		want  string
-	}{
-		{"gotest.au.cs1@local.test", []string{"cs"}, "cs"},
-		{"gotest.au.cs2@local.test", []string{"cs", "admin_cabang"}, "admin"},
-	}
-	for _, c := range cases {
-		id := f.create(pengguna(c.email, f.brand(), c.roles))
-		var role string
-		_ = f.db.QueryRow(`SELECT role FROM admin_users WHERE id = ?`, id).Scan(&role)
-		if role != c.want {
-			t.Errorf("%v: role lama = %q, harap %q", c.roles, role, c.want)
-		}
-	}
-}
-
-func TestIntegrasiR10PenugasanMengikutiRole(t *testing.T) {
-	f := setup(t)
-	mg, ku, seo, it := f.unit("Marketing & Growth"), f.unit("Keuangan"), f.unit("SEO"), f.unit("IT")
-
-	ditolak := []struct {
-		nama string
-		in   UpsertInput
-	}{
-		{"Finance di Marketing", pengguna("gotest.au.r1@local.test", nil, []string{"finance"}, tugas(mg, "anggota"))},
-		{"Direktur di Keuangan", pengguna("gotest.au.r2@local.test", nil, []string{"direktur"}, tugas(ku, "anggota"))},
-		{"akses Brand berpenugasan", pengguna("gotest.au.r3@local.test", f.brand(), []string{"finance"}, tugas(ku, "anggota"))},
-	}
-	for _, c := range ditolak {
-		if _, err := f.repo.Create(f.ctx, c.in, "hash-uji"); !errors.Is(err, rbac.ErrUnitMismatch) {
-			t.Errorf("%s: err = %v, harap ErrUnitMismatch", c.nama, err)
-		}
-	}
-
-	f.create(pengguna("gotest.au.r4@local.test", nil, []string{"direktur", "finance"}, tugas(f.unit("Manajemen"), "pemimpin"), tugas(ku, "pemimpin")))
-	f.create(pengguna("gotest.au.r5@local.test", nil, []string{rbac.SuperAdminSlug}, tugas(it, "anggota")))
-	id := f.create(pengguna("gotest.au.r6@local.test", nil, []string{"marketing_member"}, tugas(seo, "anggota")))
-
-	// Ganti role yang bertentangan dengan penugasan ditolak, juga lewat jalur RBAC.
-	if err := f.repo.Update(f.ctx, id, pengguna("gotest.au.r6@local.test", nil, []string{"finance"}, tugas(seo, "anggota"))); !errors.Is(err, rbac.ErrUnitMismatch) {
-		t.Errorf("update: err = %v, harap ErrUnitMismatch", err)
-	}
-	if err := rbac.NewRepository(f.db).SetUserRoles(f.ctx, int64(id), []string{"finance"}); !errors.Is(err, rbac.ErrUnitMismatch) {
-		t.Errorf("SetUserRoles: err = %v, harap ErrUnitMismatch", err)
-	}
-	if err := rbac.NewRepository(f.db).SetUserRoles(f.ctx, int64(id), []string{"marketing_lead"}); err != nil {
-		t.Errorf("SetUserRoles se-divisi: %v", err)
 	}
 }

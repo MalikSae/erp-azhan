@@ -2,16 +2,12 @@ import React from 'react';
 import BrandLabel from 'shared/ui/BrandLabel';
 import Badge from 'shared/ui/Badge';
 
-// Potongan UI bersama halaman Pengguna & Struktur Organisasi (gaya SmartHR).
+// Potongan UI bersama halaman Pengguna.
 
 export const errMsg = (error, fallback) => {
   const m = error?.response?.data?.error;
   return m ? m.charAt(0).toUpperCase() + m.slice(1) : fallback;
 };
-
-// Tombol aksi kotak berbingkai 30px.
-export const actionBtn =
-  'w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
 // Status Aktif/Nonaktif memakai Badge bersama (satu gaya status, lihat Badge.jsx).
 export const StatusChip = ({ active, activeLabel = 'Aktif', inactiveLabel = 'Nonaktif' }) =>
@@ -27,20 +23,3 @@ export const AksesChip = ({ brandId, brandName, brandColor }) => {
     />
   );
 };
-
-export const SoftBadge = ({ children, tone = 'neutral', title }) => (
-  <span title={title}><Badge variant={tone}>{children}</Badge></span>
-);
-
-// Kartu bergaya referensi dengan header judul.
-export const Panel = ({ title, right, children, bodyClass = 'p-5' }) => (
-  <section className="bg-white rounded-2xl border border-neutral-200">
-    {(title || right) && (
-      <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between gap-3">
-        <h3 className="text-base font-heading font-semibold text-neutral-900">{title}</h3>
-        {right}
-      </div>
-    )}
-    <div className={bodyClass}>{children}</div>
-  </section>
-);

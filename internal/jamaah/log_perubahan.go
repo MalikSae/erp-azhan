@@ -30,6 +30,7 @@ func nilaiPtr(v *string) string { return isiDari(v) }
 func bedaIsian(lama *Jamaah, req *UpdateJamaahRequest) []isianLog {
 	pasangan := []isianLog{
 		{"nama_lengkap", strings.TrimSpace(lama.NamaLengkap), strings.TrimSpace(req.NamaLengkap)},
+		{"nama_paspor", nilaiPtr(lama.NamaPaspor), nilaiPtr(req.NamaPaspor)},
 		{"jenis_kelamin", nilaiPtr(lama.JenisKelamin), nilaiPtr(req.JenisKelamin)},
 		{"nama_ayah_kandung", nilaiPtr(lama.NamaAyahKandung), nilaiPtr(req.NamaAyahKandung)},
 		{"nik", nilaiPtr(lama.NIK), nilaiPtr(req.NIK)},

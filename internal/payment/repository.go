@@ -522,6 +522,9 @@ func ambilKursiTx(ctx context.Context, tx *sql.Tx, bookingID, scheduleID int64, 
 	if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=seat_sisa-? WHERE id=?`, seatCount, scheduleID); err != nil {
 		return fmt.Errorf("payment: ambil kursi, kurangi sisa: %w", err)
 	}
+	if err := shared.SimpanSeatCountTx(ctx, tx, bookingID, seatCount); err != nil {
+		return fmt.Errorf("payment: ambil kursi, simpan seat_count: %w", err)
+	}
 	return nil
 }
 

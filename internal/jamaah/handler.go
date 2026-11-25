@@ -324,6 +324,12 @@ func isiDari(v *string) string {
 // (JB-05: tanggal tidak jadi error SQL; JB-09: NIK, tanggal, email, HP).
 // Field kosong dilewati; paspor kedaluwarsa tetap diterima.
 func validateJamaahInput(req *CreateJamaahRequest) string {
+	// Nama paspor disimpan huruf besar seperti tertulis di paspor; kosong = manifest memakai nama lengkap.
+	if np := strings.ToUpper(strings.Join(strings.Fields(isiDari(req.NamaPaspor)), " ")); np != "" {
+		req.NamaPaspor = &np
+	} else {
+		req.NamaPaspor = nil
+	}
 	tanggal := map[string]time.Time{}
 	fields := []struct {
 		nama  string

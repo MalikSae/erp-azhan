@@ -8,7 +8,6 @@ type AdminUser struct {
 	BrandID      *int64    `json:"brand_id"`
 	Email        string    `json:"email"`
 	DisplayName  string    `json:"display_name"`
-	Role         string    `json:"role"`
 	IsActive     bool      `json:"is_active"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
