@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock3, CheckCircle2, XCircle, Banknote, Eye } from 'lucide-react';
 import {
   listPencairanAdmin,
@@ -62,6 +62,8 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
   const [selected, setSelected] = useState(null);
   const [mode, setMode] = useState(null); // null | 'setujui' | 'tolak'
   const [bukti, setBukti] = useState(null);
+  // Hasil unggah terakhir ({ file, url }): dipakai ulang bila setujui gagal lalu dicoba lagi dengan berkas yang sama.
+  const unggahan = useRef(null);
   const [alasan, setAlasan] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -102,6 +104,7 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
     setSelected(row);
     setMode(null);
     setBukti(null);
+    unggahan.current = null;
     setAlasan('');
     setActionError('');
   };
@@ -121,7 +124,10 @@ export default function KomisiReferralPage({ judul = 'Persetujuan Pencairan', su
     setSaving(true);
     try {
       if (mode === 'setujui') {
-        const url = await uploadMedia(bukti, 'payment-proofs');
+        if (unggahan.current?.file !== bukti) {
+          unggahan.current = { file: bukti, url: await uploadMedia(bukti, 'payment-proofs') };
+        }
+        const { url } = unggahan.current;
         await setujuiPencairan(selected.id, url);
       } else {
         await tolakPencairan(selected.id, alasan.trim());
