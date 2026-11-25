@@ -25,7 +25,7 @@ Status: disepakati dan dibangun 2026-11-25 (ERP dev-malik, web dan app branch ag
    - jamaah terikat ke agen dari booking mulai DP;
    - agen sendiri bila ikut berangkat (lencana **"Anda"**). Keluarga atau orang lain yang dibookingkan agen = jamaah biasa (tetap berkomisi).
 5. Saringan: **Semua / Perlu tindakan / Lunas / Berangkat**. Perlu tindakan = belum DP, belum lunas, atau data/dokumen belum lengkap.
-6. Ketuk baris -> halaman detail jamaah agen. Bila booking dibuat agen sendiri, ada tautan **"Isi data"** ke halaman ubah data; selain itu hanya baca.
+6. Ketuk baris -> halaman detail jamaah agen. Bila akun agen adalah pembuat data jamaah itu (aturan akses ubah data jamaah), ada tautan **"Isi data"** ke halaman ubah data; selain itu hanya baca. Tautan, bukan tombol kedua.
 7. Kotak "Jamaah" di dashboard web dan app = angka saringan "Semua".
 8. Agen tidak punya dua menu jamaah lagi. Kotak dashboard dan notifikasi jamaah_referral, jamaah_aktivasi, prospek_* membuka menu Jamaah.
 

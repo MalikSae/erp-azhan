@@ -15,6 +15,8 @@ Agen tidak tahu berapa komisinya saat memilih paket untuk dibagikan atau dibooki
 - Lokasi:
   - Detail paket web dan app, dekat tombol Bagikan / Pesan.
   - Pemilih jadwal booking agen di web (`PilihJadwalAgen`, baris detail) dan form booking app (ringkas paket di atas form).
+    Baris detail pemilih web (keputusan pemilik 2026-11-25): `Rp 45 jt/pax` di kiri, `Komisi Rp 750.000` merah; tanpa sisa seat.
+  - Detail paket web memakai label yang sama di brand Hana (`PaketDetailHana`) dan brand lain (`PaketDetail`).
   - Tidak di kartu katalog (web maupun app).
 - Copy: `Komisi Rp500.000/jamaah`. Komisi tidak dihitung untuk bayi dan booking diri agen (aturan K13, `internal/komisi/kalkulasi.go`); label tidak menjelaskan ini.
 
