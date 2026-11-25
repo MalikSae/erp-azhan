@@ -101,7 +101,7 @@ const InventoryRiwayatStokPage = () => {
   const columns = [
     { header: 'Waktu', key: 'created_at' },
     { header: 'Item', key: 'item_nama' },
-    { header: 'Brand', key: 'lokasi' },
+    { header: 'Brand', key: 'brand_nama' },
     { header: 'Jenis', key: 'jenis' },
     { header: 'Jumlah', key: 'qty' },
     { header: 'Stok', key: 'stok_setelah' },

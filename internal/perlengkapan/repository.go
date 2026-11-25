@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -374,28 +373,18 @@ func (r *Repository) UpdateSetTemplate(ctx context.Context, inputs []SetTemplate
 	defer tx.Rollback()
 
 	// 1. Validasi semua perlengkapan_item_id valid
-	if len(inputs) > 0 {
-		ids := make([]string, len(inputs))
-		args := make([]interface{}, len(inputs))
-		for i, inp := range inputs {
-			if inp.Qty < 1 {
-				return nil, fmt.Errorf("%w: Jumlah minimal 1.", ErrInvalidInput)
-			}
-			ids[i] = "?"
-			args[i] = inp.PerlengkapanItemID
+	ids := make([]uint64, len(inputs))
+	for i, inp := range inputs {
+		if inp.Qty < 1 {
+			return nil, fmt.Errorf("%w: Jumlah minimal 1.", ErrInvalidInput)
 		}
-
-		queryValidate := fmt.Sprintf(
-			"SELECT COUNT(*) FROM perlengkapan_items WHERE id IN (%s)",
-			strings.Join(ids, ","),
-		)
-		var validCount int
-		if err := tx.QueryRowContext(ctx, queryValidate, args...).Scan(&validCount); err != nil {
-			return nil, fmt.Errorf("perlengkapan.UpdateSetTemplate validate: %w", err)
+		ids[i] = inp.PerlengkapanItemID
+	}
+	if err := itemIDsExist(ctx, tx, ids); err != nil {
+		if errors.Is(err, ErrInvalidInput) {
+			return nil, err
 		}
-		if validCount != len(inputs) {
-			return nil, fmt.Errorf("%w: Item tidak ditemukan.", ErrInvalidInput)
-		}
+		return nil, fmt.Errorf("perlengkapan.UpdateSetTemplate validate: %w", err)
 	}
 
 	// 2. Replace-all: DELETE semua lalu INSERT ulang

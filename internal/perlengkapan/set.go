@@ -92,21 +92,30 @@ func normalizeInputs(inputs []SetItemInput) ([]SetItemInput, error) {
 }
 
 func (r *Repository) itemsExist(ctx context.Context, q querier, inputs []SetItemInput) error {
-	if len(inputs) == 0 {
+	ids := make([]uint64, len(inputs))
+	for i, in := range inputs {
+		ids[i] = in.PerlengkapanItemID
+	}
+	return itemIDsExist(ctx, q, ids)
+}
+
+// itemIDsExist: ErrInvalidInput bila ada id yang tidak ada di katalog. Id harus unik.
+func itemIDsExist(ctx context.Context, q querier, ids []uint64) error {
+	if len(ids) == 0 {
 		return nil
 	}
-	ids := make([]string, len(inputs))
-	args := make([]any, len(inputs))
-	for i, in := range inputs {
-		ids[i] = "?"
-		args[i] = in.PerlengkapanItemID
+	marks := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		marks[i] = "?"
+		args[i] = id
 	}
 	var n int
 	if err := q.QueryRowContext(ctx,
-		fmt.Sprintf("SELECT COUNT(*) FROM perlengkapan_items WHERE id IN (%s)", strings.Join(ids, ",")), args...).Scan(&n); err != nil {
+		fmt.Sprintf("SELECT COUNT(*) FROM perlengkapan_items WHERE id IN (%s)", strings.Join(marks, ",")), args...).Scan(&n); err != nil {
 		return err
 	}
-	if n != len(inputs) {
+	if n != len(ids) {
 		return fmt.Errorf("%w: Item tidak ditemukan.", ErrInvalidInput)
 	}
 	return nil
