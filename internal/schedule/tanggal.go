@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"erp-azhan/api/internal/booking"
+	"erp-azhan/api/internal/manasik"
 )
 
 // ubahTanggalBerangkatTx menegakkan aturan ubah tanggal berangkat (audit menu Paket S-04). Paket tanpa
@@ -16,6 +17,14 @@ import (
 func ubahTanggalBerangkatTx(ctx context.Context, tx *sql.Tx, id int64, lama string, inp *ScheduleInput) error {
 	if inp.BerangkatTanggal == lama {
 		return nil
+	}
+	// Paket bermanasik: tanggal berangkat harus tetap setelah tanggal manasik (audit Manasik M11).
+	tanggalManasik, err := manasik.BentrokBerangkat(ctx, tx, id, inp.BerangkatTanggal)
+	if err != nil {
+		return fmt.Errorf("schedule: cek tanggal manasik: %w", err)
+	}
+	if tanggalManasik != "" {
+		return fmt.Errorf("%w: tanggal berangkat harus setelah tanggal manasik %s", ErrConflict, tanggalManasik)
 	}
 	aktif, err := booking.HitungAktif(ctx, tx, id)
 	if err != nil {

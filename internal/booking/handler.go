@@ -787,7 +787,7 @@ func (h *Handler) UpdatePaxProgress(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.repo.UpdatePaxProgress(r.Context(), id, paxID, brandID, identity.GetAdminUserID(r.Context()), body)
 	if err != nil {
-		if errors.Is(err, ErrPaxBatal) || errors.Is(err, ErrManasikInfant) {
+		if errors.Is(err, ErrPaxBatal) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}

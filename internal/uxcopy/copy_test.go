@@ -17,6 +17,12 @@ import (
 var panggilan = regexp.MustCompile(`(?m)(?:[wW]riteError|sendError|writeErrorCode)\(w,[^"\n]*?(?:fmt\.Sprintf\()?"((?:[^"\\\n]|\\.)*)"([^\n]*)`)
 var pesanAkses = regexp.MustCompile(`(?m)(?:errors\.New\(|ErrConcurrentMsg = )"((?:[^"\\\n]|\\.)*)"([^\n]*)`)
 
+// Galat sentinel dan galat validasi internal/manasik tampil apa adanya di dashboard, web, dan app.
+var pesanManasik = regexp.MustCompile(`(?m)(?:errors\.New\(|validasiGalat\()"((?:[^"\\\n]|\\.)*)"([^\n]*)`)
+
+// Modul yang galat sentinel dan galat validasinya ikut dipindai.
+var pemindaiModul = map[string]*regexp.Regexp{"akses": pesanAkses, "manasik": pesanManasik}
+
 var larangan = []struct {
 	pola  *regexp.Regexp
 	saran string
@@ -43,8 +49,8 @@ func TestPesanGalatMengikutiPanduanUXCopy(t *testing.T) {
 			return err
 		}
 		cocok := panggilan.FindAllStringSubmatchIndex(string(b), -1)
-		if filepath.Base(filepath.Dir(p)) == "akses" {
-			cocok = append(cocok, pesanAkses.FindAllStringSubmatchIndex(string(b), -1)...)
+		if pola, ok := pemindaiModul[filepath.Base(filepath.Dir(p))]; ok {
+			cocok = append(cocok, pola.FindAllStringSubmatchIndex(string(b), -1)...)
 		}
 		for _, m := range cocok {
 			pesan := string(b)[m[2]:m[3]]
