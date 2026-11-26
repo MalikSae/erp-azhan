@@ -56,6 +56,9 @@ func (e *BusinessError) Error() string {
 	return e.Message
 }
 
+// errDraftTidakDibatalkan: draft belum memegang seat atau tagihan, jadi cukup dihapus.
+var errDraftTidakDibatalkan = &BusinessError{Message: "Draft tidak bisa dibatalkan. Hapus draft-nya."}
+
 func bizErr(format string, args ...any) error {
 	return &BusinessError{Message: fmt.Sprintf(format, args...)}
 }
@@ -1449,6 +1452,9 @@ func (r *Repository) cancelPaxTx(ctx context.Context, tx *sql.Tx, bookingID int6
 	if paxStatus == "batal" {
 		return ErrPaxAlreadyCancelled
 	}
+	if bookingStatus == "draft" {
+		return errDraftTidakDibatalkan
+	}
 
 	hargaSebelum, err := jumlahHargaPaxTx(ctx, tx, bookingID)
 	if err != nil {
@@ -1549,6 +1555,13 @@ func (r *Repository) cancelPaxTx(ctx context.Context, tx *sql.Tx, bookingID int6
 	// 6. Recalculate total harga (karena sudah mengubah status/harga_pax)
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
 		return fmt.Errorf("booking.CancelPax recalc: %w", err)
+	}
+	// Booking 'baru' bisa sudah menerima pembayaran di bawah DP. Harga pax yang dinolkan tidak boleh
+	// membuat tagihan lebih kecil dari uang masuk; tanpa ini booking jadi lunas dengan kelebihan bayar.
+	if activeAdultChildCount > 0 {
+		if err := ensureTotalCoversPaidTx(ctx, tx, bookingID); err != nil {
+			return err
+		}
 	}
 
 	// 7. Commit
@@ -1697,6 +1710,9 @@ func updateBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64, new
 	}
 	if err != nil {
 		return fmt.Errorf("booking.UpdateStatus get old: %w", err)
+	}
+	if oldStatus == "draft" && newStatus == "batal" {
+		return errDraftTidakDibatalkan
 	}
 	if guard != nil {
 		if err := guard(ctx, tx); err != nil {
@@ -1893,6 +1909,16 @@ func blockSeatTx(ctx context.Context, tx *sql.Tx, bookingID int64, expiresAt *ti
 	}
 	if status != "baru" {
 		expiresAt = nil
+	} else if expiresAt != nil {
+		// Booking 'baru' yang sudah menerima pembayaran terkonfirmasi (di bawah DP) memegang seat tanpa
+		// batas waktu, sama dengan aturan di sinkron status pembayaran.
+		dibayar, err := adaPembayaranTerkonfirmasiTx(ctx, tx, bookingID)
+		if err != nil {
+			return err
+		}
+		if dibayar {
+			expiresAt = nil
+		}
 	}
 	if isBlocked {
 		if !existingKey.Valid || existingKey.String != idempotencyKey {
@@ -1946,6 +1972,16 @@ func lockNotBatalTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 // ensureTotalCoversPaidTx menolak perubahan yang membuat total tagihan lebih
 // kecil dari pembayaran terkonfirmasi (JB-07). Dipanggil setelah recalculate
 // di transaksi yang sama, sehingga penolakan membatalkan seluruh perubahan.
+// adaPembayaranTerkonfirmasiTx: booking sudah menerima uang (pembayaran confirmed).
+func adaPembayaranTerkonfirmasiTx(ctx context.Context, tx *sql.Tx, bookingID int64) (bool, error) {
+	var ada bool
+	if err := tx.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM payments WHERE booking_id=? AND status='confirmed')`, bookingID).Scan(&ada); err != nil {
+		return false, fmt.Errorf("booking: cek pembayaran terkonfirmasi %d: %w", bookingID, err)
+	}
+	return ada, nil
+}
+
 func ensureTotalCoversPaidTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 	var total, paid float64
 	err := tx.QueryRowContext(ctx, `

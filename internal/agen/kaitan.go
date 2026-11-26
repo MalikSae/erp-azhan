@@ -142,13 +142,17 @@ const AlasanIkatAkunDariJamaah = "Otomatis: jamaah milik akun ini sudah terikat 
 // (direkrut_oleh_akun_id dan upline_akun_id, yang disalin saat pengajuan disetujui); jalur ini hanya mengisi
 // yang pertama, jadi pada akun agen keduanya menjadi tidak cocok. Upline agen hanya berubah lewat Admin Master.
 // Setiap pengikatan dicatat di akun_kaitan_log dengan diganti_oleh kosong (oleh sistem).
+//
+// Jamaah harus tertaut ke akun itu (customer_accounts.jamaah_id, lahir dari aktivasi kode booking + NIK).
+// Kecocokan NIK + nama di booking bukan bukti kepemilikan: tanpa syarat ini akun bisa memakai data jamaah
+// binaan agen lain untuk mengklaim upline belakangan.
 func IkatAkunDariJamaah(ctx context.Context, tx *sql.Tx, akunID, jamaahID int64) error {
 	if akunID <= 0 || jamaahID <= 0 {
 		return nil
 	}
 	res, err := tx.ExecContext(ctx, `
 		UPDATE customer_accounts c
-		JOIN jamaah j ON j.id = ? AND j.kaitan_status = 'terikat_agen'
+		JOIN jamaah j ON j.id = ? AND j.id = c.jamaah_id AND j.kaitan_status = 'terikat_agen'
 		JOIN customer_accounts a ON a.id = j.direkrut_oleh_akun_id AND a.brand_id = c.brand_id AND a.status_agen = 'aktif' AND a.id <> c.id
 		SET c.direkrut_oleh_akun_id = a.id
 		WHERE c.id = ? AND c.direkrut_oleh_akun_id IS NULL AND c.status_agen = 'tidak_aktif'`, jamaahID, akunID)

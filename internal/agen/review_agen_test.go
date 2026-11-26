@@ -63,6 +63,18 @@ func TestIkatAkunDariJamaahHanyaBukanAgen(t *testing.T) {
 		return n
 	}
 
+	// Akun yang belum tertaut ke jamaah itu (hanya cocok NIK + nama di booking) tidak mendapat upline.
+	must(t, "ikat belum tertaut", IkatAkunDariJamaah(ctx, tx, bukanAgen, j1))
+	if got := upline(bukanAgen); got.Valid {
+		t.Fatalf("akun belum tertaut ke jamaah: upline = %d, mau kosong", got.Int64)
+	}
+	if _, err := tx.Exec(`UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, j1, bukanAgen); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(`UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, j2, agenTanpaUpline); err != nil {
+		t.Fatal(err)
+	}
+
 	must(t, "ikat bukan agen", IkatAkunDariJamaah(ctx, tx, bukanAgen, j1))
 	if got := upline(bukanAgen); got.Int64 != x {
 		t.Fatalf("akun bukan agen: upline = %v, mau %d", got, x)
