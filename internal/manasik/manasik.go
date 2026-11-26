@@ -259,6 +259,7 @@ func daftarPaket(ctx context.Context, q querier, query string, args ...any) ([]P
 // PaketManasik: paket yang ikut manasik, urut tanggal berangkat.
 func PaketManasik(ctx context.Context, q querier, manasikID int64) ([]Paket, error) {
 	return daftarPaket(ctx, q, `SELECT `+kolomPaket+` FROM manasik_jadwal mj JOIN schedules s ON s.id = mj.schedule_id
+		JOIN manasik m ON m.id = mj.manasik_id AND m.brand_id = s.brand_id
 		WHERE mj.manasik_id = ? ORDER BY s.berangkat_tanggal, s.id`, manasikID)
 }
 
@@ -592,6 +593,7 @@ func AmbilDetail(ctx context.Context, q querier, id int64, scope *int64, now tim
 			COALESCE(NULLIF(TRIM(au.display_name), ''), au.email), DATE_FORMAT(bp.progress_manasik_at, '%Y-%m-%d %H:%i')
 		FROM manasik_jadwal mj
 		JOIN schedules s ON s.id = mj.schedule_id
+		JOIN manasik m ON m.id = mj.manasik_id AND m.brand_id = s.brand_id
 		JOIN bookings b ON b.schedule_id = mj.schedule_id
 		JOIN booking_pax bp ON bp.booking_id = b.id
 		JOIN jamaah j ON j.id = bp.jamaah_id
@@ -651,7 +653,8 @@ func CatatHadir(ctx context.Context, q querier, id int64, scope *int64, adminID,
 	var x int
 	err = q.QueryRowContext(ctx, `SELECT 1 FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
 		JOIN manasik_jadwal mj ON mj.schedule_id = b.schedule_id AND mj.manasik_id = ?
-		WHERE bp.id = ? AND `+paxManasik+` FOR UPDATE`, id, paxID).Scan(&x)
+		WHERE bp.id = ? AND `+paxManasik+`
+			AND EXISTS (SELECT 1 FROM schedules s WHERE s.id = b.schedule_id AND s.brand_id = ?) FOR UPDATE`, id, paxID, m.BrandID).Scan(&x)
 	if errors.Is(err, sql.ErrNoRows) {
 		return validasiGalat("Jamaah tidak terdaftar di manasik ini")
 	}

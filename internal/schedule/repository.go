@@ -850,13 +850,7 @@ func prepareScheduleUpdate(ctx context.Context, tx *sql.Tx, id int64, inp *Sched
 		return fmt.Errorf("%w: kapasitas berubah, muat ulang paket", ErrConflict)
 	}
 	if finalBrandID != oldBrand {
-		var count int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings WHERE schedule_id=?`, id).Scan(&count); err != nil {
-			return err
-		}
-		if count > 0 {
-			return fmt.Errorf("%w: brand paket yang memiliki booking tidak dapat diubah", ErrConflict)
-		}
+		return fmt.Errorf("%w: brand paket tidak dapat diubah", ErrConflict)
 	}
 	// Kuota tetap: sisa seat tersimpan dipertahankan. Selisih dengan booking hanya diperbaiki lewat
 	// POST /schedules/{id}/seat/samakan, bukan diam-diam saat simpan form.

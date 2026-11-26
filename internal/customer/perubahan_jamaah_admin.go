@@ -221,7 +221,9 @@ func setujuiTx(ctx context.Context, tx *sql.Tx, id, adminID int64, brand *int64)
 	}
 	ids := []int64{p.JamaahID}
 	if grup, err := kelompokDari(ctx, tx, p.AkunID, p.JamaahID); err == nil {
-		ids = idGrup(grup)
+		if ids, err = idSebrand(ctx, tx, idGrup(grup), p.JamaahID); err != nil {
+			return nil, err
+		}
 	}
 	items, err := muatItem(ctx, tx, id, false)
 	if err != nil {
@@ -252,6 +254,29 @@ func setujuiTx(ctx context.Context, tx *sql.Tx, id, adminID int64, brand *int64)
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE jamaah_perubahan SET status='disetujui', diputus_oleh=?, diputus_at=NOW() WHERE id=?`, adminID, id)
 	return p, err
+}
+
+// idSebrand menyisakan baris jamaah yang sebrand dengan jamaah pengajuan: persetujuan admin satu brand
+// tidak boleh menulis baris brand lain.
+func idSebrand(ctx context.Context, tx *sql.Tx, ids []int64, jamaahID int64) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT j.id FROM jamaah j JOIN jamaah w ON w.id = ? AND w.brand_id = j.brand_id
+		WHERE j.id IN (`+placeholders(len(ids))+`) ORDER BY j.id`, append([]any{jamaahID}, argsID(ids)...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []int64{}
+	for rows.Next() {
+		var v int64
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	if len(out) == 0 {
+		out = []int64{jamaahID}
+	}
+	return out, rows.Err()
 }
 
 // tolakTx menandai pengajuan ditolak beserta alasannya; data jamaah tidak berubah.

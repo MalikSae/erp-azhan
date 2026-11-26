@@ -61,8 +61,8 @@ Form Pengguna menampilkan satu baris per menu. Mencentang Kelola otomatis mencen
 | Manasik | `manasik.view` | `manasik.edit` | ya |
 | Master data | `masterdata.view` | `masterdata.edit` | hanya Lihat |
 | Perlengkapan | `perlengkapan.view` | `perlengkapan.edit` (stok: terima barang, atur stok) | ya |
-| Rekening bank | `bankaccount.view` | `bankaccount.edit` | ya |
-| Brand | `brand.view` | | ya |
+| Rekening bank | `bankaccount.view` | `bankaccount.edit` | hanya Lihat |
+| Brand | `brand.view` | | tidak |
 | Pengumuman | | `pengumuman.manage` | ya |
 | Banner Promosi | | `banner.manage` | ya |
 | Konten web | `cms.view` | `cms.edit`, `cms.blog.write` | tidak |

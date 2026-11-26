@@ -166,7 +166,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 		trimmed := strings.TrimSpace(*req.BuktiURL)
 		if trimmed == "" {
 			req.BuktiURL = nil
-		} else if err := h.repo.ValidasiBuktiAdmin(r.Context(), trimmed, brandID); err != nil {
+		} else if err := h.repo.ValidasiBuktiAdmin(r.Context(), trimmed, brandID, bookingID); err != nil {
 			var uploadErr *media.UploadError
 			if errors.As(err, &uploadErr) {
 				shared.WriteError(w, http.StatusBadRequest, uploadErr.Message)

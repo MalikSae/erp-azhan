@@ -143,18 +143,11 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Tentukan finalBrandID
-	var finalBrandID int64
-	if ctxBrandID != nil {
-		// Scoped admin: tidak boleh ubah brand_id
-		finalBrandID = existing.BrandID
-	} else {
-		// Super Admin
-		if req.BrandID != nil && *req.BrandID != 0 {
-			finalBrandID = *req.BrandID
-		} else {
-			finalBrandID = existing.BrandID
-		}
+	// 2. Brand paket dikunci sejak dibuat: manasik, banner, dan data brand lain merujuk paket ini.
+	finalBrandID := existing.BrandID
+	if req.BrandID != nil && *req.BrandID != 0 && *req.BrandID != existing.BrandID {
+		shared.WriteError(w, http.StatusConflict, errBrandTerkunci)
+		return
 	}
 
 	// Override req.BrandID agar validateScheduleInput tidak error saat Super Admin tidak kirim brand_id
@@ -184,11 +177,6 @@ func (h *Handler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		}
 		inp.BenefitIDs = req.BenefitIDs
 		jumlahBenefit = len(*req.BenefitIDs)
-	} else if finalBrandID != existing.BrandID {
-		// Benefit milik satu brand. Brand paket diganti tanpa daftar benefit baru: tautan lama dilepas,
-		// supaya paket tidak membawa benefit brand lain.
-		kosong := []int64{}
-		inp.BenefitIDs = &kosong
 	} else {
 		n, err := h.repo.JumlahBenefit(r.Context(), id)
 		if err != nil {
@@ -680,7 +668,9 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	}
 }
 
-const errPublishLampau = "paket dengan tanggal berangkat yang sudah lewat tidak dapat diterbitkan"
+const errBrandTerkunci = "Brand paket tidak dapat diubah"
+
+const errPublishLampau ="paket dengan tanggal berangkat yang sudah lewat tidak dapat diterbitkan"
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
