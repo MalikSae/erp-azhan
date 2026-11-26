@@ -341,14 +341,15 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 		no_paspor=?, tempat_paspor_keluar=?, tanggal_paspor_keluar=?, paspor_berlaku_sampai=?,
 		no_hp=?, email=?, pekerjaan=?, pendidikan_terakhir=?, penjamin_kesehatan=?, no_asuransi_bpjs=?,
 		alamat=?, kota=?, catatan=?, status=?, emergency_nama=?, emergency_nik=?, emergency_hp=?, emergency_hubungan=?, emergency_alamat=?
-		WHERE id=?`
+		WHERE id=? AND brand_id=?`
 
+	// brand_id lama ikut di WHERE: baris yang pindah brand sesudah GetByID tidak ikut tertimpa.
 	_, err = r.db.ExecContext(ctx, q,
 		finalBrandID, req.NamaLengkap, req.NamaPaspor, req.JenisKelamin, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
 		req.NoPaspor, req.TempatPasporKeluar, req.TanggalPasporKeluar, req.PasporBerlakuSampai,
 		req.NoHP, req.Email, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan, req.NoAsuransiBPJS,
 		req.Alamat, req.Kota, req.Catatan, status, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
-		id,
+		id, existing.BrandID,
 	)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
@@ -397,7 +398,7 @@ func (r *Repository) UpdateTanggalLahir(ctx context.Context, id int64, brandID *
 	if err != nil {
 		return nil, err
 	}
-	if _, err := r.db.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir=? WHERE id=?`, tanggalLahir, id); err != nil {
+	if _, err := r.db.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir=? WHERE id=? AND brand_id=?`, tanggalLahir, id, existing.BrandID); err != nil {
 		return nil, fmt.Errorf("jamaah.UpdateTanggalLahir: %w", err)
 	}
 	if lama := tanggal10(nilaiPtr(existing.TanggalLahir)); lama != tanggalLahir {
@@ -413,7 +414,12 @@ func (r *Repository) Delete(ctx context.Context, id int64, brandID *int64) error
 	if err := r.exists(ctx, id, brandID); err != nil {
 		return err
 	}
-	_, err := r.db.ExecContext(ctx, `DELETE FROM jamaah WHERE id=?`, id)
+	q, args := `DELETE FROM jamaah WHERE id=?`, []any{id}
+	if brandID != nil {
+		q += ` AND brand_id=?`
+		args = append(args, *brandID)
+	}
+	_, err := r.db.ExecContext(ctx, q, args...)
 	return err
 }
 
@@ -462,6 +468,24 @@ func (r *Repository) CekPindahBrand(ctx context.Context, existing *Jamaah, targe
 	}
 	if existing.DirekrutOlehAkunID != nil {
 		return "jamaah terikat dengan agen sehingga tidak bisa dipindah ke brand lain", nil
+	}
+	return pesanMenungguPeriksa(ctx, r.db, existing.ID)
+}
+
+// pesanMenungguPeriksa menolak pindah brand selama dokumen atau pengajuan perubahan data jamaah
+// masih menunggu diperiksa admin brand lama.
+func pesanMenungguPeriksa(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, jamaahID int64) (string, error) {
+	var menunggu int
+	if err := q.QueryRowContext(ctx, `SELECT
+		(SELECT COUNT(*) FROM dokumen_jamaah WHERE jamaah_id = ? AND status = 'submitted') +
+		(SELECT COUNT(*) FROM jamaah_perubahan WHERE jamaah_id = ? AND status = 'menunggu')`,
+		jamaahID, jamaahID).Scan(&menunggu); err != nil {
+		return "", fmt.Errorf("jamaah.CekPindahBrand menunggu: %w", err)
+	}
+	if menunggu > 0 {
+		return "jamaah masih punya dokumen atau perubahan data yang menunggu diperiksa", nil
 	}
 	return "", nil
 }

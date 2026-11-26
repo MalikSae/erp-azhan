@@ -51,7 +51,8 @@ func TestValidasiIzinTimMenolakTanpaDB(t *testing.T) {
 			t.Errorf("%s khusus Super Admin tidak boleh ada di izinBrand", kode)
 		}
 	}
-	for _, kode := range []string{"schedule.edit", "masterdata.edit", "cms.edit", "agen.payout.approve", "booking.diskon.besar"} {
+	// brand.view dan bankaccount.edit tidak membuka halaman apa pun bagi pengguna brand (audit akses 2026-11-26).
+	for _, kode := range []string{"schedule.edit", "masterdata.edit", "cms.edit", "agen.payout.approve", "booking.diskon.besar", "brand.view", "bankaccount.edit"} {
 		if err := ValidasiIzinTim(ctx, nil, []string{kode}, &brand); !errors.Is(err, ErrIzinTidakSah) {
 			t.Errorf("%s untuk pengguna brand: %v, harap ErrIzinTidakSah", kode, err)
 		}
@@ -112,5 +113,28 @@ func TestSuperAdminTerakhirDijaga(t *testing.T) {
 	}
 	if err := EnsureOtherActiveSuperAdmin(ctx, tx, 0); err != nil {
 		t.Fatalf("masih ada Super Admin lain: err = %v, harap nil", err)
+	}
+}
+
+// Izin yang tersimpan di luar batas A4/A5 (data lama atau tulis langsung ke DB) tidak masuk token.
+func TestIzinTimSah(t *testing.T) {
+	cases := []struct {
+		kode  string
+		brand bool
+		want  bool
+	}{
+		{"booking.view", true, true},
+		{"booking.view", false, true},
+		{"schedule.edit", true, false},
+		{"schedule.edit", false, true},
+		{"brand.view", true, false},
+		{"bankaccount.edit", true, false},
+		{"user.admin", false, false},
+		{"brand.edit", true, false},
+	}
+	for _, c := range cases {
+		if got := izinTimSah(c.kode, c.brand); got != c.want {
+			t.Errorf("izinTimSah(%q, brand=%v) = %v, harap %v", c.kode, c.brand, got, c.want)
+		}
 	}
 }
