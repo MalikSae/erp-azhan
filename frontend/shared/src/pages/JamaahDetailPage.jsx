@@ -376,8 +376,8 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
           hint={bookings.length > 0 ? "Lihat riwayat di bawah" : "Belum ada booking"}
         />
         <SummaryItem
-          label="Dokumen disetujui"
-          value={`${jamaah.dokumen_wajib_disetujui ?? 0}/${jamaah.dokumen_wajib_total ?? 3} wajib`}
+          label="Dokumen wajib"
+          value={`${jamaah.dokumen_wajib_disetujui ?? 0}/${jamaah.dokumen_wajib_total ?? 3}`}
         />
         <SummaryItem
           label="Akun portal"
