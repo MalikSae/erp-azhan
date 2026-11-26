@@ -140,3 +140,36 @@ func seatDipegang(t *testing.T, tx *sql.Tx, bookingID int64) bool {
 	}
 	return v
 }
+
+// Keputusan 2026-11-26: diskon tidak boleh membuat total booking Rp 0.
+func TestTotalNolDitolak(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	b := testdb.NewBooking(t, tx, testdb.BookingOpts{Status: "baru", TotalHarga: 1000, MinimalDP: 100, Blocked: true})
+	if err := wajibTotalDiAtasNolTx(ctx, tx, b.ID); err != nil {
+		t.Fatalf("total 1000: %v", err)
+	}
+	testdb.Exec(t, tx, `UPDATE bookings SET total_harga=0 WHERE id=?`, b.ID)
+	var bisnis *BusinessError
+	if err := wajibTotalDiAtasNolTx(ctx, tx, b.ID); !errors.As(err, &bisnis) {
+		t.Fatalf("total 0: err = %v, want BusinessError", err)
+	}
+}
+
+// Keputusan 2026-11-26: booking admin (tanpa booking_checkout) yang semua pembayarannya di-void tetap memegang
+// seat tanpa batas waktu.
+func TestBookingAdminVoidSemuaTanpaBatasHold(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	b := testdb.NewBooking(t, tx, testdb.BookingOpts{Status: "dp", TotalHarga: 1000, MinimalDP: 100, Blocked: true})
+	testdb.AddPayment(t, tx, b.ID, 300, "void")
+	if err := payment.SyncBookingStatusTx(ctx, tx, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := testdb.Status(t, tx, b.ID); got != "baru" {
+		t.Fatalf("status = %s, want baru", got)
+	}
+	if exp := batasHold(t, tx, b.ID); exp.Valid || !seatDipegang(t, tx, b.ID) {
+		t.Fatalf("batas hold = %v blocked=%v, want NULL dan seat dipegang", exp, seatDipegang(t, tx, b.ID))
+	}
+}

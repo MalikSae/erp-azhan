@@ -516,11 +516,13 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	}
 	// Hold 24 jam hanya untuk reservasi tanpa pembayaran terkonfirmasi. Booking
 	// yang sudah dibayar lalu turun ke 'baru' (mis. koreksi diskon/add-on) tetap
-	// memegang kursi tanpa batas waktu sampai admin memutuskan (JB-03).
+	// memegang kursi tanpa batas waktu sampai admin memutuskan (JB-03). Booking admin
+	// (tanpa booking_checkout) tidak pernah mendapat batas 24 jam (keputusan 2026-11-26).
 	pegang := memegangKursi(targetStatus)
 	if _, err = tx.ExecContext(ctx,
 		`UPDATE bookings SET status=?,is_seat_blocked=IF(?,TRUE,is_seat_blocked),
-		 seat_hold_expires_at=IF(? OR ? > 0,NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
+		 seat_hold_expires_at=IF(? OR ? > 0 OR NOT EXISTS(SELECT 1 FROM booking_checkout c WHERE c.booking_id=bookings.id),
+		   NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
 		 seat_hold_key=IF(?,NULL,seat_hold_key) WHERE id=?`,
 		targetStatus, pegang, pegang, totalPaid, pegang, bookingID); err != nil {
 		return fmt.Errorf("payment: sinkron status, simpan status %s: %w", targetStatus, err)

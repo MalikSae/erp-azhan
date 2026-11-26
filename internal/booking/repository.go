@@ -1559,6 +1559,9 @@ func (r *Repository) cancelPaxTx(ctx context.Context, tx *sql.Tx, bookingID int6
 	// Booking 'baru' bisa sudah menerima pembayaran di bawah DP. Harga pax yang dinolkan tidak boleh
 	// membuat tagihan lebih kecil dari uang masuk; tanpa ini booking jadi lunas dengan kelebihan bayar.
 	if activeAdultChildCount > 0 {
+		if err := wajibTotalDiAtasNolTx(ctx, tx, bookingID); err != nil {
+			return err
+		}
 		if err := ensureTotalCoversPaidTx(ctx, tx, bookingID); err != nil {
 			return err
 		}
@@ -1972,6 +1975,19 @@ func lockNotBatalTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 // ensureTotalCoversPaidTx menolak perubahan yang membuat total tagihan lebih
 // kecil dari pembayaran terkonfirmasi (JB-07). Dipanggil setelah recalculate
 // di transaksi yang sama, sehingga penolakan membatalkan seluruh perubahan.
+// wajibTotalDiAtasNolTx menolak perubahan yang membuat total booking Rp 0 (keputusan 2026-11-26): booking
+// bertotal 0 tidak pernah lunas, komisi tidak tercatat, dan hold self-booking-nya dilepas.
+func wajibTotalDiAtasNolTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	var total float64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(total_harga,0) FROM bookings WHERE id=?`, bookingID).Scan(&total); err != nil {
+		return fmt.Errorf("booking: baca total %d: %w", bookingID, err)
+	}
+	if total <= 0 {
+		return bizErr("Diskon tidak boleh membuat total booking Rp 0.")
+	}
+	return nil
+}
+
 // adaPembayaranTerkonfirmasiTx: booking sudah menerima uang (pembayaran confirmed).
 func adaPembayaranTerkonfirmasiTx(ctx context.Context, tx *sql.Tx, bookingID int64) (bool, error) {
 	var ada bool
@@ -2140,6 +2156,9 @@ func (r *Repository) AddDiscount(ctx context.Context, bookingID int64, nama stri
 
 	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
 		return fmt.Errorf("booking.AddDiscount recalc: %w", err)
+	}
+	if err := wajibTotalDiAtasNolTx(ctx, tx, bookingID); err != nil {
+		return err
 	}
 	if err := ensureTotalCoversPaidTx(ctx, tx, bookingID); err != nil {
 		return err
