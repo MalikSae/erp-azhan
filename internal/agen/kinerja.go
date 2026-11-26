@@ -277,6 +277,7 @@ func getDashboardAgen(ctx context.Context, q querier, akunID int64) (*DashboardA
 	if d.KomisiTerbaru, err = listKomisi(ctx, q, KomisiFilter{PenerimaID: akunID, Limit: 5}); err != nil {
 		return nil, err
 	}
+	d.KomisiTerbaru = samarkanSumberBinaan(d.KomisiTerbaru)
 	if d.BatasSeat, err = getBatasSeatAgen(ctx, q, akunID, nil, false); err != nil {
 		return nil, err
 	}
@@ -304,7 +305,24 @@ func (r *Repository) ListKomisiAgen(ctx context.Context, akunID int64, f KomisiF
 	f.PenerimaID = akunID
 	// Portal agen hanya menerima komisi aktif sampai tampilannya siap menampilkan baris batal.
 	f.Status = ""
-	return listKomisi(ctx, r.db, f)
+	items, err := listKomisi(ctx, r.db, f)
+	if err != nil {
+		return nil, err
+	}
+	return samarkanSumberBinaan(items), nil
+}
+
+// samarkanSumberBinaan: di portal agen, bonus pembinaan berasal dari jamaah milik downline. Nama jamaahnya disamarkan
+// seperti di Detail Binaan dan kode bookingnya dikosongkan (audit keamanan 2026-11-26), supaya upline tidak bisa
+// mengenali atau menghubungi jamaah agen lain. Riwayat Komisi admin tidak memakai ini.
+func samarkanSumberBinaan(items []KomisiItem) []KomisiItem {
+	for i := range items {
+		if items[i].Jenis == komisi.JenisPembinaan {
+			items[i].SumberNama = namaTersamar(items[i].SumberNama)
+			items[i].BookingCode = ""
+		}
+	}
+	return items
 }
 
 // ─── Admin (B2, B2a, B3) ─────────────────────────────────────────────────────

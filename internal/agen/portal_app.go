@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/komisi"
 	"erp-azhan/api/internal/shared"
 )
 
@@ -39,7 +40,7 @@ type Mutasi struct {
 func listMutasiAgen(ctx context.Context, q querier, akunID int64) ([]Mutasi, error) {
 	out := []Mutasi{}
 	rows, err := q.QueryContext(ctx, `
-		SELECT tk.id, tk.nominal, tk.created_at, tk.dibatalkan_at, sb.nama_lengkap
+		SELECT tk.id, tk.nominal, tk.created_at, tk.dibatalkan_at, sb.nama_lengkap, tk.jenis
 		FROM transaksi_komisi tk
 		JOIN jamaah sb ON sb.id = tk.jamaah_sumber_id
 		WHERE tk.akun_penerima_id = ? AND tk.jenis <> 'cashback'
@@ -53,10 +54,13 @@ func listMutasiAgen(ctx context.Context, q querier, akunID int64) ([]Mutasi, err
 		var nominal float64
 		var dibuat time.Time
 		var batal sql.NullTime
-		var sumber string
-		if err := rows.Scan(&id, &nominal, &dibuat, &batal, &sumber); err != nil {
+		var sumber, jenis string
+		if err := rows.Scan(&id, &nominal, &dibuat, &batal, &sumber, &jenis); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("agen: mutasi komisi: %w", err)
+		}
+		if jenis == komisi.JenisPembinaan {
+			sumber = namaTersamar(sumber) // jamaah milik downline (lihat samarkanSumberBinaan)
 		}
 		out = append(out, Mutasi{ID: fmt.Sprintf("k-%d", id), Jenis: "komisi", Judul: "Komisi · " + sumber, Tanggal: dibuat, Nominal: nominal})
 		if batal.Valid {

@@ -2,7 +2,9 @@ package customer
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -23,21 +25,44 @@ func (r *Repository) GetByGoogleSub(ctx context.Context, brandID int64, sub stri
 }
 
 // TautkanGoogle menautkan akun ke akun Google. Akun yang sudah tertaut ke akun Google lain ditolak.
+//
+// Daftar dengan sandi tidak memverifikasi email, jadi akun dengan email ini bisa saja didaftarkan orang lain lebih dulu
+// (audit keamanan 2026-11-26). Bila email akun belum terverifikasi, Google kini membuktikan pemiliknya: sandi lama
+// dihapus, semua sesi dan tautan reset dicabut, lalu email ditandai terverifikasi. Pemilik bisa membuat sandi baru
+// lewat Buat Password atau Lupa kata sandi.
 func (r *Repository) TautkanGoogle(ctx context.Context, id int64, sub string) error {
-	res, err := r.db.ExecContext(ctx, `UPDATE customer_accounts SET google_sub=? WHERE id=? AND (google_sub IS NULL OR google_sub=?)`, sub, id, sub)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return mapDuplicate(err, "tautkan google")
+		return fmt.Errorf("tautkan google: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		var ada string
-		if err := r.db.QueryRowContext(ctx, `SELECT COALESCE(google_sub, '') FROM customer_accounts WHERE id=?`, id).Scan(&ada); err != nil {
-			return err
-		}
-		if ada != sub {
+	defer tx.Rollback()
+	var ada sql.NullString
+	var terverifikasi bool
+	if err := tx.QueryRowContext(ctx, `SELECT google_sub, email_verified_at IS NOT NULL FROM customer_accounts WHERE id=? FOR UPDATE`, id).
+		Scan(&ada, &terverifikasi); err != nil {
+		return fmt.Errorf("tautkan google baca: %w", err)
+	}
+	if ada.Valid && ada.String != "" {
+		if ada.String != sub {
 			return ErrGoogleLain
 		}
+		return nil
 	}
-	return nil
+	if _, err := tx.ExecContext(ctx, `UPDATE customer_accounts SET google_sub=? WHERE id=?`, sub, id); err != nil {
+		return mapDuplicate(err, "tautkan google")
+	}
+	if !terverifikasi {
+		if _, err := tx.ExecContext(ctx, `UPDATE customer_accounts SET password_hash=NULL, email_verified_at=NOW() WHERE id=?`, id); err != nil {
+			return fmt.Errorf("tautkan google cabut sandi: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE customer_sessions SET revoked_at=NOW() WHERE account_id=? AND revoked_at IS NULL`, id); err != nil {
+			return fmt.Errorf("tautkan google cabut sesi: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE customer_tokens SET used_at=NOW() WHERE account_id=? AND used_at IS NULL`, id); err != nil {
+			return fmt.Errorf("tautkan google cabut token: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 // CreateGoogle membuat akun dari akun Google, tanpa sandi.
@@ -149,6 +174,10 @@ func (h *Handler) LoginGoogle(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusConflict, "Email ini sudah tertaut ke akun Google lain. Masuk dengan email dan kata sandi.")
 				return
 			}
+			if err == nil {
+				// Penautan bisa menghapus sandi lama: jawaban memakai data akun terbaru (punya_password).
+				acc, err = h.repo.GetByID(r.Context(), acc.ID)
+			}
 		}
 	}
 	if errors.Is(err, ErrNotFound) {
@@ -223,7 +252,8 @@ func (h *Handler) DaftarGoogle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, ErrPhoneTaken) {
-		writeError(w, http.StatusConflict, "Nomor WhatsApp sudah terdaftar. Gunakan nomor WhatsApp lain.")
+		// Email berasal dari token Google pemohon sendiri; nomor bisa milik orang lain, jadi pesannya tidak menegaskan.
+		writeError(w, http.StatusConflict, PesanKontakTerpakai)
 		return
 	}
 	if err != nil {

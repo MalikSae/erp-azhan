@@ -140,6 +140,30 @@ func TestCreateBookingBatasPercobaanDataJamaah(t *testing.T) {
 	}
 }
 
+// Audit keamanan 2026-11-26 (Q2c): penolakan "sudah memiliki booking aktif di jadwal ini" memberi tahu bahwa NIK itu
+// terdaftar di paket tersebut, jadi ikut dibatasi seperti NIK atas nama lain. Pesannya tidak berubah.
+func TestCreateBookingBatasPercobaanDuplikat(t *testing.T) {
+	h := newTestHandler(t, "", 0)
+	n := 0
+	h.book = func(context.Context, int64, int64, BookingRequest) (*BookingResponse, error) {
+		n++
+		return nil, ErrDuplicate
+	}
+	for i := 0; i < identitasGagalAccountLimit; i++ {
+		rec := postBook(h, bodyCheckout, akunHandlerUji)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), ErrDuplicate.Error()) {
+			t.Fatalf("percobaan %d: got %d %s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+	rec := postBook(h, bodyCheckout, akunHandlerUji)
+	if rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), KodeIdentitasTerlaluSering) {
+		t.Fatalf("got %d %s, want 429", rec.Code, rec.Body.String())
+	}
+	if n != identitasGagalAccountLimit {
+		t.Fatalf("diproses %d kali, want %d", n, identitasGagalAccountLimit)
+	}
+}
+
 // K2: batas seat aktif dari repository dipetakan ke 429 dengan kode stabil.
 func TestCreateBookingBatasSeatAkun(t *testing.T) {
 	h := newTestHandler(t, "", 0)

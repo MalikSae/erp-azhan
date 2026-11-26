@@ -210,6 +210,9 @@ func validateProfile(nama, email, noHP string) string {
 	return ""
 }
 
+// PesanKontakTerpakai: email atau nomor WhatsApp yang dikirim sudah dipakai akun lain. Sengaja tidak menyebut yang mana.
+const PesanKontakTerpakai = "Email atau nomor WhatsApp tidak dapat digunakan. Coba yang lain."
+
 type registerRequest struct {
 	BrandID      int64  `json:"brand_id"`
 	NamaLengkap  string `json:"nama_lengkap"`
@@ -368,11 +371,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	acc, err := h.repo.GetByEmail(r.Context(), req.BrandID, req.Email)
 	hash := h.dummyHash
+	tanpaSandi := false
 	if err == nil {
-		hash = []byte(acc.passwordHash)
+		// Akun tanpa sandi (Google) dan akun dihapus ('!') tidak punya hash bcrypt yang sah: bcrypt langsung gagal dan
+		// jawabannya lebih cepat daripada email tak dikenal. Bandingkan dengan hash tiruan supaya waktunya sama.
+		if _, errCost := bcrypt.Cost([]byte(acc.passwordHash)); errCost == nil {
+			hash = []byte(acc.passwordHash)
+		} else {
+			tanpaSandi = true
+		}
 	}
 	cmp := bcrypt.CompareHashAndPassword(hash, []byte(req.Password))
-	if err != nil || cmp != nil {
+	if err != nil || cmp != nil || tanpaSandi {
 		if err != nil && !errors.Is(err, ErrNotFound) {
 			log.Printf("[ERROR] customer login lookup: %v", err)
 		}
@@ -579,12 +589,9 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := h.repo.UpdateProfile(r.Context(), acc.ID, req.NamaLengkap, req.Email, req.NoHP, req.Domisili, req.TanggalLahir, req.JenisKelamin)
-	if errors.Is(err, ErrEmailTaken) {
-		writeError(w, http.StatusConflict, "Email ini tidak dapat digunakan, coba email lain.")
-		return
-	}
-	if errors.Is(err, ErrPhoneTaken) {
-		writeError(w, http.StatusConflict, "Nomor WhatsApp sudah dipakai akun lain. Gunakan nomor lain.")
+	if errors.Is(err, ErrEmailTaken) || errors.Is(err, ErrPhoneTaken) {
+		// Satu pesan untuk email dan nomor: jawaban tidak menegaskan nomor mana yang dipakai akun lain (audit keamanan 2026-11-26).
+		writeError(w, http.StatusConflict, PesanKontakTerpakai)
 		return
 	}
 	if err != nil {

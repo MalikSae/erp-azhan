@@ -83,6 +83,9 @@ func main() {
 	if !shared.IsProduction() {
 		log.Printf("[WARN] APP_ENV=%q (bukan production): origin CORS pengembangan aktif. Server publik WAJIB APP_ENV=production.", shared.AppEnv())
 	}
+	if pesan := peringatanTrustedProxies(shared.IsProduction(), os.Getenv("TRUSTED_PROXIES")); pesan != "" {
+		log.Printf("[WARN] %s", pesan)
+	}
 
 	// ─── Database ─────────────────────────────────────────────────────────────
 	var db *sql.DB
@@ -705,6 +708,16 @@ func main() {
 		log.Fatalf("[ERROR] Server gagal berjalan: %v", err)
 		os.Exit(1)
 	}
+}
+
+// peringatanTrustedProxies: di produksi API berada di belakang Caddy dan server Next. Tanpa TRUSTED_PROXIES, IP klien
+// dari header proxy tidak dipercaya, sehingga semua pengunjung tercatat dengan IP proxy dan berbagi satu kunci rate limit
+// (login, daftar, lupa kata sandi, booking). Audit keamanan 2026-11-26. Kosong = tidak perlu peringatan.
+func peringatanTrustedProxies(production bool, raw string) string {
+	if !production || strings.TrimSpace(raw) != "" {
+		return ""
+	}
+	return "TRUSTED_PROXIES kosong di production: semua pengunjung di belakang reverse proxy berbagi satu batas percobaan per IP. Isi dengan IP/CIDR Caddy dan server web publik."
 }
 
 // corsOrigins: origin pengembangan (localhost, *.test) hanya bila BUKAN produksi; di produksi
