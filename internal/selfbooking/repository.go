@@ -135,6 +135,9 @@ func processBookingTx(ctx context.Context, tx *sql.Tx, brandID int64, req Bookin
 	if err := validasiTanggalLahirAnggota(req.Anggota, depDate, time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())); err != nil {
 		return nil, err
 	}
+	if err := cekJumlahInfant(req); err != nil {
+		return nil, err
+	}
 
 	var picJamaahID int64
 

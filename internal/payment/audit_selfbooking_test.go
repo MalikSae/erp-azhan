@@ -83,6 +83,8 @@ func TestAuditSelfBookingZeroDPOverrideIgnored(t *testing.T) {
 func TestAuditSelfBookingDPRemainsAfterPaymentRemoved(t *testing.T) {
 	db, tx := testdb.Tx(t)
 	b := testdb.NewBooking(t, tx, testdb.BookingOpts{Status: "dp", TotalHarga: 20000000, MinimalDP: 5000000, Blocked: true})
+	// Self-booking punya baris booking_checkout; booking admin tidak (dan tidak mendapat hold 24 jam).
+	testdb.Exec(t, tx, `INSERT INTO booking_checkout(booking_id,dp_per_pax,due_at,original_expires_at,invoice_token,terms_version) VALUES (?,5000000,DATE_ADD(NOW(),INTERVAL 1 DAY),DATE_ADD(NOW(),INTERVAL 1 DAY),REPEAT('b',64),'test')`, b.ID)
 	if err := NewRepository(db).syncBookingStatusTx(context.Background(), tx, b.ID); err != nil {
 		t.Fatal(err)
 	}

@@ -456,7 +456,7 @@ func TestBookingAgenJamaahDiriDikunciKeUpline(t *testing.T) {
 	}
 }
 
-// Pemesan ikut berangkat dengan NIK yang cocok dengan jamaah yang sudah dikunci agen X: akun tanpa pengikat menjadi downline X,
+// Pemesan ikut berangkat sebagai jamaah yang tertaut ke akunnya dan sudah dikunci agen X: akun tanpa pengikat menjadi downline X,
 // sehingga jamaah baru yang ia pesankan juga terkunci ke X. Akun yang sudah punya pengikat tidak berubah, dan pemesan yang tidak ikut
 // berangkat tidak mengikat akunnya.
 func TestBookingPublikMengikatAkunKeAgenPemilikKunciJamaah(t *testing.T) {
@@ -472,10 +472,27 @@ func TestBookingPublikMengikatAkunKeAgenPemilikKunciJamaah(t *testing.T) {
 		return v.Int64
 	}
 
-	// Z dibookingkan X sebelumnya (jamaah terkunci ke X); lalu Z membuat akun tanpa link referral dan memesan sendiri.
+	// Akun W memakai NIK + nama jamaah terkunci X tanpa tertaut ke jamaah itu: bukan bukti kepemilikan, tidak diikat.
+	nikW := nikUji()
+	testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "W Terkunci", Direkrut: x, NIK: nikW})
+	akunW := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AkunW"})
+	if _, err := processBookingTx(ctx, tx, brand, BookingRequest{
+		ScheduleID: sched,
+		PIC:        PICInput{NamaLengkap: "W Terkunci (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikW)},
+	}, inisiator{accountID: akunW}); err != nil {
+		t.Fatalf("booking W: %v", err)
+	}
+	if got := pengikat(akunW); got != 0 {
+		t.Fatalf("pengikat akun W = %d, want 0 (belum tertaut ke jamaah)", got)
+	}
+
+	// Z dibookingkan X sebelumnya (jamaah terkunci ke X); Z mengaktifkan akun dari jamaahnya (tertaut), lalu memesan sendiri.
 	nikZ := nikUji()
-	testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Z Terkunci", Direkrut: x, NIK: nikZ})
+	jamaahZ := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Z Terkunci", Direkrut: x, NIK: nikZ})
 	akunZ := testdb.NewAkun(t, tx, brand, testdb.AkunOpts{Nama: "AkunZ"})
+	if _, err := tx.Exec(`UPDATE customer_accounts SET jamaah_id=? WHERE id=?`, jamaahZ, akunZ); err != nil {
+		t.Fatal(err)
+	}
 	resp, err := processBookingTx(ctx, tx, brand, BookingRequest{
 		ScheduleID: sched,
 		PIC:        PICInput{NamaLengkap: "Z Terkunci (uji)", JenisKelamin: "L", RoomType: "Quad", NIK: nikp(nikZ)},

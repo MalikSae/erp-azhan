@@ -333,7 +333,7 @@ func tulisGalatBooking(w http.ResponseWriter, err error, portal bool) {
 		errors.Is(err, ErrNIKAtasNamaLain), errors.Is(err, ErrJamaahBukanMilik), errors.Is(err, ErrSayaSendiriBukanAnda),
 		errors.Is(err, ErrNIKAgenBelumAda), errors.Is(err, ErrInputTidakValid),
 		errors.Is(err, ErrAkunTidakValid), errors.Is(err, ErrCutoffBooking),
-		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant), errors.Is(err, ErrInfantUnavailable), errors.Is(err, ErrInvalidDP):
+		errors.Is(err, ErrTanggalLahirTidakValid), errors.Is(err, ErrUsiaInfant), errors.Is(err, ErrInfantMelebihiDewasa), errors.Is(err, ErrInfantUnavailable), errors.Is(err, ErrInvalidDP):
 		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrNotFound):
 		if portal {

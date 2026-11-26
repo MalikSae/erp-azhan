@@ -22,6 +22,7 @@ var (
 	ErrOverpayment     = errors.New("pembayaran melebihi sisa tagihan; periksa kemungkinan transfer ganda atau proses pengembalian dana")
 	ErrBookingClosed   = errors.New("booking tidak aktif; hubungi admin untuk memastikan seat sebelum pembayaran")
 	ErrNotVoidable     = errors.New("hanya pembayaran yang sudah dikonfirmasi yang dapat dibatalkan")
+	ErrSudahDiputuskan = errors.New("pembayaran ini sudah diverifikasi admin lain")
 	ErrVoidBelowRefund = errors.New("pembayaran tidak dapat dibatalkan karena dana booking ini sudah dikembalikan melebihi sisa pembayaran lainnya")
 )
 
@@ -218,6 +219,19 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 		return nil, fmt.Errorf("payment.Create tx: %w", err)
 	}
 	defer tx.Rollback()
+	id, err := createTx(ctx, tx, bookingID, req, verifiedBy)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("payment.Create commit: %w", err)
+	}
+	return r.GetByID(ctx, id, nil)
+}
+
+// createTx menjalankan Create di dalam transaksi pemanggil dan mengembalikan ID pembayaran baru.
+func createTx(ctx context.Context, tx *sql.Tx, bookingID int64, req *CreatePaymentRequest, verifiedBy *int64) (int64, error) {
+	var err error
 
 	// Validasi nilai pembayaran tidak boleh lebih besar dari sisa tagihan
 	var totalHarga sql.NullFloat64
@@ -227,24 +241,32 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 	var expires sql.NullTime
 	err = tx.QueryRowContext(ctx, `SELECT total_harga,status,is_seat_blocked,seat_hold_expires_at FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&totalHarga, &bookingStatus, &blocked, &expires)
 	if err != nil {
-		return nil, fmt.Errorf("payment.Create check booking: %w", err)
+		return 0, fmt.Errorf("payment.Create check booking: %w", err)
 	}
 	if bookingTertutup(bookingStatus) {
-		return nil, ErrBookingClosed
+		return 0, ErrBookingClosed
 	}
 	if req.Source == SourcePortal && (!blocked || (expires.Valid && expires.Time.Before(time.Now()))) {
-		return nil, ErrBookingClosed
+		return 0, ErrBookingClosed
 	}
 	if totalPaid, err = totalTerkonfirmasiTx(ctx, tx, bookingID, 0); err != nil {
-		return nil, err
+		return 0, err
+	}
+	// Konfirmasi portal yang masih menunggu ikut dihitung di dalam kunci booking, supaya dua kiriman
+	// bersamaan tidak sama-sama lolos melebihi sisa tagihan.
+	var menunggu float64
+	if req.Source == SourcePortal {
+		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(jumlah),0) FROM payments WHERE booking_id=? AND status='pending'`, bookingID).Scan(&menunggu); err != nil {
+			return 0, fmt.Errorf("payment.Create cek menunggu: %w", err)
+		}
 	}
 	if totalHarga.Valid && totalHarga.Float64 > 0 {
-		sisaTagihan := totalHarga.Float64 - totalPaid
+		sisaTagihan := totalHarga.Float64 - totalPaid - menunggu
 		if sisaTagihan < 0 {
 			sisaTagihan = 0
 		}
 		if req.Jumlah > sisaTagihan {
-			return nil, ErrOverpayment
+			return 0, ErrOverpayment
 		}
 	}
 
@@ -261,10 +283,10 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 		// Hanya "tidak ada baris" yang berarti rekening tidak ditemukan; gangguan database harus tetap
 		// terlihat sebagai kesalahan, bukan sebagai data yang tidak ada.
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
+			return 0, ErrNotFound
 		}
 		if err != nil {
-			return nil, fmt.Errorf("payment.Create cek rekening: %w", err)
+			return 0, fmt.Errorf("payment.Create cek rekening: %w", err)
 		}
 		bankName = &n
 		accountNumber = &no
@@ -291,31 +313,26 @@ func (r *Repository) Create(ctx context.Context, bookingID int64, req *CreatePay
 
 	res, err := tx.ExecContext(ctx, q, bookingID, req.BankAccountID, bankName, accountNumber, accountHolder, req.Jumlah, req.Metode, req.SenderName, req.SenderBank, req.ReceivedBy, req.Tanggal, status, req.BuktiURL, req.Notes, source, dicatatOleh, diverifikasiOleh, verifiedAt)
 	if err != nil {
-		return nil, fmt.Errorf("payment.Create: %w", err)
+		return 0, fmt.Errorf("payment.Create: %w", err)
 	}
 
 	id, err := res.LastInsertId()
 	if err != nil {
-		return nil, fmt.Errorf("payment.Create LastInsertId: %w", err)
+		return 0, fmt.Errorf("payment.Create LastInsertId: %w", err)
 	}
 
 	if status == StatusConfirmed {
 		notifikasi.Pembayaran(ctx, tx, bookingID, true, req.Jumlah)
-		if err := r.syncBookingStatusTx(ctx, tx, bookingID); err != nil {
-			return nil, fmt.Errorf("payment.Create sync booking: %w", err)
+		if err := SyncBookingStatusTx(ctx, tx, bookingID); err != nil {
+			return 0, fmt.Errorf("payment.Create sync booking: %w", err)
 		}
 	}
 	if status == StatusPending && expires.Valid && expires.Time.After(time.Now()) {
 		if err := extendPendingReviewTx(ctx, tx, bookingID); err != nil {
-			return nil, err
+			return 0, err
 		}
 	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("payment.Create commit: %w", err)
-	}
-
-	return r.GetByID(ctx, id, nil)
+	return id, nil
 }
 
 // GetBookingTotalAndPaid mengambil status, total_harga booking dan total pembayaran yang sudah dikonfirmasi.
@@ -351,59 +368,64 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus strin
 		return nil, fmt.Errorf("payment.UpdateStatus tx: %w", err)
 	}
 	defer tx.Rollback()
+	if err := updateStatusTx(ctx, tx, id, newStatus, rejectionReason, verifiedBy); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("payment.UpdateStatus commit: %w", err)
+	}
+	return r.GetByID(ctx, id, nil)
+}
 
+// updateStatusTx menjalankan UpdateStatus di dalam transaksi pemanggil.
+func updateStatusTx(ctx context.Context, tx *sql.Tx, id int64, newStatus string, rejectionReason *string, verifiedBy int64) error {
 	var bookingID int64
-	err = tx.QueryRowContext(ctx, `SELECT booking_id FROM payments WHERE id=?`, id).Scan(&bookingID)
+	err := tx.QueryRowContext(ctx, `SELECT booking_id FROM payments WHERE id=?`, id).Scan(&bookingID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
+		return ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("payment.UpdateStatus get booking_id: %w", err)
+		return fmt.Errorf("payment.UpdateStatus get booking_id: %w", err)
 	}
 	// Lock the booking before the payment: every payment writer follows this order.
 	var bookingStatus string
 	var total float64
 	if err = tx.QueryRowContext(ctx, `SELECT status,COALESCE(total_harga,0) FROM bookings WHERE id=? FOR UPDATE`, bookingID).Scan(&bookingStatus, &total); err != nil {
-		return nil, fmt.Errorf("payment.UpdateStatus lock booking: %w", err)
+		return fmt.Errorf("payment.UpdateStatus lock booking: %w", err)
 	}
 	// Booking batal/draft tidak boleh menerima konfirmasi, tetapi pembayaran pending yang
 	// tersisa harus tetap bisa ditolak agar tidak menggantung di inbox.
 	if bookingTertutup(bookingStatus) && newStatus != StatusRejected {
-		return nil, ErrBookingClosed
+		return ErrBookingClosed
 	}
 	var amount float64
 	var oldStatus string
 	if err = tx.QueryRowContext(ctx, `SELECT jumlah,status FROM payments WHERE id=? FOR UPDATE`, id).Scan(&amount, &oldStatus); err != nil {
-		return nil, fmt.Errorf("payment.UpdateStatus lock payment: %w", err)
+		return fmt.Errorf("payment.UpdateStatus lock payment: %w", err)
 	}
 	// A concurrent verifier may have finished after the HTTP handler read pending.
 	if oldStatus != StatusPending {
-		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("payment.UpdateStatus commit: %w", err)
+		if oldStatus != newStatus {
+			return ErrSudahDiputuskan
 		}
-		return r.GetByID(ctx, id, nil)
+		return nil
 	}
 	if newStatus == StatusConfirmed {
 		if err := checkConfirmationBalanceTx(ctx, tx, bookingID, id, amount, total); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	_, err = tx.ExecContext(ctx, `UPDATE payments SET status=?,rejection_reason=?,verified_by=?,verified_at=NOW() WHERE id=?`, newStatus, rejectionReason, verifiedBy, id)
 	if err != nil {
-		return nil, fmt.Errorf("payment.UpdateStatus update: %w", err)
+		return fmt.Errorf("payment.UpdateStatus update: %w", err)
 	}
 	notifikasi.Pembayaran(ctx, tx, bookingID, newStatus == StatusConfirmed, amount)
 
-	if err := r.syncBookingStatusTx(ctx, tx, bookingID); err != nil {
-		return nil, fmt.Errorf("payment.UpdateStatus sync booking: %w", err)
+	if err := SyncBookingStatusTx(ctx, tx, bookingID); err != nil {
+		return fmt.Errorf("payment.UpdateStatus sync booking: %w", err)
 	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("payment.UpdateStatus commit: %w", err)
-	}
-
-	return r.GetByID(ctx, id, nil)
+	return nil
 }
 
 // Caller holds the booking lock, so concurrent confirmations cannot share a balance.
@@ -473,6 +495,14 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	}
 	targetStatus := statusBookingDari(targetHarga, totalPaid, requiredDP)
 	if targetStatus == currentStatus {
+		// Status tetap 'baru' tetapi uang sudah masuk (di bawah DP): seat dipegang tanpa batas waktu,
+		// supaya worker hold tidak melepasnya.
+		if totalPaid > 0 {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE bookings SET seat_hold_expires_at=NULL WHERE id=? AND seat_hold_expires_at IS NOT NULL`, bookingID); err != nil {
+				return fmt.Errorf("payment: hapus batas hold booking berbayar: %w", err)
+			}
+		}
 		return nil
 	}
 
@@ -486,11 +516,13 @@ func SyncBookingStatusTx(ctx context.Context, tx *sql.Tx, bookingID int64) error
 	}
 	// Hold 24 jam hanya untuk reservasi tanpa pembayaran terkonfirmasi. Booking
 	// yang sudah dibayar lalu turun ke 'baru' (mis. koreksi diskon/add-on) tetap
-	// memegang kursi tanpa batas waktu sampai admin memutuskan (JB-03).
+	// memegang kursi tanpa batas waktu sampai admin memutuskan (JB-03). Booking admin
+	// (tanpa booking_checkout) tidak pernah mendapat batas 24 jam (keputusan 2026-11-26).
 	pegang := memegangKursi(targetStatus)
 	if _, err = tx.ExecContext(ctx,
 		`UPDATE bookings SET status=?,is_seat_blocked=IF(?,TRUE,is_seat_blocked),
-		 seat_hold_expires_at=IF(? OR ? > 0,NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
+		 seat_hold_expires_at=IF(? OR ? > 0 OR NOT EXISTS(SELECT 1 FROM booking_checkout c WHERE c.booking_id=bookings.id),
+		   NULL,IF(is_seat_blocked,DATE_ADD(NOW(),INTERVAL 24 HOUR),NULL)),
 		 seat_hold_key=IF(?,NULL,seat_hold_key) WHERE id=?`,
 		targetStatus, pegang, pegang, totalPaid, pegang, bookingID); err != nil {
 		return fmt.Errorf("payment: sinkron status, simpan status %s: %w", targetStatus, err)

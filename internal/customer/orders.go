@@ -106,7 +106,7 @@ const orderSelect = `
 	       c.due_at, COALESCE(c.dp_per_pax,0), COALESCE(c.full_payment,FALSE), b.created_at,
 	       COALESCE(SUM(CASE WHEN p.status='confirmed' THEN p.jumlah END),0),
 	       COALESCE(SUM(CASE WHEN p.status='pending' THEN p.jumlah END),0),
-	       COUNT(p.id),
+	       COUNT(CASE WHEN p.status IN ('pending','confirmed') THEN 1 END),
 	       b.pemesan_ikut,
 	       COALESCE((SELECT j.nama_lengkap FROM jamaah j WHERE j.id = b.pic_jamaah_id), ''),
 	       b.customer_account_id
@@ -474,7 +474,7 @@ func (o *Orders) Cancel(w http.ResponseWriter, r *http.Request) {
 var errTidakBisaBatal = errors.New("booking tidak memenuhi syarat batal mandiri")
 
 // cancelGuard: booking milik akun, masih 'baru' dengan seat tertahan yang belum lewat batas, dan
-// belum ada pembayaran apa pun. Dijalankan di dalam transaksi pembatalan.
+// belum ada pembayaran yang menunggu atau terkonfirmasi (yang ditolak/void tidak menghalangi). Dijalankan di dalam transaksi pembatalan.
 func cancelGuard(accountID, bookingID int64) booking.StatusGuard {
 	return func(ctx context.Context, tx *sql.Tx) error {
 		var ok bool
@@ -483,7 +483,7 @@ func cancelGuard(accountID, bookingID int64) booking.StatusGuard {
 				SELECT 1 FROM bookings b
 				WHERE b.id=? AND b.customer_account_id=? AND b.status='baru' AND b.is_seat_blocked=TRUE
 				  AND (b.seat_hold_expires_at IS NULL OR b.seat_hold_expires_at > ?)
-				  AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.booking_id=b.id)
+				  AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.booking_id=b.id AND p.status IN ('pending','confirmed'))
 			)`, bookingID, accountID, time.Now()).Scan(&ok)
 		if err != nil {
 			return err

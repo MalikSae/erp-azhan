@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"erp-azhan/api/internal/shared"
@@ -38,6 +39,7 @@ func (r *Repository) ReleaseExpiredSeatHolds(ctx context.Context) (int64, error)
 	for _, bookingID := range candidateIDs {
 		released, err := r.releaseSingleSeatHold(ctx, bookingID)
 		if err != nil {
+			log.Printf("[ERROR] seat_hold_expiry booking=%d: %v", bookingID, err)
 			continue
 		}
 		if released {
@@ -54,13 +56,14 @@ func (r *Repository) releaseSingleSeatHold(ctx context.Context, bookingID int64)
 	}
 	defer tx.Rollback()
 	released, err := releaseSingleSeatHoldTx(ctx, tx, bookingID)
-	if err != nil || !released {
+	if err != nil {
 		return false, err
 	}
+	// Commit juga saat tidak dilepas: batas waktu booking yang sudah dibayar ikut dihapus.
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("commit release hold on booking %d: %w", bookingID, err)
 	}
-	return true, nil
+	return released, nil
 }
 
 // releaseSingleSeatHoldTx melepas hold kedaluwarsa satu booking di dalam transaksi pemanggil.
@@ -85,6 +88,17 @@ func releaseSingleSeatHoldTx(ctx context.Context, tx *sql.Tx, bookingID int64) (
 
 	now := time.Now().UTC()
 	if !isSeatBlocked || !seatHoldExpiresAt.Valid || status != "baru" || seatHoldExpiresAt.Time.After(now) {
+		return false, nil
+	}
+	// Uang jamaah sudah masuk: seat tidak dilepas, batas waktunya dihapus.
+	dibayar, err := adaPembayaranTerkonfirmasiTx(ctx, tx, bookingID)
+	if err != nil {
+		return false, err
+	}
+	if dibayar {
+		if _, err := tx.ExecContext(ctx, `UPDATE bookings SET seat_hold_expires_at=NULL WHERE id=?`, bookingID); err != nil {
+			return false, fmt.Errorf("clear expiry on paid booking %d: %w", bookingID, err)
+		}
 		return false, nil
 	}
 

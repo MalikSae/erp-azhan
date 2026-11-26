@@ -16,6 +16,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// maxNominal adalah batas kolom jumlah DECIMAL(12,0) pada payments.
+const maxNominal = 999_999_999_999
+
 // Handler menyimpan dependency untuk semua HTTP handler payment.
 type Handler struct {
 	repo *Repository
@@ -109,6 +112,14 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 
 	if req.Jumlah <= 0 {
 		shared.WriteError(w, http.StatusBadRequest, "Jumlah pembayaran harus lebih dari 0.")
+		return
+	}
+	if !shared.RupiahBulat(req.Jumlah) {
+		shared.WriteError(w, http.StatusBadRequest, "Nominal harus bilangan bulat rupiah.")
+		return
+	}
+	if req.Jumlah > maxNominal {
+		shared.WriteError(w, http.StatusBadRequest, "Jumlah pembayaran terlalu besar.")
 		return
 	}
 	// Pembayaran admin langsung terkonfirmasi; tanggal masa depan merusak laporan (JB-10).
@@ -359,7 +370,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 		shared.WriteError(w, http.StatusConflict, "Tidak bisa menghapus pembayaran yang sudah dikonfirmasi.")
 	default:
 		// Pesan bisnis ditampilkan apa adanya, tanpa awalan teknis yang ditambahkan saat error dibungkus.
-		for _, bisnis := range []error{ErrSeatUnavailable, ErrOverpayment, ErrBookingClosed, ErrNotVoidable, ErrVoidBelowRefund} {
+		for _, bisnis := range []error{ErrSeatUnavailable, ErrOverpayment, ErrBookingClosed, ErrNotVoidable, ErrVoidBelowRefund, ErrSudahDiputuskan} {
 			if errors.Is(err, bisnis) {
 				shared.WriteError(w, http.StatusConflict, bisnis.Error())
 				return

@@ -97,6 +97,15 @@ func TestCancelGuardPeriksaUlangDalamTransaksi(t *testing.T) {
 	if err := cancelGuard(akun+1, b.ID)(ctx, tx); err == nil {
 		t.Fatal("akun lain lolos guard")
 	}
+	// Bukti transfer yang ditolak atau pembayaran yang di-void tidak menghalangi batal mandiri (audit 2026-11-26).
+	testdb.AddPayment(t, tx, b.ID, 500, "rejected")
+	testdb.AddPayment(t, tx, b.ID, 500, "void")
+	if err := cancelGuard(akun, b.ID)(ctx, tx); err != nil {
+		t.Fatalf("pembayaran ditolak/void tidak boleh menghalangi pembatalan: %v", err)
+	}
+	if o, n, err := ownedQ(ctx, tx, akun, b.ID); err != nil || n != 0 || !o.CanCancel {
+		t.Fatalf("detail booking: jumlah pembayaran aktif=%d can_cancel=%v err=%v, want 0/true", n, o != nil && o.CanCancel, err)
+	}
 	testdb.AddPayment(t, tx, b.ID, 500, "pending")
 	if err := cancelGuard(akun, b.ID)(ctx, tx); err != errTidakBisaBatal {
 		t.Fatalf("pembayaran yang baru masuk harus menggagalkan pembatalan: %v", err)
