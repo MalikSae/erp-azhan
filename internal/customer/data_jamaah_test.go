@@ -77,9 +77,14 @@ func TestHitungDokumenLengkap(t *testing.T) {
 		t.Fatalf("lengkap (dokumen opsional tidak dihitung): %+v", p)
 	}
 	inf := progressPax{PaxType: "infant"}
-	inf.hitungDokumenLengkap(map[string]bool{"paspor": true, "akte_lahir": true, "pas_foto": true})
+	inf.hitungDokumenLengkap(map[string]bool{"paspor": true, "kk": true, "pas_foto": true})
 	if !inf.DokumenLengkap {
 		t.Fatalf("infant lengkap: %+v", inf)
+	}
+	// Keputusan 2026-11-26: akta lahir tidak lagi wajib untuk bayi, KK yang wajib.
+	inf.hitungDokumenLengkap(map[string]bool{"paspor": true, "akte_lahir": true, "pas_foto": true})
+	if inf.DokumenLengkap || inf.DokumenSetuju != 2 {
+		t.Fatalf("infant tanpa KK tidak lengkap: %+v", inf)
 	}
 	kosong := progressPax{PaxType: "reguler"}
 	kosong.hitungDokumenLengkap(nil)

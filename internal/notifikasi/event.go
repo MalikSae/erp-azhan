@@ -7,6 +7,8 @@ import (
 	"log"
 	"strconv"
 	"time"
+
+	"erp-azhan/api/internal/shared"
 )
 
 // Fungsi di file ini dipanggil paket lain tepat setelah perubahan data, di transaksi yang sama bila ada.
@@ -15,14 +17,8 @@ import (
 // RefJamaah: ref_id = jamaah id (data jamaah di app).
 const RefJamaah = "jamaah"
 
-var labelDokumen = map[string]string{
-	"pas_foto":   "Pas foto",
-	"paspor":     "Paspor",
-	"ktp":        "KTP",
-	"kk":         "Kartu keluarga",
-	"buku_nikah": "Buku nikah",
-	"akte_lahir": "Akta lahir",
-}
+// labelDokumen: peta label bersama (termasuk vaksin meningitis), sama dengan portal pelanggan.
+var labelDokumen = shared.LabelDokumen
 
 func catat(jenis string, err error) {
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {

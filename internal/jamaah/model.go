@@ -41,6 +41,10 @@ type Jamaah struct {
 	KaitanStatus         string    `json:"kaitan_status"`
 	DirekrutOlehAkunID *int64    `json:"direkrut_oleh_akun_id"`
 	DirekrutOlehNama     *string   `json:"direkrut_oleh_nama"`
+	// Dokumen wajib sesuai tipe pax di booking aktif terakhir (reguler bila tanpa booking) dan jumlah yang disetujui.
+	DokumenWajib          []string `json:"dokumen_wajib"`
+	DokumenWajibDisetujui int      `json:"dokumen_wajib_disetujui"`
+	DokumenWajibTotal     int      `json:"dokumen_wajib_total"`
 }
 
 // JamaahListItem adalah ringkasan untuk endpoint list.
@@ -57,7 +61,10 @@ type JamaahListItem struct {
 	Email                *string   `json:"email"`
 	Status               string    `json:"status"`
 	PctData              int       `json:"pct_data"`
-	PctDokumen           int       `json:"pct_dokumen"`
+	// PctDokumen: persen dokumen wajib (sesuai tipe pax) yang disetujui; 100 = lengkap.
+	PctDokumen            int       `json:"pct_dokumen"`
+	DokumenWajibDisetujui int       `json:"dokumen_wajib_disetujui"`
+	DokumenWajibTotal     int       `json:"dokumen_wajib_total"`
 	CreatedAt            time.Time `json:"created_at"`
 	KaitanStatus         string    `json:"kaitan_status"`
 	DirekrutOlehAkunID *int64    `json:"direkrut_oleh_akun_id"`
