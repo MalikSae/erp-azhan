@@ -8,9 +8,11 @@ import Button from 'shared/ui/Button';
 import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { AuthContext } from '../context/AuthContext';
-import PilihPaketManasik from '../components/PilihPaketManasik';
+import PilihPaketManasik, { tanggalPendek } from '../components/PilihPaketManasik';
 import { createManasik, getManasik, listPaketTersediaManasik, updateManasik } from '../api/manasik';
 import { listBrandOptions } from '../api/brands';
+
+const jamTitik = (hhmm) => (hhmm || '').replace(':', '.');
 
 const KOSONG = { judul: '', tanggal: '', jam_mulai: '', jam_selesai: '', agenda: '', ustadz: '', tempat: '', alamat: '', gmaps_url: '' };
 
@@ -28,6 +30,9 @@ const ManasikFormPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  // Mulai 00.00 WIB hari manasik, tanggal dan jam terkunci (tampil sebagai teks).
+  const [terkunci, setTerkunci] = useState(false);
+  const hariIni = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
   useEffect(() => {
     let batal = false;
@@ -37,6 +42,7 @@ const ManasikFormPage = () => {
           const d = await getManasik(id);
           const m = d.manasik;
           if (!batal) {
+            setTerkunci(Boolean(d.sudah_dimulai));
             setForm({
               judul: m.judul, tanggal: m.tanggal, jam_mulai: m.jam_mulai, jam_selesai: m.jam_selesai,
               agenda: m.agenda.join('\n'), ustadz: m.ustadz || '', tempat: m.tempat, alamat: m.alamat, gmaps_url: m.gmaps_url || '',
@@ -101,11 +107,28 @@ const ManasikFormPage = () => {
         <FormSection title="Informasi Manasik">
           <div className="space-y-4">
             <Input label="Judul" name="judul" required maxLength={150} value={form.judul} onChange={ubah('judul')} placeholder="Manasik Umroh Lengkap" />
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <Input label="Tanggal" name="tanggal" type="date" required value={form.tanggal} onChange={ubah('tanggal')} />
-              <Input label="Jam mulai" name="jam_mulai" type="time" required value={form.jam_mulai} onChange={ubah('jam_mulai')} />
-              <Input label="Jam selesai" name="jam_selesai" type="time" required value={form.jam_selesai} onChange={ubah('jam_selesai')} />
-            </div>
+            {terkunci ? (
+              <div>
+                <div className="text-sm font-medium font-body text-neutral-800">Tanggal dan jam</div>
+                <div className="mt-0.5 text-sm font-body text-neutral-900">
+                  {tanggalPendek(form.tanggal)}, {jamTitik(form.jam_mulai)}–{jamTitik(form.jam_selesai)} WIB
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <Input
+                  label="Tanggal"
+                  name="tanggal"
+                  type="date"
+                  required
+                  min={hariIni}
+                  value={form.tanggal}
+                  onChange={ubah('tanggal')}
+                />
+                <Input label="Jam mulai" name="jam_mulai" type="time" required value={form.jam_mulai} onChange={ubah('jam_mulai')} />
+                <Input label="Jam selesai" name="jam_selesai" type="time" required value={form.jam_selesai} onChange={ubah('jam_selesai')} />
+              </div>
+            )}
             <Input label="Ustadz pengisi" name="ustadz" maxLength={150} value={form.ustadz} onChange={ubah('ustadz')} />
             <Textarea
               label="Agenda"

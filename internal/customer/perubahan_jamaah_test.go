@@ -223,3 +223,24 @@ func TestPerubahanJamaahDitolakDanValidasi(t *testing.T) {
 		}
 	}
 }
+
+// Persetujuan perubahan hanya menulis baris jamaah sebrand dengan jamaah pengajuan (audit akses 2026-11-26, T7).
+func TestIdSebrand(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	_, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
+	var brandLain int64
+	if err := tx.QueryRow(`SELECT id FROM brands WHERE id <> ? ORDER BY id LIMIT 1`, brand).Scan(&brandLain); err != nil {
+		t.Skipf("butuh dua brand: %v", err)
+	}
+	a := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "SebrandSatuQzk"})
+	b := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "SebrandDuaQzk"})
+	lain := testdb.NewJamaah(t, tx, brandLain, testdb.JamaahOpts{Nama: "SebrandLainQzk"})
+	got, err := idSebrand(ctx, tx, []int64{a, lain, b}, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0] != min(a, b) || got[1] != max(a, b) {
+		t.Fatalf("idSebrand = %v, harap [%d %d] tanpa %d", got, min(a, b), max(a, b), lain)
+	}
+}

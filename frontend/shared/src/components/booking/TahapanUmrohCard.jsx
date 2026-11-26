@@ -17,7 +17,7 @@ const StatusPerlengkapan = ({ tahap }) => {
 const StatusPaspor = ({ tahap, terunggah }) => {
   if (tahap?.status === "selesai") return <Badge variant="success">Disetujui</Badge>;
   if (tahap?.status === "perbaiki") return <Badge variant="danger">Ditolak</Badge>;
-  if (terunggah) return <Badge variant="warning">Perlu dicek</Badge>;
+  if (terunggah) return <Badge variant="warning">Menunggu verifikasi</Badge>;
   return <Badge variant="neutral">Belum diunggah</Badge>;
 };
 

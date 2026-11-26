@@ -14,7 +14,8 @@ import (
 )
 
 // Detail satu jamaah untuk agen perekrutnya (follow-up pembayaran dan kelengkapan). Hanya status dan hitungan:
-// nilai isian, dokumen, dan nomor telepon sebagai teks tidak pernah ikut (keputusan akses data jamaah 11 November 2026).
+// nilai isian dan dokumen tidak pernah ikut (keputusan akses data jamaah 11 November 2026). Nomor telepon tidak dikirim
+// sebagai field tersendiri, tetapi ikut di whatsapp_url (tautan wa.me), jadi tetap terbaca oleh agen yang berhak.
 
 type PembayaranJamaah struct {
 	Total        float64 `json:"total"`

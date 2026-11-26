@@ -166,13 +166,16 @@ func UpsertTx(ctx context.Context, tx *sql.Tx, jamaahID int64, req *CreateDokume
 
 // ─── UpdateStatus ─────────────────────────────────────────────────────────────
 
-// UpdateStatus mengubah status: approved/rejected (tinjau), atau submitted untuk membatalkan persetujuan
-// (hanya dari approved). Peninjau dan waktunya dicatat di verified_by/verified_at, termasuk saat pembatalan.
-// Versi wajib cocok, jadi berkas pengganti tidak ikut tersetujui dengan versi lama.
+// UpdateStatus mengubah status: approved/rejected (tinjau, hanya dari submitted), atau submitted untuk membatalkan
+// persetujuan (hanya dari approved). Koreksi persetujuan: batalkan dulu, lalu tolak. Peninjau dan waktunya dicatat di
+// verified_by/verified_at, termasuk saat pembatalan. Versi wajib cocok, jadi berkas pengganti tidak ikut tersetujui
+// dengan versi lama. Status asal yang tidak cocok dilaporkan sebagai ErrVersionConflict.
 func (r *Repository) UpdateStatus(ctx context.Context, id int64, newStatus string, version int64, reason string, adminID int64) (*DokumenJamaah, error) {
 	q := `UPDATE dokumen_jamaah SET status=?,rejection_reason=NULLIF(?,''),verified_by=NULLIF(?,0),verified_at=NOW(),updated_at=CURRENT_TIMESTAMP WHERE id=? AND version=?`
 	if newStatus == "submitted" {
 		q += ` AND status='approved'`
+	} else {
+		q += ` AND status='submitted'`
 	}
 	res, err := r.db.ExecContext(ctx, q, newStatus, reason, adminID, id, version)
 	if err != nil {

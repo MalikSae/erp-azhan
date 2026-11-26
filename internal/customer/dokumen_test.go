@@ -8,8 +8,17 @@ func TestDokumenWajibPerTipe(t *testing.T) {
 		t.Fatalf("wajib reguler: %v", reg)
 	}
 	inf := dokumenWajib("infant")
-	if len(inf) != 3 || inf[1] != "akte_lahir" {
+	// Keputusan 2026-11-26: bayi wajib paspor, KK, pas foto; akta lahir tidak tampil di portal.
+	if len(inf) != 3 || inf[0] != "paspor" || inf[1] != "kk" || inf[2] != "pas_foto" {
 		t.Fatalf("wajib infant: %v", inf)
+	}
+	for _, it := range susunDokumen("infant", nil) {
+		if it.Jenis == "akte_lahir" {
+			t.Errorf("akta lahir bayi tidak boleh tampil di portal: %+v", it)
+		}
+		if it.Jenis == "kk" && !it.Wajib {
+			t.Errorf("KK bayi harus wajib: %+v", it)
+		}
 	}
 	for _, tipe := range []string{"reguler", "infant"} {
 		for _, j := range append(dokumenWajib(tipe), dokumenTambahan(tipe)...) {

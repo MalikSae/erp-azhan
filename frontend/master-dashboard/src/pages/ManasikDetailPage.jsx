@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ExternalLink, Trash2 } from 'lucide-react';
+import { ExternalLink, Trash2, X } from 'lucide-react';
 import PageHeader from 'shared/ui/PageHeader';
 import Button from 'shared/ui/Button';
 import Badge from 'shared/ui/Badge';
@@ -163,7 +163,18 @@ const ManasikDetailPage = () => {
     if (key === 'berangkat_tanggal') return <span className="whitespace-nowrap">{tanggalPendek(p.berangkat_tanggal)}</span>;
     if (key === 'jumlah_jamaah') return <span className="tabular-nums">{p.jumlah_jamaah}</span>;
     if (key === 'aksi') {
-      return <Button size="sm" variant="danger-outline" onClick={() => { setModalError(null); setLepas(p); }}>Lepas</Button>;
+      return (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="w-8 !px-0"
+          aria-label={`Lepas ${p.nama}`}
+          title="Lepas paket"
+          onClick={() => { setModalError(null); setLepas(p); }}
+        >
+          <X size={16} aria-hidden="true" />
+        </Button>
+      );
     }
     return p[key];
   };

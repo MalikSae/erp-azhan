@@ -21,8 +21,8 @@ func inputSah() Input {
 func TestValidasiInput(t *testing.T) {
 	in := inputSah()
 	in.rapikan()
-	if msg := in.validasi(); msg != "" {
-		t.Fatalf("input sah ditolak: %s", msg)
+	if err := in.validasi(); err != nil {
+		t.Fatalf("input sah ditolak: %v", err)
 	}
 	if len(in.Agenda) != 2 {
 		t.Errorf("butir agenda kosong harus dibuang: %v", in.Agenda)
@@ -46,7 +46,7 @@ func TestValidasiInput(t *testing.T) {
 		in := inputSah()
 		ubah(&in)
 		in.rapikan()
-		if in.validasi() == "" {
+		if in.validasi() == nil {
 			t.Errorf("%s: harus ditolak", nama)
 		}
 	}
@@ -191,12 +191,12 @@ func TestManasikPaketRSVPDanAbsensi(t *testing.T) {
 	// Ubah: tanggal tidak boleh menyamai keberangkatan paling awal; jawaban tetap tersimpan.
 	geser := inputSah()
 	geser.Tanggal = "2099-02-05"
-	if err := Ubah(ctx, tx, id, &brand, 0, geser); !galatValidasi(err) {
+	if err := Ubah(ctx, tx, id, &brand, 0, geser, sebelum); !galatValidasi(err) {
 		t.Errorf("ubah tanggal lewat keberangkatan: %v", err)
 	}
 	ubah := inputSah()
 	ubah.Ustadz, ubah.GmapsURL = "", ""
-	if err := Ubah(ctx, tx, id, &brand, 0, ubah); err != nil {
+	if err := Ubah(ctx, tx, id, &brand, 0, ubah, sebelum); err != nil {
 		t.Fatal(err)
 	}
 	if d, _ = AmbilDetail(ctx, tx, id, &brand, sebelum); d.Manasik.Ustadz != nil || cariJamaah(d, j1).Jawaban == nil {
@@ -286,5 +286,38 @@ func TestManasikPaketRSVPDanAbsensi(t *testing.T) {
 	}
 	if ring, _ := UntukPaket(ctx, tx, s1, &brand); ring != nil {
 		t.Error("paket masih terkait setelah manasik dihapus")
+	}
+}
+
+// Pax paket brand lain tidak terbaca dan tidak bisa diabsen lewat manasik, walau paketnya
+// tertaut ke manasik itu (data lama sebelum brand paket dikunci).
+func TestManasikAbaikanPaketBrandLain(t *testing.T) {
+	_, tx := testdb.Tx(t)
+	ctx := context.Background()
+	s1, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-02-01"})
+	testdb.Exec(t, tx, `DELETE FROM manasik_jadwal WHERE schedule_id = ?`, s1)
+	var brandLain int64
+	if err := tx.QueryRow(`SELECT id FROM brands WHERE id <> ? ORDER BY id LIMIT 1`, brand).Scan(&brandLain); err != nil {
+		t.Skipf("butuh dua brand: %v", err)
+	}
+	sebelum := time.Date(2098, 12, 1, 10, 0, 0, 0, ZonaWIB)
+	hariH := time.Date(2099, 1, 1, 9, 0, 0, 0, ZonaWIB)
+	id, err := Buat(ctx, tx, &brand, 0, inputSah(), []int64{s1}, sebelum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testdb.Exec(t, tx, `UPDATE schedules SET brand_id = ? WHERE id = ?`, brandLain, s1)
+	j := testdb.NewJamaah(t, tx, brandLain, testdb.JamaahOpts{Nama: "JamaahBrandLainQzp"})
+	_, pax := testdb.NewBookingPax(t, tx, s1, "dp", 1000, testdb.Pax{JamaahID: j})
+
+	d, err := AmbilDetail(ctx, tx, id, &brand, sebelum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Jamaah) != 0 || len(d.Paket) != 0 {
+		t.Fatalf("pax/paket brand lain terbaca: jamaah=%d paket=%d", len(d.Jamaah), len(d.Paket))
+	}
+	if err := CatatHadir(ctx, tx, id, &brand, 0, pax[0], true, hariH); !galatValidasi(err) {
+		t.Fatalf("absen pax brand lain: err=%v, mau galat validasi", err)
 	}
 }

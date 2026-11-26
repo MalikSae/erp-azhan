@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"erp-azhan/api/internal/komisi"
@@ -708,6 +709,28 @@ func (r *Repository) BookingExistsForBrand(ctx context.Context, bookingID int64,
 }
 
 // ValidasiBuktiAdmin memastikan bukti pembayaran adalah unggahan admin resmi di brand ini, bukan URL bebas.
-func (r *Repository) ValidasiBuktiAdmin(ctx context.Context, url string, brandID *int64) error {
-	return media.ValidateAdminPaymentProof(ctx, r.db, url, brandID)
+// Admin Holding (brandID nil) hanya boleh memakai unggahan Holding atau unggahan brand booking itu: bukti yang
+// ditautkan ke booking bisa dibuka admin brand booking (media.canReadAdminFile).
+func (r *Repository) ValidasiBuktiAdmin(ctx context.Context, url string, brandID *int64, bookingID int64) error {
+	if err := media.ValidateAdminPaymentProof(ctx, r.db, url, brandID); err != nil {
+		return err
+	}
+	if brandID != nil {
+		return nil
+	}
+	canonical := url
+	if strings.HasPrefix(url, "/uploads/") {
+		canonical = "/api/admin/media/" + strings.TrimPrefix(url, "/uploads/")
+	}
+	var cocok bool
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM media_uploads m
+		JOIN bookings b ON b.id = ? JOIN schedules s ON s.id = b.schedule_id
+		WHERE m.path = ? AND m.admin_user_id IS NOT NULL AND (m.brand_id IS NULL OR m.brand_id = s.brand_id))`,
+		bookingID, canonical).Scan(&cocok); err != nil {
+		return fmt.Errorf("payment.ValidasiBuktiAdmin: %w", err)
+	}
+	if !cocok {
+		return &media.UploadError{Message: "Bukti pembayaran bukan unggahan brand booking ini."}
+	}
+	return nil
 }

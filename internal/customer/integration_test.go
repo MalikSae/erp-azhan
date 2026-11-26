@@ -277,13 +277,14 @@ func TestUpdateMe(t *testing.T) {
 		t.Fatalf("data tidak sesuai: %+v", got)
 	}
 
-	// Nomor akun lain ditolak.
-	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailA, "no_hp": hpB}); rec.Code != http.StatusConflict {
-		t.Fatalf("nomor akun lain harus 409, dapat %d", rec.Code)
+	// Nomor dan email akun lain ditolak dengan pesan yang sama (tidak menegaskan mana yang dipakai akun lain).
+	recHP := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailA, "no_hp": hpB})
+	if recHP.Code != http.StatusConflict || !strings.Contains(recHP.Body.String(), PesanKontakTerpakai) {
+		t.Fatalf("nomor akun lain harus 409 dengan pesan umum, dapat %d %s", recHP.Code, recHP.Body)
 	}
-	// Email akun lain ditolak.
-	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailB, "no_hp": hpA2, "password_saat_ini": "rahasia-123"}); rec.Code != http.StatusConflict {
-		t.Fatalf("email akun lain harus 409, dapat %d", rec.Code)
+	recEmail := call(map[string]any{"nama_lengkap": "Nama Baru", "email": emailB, "no_hp": hpA2, "password_saat_ini": "rahasia-123"})
+	if recEmail.Code != http.StatusConflict || recEmail.Body.String() != recHP.Body.String() {
+		t.Fatalf("email akun lain harus 409 dengan pesan sama, dapat %d %s", recEmail.Code, recEmail.Body)
 	}
 	// Format tidak valid ditolak.
 	if rec := call(map[string]any{"nama_lengkap": "Nama Baru", "email": "bukan-email", "no_hp": hpA2}); rec.Code != http.StatusBadRequest {

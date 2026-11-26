@@ -28,13 +28,13 @@ import { STATUS_AGEN } from "../utils/agen";
 import { printJamaah } from "../utils/printJamaah";
 
 const DOKUMEN_TYPES = [
-  { key: "pas_foto", label: "Pas Foto" },
+  { key: "pas_foto", label: "Pas foto" },
   { key: "paspor", label: "Paspor" },
   { key: "ktp", label: "KTP" },
-  { key: "kk", label: "Kartu Keluarga" },
-  { key: "buku_nikah", label: "Buku Nikah" },
-  { key: "akte_lahir", label: "Akte Lahir" },
-  { key: "vaksin_meningitis", label: "Vaksin Meningitis" },
+  { key: "kk", label: "Kartu keluarga" },
+  { key: "buku_nikah", label: "Buku nikah" },
+  { key: "akte_lahir", label: "Akta lahir" },
+  { key: "vaksin_meningitis", label: "Vaksin meningitis" },
 ];
 const labelDokumen = (jenis) => DOKUMEN_TYPES.find((t) => t.key === jenis)?.label || jenis;
 
@@ -376,8 +376,8 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
           hint={bookings.length > 0 ? "Lihat riwayat di bawah" : "Belum ada booking"}
         />
         <SummaryItem
-          label="Dokumen disetujui"
-          value={`${dokumenList.filter((d) => d.file_url && d.status === "approved").length}/${DOKUMEN_TYPES.length}`}
+          label="Dokumen wajib"
+          value={`${jamaah.dokumen_wajib_disetujui ?? 0}/${jamaah.dokumen_wajib_total ?? 3}`}
         />
         <SummaryItem
           label="Akun portal"
@@ -519,6 +519,9 @@ export const JamaahDetailPage = ({ showBrandColumn = false, bolehLihatPerubahan 
                     <div className="min-w-0 space-y-1">
                       <span className="text-sm font-medium font-body text-neutral-800 block">
                         {docType.label}
+                        {(jamaah.dokumen_wajib || []).includes(docType.key) && (
+                          <span className="ml-2 text-xs font-normal text-neutral-500">Wajib</span>
+                        )}
                       </span>
                       <StatusDokumen status={hasFile ? existing.status : null} />
                       {hasFile && existing.status === "rejected" && existing.rejection_reason && (

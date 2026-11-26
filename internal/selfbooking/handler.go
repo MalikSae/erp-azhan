@@ -268,7 +268,9 @@ func (h *Handler) buatBooking(w http.ResponseWriter, r *http.Request, jalur jalu
 	}
 	resp, err := book(r.Context(), req.BrandID, account.ID, req)
 	if err != nil {
-		if errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrJamaahBukanMilik) || errors.Is(err, ErrSayaSendiriBukanAnda) {
+		// ErrDuplicate ikut dihitung: penolakannya menandakan NIK itu terdaftar di paket ini (audit keamanan 2026-11-26).
+		if errors.Is(err, ErrNIKAtasNamaLain) || errors.Is(err, ErrJamaahBukanMilik) || errors.Is(err, ErrSayaSendiriBukanAnda) ||
+			errors.Is(err, ErrDuplicate) {
 			identitasSalah = true
 		}
 		tulisGalatBooking(w, err, jalur == jalurPortalAgen)

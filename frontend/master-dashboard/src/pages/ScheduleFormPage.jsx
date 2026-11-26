@@ -4,6 +4,7 @@ import PageHeader from 'shared/ui/PageHeader';
 import Input from 'shared/ui/Input';
 import Textarea from 'shared/ui/Textarea';
 import CustomDropdown from 'shared/ui/CustomDropdown';
+import FormField from 'shared/ui/FormField';
 import AutocompleteInput from 'shared/ui/AutocompleteInput';
 import Button from 'shared/ui/Button';
 import Toggle from 'shared/ui/Toggle';
@@ -935,6 +936,13 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {/* Brand */}
                   <div id="brand_id" tabIndex={-1} className="focus:outline-none">
+                    {isEditMode ? (
+                      <FormField label="Brand" className="!mb-0">
+                        <p className="flex min-h-10 items-center text-sm text-neutral-800 font-body">
+                          {brandOptions.find(b => String(b.id) === String(formData.brand_id))?.name || '-'}
+                        </p>
+                      </FormField>
+                    ) : (
                     <CustomDropdown
                       label="Brand"
                       className="!mb-0"
@@ -956,6 +964,7 @@ if (formData.pulang_tanggal <= formData.berangkat_tanggal) errors.pulang_tanggal
                       placeholder="Pilih brand"
                       options={brandOptions.map(b => ({ value: b.id, label: b.name }))}
                     />
+                    )}
                   </div>
 
                   {/* Kategori */}

@@ -21,3 +21,16 @@ func TestCORSOriginsPengembanganHanyaNonProduksi(t *testing.T) {
 		t.Fatalf("dev: %s", dev)
 	}
 }
+
+// Audit keamanan 2026-11-26 (Q7): produksi tanpa TRUSTED_PROXIES diberi peringatan saat start.
+func TestPeringatanTrustedProxies(t *testing.T) {
+	if peringatanTrustedProxies(true, "  ") == "" {
+		t.Fatal("produksi tanpa TRUSTED_PROXIES harus diberi peringatan")
+	}
+	if p := peringatanTrustedProxies(true, "172.18.0.0/16"); p != "" {
+		t.Fatalf("produksi dengan TRUSTED_PROXIES: %q", p)
+	}
+	if p := peringatanTrustedProxies(false, ""); p != "" {
+		t.Fatalf("non-produksi: %q", p)
+	}
+}

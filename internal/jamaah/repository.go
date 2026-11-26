@@ -105,15 +105,34 @@ type ListOpts struct {
 	Offset int
 }
 
-// pctDokumenSQL: persentase jenis dokumen yang sudah disetujui admin, dari semua 7 jenis
-// (pas foto, paspor, KTP, KK, buku nikah, akta lahir, vaksin meningitis; sama dengan dokumen.validJenis).
-// Menunggu verifikasi dan ditolak tidak dihitung (keputusan 2026-11-25). 100 hanya bila ketujuhnya disetujui.
-// Pembaginya harus ikut diubah bila jenis dokumen bertambah.
-const pctDokumenSQL = `ROUND(
-			(SELECT COUNT(DISTINCT dj.jenis)
-			 FROM dokumen_jamaah dj
-			 WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status = 'approved') / 7.0 * 100
-		)`
+// Kelengkapan dokumen di admin memakai dokumen wajib sesuai tipe pax (shared.DokumenWajibJamaah), sama dengan
+// portal pelanggan dan agen (keputusan 2026-11-26). Tipe pax diambil dari booking aktif (bukan batal) terakhir;
+// jamaah tanpa booking memakai daftar reguler. Hanya dokumen disetujui yang dihitung (keputusan 2026-11-25).
+
+// tipeDokumenSQL: tipe pax jamaah di booking aktif terakhir, 'reguler' bila tidak ada.
+const tipeDokumenSQL = `COALESCE((SELECT bp.pax_type FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
+			WHERE bp.jamaah_id = jamaah.id AND bp.pax_status = 'aktif' AND b.status <> 'batal'
+			ORDER BY b.created_at DESC, b.id DESC LIMIT 1), 'reguler')`
+
+// dokumenDisetujuiSQL: jenis dokumen yang sudah disetujui, dipisah koma.
+const dokumenDisetujuiSQL = `COALESCE((SELECT GROUP_CONCAT(DISTINCT dj.jenis)
+			FROM dokumen_jamaah dj
+			WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status = 'approved'), '')`
+
+// kelengkapanDokumen: jumlah dokumen wajib yang disetujui, jumlah dokumen wajib, dan persennya.
+func kelengkapanDokumen(paxType, disetujuiCSV string) (setuju, total, pct int) {
+	disetujui := map[string]bool{}
+	for _, j := range strings.Split(disetujuiCSV, ",") {
+		if j = strings.TrimSpace(j); j != "" {
+			disetujui[j] = true
+		}
+	}
+	setuju, total = shared.HitungDokumenWajib(paxType, disetujui)
+	if total > 0 {
+		pct = (setuju*200 + total) / (2 * total) // dibulatkan; 100 hanya bila semua wajib disetujui
+	}
+	return setuju, total, pct
+}
 
 // List mengambil semua jamaah, filter brand kalau scoped admin.
 func (r *Repository) List(ctx context.Context, brandID *int64, status string, opts ...ListOpts) ([]JamaahListItem, error) {
@@ -144,7 +163,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 			IF(emergency_hubungan IS NOT NULL AND emergency_hubungan != '', 1, 0) +
 			IF(emergency_alamat IS NOT NULL AND emergency_alamat != '', 1, 0)
 		) / 22.0 * 100) AS pct_data,
-		` + pctDokumenSQL + ` AS pct_dokumen,
+		` + tipeDokumenSQL + ` AS tipe_dokumen, ` + dokumenDisetujuiSQL + ` AS dokumen_disetujui,
 		created_at,
 		kaitan_status, direkrut_oleh_akun_id,
 		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama,
@@ -196,10 +215,12 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 	items := make([]JamaahListItem, 0)
 	for rows.Next() {
 		var item JamaahListItem
-		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &item.PctDokumen, &item.CreatedAt,
+		var tipe, disetujui string
+		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &tipe, &disetujui, &item.CreatedAt,
 			&item.KaitanStatus, &item.DirekrutOlehAkunID, &item.DirekrutOlehNama, &item.TotalBooking); err != nil {
 			return nil, fmt.Errorf("jamaah.List scan: %w", err)
 		}
+		item.DokumenWajibDisetujui, item.DokumenWajibTotal, item.PctDokumen = kelengkapanDokumen(tipe, disetujui)
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -219,7 +240,8 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		created_at,
 		EXISTS(SELECT 1 FROM customer_accounts WHERE jamaah_id = jamaah.id) AS portal_aktif,
 		kaitan_status, direkrut_oleh_akun_id,
-		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama
+		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama,
+		` + tipeDokumenSQL + ` AS tipe_dokumen, ` + dokumenDisetujuiSQL + ` AS dokumen_disetujui
 		FROM jamaah WHERE id=?`
 
 	var args []interface{}
@@ -230,6 +252,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 	}
 
 	var j Jamaah
+	var tipe, disetujui string
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(
 		&j.ID, &j.BrandID, &j.IDJamaah, &j.KodeJamaah, &j.NamaLengkap, &j.NamaPaspor, &j.JenisKelamin, &j.NamaAyahKandung, &j.NIK, &j.TempatLahir,
 		&j.TanggalLahir,
@@ -240,6 +263,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		&j.CreatedAt,
 		&j.PortalAktif,
 		&j.KaitanStatus, &j.DirekrutOlehAkunID, &j.DirekrutOlehNama,
+		&tipe, &disetujui,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -247,6 +271,8 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 	if err != nil {
 		return nil, fmt.Errorf("jamaah.GetByID: %w", err)
 	}
+	j.DokumenWajib = shared.DokumenWajibJamaah(tipe)
+	j.DokumenWajibDisetujui, j.DokumenWajibTotal, _ = kelengkapanDokumen(tipe, disetujui)
 	return &j, nil
 }
 
@@ -341,14 +367,15 @@ func (r *Repository) Update(ctx context.Context, id int64, brandID *int64, final
 		no_paspor=?, tempat_paspor_keluar=?, tanggal_paspor_keluar=?, paspor_berlaku_sampai=?,
 		no_hp=?, email=?, pekerjaan=?, pendidikan_terakhir=?, penjamin_kesehatan=?, no_asuransi_bpjs=?,
 		alamat=?, kota=?, catatan=?, status=?, emergency_nama=?, emergency_nik=?, emergency_hp=?, emergency_hubungan=?, emergency_alamat=?
-		WHERE id=?`
+		WHERE id=? AND brand_id=?`
 
+	// brand_id lama ikut di WHERE: baris yang pindah brand sesudah GetByID tidak ikut tertimpa.
 	_, err = r.db.ExecContext(ctx, q,
 		finalBrandID, req.NamaLengkap, req.NamaPaspor, req.JenisKelamin, req.NamaAyahKandung, req.NIK, req.TempatLahir, req.TanggalLahir,
 		req.NoPaspor, req.TempatPasporKeluar, req.TanggalPasporKeluar, req.PasporBerlakuSampai,
 		req.NoHP, req.Email, req.Pekerjaan, req.PendidikanTerakhir, req.PenjaminKesehatan, req.NoAsuransiBPJS,
 		req.Alamat, req.Kota, req.Catatan, status, req.EmergencyNama, req.EmergencyNIK, req.EmergencyHP, req.EmergencyHubungan, req.EmergencyAlamat,
-		id,
+		id, existing.BrandID,
 	)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
@@ -397,7 +424,7 @@ func (r *Repository) UpdateTanggalLahir(ctx context.Context, id int64, brandID *
 	if err != nil {
 		return nil, err
 	}
-	if _, err := r.db.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir=? WHERE id=?`, tanggalLahir, id); err != nil {
+	if _, err := r.db.ExecContext(ctx, `UPDATE jamaah SET tanggal_lahir=? WHERE id=? AND brand_id=?`, tanggalLahir, id, existing.BrandID); err != nil {
 		return nil, fmt.Errorf("jamaah.UpdateTanggalLahir: %w", err)
 	}
 	if lama := tanggal10(nilaiPtr(existing.TanggalLahir)); lama != tanggalLahir {
@@ -413,7 +440,12 @@ func (r *Repository) Delete(ctx context.Context, id int64, brandID *int64) error
 	if err := r.exists(ctx, id, brandID); err != nil {
 		return err
 	}
-	_, err := r.db.ExecContext(ctx, `DELETE FROM jamaah WHERE id=?`, id)
+	q, args := `DELETE FROM jamaah WHERE id=?`, []any{id}
+	if brandID != nil {
+		q += ` AND brand_id=?`
+		args = append(args, *brandID)
+	}
+	_, err := r.db.ExecContext(ctx, q, args...)
 	return err
 }
 
@@ -462,6 +494,24 @@ func (r *Repository) CekPindahBrand(ctx context.Context, existing *Jamaah, targe
 	}
 	if existing.DirekrutOlehAkunID != nil {
 		return "jamaah terikat dengan agen sehingga tidak bisa dipindah ke brand lain", nil
+	}
+	return pesanMenungguPeriksa(ctx, r.db, existing.ID)
+}
+
+// pesanMenungguPeriksa menolak pindah brand selama dokumen atau pengajuan perubahan data jamaah
+// masih menunggu diperiksa admin brand lama.
+func pesanMenungguPeriksa(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, jamaahID int64) (string, error) {
+	var menunggu int
+	if err := q.QueryRowContext(ctx, `SELECT
+		(SELECT COUNT(*) FROM dokumen_jamaah WHERE jamaah_id = ? AND status = 'submitted') +
+		(SELECT COUNT(*) FROM jamaah_perubahan WHERE jamaah_id = ? AND status = 'menunggu')`,
+		jamaahID, jamaahID).Scan(&menunggu); err != nil {
+		return "", fmt.Errorf("jamaah.CekPindahBrand menunggu: %w", err)
+	}
+	if menunggu > 0 {
+		return "jamaah masih punya dokumen atau perubahan data yang menunggu diperiksa", nil
 	}
 	return "", nil
 }
