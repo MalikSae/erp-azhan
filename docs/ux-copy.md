@@ -44,7 +44,7 @@ Bila terjadi konflik, dokumen ini yang menang untuk prinsip dan pola; glosarium 
 
 ### Label dan placeholder
 - Label: sentence case, ringkas, tanpa menjelaskan singkatan yang sudah dipahami petugas. "NIK", bukan "NIK (Nomor Induk Kependudukan)".
-- Placeholder: contoh isi nyata, bukan mengulang label dan tanpa "Contoh:". "A1234567", "081234567890". Kosongkan bila tidak menambah informasi.
+- Placeholder: petunjuk isi atau contoh format, bukan mengulang label dan tanpa "Contoh:". "A1234567", "081234567890", "Sesuai dokumen identitas". Jangan nama orang atau data yang bisa dikira sudah terisi. Kosongkan bila tidak menambah informasi.
 - Field wajib bertanda `*`.
 
 ### Keadaan kosong (empty state)
