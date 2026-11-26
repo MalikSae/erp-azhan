@@ -17,6 +17,9 @@ var ErrTidakAda = errors.New("tabungan: tidak ada")
 // ErrTanpaTarget: catatan ditambah saat akun belum punya target.
 var ErrTanpaTarget = errors.New("tabungan: belum ada target")
 
+// ErrCatatanPenuh: catatan akun sudah MaksDaftarCatatan.
+var ErrCatatanPenuh = errors.New("tabungan: catatan penuh")
+
 // Querier dipenuhi *sql.DB dan *sql.Tx.
 type Querier interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
@@ -34,8 +37,10 @@ func parseBulan(s string) (time.Time, bool) {
 	return t, err == nil
 }
 
-// ValidasiTarget memeriksa batas kontrak dan merapikan teks. Mengembalikan pesan galat, kosong bila lolos.
-func ValidasiTarget(t *Target, now time.Time) string {
+// ValidasiTarget memeriksa batas kontrak dan merapikan teks. bulanTersimpan adalah bulan_berangkat target
+// yang sudah tersimpan (kosong bila belum ada); bulan yang sama tetap diterima walau sudah lewat.
+// Mengembalikan pesan galat, kosong bila lolos.
+func ValidasiTarget(t *Target, bulanTersimpan string, now time.Time) string {
 	t.NamaPaket = strings.TrimSpace(t.NamaPaket)
 	switch t.Jenis {
 	case "paket":
@@ -57,17 +62,23 @@ func ValidasiTarget(t *Target, now time.Time) string {
 		return "Bulan berangkat tidak valid."
 	}
 	selisih := indeksBulan(bulan) - indeksBulan(now.In(ZonaWIB))
-	if selisih < 0 {
+	if selisih < 0 && t.BulanBerangkat != bulanTersimpan {
 		return "Bulan berangkat tidak boleh lewat."
 	}
 	if selisih > MaksBulanKeDepan {
 		return "Bulan berangkat maksimal 36 bulan lagi."
 	}
-	if t.JumlahDewasa < 1 || t.JumlahDewasa > MaksDewasa {
-		return "Jumlah dewasa 1 sampai 20."
+	if t.JumlahDewasa < 1 {
+		return "Jumlah dewasa minimal 1."
 	}
-	if t.JumlahBayi < 0 || t.JumlahBayi > MaksBayi {
-		return "Jumlah bayi 0 sampai 10."
+	if t.JumlahBayi < 0 {
+		return "Jumlah bayi tidak valid."
+	}
+	if t.JumlahBayi > t.JumlahDewasa {
+		return "Jumlah bayi tidak boleh melebihi dewasa."
+	}
+	if t.JumlahDewasa+t.JumlahBayi > MaksJamaah {
+		return "Jamaah maksimal 9 orang."
 	}
 	if !TipeKamar[t.TipeKamar] {
 		return "Pilih tipe kamar."
@@ -75,7 +86,10 @@ func ValidasiTarget(t *Target, now time.Time) string {
 	if t.TargetTotal < MinTarget || t.TargetTotal > MaksTarget {
 		return "Target total Rp1.000.000 sampai Rp2.000.000.000."
 	}
-	if t.DPMinimal < 0 || t.DPMinimal > t.TargetTotal {
+	if t.DPMinimal < 0 {
+		return "DP tidak valid."
+	}
+	if t.DPMinimal > t.TargetTotal {
 		return "DP tidak boleh melebihi target total."
 	}
 	if t.PengingatTanggal < 1 || t.PengingatTanggal > 28 {
@@ -110,9 +124,23 @@ func ValidasiCatatan(jumlah int64, tanggal string, now time.Time) (string, strin
 	return tanggal, ""
 }
 
-// Hitung menghitung ringkasan dari target dan angka catatan. bulanIni adalah jumlah catatan di bulan berjalan WIB.
-func Hitung(t Target, tercatat, bulanIni int64, now time.Time) Ringkasan {
-	r := Ringkasan{Tercatat: tercatat, TercatatBulanIni: bulanIni}
+// bagiPerBulan: sisa dibagi n bulan, dibulatkan ke atas ke kelipatan 1.000; 0 bila sisa tidak positif.
+func bagiPerBulan(sisa int64, n int) int64 {
+	if sisa <= 0 {
+		return 0
+	}
+	per := (sisa + int64(n) - 1) / int64(n)
+	return (per + KelipatanPerBulan - 1) / KelipatanPerBulan * KelipatanPerBulan
+}
+
+// Hitung menghitung ringkasan dari target, jadwalnya (untuk jenis paket), dan angka catatan.
+// bulanIni adalah jumlah catatan di bulan berjalan WIB.
+//
+// Target paket dibagi sampai bulan batas pelunasan (berangkat - batas_pelunasan_hari brand, paling awal hari ini);
+// target perkiraan dibagi sampai bulan berangkat. Selisih bulan minimal 1.
+func Hitung(t Target, j Jadwal, tercatat, bulanIni int64, now time.Time) Ringkasan {
+	wib := now.In(ZonaWIB)
+	r := Ringkasan{Tercatat: tercatat, TercatatBulanIni: bulanIni, PaketTayang: true}
 	r.Sisa = t.TargetTotal - tercatat
 	if r.Sisa < 0 {
 		r.Sisa = 0
@@ -124,16 +152,39 @@ func Hitung(t Target, tercatat, bulanIni int64, now time.Time) Ringkasan {
 		}
 		r.Persen = int(p)
 	}
+	bulan, adaBulan := parseBulan(t.BulanBerangkat)
+	if adaBulan {
+		r.Lewat = indeksBulan(bulan) < indeksBulan(wib)
+	}
+
 	r.SisaBulan = 1
-	if bulan, ok := parseBulan(t.BulanBerangkat); ok {
-		if s := indeksBulan(bulan) - indeksBulan(now.In(ZonaWIB)); s > 1 {
+	akhir, adaAkhir := bulan, adaBulan
+	if t.Jenis == "paket" {
+		r.PaketTayang = j.Tayang(now)
+		if berangkat, err := time.Parse("2006-01-02", j.BerangkatTanggal); j.Ada && err == nil {
+			batas := berangkat.AddDate(0, 0, -j.BatasPelunasanHari)
+			s := batas.Format("2006-01-02")
+			r.BatasPelunasan = &s
+			akhir, adaAkhir = batas, true
+			if s < wib.Format("2006-01-02") {
+				akhir = wib
+			}
+		}
+	}
+	if adaAkhir {
+		if s := indeksBulan(akhir) - indeksBulan(wib); s > 1 {
 			r.SisaBulan = s
 		}
 	}
-	if r.Sisa > 0 {
-		n := int64(r.SisaBulan)
-		perBulan := (r.Sisa + n - 1) / n
-		r.PerBulan = (perBulan + KelipatanPerBulan - 1) / KelipatanPerBulan * KelipatanPerBulan
+
+	r.PerBulan = bagiPerBulan(r.Sisa, r.SisaBulan)
+	sisaAwalBulan := t.TargetTotal - (tercatat - bulanIni)
+	if sisaAwalBulan < 0 {
+		sisaAwalBulan = 0
+	}
+	r.PerBulanIni = bagiPerBulan(sisaAwalBulan, r.SisaBulan)
+	if k := r.PerBulanIni - bulanIni; k > 0 {
+		r.KurangBulanIni = k
 	}
 	r.DPTercapai = tercatat >= t.DPMinimal
 	r.Tercapai = tercatat >= t.TargetTotal
@@ -146,12 +197,19 @@ func Ambil(ctx context.Context, q Querier, akun int64, now time.Time) (*Respons,
 	var tg TargetOut
 	var sched sql.NullInt64
 	var dibuat time.Time
+	var berangkat, status sql.NullString
+	var batasHari sql.NullInt64
 	err := q.QueryRowContext(ctx, `
-		SELECT jenis, schedule_id, nama_paket, bulan_berangkat, jumlah_dewasa, jumlah_bayi, tipe_kamar,
-		       target_total, dp_minimal, pengingat_aktif, pengingat_tanggal, pengingat_jam, dibuat_at
-		FROM tabungan_target WHERE akun_id = ?`, akun).Scan(
+		SELECT t.jenis, t.schedule_id, t.nama_paket, t.bulan_berangkat, t.jumlah_dewasa, t.jumlah_bayi, t.tipe_kamar,
+		       t.target_total, t.dp_minimal, t.pengingat_aktif, t.pengingat_tanggal, t.pengingat_jam, t.dibuat_at,
+		       DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d'), s.status, br.batas_pelunasan_hari
+		FROM tabungan_target t
+		LEFT JOIN schedules s ON s.id = t.schedule_id
+		LEFT JOIN brands br ON br.id = s.brand_id
+		WHERE t.akun_id = ?`, akun).Scan(
 		&tg.Jenis, &sched, &tg.NamaPaket, &tg.BulanBerangkat, &tg.JumlahDewasa, &tg.JumlahBayi, &tg.TipeKamar,
-		&tg.TargetTotal, &tg.DPMinimal, &tg.PengingatAktif, &tg.PengingatTanggal, &tg.PengingatJam, &dibuat)
+		&tg.TargetTotal, &tg.DPMinimal, &tg.PengingatAktif, &tg.PengingatTanggal, &tg.PengingatJam, &dibuat,
+		&berangkat, &status, &batasHari)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("tabungan: baca target: %w", err)
 	}
@@ -173,7 +231,8 @@ func Ambil(ctx context.Context, q Querier, akun int64, now time.Time) (*Respons,
 			FROM tabungan_catatan WHERE akun_id = ?`, awalBulan, akun).Scan(&tercatat, &bulanIni); err != nil {
 			return nil, fmt.Errorf("tabungan: jumlah catatan: %w", err)
 		}
-		r := Hitung(tg.Target, tercatat, bulanIni, now)
+		j := Jadwal{Ada: berangkat.Valid, BerangkatTanggal: berangkat.String, Status: status.String, BatasPelunasanHari: int(batasHari.Int64)}
+		r := Hitung(tg.Target, j, tercatat, bulanIni, now)
 		out.Ringkasan = &r
 	}
 
@@ -197,14 +256,48 @@ func Ambil(ctx context.Context, q Querier, akun int64, now time.Time) (*Respons,
 	return out, rows.Err()
 }
 
-// JadwalTayang: apakah jadwal (paket) berstatus published dan belum berangkat (tanggal WIB).
-func JadwalTayang(ctx context.Context, q Querier, id int64, now time.Time) (bool, error) {
-	var n int
-	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM schedules WHERE id = ? AND status = 'published' AND berangkat_tanggal >= ?`,
-		id, now.In(ZonaWIB).Format("2006-01-02")).Scan(&n); err != nil {
-		return false, fmt.Errorf("tabungan: cek jadwal: %w", err)
+// BacaJadwal membaca jadwal (paket) untuk target; tidak ada: Jadwal{Ada: false}.
+func BacaJadwal(ctx context.Context, q Querier, id int64) (Jadwal, error) {
+	j := Jadwal{Ada: true}
+	err := q.QueryRowContext(ctx, `
+		SELECT DATE_FORMAT(s.berangkat_tanggal, '%Y-%m-%d'), s.status, COALESCE(br.batas_pelunasan_hari, 0)
+		FROM schedules s LEFT JOIN brands br ON br.id = s.brand_id WHERE s.id = ?`, id).
+		Scan(&j.BerangkatTanggal, &j.Status, &j.BatasPelunasanHari)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Jadwal{}, nil
 	}
-	return n > 0, nil
+	if err != nil {
+		return Jadwal{}, fmt.Errorf("tabungan: baca jadwal: %w", err)
+	}
+	return j, nil
+}
+
+// TargetTersimpan: bagian target lama yang menentukan pengecualian saat target disimpan ulang.
+type TargetTersimpan struct {
+	Ada            bool
+	ScheduleID     *int64
+	BulanBerangkat string
+}
+
+// KunciTarget mengunci baris target akun (SELECT ... FOR UPDATE) dan membaca bagian yang dipakai validasi.
+// Wajib dipanggil di dalam transaksi.
+func KunciTarget(ctx context.Context, q Querier, akun int64) (TargetTersimpan, error) {
+	var out TargetTersimpan
+	var sched sql.NullInt64
+	err := q.QueryRowContext(ctx, `SELECT schedule_id, bulan_berangkat FROM tabungan_target WHERE akun_id = ? FOR UPDATE`, akun).
+		Scan(&sched, &out.BulanBerangkat)
+	if errors.Is(err, sql.ErrNoRows) {
+		return TargetTersimpan{}, nil
+	}
+	if err != nil {
+		return TargetTersimpan{}, fmt.Errorf("tabungan: kunci target: %w", err)
+	}
+	out.Ada = true
+	if sched.Valid {
+		v := sched.Int64
+		out.ScheduleID = &v
+	}
+	return out, nil
 }
 
 // SimpanTarget: upsert satu target per akun. Catatan tidak disentuh.
@@ -226,8 +319,12 @@ func SimpanTarget(ctx context.Context, q Querier, akun int64, t Target) error {
 	return nil
 }
 
-// HapusSemua menghapus target dan seluruh catatan akun.
+// HapusSemua menghapus target dan seluruh catatan akun. Target dikunci dulu supaya catatan baru tidak
+// masuk di antara dua DELETE. Dipanggil di dalam transaksi.
 func HapusSemua(ctx context.Context, q Querier, akun int64) error {
+	if _, err := KunciTarget(ctx, q, akun); err != nil {
+		return err
+	}
 	if _, err := q.ExecContext(ctx, `DELETE FROM tabungan_catatan WHERE akun_id = ?`, akun); err != nil {
 		return fmt.Errorf("tabungan: hapus catatan: %w", err)
 	}
@@ -248,16 +345,26 @@ func HapusDataAkun(ctx context.Context, q Querier, akun int64) error {
 	return nil
 }
 
-// TambahCatatan menulis satu catatan bila akun punya target (atomik); tanpa target ErrTanpaTarget.
+// TambahCatatan mengunci target akun lalu menulis satu catatan. Tanpa target ErrTanpaTarget;
+// catatan sudah MaksDaftarCatatan ErrCatatanPenuh. Dipanggil di dalam transaksi.
 func TambahCatatan(ctx context.Context, q Querier, akun, jumlah int64, tanggal string) error {
-	res, err := q.ExecContext(ctx, `
-		INSERT INTO tabungan_catatan (akun_id, jumlah, tanggal)
-		SELECT ?, ?, ? FROM tabungan_target WHERE akun_id = ?`, akun, jumlah, tanggal, akun)
+	lama, err := KunciTarget(ctx, q, akun)
 	if err != nil {
-		return fmt.Errorf("tabungan: tambah catatan: %w", err)
+		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if !lama.Ada {
 		return ErrTanpaTarget
+	}
+	var n int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM tabungan_catatan WHERE akun_id = ?`, akun).Scan(&n); err != nil {
+		return fmt.Errorf("tabungan: hitung catatan: %w", err)
+	}
+	if n >= MaksDaftarCatatan {
+		return ErrCatatanPenuh
+	}
+	if _, err := q.ExecContext(ctx, `INSERT INTO tabungan_catatan (akun_id, jumlah, tanggal) VALUES (?,?,?)`,
+		akun, jumlah, tanggal); err != nil {
+		return fmt.Errorf("tabungan: tambah catatan: %w", err)
 	}
 	return nil
 }

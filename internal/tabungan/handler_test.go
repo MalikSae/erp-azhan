@@ -109,15 +109,38 @@ func buatJadwal(t *testing.T, db *sql.DB, status string, hariKeDepan int) int64 
 	return id
 }
 
+// bodyTarget: target paket untuk jadwal published 90 hari lagi; bulan_berangkat mengikuti jadwal.
 func bodyTarget(t *testing.T, db *sql.DB, total int64) map[string]any {
 	t.Helper()
 	sched := buatJadwal(t, db, "published", 90)
-	bulan := time.Now().In(ZonaWIB).AddDate(0, 6, 0).Format("2006-01")
+	bulan := time.Now().In(ZonaWIB).AddDate(0, 0, 90).Format("2006-01")
 	return map[string]any{
 		"jenis": "paket", "schedule_id": sched, "nama_paket": "Paket Uji", "bulan_berangkat": bulan,
 		"jumlah_dewasa": 2, "jumlah_bayi": 1, "tipe_kamar": "Quad", "target_total": total, "dp_minimal": 10_000_000,
 		"pengingat_aktif": true, "pengingat_tanggal": 5, "pengingat_jam": 9,
 	}
+}
+
+// sisaBulanJadwal90: sisa_bulan dan batas pelunasan yang diharapkan untuk jadwal dari buatJadwal(..., 90),
+// memakai batas_pelunasan_hari brand pertama.
+func sisaBulanJadwal90(t *testing.T, db *sql.DB) (int, string) {
+	t.Helper()
+	var hari int
+	if err := db.QueryRow(`SELECT batas_pelunasan_hari FROM brands ORDER BY id LIMIT 1`).Scan(&hari); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().In(ZonaWIB)
+	b := now.AddDate(0, 0, 90)
+	batas := time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -hari)
+	akhir := batas
+	if batas.Format("2006-01-02") < now.Format("2006-01-02") {
+		akhir = now
+	}
+	n := indeksBulan(akhir) - indeksBulan(now)
+	if n < 1 {
+		n = 1
+	}
+	return n, batas.Format("2006-01-02")
 }
 
 func TestTanpaSesiDitolak(t *testing.T) {
@@ -165,8 +188,10 @@ func TestAlurTargetDanCatatan(t *testing.T) {
 	if rec.Code != 200 || r.Target == nil || r.Ringkasan == nil || r.Target.DibuatAt == "" || r.Target.TipeKamar != "Quad" {
 		t.Fatalf("simpan target: %d %s", rec.Code, rec.Body.String())
 	}
-	if r.Ringkasan.Sisa != 60_000_000 || r.Ringkasan.SisaBulan != 6 || r.Ringkasan.DPTercapai {
-		t.Fatalf("ringkasan awal: %+v", r.Ringkasan)
+	sisaBulan, batas := sisaBulanJadwal90(t, db)
+	if r.Ringkasan.Sisa != 60_000_000 || r.Ringkasan.SisaBulan != sisaBulan || r.Ringkasan.DPTercapai ||
+		r.Ringkasan.BatasPelunasan == nil || *r.Ringkasan.BatasPelunasan != batas || !r.Ringkasan.PaketTayang || r.Ringkasan.Lewat {
+		t.Fatalf("ringkasan awal: %+v (mau sisa_bulan %d, batas %s)", r.Ringkasan, sisaBulan, batas)
 	}
 
 	// Catatan: 201, tanggal default hari ini WIB, terbaru dulu.
@@ -252,8 +277,116 @@ func TestJadwalTidakTayangDitolak(t *testing.T) {
 		}
 	}
 	b["schedule_id"] = buatJadwal(t, db, "published", 0)
+	b["bulan_berangkat"] = time.Now().In(ZonaWIB).Format("2006-01")
 	if rec := panggil(t, rt, a, "PUT", "/tabungan/target", b); rec.Code != 200 {
 		t.Fatalf("berangkat hari ini sah: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func pesanGalat(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	var e struct {
+		Error string `json:"error"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &e)
+	return e.Error
+}
+
+// Jenis paket: bulan_berangkat wajib sama dengan bulan berangkat jadwal.
+func TestBulanHarusSesuaiPaket(t *testing.T) {
+	db := testdb.DB(t)
+	rt := router(db)
+	a, _ := buatAkun(t, db)
+	b := bodyTarget(t, db, 30_000_000)
+	b["bulan_berangkat"] = time.Now().In(ZonaWIB).AddDate(0, 0, 90).AddDate(0, 2, 0).Format("2006-01")
+	rec := panggil(t, rt, a, "PUT", "/tabungan/target", b)
+	if rec.Code != 400 || pesanGalat(t, rec) != "Bulan berangkat tidak sesuai paket." {
+		t.Fatalf("bulan beda: %d %s", rec.Code, rec.Body.String())
+	}
+	var n int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM tabungan_target WHERE akun_id = ?`, a).Scan(&n)
+	if n != 0 {
+		t.Fatalf("target tersimpan walau ditolak: %d", n)
+	}
+}
+
+// Target yang disimpan ulang dengan paket atau bulan yang sama tetap diterima walau paket tidak tayang
+// atau bulan sudah lewat; paket atau bulan baru tetap dicek.
+func TestSimpanUlangPaketTidakTayang(t *testing.T) {
+	db := testdb.DB(t)
+	rt := router(db)
+	a, _ := buatAkun(t, db)
+	b := bodyTarget(t, db, 30_000_000)
+	if rec := panggil(t, rt, a, "PUT", "/tabungan/target", b); rec.Code != 200 {
+		t.Fatalf("simpan: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := db.Exec(`UPDATE schedules SET status = 'draft' WHERE id = ?`, b["schedule_id"]); err != nil {
+		t.Fatal(err)
+	}
+	r := baca(t, panggil(t, rt, a, "GET", "/tabungan", nil))
+	if r.Ringkasan == nil || r.Ringkasan.PaketTayang {
+		t.Fatalf("paket draft harus paket_tayang false: %+v", r.Ringkasan)
+	}
+	b["target_total"] = 35_000_000
+	if rec := panggil(t, rt, a, "PUT", "/tabungan/target", b); rec.Code != 200 {
+		t.Fatalf("paket sama tidak tayang: %d %s", rec.Code, rec.Body.String())
+	}
+	lain := buatJadwal(t, db, "draft", 90)
+	b["schedule_id"] = lain
+	rec := panggil(t, rt, a, "PUT", "/tabungan/target", b)
+	if rec.Code != 400 || pesanGalat(t, rec) != "Paket tidak ditemukan. Pilih paket lain." {
+		t.Fatalf("paket lain tidak tayang: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Perkiraan dengan bulan tersimpan yang sudah lewat.
+	lalu := time.Now().In(ZonaWIB).AddDate(0, -2, -time.Now().In(ZonaWIB).Day()+1).Format("2006-01")
+	p := bodyTarget(t, db, 30_000_000)
+	p["jenis"], p["schedule_id"] = "perkiraan", nil
+	if rec := panggil(t, rt, a, "PUT", "/tabungan/target", p); rec.Code != 200 {
+		t.Fatalf("perkiraan: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := db.Exec(`UPDATE tabungan_target SET bulan_berangkat = ? WHERE akun_id = ?`, lalu, a); err != nil {
+		t.Fatal(err)
+	}
+	r = baca(t, panggil(t, rt, a, "GET", "/tabungan", nil))
+	if !r.Ringkasan.Lewat || !r.Ringkasan.PaketTayang || r.Ringkasan.BatasPelunasan != nil {
+		t.Fatalf("bulan lewat: %+v", r.Ringkasan)
+	}
+	p["bulan_berangkat"] = lalu
+	if rec := panggil(t, rt, a, "PUT", "/tabungan/target", p); rec.Code != 200 {
+		t.Fatalf("bulan lewat sama: %d %s", rec.Code, rec.Body.String())
+	}
+	p["bulan_berangkat"] = time.Now().In(ZonaWIB).AddDate(0, -1, -time.Now().In(ZonaWIB).Day()+1).Format("2006-01")
+	rec = panggil(t, rt, a, "PUT", "/tabungan/target", p)
+	if rec.Code != 400 || pesanGalat(t, rec) != "Bulan berangkat tidak boleh lewat." {
+		t.Fatalf("bulan lewat lain: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Catatan dibatasi 200 per akun supaya ringkasan dan daftar memakai data yang sama.
+func TestBatasCatatan(t *testing.T) {
+	db := testdb.DB(t)
+	rt := router(db)
+	a, _ := buatAkun(t, db)
+	if rec := panggil(t, rt, a, "PUT", "/tabungan/target", bodyTarget(t, db, 60_000_000)); rec.Code != 200 {
+		t.Fatalf("simpan: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := db.Exec(`
+		INSERT INTO tabungan_catatan (akun_id, jumlah, tanggal)
+		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+		SELECT ?, 1000, '2026-01-01' FROM n`, MaksDaftarCatatan-1, a); err != nil {
+		t.Fatal(err)
+	}
+	if rec := panggil(t, rt, a, "POST", "/tabungan/catatan", map[string]any{"jumlah": 1000}); rec.Code != 201 {
+		t.Fatalf("catatan ke-200: %d %s", rec.Code, rec.Body.String())
+	}
+	rec := panggil(t, rt, a, "POST", "/tabungan/catatan", map[string]any{"jumlah": 1000})
+	if rec.Code != http.StatusConflict || pesanGalat(t, rec) != "Catatan sudah 200. Hapus catatan lama dulu." {
+		t.Fatalf("catatan ke-201: %d %s", rec.Code, rec.Body.String())
+	}
+	r := baca(t, panggil(t, rt, a, "GET", "/tabungan", nil))
+	if len(r.Catatan) != MaksDaftarCatatan || r.Ringkasan.Tercatat != 200_000 {
+		t.Fatalf("daftar %d, tercatat %d", len(r.Catatan), r.Ringkasan.Tercatat)
 	}
 }
 
