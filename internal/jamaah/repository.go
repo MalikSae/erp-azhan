@@ -105,15 +105,34 @@ type ListOpts struct {
 	Offset int
 }
 
-// pctDokumenSQL: persentase jenis dokumen yang sudah disetujui admin, dari semua 7 jenis
-// (pas foto, paspor, KTP, KK, buku nikah, akta lahir, vaksin meningitis; sama dengan dokumen.validJenis).
-// Menunggu verifikasi dan ditolak tidak dihitung (keputusan 2026-11-25). 100 hanya bila ketujuhnya disetujui.
-// Pembaginya harus ikut diubah bila jenis dokumen bertambah.
-const pctDokumenSQL = `ROUND(
-			(SELECT COUNT(DISTINCT dj.jenis)
-			 FROM dokumen_jamaah dj
-			 WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status = 'approved') / 7.0 * 100
-		)`
+// Kelengkapan dokumen di admin memakai dokumen wajib sesuai tipe pax (shared.DokumenWajibJamaah), sama dengan
+// portal pelanggan dan agen (keputusan 2026-11-26). Tipe pax diambil dari booking aktif (bukan batal) terakhir;
+// jamaah tanpa booking memakai daftar reguler. Hanya dokumen disetujui yang dihitung (keputusan 2026-11-25).
+
+// tipeDokumenSQL: tipe pax jamaah di booking aktif terakhir, 'reguler' bila tidak ada.
+const tipeDokumenSQL = `COALESCE((SELECT bp.pax_type FROM booking_pax bp JOIN bookings b ON b.id = bp.booking_id
+			WHERE bp.jamaah_id = jamaah.id AND bp.pax_status = 'aktif' AND b.status <> 'batal'
+			ORDER BY b.created_at DESC, b.id DESC LIMIT 1), 'reguler')`
+
+// dokumenDisetujuiSQL: jenis dokumen yang sudah disetujui, dipisah koma.
+const dokumenDisetujuiSQL = `COALESCE((SELECT GROUP_CONCAT(DISTINCT dj.jenis)
+			FROM dokumen_jamaah dj
+			WHERE dj.jamaah_id = jamaah.id AND dj.file_url IS NOT NULL AND dj.status = 'approved'), '')`
+
+// kelengkapanDokumen: jumlah dokumen wajib yang disetujui, jumlah dokumen wajib, dan persennya.
+func kelengkapanDokumen(paxType, disetujuiCSV string) (setuju, total, pct int) {
+	disetujui := map[string]bool{}
+	for _, j := range strings.Split(disetujuiCSV, ",") {
+		if j = strings.TrimSpace(j); j != "" {
+			disetujui[j] = true
+		}
+	}
+	setuju, total = shared.HitungDokumenWajib(paxType, disetujui)
+	if total > 0 {
+		pct = (setuju*200 + total) / (2 * total) // dibulatkan; 100 hanya bila semua wajib disetujui
+	}
+	return setuju, total, pct
+}
 
 // List mengambil semua jamaah, filter brand kalau scoped admin.
 func (r *Repository) List(ctx context.Context, brandID *int64, status string, opts ...ListOpts) ([]JamaahListItem, error) {
@@ -144,7 +163,7 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 			IF(emergency_hubungan IS NOT NULL AND emergency_hubungan != '', 1, 0) +
 			IF(emergency_alamat IS NOT NULL AND emergency_alamat != '', 1, 0)
 		) / 22.0 * 100) AS pct_data,
-		` + pctDokumenSQL + ` AS pct_dokumen,
+		` + tipeDokumenSQL + ` AS tipe_dokumen, ` + dokumenDisetujuiSQL + ` AS dokumen_disetujui,
 		created_at,
 		kaitan_status, direkrut_oleh_akun_id,
 		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama,
@@ -196,10 +215,12 @@ func (r *Repository) List(ctx context.Context, brandID *int64, status string, op
 	items := make([]JamaahListItem, 0)
 	for rows.Next() {
 		var item JamaahListItem
-		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &item.PctDokumen, &item.CreatedAt,
+		var tipe, disetujui string
+		if err := rows.Scan(&item.ID, &item.BrandID, &item.IDJamaah, &item.KodeJamaah, &item.NamaLengkap, &item.JenisKelamin, &item.NIK, &item.TanggalLahir, &item.NoHP, &item.Email, &item.Status, &item.PctData, &tipe, &disetujui, &item.CreatedAt,
 			&item.KaitanStatus, &item.DirekrutOlehAkunID, &item.DirekrutOlehNama, &item.TotalBooking); err != nil {
 			return nil, fmt.Errorf("jamaah.List scan: %w", err)
 		}
+		item.DokumenWajibDisetujui, item.DokumenWajibTotal, item.PctDokumen = kelengkapanDokumen(tipe, disetujui)
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -219,7 +240,8 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		created_at,
 		EXISTS(SELECT 1 FROM customer_accounts WHERE jamaah_id = jamaah.id) AS portal_aktif,
 		kaitan_status, direkrut_oleh_akun_id,
-		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama
+		(SELECT a.nama_lengkap FROM customer_accounts a WHERE a.id = jamaah.direkrut_oleh_akun_id) AS direkrut_oleh_nama,
+		` + tipeDokumenSQL + ` AS tipe_dokumen, ` + dokumenDisetujuiSQL + ` AS dokumen_disetujui
 		FROM jamaah WHERE id=?`
 
 	var args []interface{}
@@ -230,6 +252,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 	}
 
 	var j Jamaah
+	var tipe, disetujui string
 	err := r.db.QueryRowContext(ctx, q, args...).Scan(
 		&j.ID, &j.BrandID, &j.IDJamaah, &j.KodeJamaah, &j.NamaLengkap, &j.NamaPaspor, &j.JenisKelamin, &j.NamaAyahKandung, &j.NIK, &j.TempatLahir,
 		&j.TanggalLahir,
@@ -240,6 +263,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 		&j.CreatedAt,
 		&j.PortalAktif,
 		&j.KaitanStatus, &j.DirekrutOlehAkunID, &j.DirekrutOlehNama,
+		&tipe, &disetujui,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -247,6 +271,8 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Ja
 	if err != nil {
 		return nil, fmt.Errorf("jamaah.GetByID: %w", err)
 	}
+	j.DokumenWajib = shared.DokumenWajibJamaah(tipe)
+	j.DokumenWajibDisetujui, j.DokumenWajibTotal, _ = kelengkapanDokumen(tipe, disetujui)
 	return &j, nil
 }
 

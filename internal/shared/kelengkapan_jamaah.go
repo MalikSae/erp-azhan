@@ -16,9 +16,33 @@ func DataWajibBerlaku(paxType, kunci string) bool {
 }
 
 // DokumenWajibJamaah: jenis dokumen yang harus disetujui admin sebelum jamaah dianggap lengkap.
+// Bayi: paspor, KK, pas foto; akta lahir tidak wajib (keputusan 2026-11-26).
 func DokumenWajibJamaah(paxType string) []string {
 	if paxType == "infant" {
-		return []string{"paspor", "akte_lahir", "pas_foto"}
+		return []string{"paspor", "kk", "pas_foto"}
 	}
 	return []string{"paspor", "ktp", "pas_foto"}
+}
+
+// LabelDokumen: label jenis dokumen jamaah (sentence case), satu peta untuk portal pelanggan, notifikasi, dan admin.
+// Kuncinya sama dengan enum dokumen_jamaah.jenis.
+var LabelDokumen = map[string]string{
+	"pas_foto":          "Pas foto",
+	"paspor":            "Paspor",
+	"ktp":               "KTP",
+	"kk":                "Kartu keluarga",
+	"buku_nikah":        "Buku nikah",
+	"akte_lahir":        "Akta lahir",
+	"vaksin_meningitis": "Vaksin meningitis",
+}
+
+// HitungDokumenWajib: jumlah dokumen wajib (sesuai tipe pax) yang ada di disetujui, dan jumlah dokumen wajib.
+func HitungDokumenWajib(paxType string, disetujui map[string]bool) (setuju, total int) {
+	wajib := DokumenWajibJamaah(paxType)
+	for _, j := range wajib {
+		if disetujui[j] {
+			setuju++
+		}
+	}
+	return setuju, len(wajib)
 }

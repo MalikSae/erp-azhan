@@ -34,7 +34,8 @@ func tulisGalat(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrBukanJamaah):
 		shared.WriteError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, ErrRSVPDitutup), errors.Is(err, ErrBelumAda), errors.Is(err, ErrSudahDimulai),
-		errors.Is(err, ErrAdaAbsensi), errors.Is(err, ErrAbsensiBelumDibuka), errors.Is(err, ErrPaketSudahBermanasik):
+		errors.Is(err, ErrAdaAbsensi), errors.Is(err, ErrAbsensiBelumDibuka), errors.Is(err, ErrPaketSudahBermanasik),
+		errors.Is(err, ErrJadwalTerkunci), errors.Is(err, ErrBelumDP):
 		shared.WriteError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("[ERROR] manasik: %v", err)
@@ -149,7 +150,10 @@ func (h *Handler) Ubah(w http.ResponseWriter, r *http.Request) {
 		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
-	if err := Ubah(r.Context(), h.db, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), in); err != nil {
+	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
+		return Ubah(r.Context(), tx, id, identity.GetBrandID(r.Context()), identity.GetAdminUserID(r.Context()), in, h.now())
+	})
+	if err != nil {
 		tulisGalat(w, err)
 		return
 	}
@@ -162,7 +166,10 @@ func (h *Handler) Hapus(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := Hapus(r.Context(), h.db, id, identity.GetBrandID(r.Context()), h.now()); err != nil {
+	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {
+		return Hapus(r.Context(), tx, id, identity.GetBrandID(r.Context()), h.now())
+	})
+	if err != nil {
 		tulisGalat(w, err)
 		return
 	}
@@ -223,7 +230,7 @@ func (h *Handler) Absensi(w http.ResponseWriter, r *http.Request) {
 		Hadir *bool `json:"hadir"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PaxID <= 0 || req.Hadir == nil {
-		shared.WriteError(w, http.StatusBadRequest, "Pax dan hadir wajib diisi.")
+		shared.WriteError(w, http.StatusBadRequest, "Jamaah dan hadir wajib diisi.")
 		return
 	}
 	err := h.dalamTx(r.Context(), func(tx *sql.Tx) error {

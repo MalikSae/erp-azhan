@@ -19,8 +19,7 @@ const (
 	MaksCatatan       = 1_000_000_000
 	MaksBulanKeDepan  = 36
 	MaksNamaPaket     = 150
-	MaksDewasa        = 20
-	MaksBayi          = 10
+	MaksJamaah        = 9
 	MaksTokenPerAkun  = 10
 	MaksDaftarCatatan = 200
 	KelipatanPerBulan = 1000
@@ -56,14 +55,33 @@ type TargetOut struct {
 
 // Ringkasan: angka turunan dari target dan catatan.
 type Ringkasan struct {
-	Tercatat         int64 `json:"tercatat"`
-	Sisa             int64 `json:"sisa"`
-	Persen           int   `json:"persen"`
-	SisaBulan        int   `json:"sisa_bulan"`
-	PerBulan         int64 `json:"per_bulan"`
-	TercatatBulanIni int64 `json:"tercatat_bulan_ini"`
-	DPTercapai       bool  `json:"dp_tercapai"`
-	Tercapai         bool  `json:"tercapai"`
+	Tercatat         int64   `json:"tercatat"`
+	Sisa             int64   `json:"sisa"`
+	Persen           int     `json:"persen"`
+	SisaBulan        int     `json:"sisa_bulan"`
+	PerBulan         int64   `json:"per_bulan"`
+	TercatatBulanIni int64   `json:"tercatat_bulan_ini"`
+	PerBulanIni      int64   `json:"per_bulan_ini"`
+	KurangBulanIni   int64   `json:"kurang_bulan_ini"`
+	DPTercapai       bool    `json:"dp_tercapai"`
+	Tercapai         bool    `json:"tercapai"`
+	Lewat            bool    `json:"lewat"`
+	PaketTayang      bool    `json:"paket_tayang"`
+	BatasPelunasan   *string `json:"batas_pelunasan"`
+}
+
+// Jadwal: jadwal (paket) yang dipakai target jenis paket. Ada false bila target perkiraan
+// atau jadwalnya sudah dihapus.
+type Jadwal struct {
+	Ada                bool
+	BerangkatTanggal   string // YYYY-MM-DD
+	Status             string
+	BatasPelunasanHari int
+}
+
+// Tayang: berstatus published dan belum berangkat (tanggal WIB).
+func (j Jadwal) Tayang(now time.Time) bool {
+	return j.Ada && j.Status == "published" && j.BerangkatTanggal >= now.In(ZonaWIB).Format("2006-01-02")
 }
 
 // Catatan: satu catatan tabungan.

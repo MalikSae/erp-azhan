@@ -1,6 +1,7 @@
 package customer
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log"
@@ -15,22 +16,16 @@ import (
 // Dokumen jamaah di portal pelanggan: pemesan melihat kelengkapan dokumen tiap jamaah di bookingnya
 // dan mengirim berkas (status submitted). Persetujuan tetap oleh admin lewat PUT /api/admin/dokumen/{id}/status.
 
-var labelDokumen = map[string]string{
-	"paspor":            "Paspor",
-	"ktp":               "KTP",
-	"pas_foto":          "Pas foto",
-	"kk":                "Kartu Keluarga",
-	"buku_nikah":        "Buku nikah",
-	"akte_lahir":        "Akta lahir",
-	"vaksin_meningitis": "Vaksin meningitis",
-}
+var labelDokumen = shared.LabelDokumen
 
-// dokumenWajib: reguler paspor, KTP, pas foto; infant paspor, akta lahir, pas foto. Selebihnya tambahan (opsional).
+// dokumenWajib: reguler paspor, KTP, pas foto; infant paspor, KK, pas foto. Selebihnya tambahan (opsional).
 func dokumenWajib(paxType string) []string { return shared.DokumenWajibJamaah(paxType) }
 
+// dokumenTambahan: infant tanpa tambahan; akta lahir bayi tidak tampil di web dan app (keputusan 2026-11-26),
+// hanya tersedia di admin.
 func dokumenTambahan(paxType string) []string {
 	if paxType == "infant" {
-		return []string{"kk"}
+		return []string{}
 	}
 	return []string{"kk", "buku_nikah", "vaksin_meningitis"}
 }
@@ -202,6 +197,41 @@ func putuskanGantiDokumen(statusAda string, aksesPenuh bool) keputusanGanti {
 	return gantiBoleh
 }
 
+// gerbangKirimDokumen memeriksa booking (tidak batal, minimal DP), hak akun atas jamaah, dan pax aktif di dalam
+// transaksi unggah. Baris booking dan pax dikunci FOR SHARE, jadi pembatalan atau perubahan status di tengah jalan
+// menunggu unggah ini selesai, dan unggah sesudahnya membaca status terbaru. kode 0 = lolos.
+func gerbangKirimDokumen(ctx context.Context, tx dbq, akunID, bookingID, jamaahID int64) (kode int, pesan string, err error) {
+	var bid int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM bookings WHERE id=? FOR SHARE`, bookingID).Scan(&bid); errors.Is(err, sql.ErrNoRows) {
+		return http.StatusNotFound, "Booking tidak ditemukan.", nil
+	} else if err != nil {
+		return 0, "", err
+	}
+	order, _, err := ownedQ(ctx, tx, akunID, bookingID)
+	if errors.Is(err, ErrNotFound) {
+		return http.StatusNotFound, "Booking tidak ditemukan.", nil
+	}
+	if err != nil {
+		return 0, "", err
+	}
+	if order.Tab == "batal" {
+		return http.StatusConflict, "Booking ini sudah dibatalkan atau kedaluwarsa.", nil
+	}
+	if !bolehUnggahDokumen(order.Status) {
+		return http.StatusConflict, "Dokumen bisa diunggah setelah DP terverifikasi.", nil
+	}
+	if !order.bolehJamaah(jamaahID) {
+		return http.StatusForbidden, pesanBukanDiriSendiri, nil
+	}
+	var paxID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM booking_pax WHERE booking_id=? AND jamaah_id=? AND pax_status='aktif' LIMIT 1 FOR SHARE`, bookingID, jamaahID).Scan(&paxID); errors.Is(err, sql.ErrNoRows) {
+		return http.StatusNotFound, "Jamaah tidak ditemukan di booking ini.", nil
+	} else if err != nil {
+		return 0, "", err
+	}
+	return 0, "", nil
+}
+
 // KirimDokumen POST /api/account/bookings/{id}/dokumen
 // Berkas harus unggahan akun ini (POST /api/account/media/upload). Status dokumen diperiksa dan berkas disimpan
 // dalam satu transaksi (baris dokumen dikunci), jadi persetujuan admin di tengah jalan tidak tertimpa.
@@ -220,38 +250,6 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Data dokumen tidak valid.")
 		return
 	}
-	order, _, err := o.owned(r.Context(), acc.ID, id)
-	if errors.Is(err, ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Booking tidak ditemukan.")
-		return
-	}
-	if err != nil {
-		log.Printf("[ERROR] account kirim dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
-		return
-	}
-	if order.Tab == "batal" {
-		writeError(w, http.StatusConflict, "Booking ini sudah dibatalkan atau kedaluwarsa.")
-		return
-	}
-	if !bolehUnggahDokumen(order.Status) {
-		writeError(w, http.StatusConflict, "Dokumen bisa diunggah setelah DP terverifikasi.")
-		return
-	}
-	if !order.bolehJamaah(req.JamaahID) {
-		writeError(w, http.StatusForbidden, pesanBukanDiriSendiri)
-		return
-	}
-	var jamaahOK bool
-	if err := o.db.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM booking_pax WHERE booking_id=? AND jamaah_id=? AND pax_status='aktif')`, id, req.JamaahID).Scan(&jamaahOK); err != nil {
-		log.Printf("[ERROR] account kirim dokumen: %v", err)
-		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
-		return
-	}
-	if !jamaahOK {
-		writeError(w, http.StatusNotFound, "Jamaah tidak ditemukan di booking ini.")
-		return
-	}
 	tx, err := o.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		log.Printf("[ERROR] account kirim dokumen begin: %v", err)
@@ -259,6 +257,14 @@ func (o *Orders) KirimDokumen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+	if kode, pesan, err := gerbangKirimDokumen(r.Context(), tx, acc.ID, id, req.JamaahID); err != nil {
+		log.Printf("[ERROR] account kirim dokumen: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal menyimpan dokumen.")
+		return
+	} else if kode != 0 {
+		writeError(w, kode, pesan)
+		return
+	}
 	// Kunci jamaah lalu baris dokumen, urutan sama dengan dokumen.UpsertTx. UPDATE status oleh admin menunggu
 	// kunci ini dan gagal cek versi setelah berkas diganti, jadi keputusan di bawah tidak basi.
 	var jid int64

@@ -21,8 +21,8 @@ func inputSah() Input {
 func TestValidasiInput(t *testing.T) {
 	in := inputSah()
 	in.rapikan()
-	if msg := in.validasi(); msg != "" {
-		t.Fatalf("input sah ditolak: %s", msg)
+	if err := in.validasi(); err != nil {
+		t.Fatalf("input sah ditolak: %v", err)
 	}
 	if len(in.Agenda) != 2 {
 		t.Errorf("butir agenda kosong harus dibuang: %v", in.Agenda)
@@ -46,7 +46,7 @@ func TestValidasiInput(t *testing.T) {
 		in := inputSah()
 		ubah(&in)
 		in.rapikan()
-		if in.validasi() == "" {
+		if in.validasi() == nil {
 			t.Errorf("%s: harus ditolak", nama)
 		}
 	}
@@ -191,12 +191,12 @@ func TestManasikPaketRSVPDanAbsensi(t *testing.T) {
 	// Ubah: tanggal tidak boleh menyamai keberangkatan paling awal; jawaban tetap tersimpan.
 	geser := inputSah()
 	geser.Tanggal = "2099-02-05"
-	if err := Ubah(ctx, tx, id, &brand, 0, geser); !galatValidasi(err) {
+	if err := Ubah(ctx, tx, id, &brand, 0, geser, sebelum); !galatValidasi(err) {
 		t.Errorf("ubah tanggal lewat keberangkatan: %v", err)
 	}
 	ubah := inputSah()
 	ubah.Ustadz, ubah.GmapsURL = "", ""
-	if err := Ubah(ctx, tx, id, &brand, 0, ubah); err != nil {
+	if err := Ubah(ctx, tx, id, &brand, 0, ubah, sebelum); err != nil {
 		t.Fatal(err)
 	}
 	if d, _ = AmbilDetail(ctx, tx, id, &brand, sebelum); d.Manasik.Ustadz != nil || cariJamaah(d, j1).Jawaban == nil {

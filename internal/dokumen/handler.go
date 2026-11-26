@@ -24,17 +24,10 @@ func NewHandler(repo *Repository) *Handler {
 	return &Handler{repo: repo}
 }
 
-var validJenis = map[string]bool{
-	"pas_foto":          true,
-	"paspor":            true,
-	"ktp":               true,
-	"kk":                true,
-	"buku_nikah":        true,
-	"akte_lahir":        true,
-	"vaksin_meningitis": true,
-}
+// validJenis: jenis dokumen yang punya label di peta bersama (sama dengan enum dokumen_jamaah.jenis).
+func validJenis(jenis string) bool { return shared.LabelDokumen[jenis] != "" }
 
-// submitted = batalkan persetujuan; hanya dari approved.
+// approved/rejected hanya dari submitted (menunggu verifikasi); submitted = batalkan persetujuan, hanya dari approved.
 var validStatuses = map[string]bool{
 	"approved":  true,
 	"rejected":  true,
@@ -88,7 +81,7 @@ func (h *Handler) UpsertDokumen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !validJenis[req.Jenis] {
+	if !validJenis(req.Jenis) {
 		shared.WriteError(w, http.StatusBadRequest, "Jenis dokumen tidak valid.")
 		return
 	}
@@ -175,6 +168,10 @@ func (h *Handler) UpdateDokumenStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Status == "submitted" && current.Status != "approved" {
 		shared.WriteError(w, http.StatusConflict, "Dokumen belum disetujui.")
+		return
+	}
+	if req.Status != "submitted" && current.Status != "submitted" {
+		shared.WriteError(w, http.StatusConflict, "Dokumen tidak menunggu verifikasi.")
 		return
 	}
 

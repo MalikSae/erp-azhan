@@ -50,22 +50,44 @@ func (h *Handler) SimpanTarget(w http.ResponseWriter, r *http.Request) {
 		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
-	if pesan := ValidasiTarget(&t, h.now()); pesan != "" {
+	now := h.now()
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		h.gagal(w, "simpan target", akun, err)
+		return
+	}
+	defer tx.Rollback()
+	lama, err := KunciTarget(r.Context(), tx, akun)
+	if err != nil {
+		h.gagal(w, "simpan target", akun, err)
+		return
+	}
+	if pesan := ValidasiTarget(&t, lama.BulanBerangkat, now); pesan != "" {
 		shared.WriteError(w, http.StatusBadRequest, pesan)
 		return
 	}
 	if t.ScheduleID != nil {
-		ada, err := JadwalTayang(r.Context(), h.db, *t.ScheduleID, h.now())
+		j, err := BacaJadwal(r.Context(), tx, *t.ScheduleID)
 		if err != nil {
 			h.gagal(w, "jadwal", akun, err)
 			return
 		}
-		if !ada {
+		// Paket yang sama dengan yang tersimpan tetap diterima walau sudah tidak tayang.
+		sama := lama.ScheduleID != nil && *lama.ScheduleID == *t.ScheduleID
+		if !j.Ada || (!sama && !j.Tayang(now)) {
 			shared.WriteError(w, http.StatusBadRequest, "Paket tidak ditemukan. Pilih paket lain.")
 			return
 		}
+		if len(j.BerangkatTanggal) < 7 || j.BerangkatTanggal[:7] != t.BulanBerangkat {
+			shared.WriteError(w, http.StatusBadRequest, "Bulan berangkat tidak sesuai paket.")
+			return
+		}
 	}
-	if err := SimpanTarget(r.Context(), h.db, akun, t); err != nil {
+	if err := SimpanTarget(r.Context(), tx, akun, t); err != nil {
+		h.gagal(w, "simpan target", akun, err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		h.gagal(w, "simpan target", akun, err)
 		return
 	}
@@ -108,11 +130,24 @@ func (h *Handler) TambahCatatan(w http.ResponseWriter, r *http.Request) {
 		shared.WriteError(w, http.StatusBadRequest, pesan)
 		return
 	}
-	if err := TambahCatatan(r.Context(), h.db, akun, req.Jumlah, tanggal); err != nil {
-		if errors.Is(err, ErrTanpaTarget) {
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		h.gagal(w, "tambah catatan", akun, err)
+		return
+	}
+	defer tx.Rollback()
+	if err := TambahCatatan(r.Context(), tx, akun, req.Jumlah, tanggal); err != nil {
+		switch {
+		case errors.Is(err, ErrTanpaTarget):
 			shared.WriteError(w, http.StatusConflict, "Belum ada target. Buat target dulu.")
-			return
+		case errors.Is(err, ErrCatatanPenuh):
+			shared.WriteError(w, http.StatusConflict, "Catatan sudah 200. Hapus catatan lama dulu.")
+		default:
+			h.gagal(w, "tambah catatan", akun, err)
 		}
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		h.gagal(w, "tambah catatan", akun, err)
 		return
 	}

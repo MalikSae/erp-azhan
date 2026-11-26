@@ -123,8 +123,7 @@ var lockedStatuses = map[string]bool{
 }
 
 var (
-	ErrPaxBatal      = errors.New("tidak dapat mengubah progress untuk pax yang sudah dibatalkan")
-	ErrManasikInfant = errors.New("Manasik tidak berlaku untuk infant")
+	ErrPaxBatal = errors.New("tidak dapat mengubah progress untuk pax yang sudah dibatalkan")
 )
 
 // AllowedHeaderProgressFields adalah mapping dari key request header ke nama kolom bookings.
@@ -138,7 +137,6 @@ var AllowedHeaderProgressFields = map[string]string{
 var AllowedPaxProgressFields = map[string]string{
 	"visa":              "progress_visa",
 	"siskopatuh":        "progress_siskopatuh",
-	"manasik":           "progress_manasik",
 	"vaksin_meningitis": "progress_vaksin_meningitis",
 }
 
@@ -2317,8 +2315,8 @@ func simpanProgressBooking(ctx context.Context, q notifikasi.Querier, bookingID 
 	return nil
 }
 
-// UpdatePaxProgress melakukan update terhadap kolom progress individual pax (visa, siskopatuh, manasik, vaksin_meningitis).
-// adminID dicatat sebagai pengubah penanda "sudah manasik" (jejak yang sama dengan absensi di menu Manasik).
+// UpdatePaxProgress melakukan update terhadap kolom progress individual pax (visa, siskopatuh, vaksin_meningitis).
+// Penanda "sudah manasik" hanya diisi absensi di menu Manasik (keputusan Q6 audit 2026-11-26), bukan dari sini.
 func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, paxID int64, brandID *int64, adminID int64, updates map[string]bool) (*Booking, error) {
 	if len(updates) == 0 {
 		return r.GetByID(ctx, bookingID, brandID)
@@ -2340,7 +2338,7 @@ func (r *Repository) UpdatePaxProgress(ctx context.Context, bookingID int64, pax
 	return r.GetByID(ctx, bookingID, brandID)
 }
 
-// simpanProgressPax menyimpan penanda progres satu pax aktif (visa, SISKOPATUH, manasik, vaksin). Visa dan SISKOPATUH juga
+// simpanProgressPax menyimpan penanda progres satu pax aktif (visa, SISKOPATUH, vaksin). Visa dan SISKOPATUH juga
 // menyimpan tanggal selesai tahap (tetap saat dicentang ulang, kosong saat dicabut) dan memberi notifikasi saat pertama
 // kali selesai.
 func simpanProgressPax(ctx context.Context, q notifikasi.Querier, bookingID, paxID, adminID int64, updates map[string]bool) error {
@@ -2365,22 +2363,11 @@ func simpanProgressPax(ctx context.Context, q notifikasi.Querier, bookingID, pax
 		if !ok {
 			return bizErr("item progress pax '%s' tidak valid", key)
 		}
-		if key == "manasik" && paxType == "infant" {
-			return ErrManasikInfant
-		}
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", colName))
 		args = append(args, val)
 		if key == "visa" || key == "siskopatuh" {
 			setClauses = append(setClauses, fmt.Sprintf("%s_at = IF(?, COALESCE(%s_at, NOW()), NULL)", colName, colName))
 			args = append(args, val)
-		}
-		if key == "manasik" {
-			var oleh any
-			if adminID > 0 {
-				oleh = adminID
-			}
-			setClauses = append(setClauses, "progress_manasik_oleh = ?", "progress_manasik_at = NOW()")
-			args = append(args, oleh)
 		}
 	}
 	if len(setClauses) == 0 {

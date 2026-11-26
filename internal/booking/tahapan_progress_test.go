@@ -84,8 +84,8 @@ func TestSimpanProgressTahapan(t *testing.T) {
 		t.Errorf("centang ulang setelah dicabut: tanggal %v, notifikasi %d", tanggalVisa(), jumlahNotif(pemesan, kunciVisa))
 	}
 
-	// SISKOPATUH jamaah 2 bersama manasik: tanggal SISKOPATUH terisi, notifikasi ke pemilik dan akun tertaut jamaah 2.
-	if err := simpanProgressPax(ctx, tx, b, pax[1], 0, map[string]bool{"siskopatuh": true, "manasik": true}); err != nil {
+	// SISKOPATUH jamaah 2: tanggal SISKOPATUH terisi, notifikasi ke pemilik dan akun tertaut jamaah 2.
+	if err := simpanProgressPax(ctx, tx, b, pax[1], 0, map[string]bool{"siskopatuh": true}); err != nil {
 		t.Fatal(err)
 	}
 	var siskoAt sql.NullTime

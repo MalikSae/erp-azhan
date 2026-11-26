@@ -42,7 +42,7 @@ func Pengingat(ctx context.Context, db Querier, now time.Time) error {
 	}
 	if now.In(ZonaWIB).Hour() >= JamPengingat {
 		hari := now.In(ZonaWIB).Format("2006-01-02")
-		for _, f := range []func(context.Context, Execer, string) error{pelunasan, berangkat, komisiTersedia} {
+		for _, f := range []func(context.Context, Execer, string) error{pelunasan, berangkat, komisiTersedia, manasikBesok} {
 			if err := f(ctx, db, hari); err != nil {
 				return err
 			}
