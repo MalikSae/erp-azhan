@@ -139,13 +139,15 @@ func NewBooking(t *testing.T, tx *sql.Tx, o BookingOpts) Booking {
 	}
 	mustExec(t, tx, `UPDATE schedules SET minimal_dp=?, seat_sisa=seat_sisa+100 WHERE id=?`, o.MinimalDP, b.ScheduleID)
 
-	suffix := fmt.Sprintf("%d", time.Now().UnixNano()%1_000_000_000)
+	// Akhiran dari uniq() (5 digit, bertambah per panggilan) seperti fixture lain. id_booking hanya VARCHAR(6), jadi
+	// prefiksnya satu huruf; akhiran 4 digit waktu yang dulu dipakai sesekali bentrok (Duplicate entry 'TS3400').
+	u := uniq()
 	res := mustExec(t, tx, `INSERT INTO jamaah (brand_id, id_jamaah, kode_jamaah, nama_lengkap) VALUES (?,?,?,?)`,
-		brandID, "TST-"+suffix, "T"+suffix[len(suffix)-5:], "Jamaah Uji "+suffix)
+		brandID, "TST-"+u, "T"+u, "Jamaah Uji "+u)
 	b.JamaahID, _ = res.LastInsertId()
 
 	res = mustExec(t, tx, `INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, total_harga)
-		VALUES (?,?,?,1,?,?,?)`, "TS"+suffix[len(suffix)-4:], b.ScheduleID, b.JamaahID, o.Status, o.Blocked, o.TotalHarga)
+		VALUES (?,?,?,1,?,?,?)`, "S"+u, b.ScheduleID, b.JamaahID, o.Status, o.Blocked, o.TotalHarga)
 	b.ID, _ = res.LastInsertId()
 
 	res = mustExec(t, tx, `INSERT INTO booking_pax (booking_id, jamaah_id, pax_type, room_type, harga_pax, counts_for_seat, pax_status)
@@ -263,7 +265,7 @@ type Pax struct {
 func NewBookingPax(t *testing.T, tx *sql.Tx, scheduleID int64, status string, total float64, paxes ...Pax) (int64, []int64) {
 	t.Helper()
 	res := mustExec(t, tx, `INSERT INTO bookings (id_booking, schedule_id, pic_jamaah_id, seat_count, status, is_seat_blocked, total_harga)
-		VALUES (?,?,?,?,?,TRUE,?)`, "TB"+uniq()[1:], scheduleID, paxes[0].JamaahID, len(paxes), status, total)
+		VALUES (?,?,?,?,?,TRUE,?)`, "B"+uniq(), scheduleID, paxes[0].JamaahID, len(paxes), status, total)
 	bookingID, _ := res.LastInsertId()
 	var paxIDs []int64
 	for _, p := range paxes {
