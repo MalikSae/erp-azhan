@@ -68,6 +68,10 @@ func main() {
 	if err := identity.ValidateJWTSecret(); err != nil {
 		log.Fatalf("[ERROR] konfigurasi JWT tidak aman: %v", err)
 	}
+	// APP_ENV kosong tidak boleh diam-diam berarti mode pengembangan (CORS dev, email reset ke log).
+	if err := shared.ValidateAppEnv(); err != nil {
+		log.Fatalf("[ERROR] konfigurasi: %v", err)
+	}
 	if mins, _ := strconv.Atoi(strings.TrimSpace(os.Getenv("JWT_ACCESS_TTL_MINUTES"))); mins > 60 {
 		log.Printf("[WARN] JWT_ACCESS_TTL_MINUTES=%d dibatasi menjadi 60 menit", mins)
 	}
