@@ -72,9 +72,8 @@ Ada project TERPISAH yang konsumsi API ini: **`azhan-booking`** (`C:\laragon\www
 
 Catatan di bawah ini adalah acuan modul booking & jamaah. Keputusan kebijakan terbaru (kursi, PIC, infant, diskon, booking batal) ada di `docs/arsip/AUDIT-JAMAAH-BOOKING-2026-09-30.md` — WAJIB baca sebelum sentuh modul ini. Poin paling penting:
 
-- **2 konsep "Add-On" BEDA, jangan tertukar**: `add_ons`+`schedule_add_ons` (master paket, TANPA harga) vs `booking_addons` (per transaksi booking, ADA `nominal`). Kalau prompt sebut "add-on" tanpa konteks jelas, TANYA dulu.
-- `bookings.harga_dasar` = snapshot harga kamar saat dibuat (bukan referensi live ke `schedules`)
-- `total_harga = GREATEST(0, harga_dasar + SUM(booking_addons.nominal) - diskon)`
+- `booking_pax.harga_pax` = harga per pax saat booking dibuat (snapshot, bukan referensi live ke `schedules`). Ganti tipe kamar memakai harga paket saat itu. Pax yang batal saat booking masih `baru`/`draft` harganya dinolkan; saat `dp`/`lunas` harganya tetap.
+- `bookings.total_harga = GREATEST(0, SUM(booking_pax.harga_pax) - SUM(booking_discounts.nominal))`. Total wajib di atas Rp 0 dan tidak boleh di bawah pembayaran terkonfirmasi (keputusan 2026-11-26). Add-on paket dan add-on booking sudah dihapus (migrasi 086).
 - **Kuota kursi (`seat_sisa`)** — kursi "terkunci" ditandai `bookings.is_seat_blocked = TRUE`. Setiap pengurangan/pengembalian WAJIB pakai row-level lock (`SELECT ... FOR UPDATE` pada `schedules`) dan hanya untuk pax `counts_for_seat = TRUE` + `pax_status = 'aktif'` (infant tidak makan kursi). Aturan yang berlaku (keputusan 2026-09-27: ikuti kode, bukan aturan lama "hanya saat `dp`"):
   - **Booking admin** (`POST /bookings`) dan **finalisasi draft** (`POST /bookings/{id}/finalize`): kursi langsung dikurangi saat booking masuk status `baru`, **tanpa batas waktu** (`seat_hold_expires_at` NULL). Draft (`status = 'draft'`) belum mengurangi kursi.
   - **Self-booking publik** (`POST /api/public/book`): kursi dikurangi saat `baru` dengan hold **24 jam** (`seat_hold_expires_at`).

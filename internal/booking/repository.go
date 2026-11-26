@@ -25,7 +25,7 @@ const idBookingCharset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 // Sentinel errors
 var (
 	ErrNotFound          = errors.New("data tidak ditemukan")
-	ErrSeatHabis         = errors.New("seat sudah habis, tidak bisa konfirmasi DP")
+	ErrSeatHabis         = errors.New("seat tidak cukup")
 	ErrInvalidStatus     = errors.New("status tidak valid")
 	ErrSeatBelumDiblokir = errors.New("seat booking ini belum di-hold")
 	ErrSeatSudahDiblokir = errors.New("seat booking ini sudah di-hold oleh permintaan lain")

@@ -78,7 +78,8 @@ func nullableID(id int64) any {
 //
 // Nomor WhatsApp dan email PIC diisi handler dari tabel akun, bukan dari payload, sehingga PIC tidak bisa
 // diarahkan ke kontak orang lain. Jamaah lama yang cocok tidak ditimpa datanya; email akun hanya melengkapi
-// jamaah yang emailnya masih kosong.
+// jamaah yang emailnya masih kosong DAN milik akun ini: dibuat akun ini (termasuk yang baru dibuat di booking
+// ini) atau tertaut lewat aktivasi. Jamaah orang lain yang cocok lewat NIK + nama tidak disentuh.
 func resolvePIC(ctx context.Context, tx *sql.Tx, brandID, accountID int64, pic PICInput) (int64, error) {
 	var accBrand int64
 	err := tx.QueryRowContext(ctx, `SELECT brand_id FROM customer_accounts WHERE id=? FOR UPDATE`, accountID).Scan(&accBrand)
@@ -99,7 +100,11 @@ func resolvePIC(ctx context.Context, tx *sql.Tx, brandID, accountID int64, pic P
 		return 0, err
 	}
 	if pic.Email != nil && strings.TrimSpace(*pic.Email) != "" {
-		if _, err := tx.ExecContext(ctx, `UPDATE jamaah SET email=? WHERE id=? AND (email IS NULL OR email='')`, strings.TrimSpace(*pic.Email), id); err != nil {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE jamaah j SET j.email=?
+			WHERE j.id=? AND (j.email IS NULL OR j.email='')
+			  AND (j.dibuat_oleh_akun_id=? OR EXISTS (SELECT 1 FROM customer_accounts c WHERE c.id=? AND c.jamaah_id=j.id))`,
+			strings.TrimSpace(*pic.Email), id, accountID, accountID); err != nil {
 			return 0, fmt.Errorf("lengkapi email PIC: %w", err)
 		}
 	}

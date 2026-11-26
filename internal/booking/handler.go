@@ -860,7 +860,7 @@ func handleRepoError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "Data tidak ditemukan.")
 	case errors.Is(err, ErrSeatHabis):
-		writeError(w, http.StatusConflict, "Seat sudah habis, tidak bisa konfirmasi DP.")
+		writeError(w, http.StatusConflict, "Seat tidak cukup.")
 	case errors.As(err, &errSeatNotEnough):
 		writeError(w, http.StatusBadRequest, errSeatNotEnough.Message)
 	case errors.Is(err, ErrPaxAlreadyCancelled):

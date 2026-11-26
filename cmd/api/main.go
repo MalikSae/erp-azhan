@@ -690,7 +690,7 @@ func main() {
 		bindHost = "127.0.0.1"
 	}
 	addr := net.JoinHostPort(bindHost, cfg.AppPort)
-	log.Printf("[INFO] Server ERP Azhan API berjalan di http://localhost%s", addr)
+	log.Printf("[INFO] Server ERP Azhan API berjalan di http://%s", addr)
 
 	server := &http.Server{
 		Addr:              addr,
