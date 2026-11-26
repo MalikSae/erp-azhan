@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"erp-azhan/api/internal/akses"
 	"erp-azhan/api/internal/booking"
 	"erp-azhan/api/internal/dokumen"
 	"erp-azhan/api/internal/media"
@@ -460,15 +461,27 @@ func (o *Orders) Cancel(w http.ResponseWriter, r *http.Request) {
 	// Syarat diperiksa ulang di dalam transaksi setelah baris booking dikunci (FOR UPDATE): pembayaran
 	// yang masuk di antara pengecekan di atas dan pembatalan tidak bisa terlewat (TOCTOU).
 	if _, err = o.bookingRepo.UpdateBookingStatusGuarded(r.Context(), id, "batal", cancelGuard(acc.ID, id)); err != nil {
-		if errors.Is(err, errTidakBisaBatal) {
-			writeError(w, http.StatusConflict, "Booking ini tidak bisa dibatalkan sendiri. Hubungi admin.")
-			return
+		status, pesan := galatBatalMandiri(err)
+		if status == http.StatusInternalServerError {
+			log.Printf("[ERROR] account cancel booking %d: %v", id, err)
 		}
-		log.Printf("[ERROR] account cancel booking %d: %v", id, err)
-		writeError(w, http.StatusInternalServerError, "Gagal membatalkan booking.")
+		writeError(w, status, pesan)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "batal"})
+}
+
+// galatBatalMandiri memetakan galat pembatalan ke jawaban HTTP. Bentrok kunci (deadlock 1213 / lock wait 1205)
+// sudah di-rollback dan aman dicoba lagi, jadi dijawab 409, bukan 500.
+func galatBatalMandiri(err error) (int, string) {
+	switch {
+	case errors.Is(err, errTidakBisaBatal):
+		return http.StatusConflict, "Booking ini tidak bisa dibatalkan sendiri. Hubungi admin."
+	case akses.IsConcurrencyErr(err):
+		return http.StatusConflict, "Booking sedang diproses. Coba lagi."
+	default:
+		return http.StatusInternalServerError, "Gagal membatalkan booking."
+	}
 }
 
 var errTidakBisaBatal = errors.New("booking tidak memenuhi syarat batal mandiri")
