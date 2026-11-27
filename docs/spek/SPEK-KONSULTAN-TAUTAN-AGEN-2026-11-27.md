@@ -1,6 +1,6 @@
 # Spek: Konsultan dari tautan agen (2026-11-27)
 
-Status: disepakati 2026-11-27 (brainstorming dengan pemilik). Belum dibangun.
+Status: disepakati 2026-11-27 (brainstorming dengan pemilik), dibangun 2026-11-27 (ERP `internal/agen/konsultan.go`; web dan app branch `konsultan-tautan-agen`). Belum diuji di HP.
 
 ## Masalah
 Agen membagikan tautan paket berkode `?ref`, tetapi tombol WhatsApp di halaman paket tetap mengarah ke nomor brand. Calon jamaah yang datang dari tautan agen tidak melihat siapa agennya, dan pertanyaannya masuk ke brand, bukan ke agen.
@@ -29,7 +29,7 @@ Agen membagikan tautan paket berkode `?ref`, tetapi tombol WhatsApp di halaman p
    - Daftar paket web (`/paket`, hub, landing): tautan WA ke konsultan, tanpa baris nama.
    - App Hana, detail paket: kartu "Konsultasi gratis" menampilkan "Konsultan Anda" dan nama, dan WA-nya ke konsultan. "Pesan via WhatsApp" (booking online sudah ditutup) tetap ke tim travel brand.
 7. Tetap ke brand: header, footer, beranda, jadwal, kalkulator, kontak, cabang, jadi agen, checkout, bayar, invoice, dan halaman akun.
-8. Isi pesan WA ke konsultan: "Halo {nama agen}, saya ingin bertanya tentang paket {paket} (berangkat {tanggal})." Tanpa nama paket: "Halo {nama agen}, saya ingin berkonsultasi tentang paket umroh."
+8. Isi pesan WA ke konsultan (app memakai gaya pesannya sendiri: "Assalamu'alaikum {nama agen}, saya ingin mulai konsultasi {paket}"). Web: "Halo {nama agen}, saya ingin bertanya tentang paket {paket} (berangkat {tanggal})." Tanpa nama paket: "Halo {nama agen}, saya ingin berkonsultasi tentang paket umroh."
 
 **Endpoint ERP (baru; endpoint lama tidak berubah)**
 9. `GET /api/public/v1/agen/konsultan?brand_id={id}&kode={KODE}` mengembalikan
@@ -42,7 +42,8 @@ Agen membagikan tautan paket berkode `?ref`, tetapi tombol WhatsApp di halaman p
 
 **Web azhan-booking**
 11. Proxy meneruskan kode, dari `?ref` atau cookie, ke render lewat header internal baru, yang ditambahkan ke `INTERNAL_REQUEST_HEADERS` dan selalu ditimpa. Dengan begitu kunjungan pertama dari tautan langsung menampilkan agen.
-12. Fetch konsultan di server di-cache per URL (per kode) selama 60 detik. Agen yang dinonaktifkan berhenti tampil paling lambat setelah masa cache itu habis.
+12. Fetch konsultan di server tanpa cache (`no-store`) dengan IP pengunjung diteruskan, supaya batas per IP berlaku per orang. Agen yang dinonaktifkan langsung berhenti tampil. Kode yang sama dari IP yang sama tidak menghabiskan jatah (batas 20 kode berbeda per IP per jam).
+12a. Kartu paket tema Hana di halaman paket (daftar, hub, paket terkait di detail) ikut memakai konsultan untuk tautan WA per kartu. Kartu Best Seller di beranda tetap ke brand.
 13. Nama agen tidak masuk metadata, Open Graph, atau JSON-LD. Canonical tetap tanpa `?ref`.
 
 ## Di luar lingkup
