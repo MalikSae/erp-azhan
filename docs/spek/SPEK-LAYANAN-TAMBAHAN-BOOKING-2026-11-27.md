@@ -1,7 +1,7 @@
 # SPEK — Layanan Tambahan Booking
 
 > **Status:** Disepakati dan dibangun 27 Nov 2026 (migrasi 165; ERP, `azhan-booking`, `azhan-mobile`).
-> **Catatan pembangunan:** pesan "Total tidak boleh di bawah pembayaran Rp …" juga dipakai diskon, ganti kamar, dan batal pax (dulu "total tagihan tidak boleh lebih kecil dari pembayaran terkonfirmasi (…)"). Ringkasan Pembayaran di Detail Booking mendapat baris "Layanan Tambahan". Halaman Detail Booking tidak punya pola pesan sukses, jadi daftar yang diperbarui menjadi tanda berhasil, sama dengan diskon.
+> **Catatan pembangunan:** pesan "Total tidak boleh di bawah pembayaran Rp …" juga dipakai diskon, ganti kamar, dan batal pax (dulu "total tagihan tidak boleh lebih kecil dari pembayaran terkonfirmasi (…)"). Ringkasan Pembayaran di Detail Booking mendapat baris "Layanan Tambahan", dan baris "Harga Paket Dasar" menjadi "Harga Paket" berisi jumlah harga semua pax supaya ringkasan menjumlah ke total. Rincian akun menjawab 500 bila layanan atau diskon gagal dibaca, bukan diam-diam mengosongkan barisnya. Halaman Detail Booking tidak punya pola pesan sukses, jadi daftar yang diperbarui menjadi tanda berhasil, sama dengan diskon.
 > **Sumber keputusan:** sesi grilling 27 Nov 2026 (3 babak, 18 keputusan), atas permintaan pemilik bisnis: admin bisa menambahkan biaya layanan ke sebuah booking, misalnya kereta cepat, dengan isian sederhana nama + nominal.
 > **Prinsip:** layanan adalah kebalikan diskon. Bentuk, gate, dan alur hitung ulangnya mengikuti `booking_discounts`, yang sudah melewati audit.
 
@@ -110,7 +110,7 @@ Sebab batal komisi baru di `internal/komisi/batal.go`: `SebabLayananDitambah = "
 
 ### Akun pelanggan (kontrak dengan `azhan-booking` dan `azhan-mobile`)
 
-`GET /api/account/orders/{id}` (`internal/customer/orders.go`) mendapat field baru `"layanan": [{"nama": "...", "nominal": 3000000}]` di samping `discounts`. Hanya menambah field; struktur lama tidak berubah.
+`GET /api/account/bookings/{id}` (`internal/customer/orders.go`) mendapat field baru `"layanan": [{"nama": "...", "nominal": 3000000}]` di samping `discounts`. Hanya menambah field; struktur lama tidak berubah.
 
 ## 5. UI dan copy
 
@@ -140,7 +140,7 @@ Baris layanan: nama + nominal, tanpa awalan dan tanpa tanda +, sesudah baris jam
 |---|---|
 | Invoice ERP | `frontend/shared/src/utils/printInvoice.js` |
 | Web rincian & invoice | `azhan-booking/src/components/pesanan/TabelInvoice.jsx`, `src/app/(pelanggan)/akun/booking/[id]/page.jsx`, `.../invoice/page.jsx` |
-| App | `azhan-mobile/apps/hana/src/components/perjalanan/DetailBooking.tsx`, tipe `packages/core/src/booking.ts` |
+| App | `azhan-mobile/apps/hana/src/components/perjalanan/DetailBooking.tsx`, tipe `packages/core/src/perjalanan.ts` |
 
 Web dan app membaca `layanan` dengan nilai bawaan `[]`, supaya tetap jalan bila ERP belum mengirim field itu.
 
@@ -156,8 +156,8 @@ Uji Go (pakai `internal/testdb`):
 - booking batal: tambah dan hapus ditolak, data tidak berubah
 - draft + layanan → finalisasi → layanan tetap, total = harga pax baru + layanan − diskon
 - batas diskon 10% tidak berubah oleh layanan
-- `GET /api/account/orders/{id}` memuat `layanan` (`[]` bila kosong)
-- `go test ./internal/uxcopy` lulus untuk pesan galat baru
+- `GET /api/account/bookings/{id}` memuat `layanan` (`[]` bila kosong)
+- `go test ./internal/uxcopy` lulus untuk pesan galat handler baru (pesan `bizErr` di repository tidak ikut dipindai pemindai itu)
 
 Frontend: `npm run build` di dashboard yang diubah, `npm run test:copy`, screenshot 375px dan 1440px kartu Layanan Tambahan, modal, dan invoice.
 

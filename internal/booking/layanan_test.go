@@ -182,25 +182,24 @@ func TestBatasDiskonTidakIkutLayanan(t *testing.T) {
 	}
 }
 
+// Alur finalisasi yang sebenarnya: harga pax ikut harga paket saat ini, layanan draft tetap dan ikut total.
 func TestLayananDraftTerbawaSaatFinalisasi(t *testing.T) {
-	db, tx := testdb.Tx(t)
-	repo := NewRepository(db)
-	ctx := context.Background()
-	sched, brand := testdb.Schedule(t, tx, testdb.ScheduleOpts{BerangkatTanggal: "2099-01-01"})
-	testdb.Exec(t, tx, `UPDATE schedules SET harga_quad=30000000 WHERE id=?`, sched)
-	j := testdb.NewJamaah(t, tx, brand, testdb.JamaahOpts{Nama: "Draft"})
-	booking, _ := testdb.NewBookingPax(t, tx, sched, "draft", 1000, testdb.Pax{JamaahID: j})
+	j := siapkanRumus(t)
+	repo := &Repository{}
+	a := j.jamaah("Draft")
+	booking, _ := testdb.NewBookingPax(t, j.tx, j.sched, "draft", 1000, testdb.Pax{JamaahID: a})
+	testdb.Exec(t, j.tx, `UPDATE bookings SET is_seat_blocked=FALSE, id_booking=NULL WHERE id=?`, booking)
 
-	if err := repo.addLayananTx(ctx, tx, booking, "Kereta cepat", 750000, 0); err != nil {
+	if err := repo.addLayananTx(j.ctx, j.tx, booking, "Kereta cepat", 750000, 0); err != nil {
 		t.Fatalf("tambah layanan di draft: %v", err)
 	}
-	if err := hargaPaxSaatIniTx(ctx, tx, booking); err != nil {
-		t.Fatal(err)
+	if got := testdb.Status(t, j.tx, booking); got != "draft" {
+		t.Fatalf("status = %s, mau tetap draft", got)
 	}
-	if err := repo.recalculateTotalTx(ctx, tx, booking); err != nil {
-		t.Fatal(err)
+	if err := repo.finalizeBookingTx(j.ctx, j.tx, booking, true); err != nil {
+		t.Fatalf("finalisasi: %v", err)
 	}
-	if n, total := jumlahLayanan(t, tx, booking), totalBooking(t, tx, booking); n != 1 || total != 30_750_000 {
+	if n, total := jumlahLayanan(t, j.tx, booking), totalBooking(t, j.tx, booking); n != 1 || total != 30_750_000 {
 		t.Fatalf("layanan %d, total %.0f; mau 1 dan 30750000", n, total)
 	}
 }

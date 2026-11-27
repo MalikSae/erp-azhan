@@ -312,10 +312,37 @@ type kantorView struct {
 	JamKantor *string `json:"jam_kantor"`
 }
 
-// discountView: diskon atau cashback yang dipotong dari total booking (booking_discounts), ditampilkan di rincian booking.
-type discountView struct {
+// barisNominal: satu baris rincian booking selain jamaah: layanan tambahan (booking_layanan, menambah total) atau
+// diskon/cashback (booking_discounts, mengurangi total).
+type barisNominal struct {
 	Nama    string  `json:"nama"`
 	Nominal float64 `json:"nominal"`
+}
+
+const (
+	sqlLayananBooking = `SELECT nama, nominal FROM booking_layanan WHERE booking_id=? ORDER BY id`
+	sqlDiskonBooking  = `SELECT nama, nominal FROM booking_discounts WHERE booking_id=? ORDER BY id`
+)
+
+// daftarBarisNominal membaca baris rincian dengan kueri q (sqlLayananBooking atau sqlDiskonBooking).
+// Hasil kosong berupa [] (bukan null) di JSON.
+func daftarBarisNominal(ctx context.Context, db interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, q string, bookingID int64) ([]barisNominal, error) {
+	rows, err := db.QueryContext(ctx, q, bookingID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []barisNominal{}
+	for rows.Next() {
+		var b barisNominal
+		if err := rows.Scan(&b.Nama, &b.Nominal); err != nil {
+			return nil, err
+		}
+		items = append(items, b)
+	}
+	return items, rows.Err()
 }
 
 type bankView struct {
@@ -407,28 +434,18 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// Layanan tambahan (booking_layanan, migrasi 165): baris rincian sesudah jamaah, sebelum diskon.
-	layanan := []discountView{}
-	lrows, err := o.db.QueryContext(r.Context(), `SELECT nama, nominal FROM booking_layanan WHERE booking_id=? ORDER BY id`, id)
-	if err == nil {
-		defer lrows.Close()
-		for lrows.Next() {
-			var l discountView
-			if lrows.Scan(&l.Nama, &l.Nominal) == nil {
-				layanan = append(layanan, l)
-			}
-		}
+	// Total sudah memuat layanan dan diskon; tanpa barisnya rincian tidak menjumlah, jadi galat tidak didiamkan.
+	layanan, err := daftarBarisNominal(r.Context(), o.db, sqlLayananBooking, id)
+	if err != nil {
+		log.Printf("[ERROR] account booking layanan: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil rincian booking.")
+		return
 	}
-	discounts := []discountView{}
-	drows, err := o.db.QueryContext(r.Context(), `SELECT nama, nominal FROM booking_discounts WHERE booking_id=? ORDER BY id`, id)
-	if err == nil {
-		defer drows.Close()
-		for drows.Next() {
-			var d discountView
-			if drows.Scan(&d.Nama, &d.Nominal) == nil {
-				discounts = append(discounts, d)
-			}
-		}
+	discounts, err := daftarBarisNominal(r.Context(), o.db, sqlDiskonBooking, id)
+	if err != nil {
+		log.Printf("[ERROR] account booking diskon: %v", err)
+		writeError(w, http.StatusInternalServerError, "Gagal mengambil rincian booking.")
+		return
 	}
 	payments, err := o.paymentRepo.ListByBookingID(r.Context(), id, nil)
 	if err != nil {

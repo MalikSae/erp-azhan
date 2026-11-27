@@ -36,11 +36,11 @@ var validRoomTypes = map[string]bool{
 	"Double": true,
 }
 
-// maxNominal adalah batas kolom nominal DECIMAL(12,0) pada booking_discounts.
+// maxNominal adalah batas kolom nominal DECIMAL(12,0) pada booking_discounts dan booking_layanan.
 const maxNominal = 999_999_999_999
 
-// maksNamaDiskon: lebar kolom booking_discounts.nama.
-const maksNamaDiskon = 255
+// maksNamaBaris: lebar kolom nama booking_discounts dan booking_layanan.
+const maksNamaBaris = 255
 
 // validStatuses berisi enum status booking yang valid.
 var validStatuses = map[string]bool{
@@ -633,7 +633,7 @@ func (h *Handler) AddBookingDiscount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Nama diskon tidak boleh kosong.")
 		return
 	}
-	if len([]rune(req.Nama)) > maksNamaDiskon {
+	if len([]rune(req.Nama)) > maksNamaBaris {
 		writeError(w, http.StatusBadRequest, "Nama diskon maksimal 255 karakter.")
 		return
 	}
@@ -730,7 +730,7 @@ func (h *Handler) AddBookingLayanan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Nama layanan wajib diisi.")
 		return
 	}
-	if len([]rune(req.Nama)) > maksNamaDiskon {
+	if len([]rune(req.Nama)) > maksNamaBaris {
 		writeError(w, http.StatusBadRequest, "Nama layanan maksimal 255 karakter.")
 		return
 	}

@@ -413,11 +413,13 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
 
   // Perhitungan Keuangan
   const hargaDasar = booking?.harga_dasar ? parseFloat(booking.harga_dasar) : (parseFloat(booking?.total_harga) || 0);
+  // Jumlah harga semua pax: dasar rumus total (harga pax + layanan − diskon), supaya Ringkasan Pembayaran menjumlah.
+  const jumlahHargaPax = (booking?.pax || []).reduce((sum, p) => sum + (parseFloat(p.harga_pax) || 0), 0);
   const discounts = booking?.discounts || [];
   const layananList = booking?.layanan || [];
   const totalDiskon = discounts.reduce((sum, d) => sum + (parseFloat(d.nominal) || 0), 0);
   const totalLayanan = layananList.reduce((sum, l) => sum + (parseFloat(l.nominal) || 0), 0);
-  const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, hargaDasar + totalLayanan - totalDiskon);
+  const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, (booking?.pax?.length ? jumlahHargaPax : hargaDasar) + totalLayanan - totalDiskon);
 
   // Bila riwayat pembayaran tidak termuat, pakai total terkonfirmasi dari data booking agar sisa tagihan tetap benar.
   const totalPaid = paymentsGagal
@@ -544,7 +546,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
       setLayananForm(null);
       fetchAll();
     } catch (err) {
-      setLayananForm((s) => ({ ...s, saving: false, konfirmasi: false, error: { umum: err.response?.data?.error || "Layanan gagal ditambahkan." } }));
+      setLayananForm((s) => ({ ...s, saving: false, konfirmasi: false, error: { umum: err.response?.data?.error || "Layanan gagal ditambahkan. Coba lagi." } }));
     }
   };
 
@@ -556,7 +558,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
       setHapusLayanan(null);
       fetchAll();
     } catch (err) {
-      setHapusLayanan((s) => ({ ...s, saving: false, error: err.response?.data?.error || "Layanan gagal dihapus." }));
+      setHapusLayanan((s) => ({ ...s, saving: false, error: err.response?.data?.error || "Layanan gagal dihapus. Coba lagi." }));
     }
   };
 
@@ -1337,8 +1339,8 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
           >
             <div className="space-y-2.5 font-body">
               <div className="flex justify-between text-sm">
-                <span className="text-neutral-500">Harga Paket Dasar:</span>
-                <span className="font-medium text-neutral-900">{formatRupiah(hargaDasar)}</span>
+                <span className="text-neutral-500">Harga Paket:</span>
+                <span className="font-medium text-neutral-900">{formatRupiah(booking?.pax?.length ? jumlahHargaPax : hargaDasar)}</span>
               </div>
               {totalLayanan > 0 && (
                 <div className="flex justify-between text-sm">
