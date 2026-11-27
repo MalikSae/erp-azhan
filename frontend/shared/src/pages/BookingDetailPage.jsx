@@ -1617,7 +1617,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
               required
               value={layananForm.nama}
               onChange={(e) => setLayananForm((s) => ({ ...s, nama: e.target.value }))}
-              placeholder="Kereta cepat Madinah–Makkah"
+              placeholder="Kereta cepat"
               error={layananForm.error.nama}
               maxLength={255}
             />

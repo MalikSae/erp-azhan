@@ -123,7 +123,7 @@ Mengikuti `docs/ux-copy.md` dan `.agents/rules/design-system.md`.
 - Kosong: "Belum ada layanan."
 - Baris: nama layanan; di bawahnya tanggal dan nama admin ("27 Nov 2026 · Rina"); nominal di kanan, warna netral. Hapus lewat menu ikon ⋯.
 - Modal **"Tambah Layanan"**:
-  - Nama layanan * — placeholder "Kereta cepat Madinah–Makkah"
+  - Nama layanan * — placeholder "Kereta cepat"
   - Nominal * — placeholder "Total untuk semua jamaah"
   - Tombol "Simpan"
 - Sukses: "Layanan ditambahkan." / "Layanan dihapus."
