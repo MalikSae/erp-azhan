@@ -341,7 +341,7 @@ type UpdateStatusRequest struct {
 // SeatAdjustment adalah satu baris riwayat penyesuaian sisa seat manual.
 type SeatAdjustment struct {
 	ID         int64     `json:"id"`
-	Jenis      string    `json:"jenis"` // kuota (sisa sebelum/sesudah ubah kuota) | tampil (0 = nonaktif)
+	Jenis      string    `json:"jenis"` // kuota (sisa sebelum/sesudah ubah kuota) | tampil (0 = nonaktif) | samakan (sisa sebelum/sesudah disamakan)
 	SeatBefore int       `json:"seat_before"`
 	SeatAfter  int       `json:"seat_after"`
 	Reason     string    `json:"reason"`

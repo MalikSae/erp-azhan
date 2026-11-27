@@ -3,6 +3,7 @@ package schedule
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"erp-azhan/api/internal/testdb"
@@ -124,6 +125,34 @@ func TestUpdateSeatTampilTx(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("riwayat[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// Body seat tampil: field wajib ada, hanya null eksplisit yang mematikan scarcity.
+func TestParseSeatTampilBody(t *testing.T) {
+	cases := []struct {
+		body  string
+		want  *int
+		galat bool
+	}{
+		{`{"seat_tampil":10}`, intp(10), false},
+		{`{"seat_tampil":null}`, nil, false},
+		{`{}`, nil, true},
+		{`null`, nil, true},
+		{`{"seat":10}`, nil, true},
+		{`{"seat_tampil":"abc"}`, nil, true},
+		{`{"seat_tampil":10.5}`, nil, true},
+		{``, nil, true},
+	}
+	for _, c := range cases {
+		req, err := parseSeatTampilBody(strings.NewReader(c.body))
+		if (err != nil) != c.galat {
+			t.Errorf("%q: err=%v, want galat=%v", c.body, err, c.galat)
+			continue
+		}
+		if err == nil && ((req.SeatTampil == nil) != (c.want == nil) || (c.want != nil && *req.SeatTampil != *c.want)) {
+			t.Errorf("%q: seat_tampil=%v, want %v", c.body, req.SeatTampil, c.want)
 		}
 	}
 }

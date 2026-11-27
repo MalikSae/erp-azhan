@@ -3,6 +3,7 @@ package schedule
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"erp-azhan/api/internal/testdb"
@@ -29,7 +30,7 @@ func TestSamakanSeatTx(t *testing.T) {
 	// Sisa seat dibuat tidak cocok (lebih kecil dan lebih besar), lalu disamakan.
 	for _, rusak := range []int{0, total} {
 		testdb.Exec(t, tx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, rusak, b.ScheduleID)
-		_, before, after, err := samakanSeatTx(ctx, tx, b.ScheduleID, &brand)
+		_, before, after, err := samakanSeatTx(ctx, tx, b.ScheduleID, &brand, 0)
 		if err != nil {
 			t.Fatalf("samakan dari %d: %v", rusak, err)
 		}
@@ -42,11 +43,34 @@ func TestSamakanSeatTx(t *testing.T) {
 		}
 	}
 
+	// Setiap Samakan yang mengubah sisa tercatat di riwayat; menyamakan ulang tanpa selisih tidak.
+	if _, _, _, err := samakanSeatTx(ctx, tx, b.ScheduleID, &brand, 0); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tx.Query(`SELECT jenis, seat_before, seat_after FROM schedule_seat_adjustments WHERE schedule_id=? ORDER BY id`, b.ScheduleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var riwayat []string
+	for rows.Next() {
+		var jenis string
+		var before, after int
+		if err := rows.Scan(&jenis, &before, &after); err != nil {
+			t.Fatal(err)
+		}
+		riwayat = append(riwayat, fmt.Sprintf("%s %d→%d", jenis, before, after))
+	}
+	rows.Close()
+	want := []string{fmt.Sprintf("samakan 0→%d", total-dipegang), fmt.Sprintf("samakan %d→%d", total, total-dipegang)}
+	if fmt.Sprint(riwayat) != fmt.Sprint(want) {
+		t.Fatalf("riwayat = %v, want %v", riwayat, want)
+	}
+
 	other := brand + 1000
-	if _, _, _, err := samakanSeatTx(ctx, tx, b.ScheduleID, &other); !errors.Is(err, ErrNotFound) {
+	if _, _, _, err := samakanSeatTx(ctx, tx, b.ScheduleID, &other, 0); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("brand lain: err=%v, want ErrNotFound", err)
 	}
-	if _, _, _, err := samakanSeatTx(ctx, tx, -1, nil); !errors.Is(err, ErrNotFound) {
+	if _, _, _, err := samakanSeatTx(ctx, tx, -1, nil, 0); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("id tak ada: err=%v, want ErrNotFound", err)
 	}
 }
