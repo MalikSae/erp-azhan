@@ -25,7 +25,7 @@ func TestAddBookingDiscountMenolakIsianTidakSah(t *testing.T) {
 		"nominal pecahan":      `{"nama":"Promo","nominal":1000000.5}`,
 		"nominal nol":          `{"nama":"Promo","nominal":0}`,
 		"nama kosong":          `{"nama":"   ","nominal":1000}`,
-		"nama terlalu panjang": `{"nama":"` + strings.Repeat("a", maksNamaDiskon+1) + `","nominal":1000}`,
+		"nama terlalu panjang": `{"nama":"` + strings.Repeat("a", maksNamaBaris+1) + `","nominal":1000}`,
 	}
 	for nama, body := range cases {
 		rec := httptest.NewRecorder()

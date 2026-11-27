@@ -36,11 +36,11 @@ var validRoomTypes = map[string]bool{
 	"Double": true,
 }
 
-// maxNominal adalah batas kolom nominal DECIMAL(12,0) pada booking_discounts.
+// maxNominal adalah batas kolom nominal DECIMAL(12,0) pada booking_discounts dan booking_layanan.
 const maxNominal = 999_999_999_999
 
-// maksNamaDiskon: lebar kolom booking_discounts.nama.
-const maksNamaDiskon = 255
+// maksNamaBaris: lebar kolom nama booking_discounts dan booking_layanan.
+const maksNamaBaris = 255
 
 // validStatuses berisi enum status booking yang valid.
 var validStatuses = map[string]bool{
@@ -633,7 +633,7 @@ func (h *Handler) AddBookingDiscount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Nama diskon tidak boleh kosong.")
 		return
 	}
-	if len([]rune(req.Nama)) > maksNamaDiskon {
+	if len([]rune(req.Nama)) > maksNamaBaris {
 		writeError(w, http.StatusBadRequest, "Nama diskon maksimal 255 karakter.")
 		return
 	}
@@ -706,6 +706,95 @@ func (h *Handler) RemoveBookingDiscount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	writeJSON(w, http.StatusOK, b)
+}
+
+// ─── Layanan tambahan ────────────────────────────────────────────────
+
+// AddBookingLayanan godoc
+// POST /api/admin/bookings/{id}/layanan
+func (h *Handler) AddBookingLayanan(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+
+	var req AddBookingLayananRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Data tidak valid.")
+		return
+	}
+
+	req.Nama = strings.TrimSpace(req.Nama)
+	if req.Nama == "" {
+		writeError(w, http.StatusBadRequest, "Nama layanan wajib diisi.")
+		return
+	}
+	if len([]rune(req.Nama)) > maksNamaBaris {
+		writeError(w, http.StatusBadRequest, "Nama layanan maksimal 255 karakter.")
+		return
+	}
+	if req.Nominal <= 0 {
+		writeError(w, http.StatusBadRequest, "Nominal harus lebih dari 0.")
+		return
+	}
+	if !shared.RupiahBulat(req.Nominal) {
+		writeError(w, http.StatusBadRequest, "Nominal harus bilangan bulat rupiah.")
+		return
+	}
+	if req.Nominal > maxNominal {
+		writeError(w, http.StatusBadRequest, "Nominal terlalu besar.")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	if err := h.repo.AddLayanan(r.Context(), id, req.Nama, req.Nominal, identity.GetAdminUserID(r.Context())); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	b, err := h.repo.GetByID(r.Context(), id, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
+}
+
+// RemoveBookingLayanan godoc
+// DELETE /api/admin/bookings/{id}/layanan/{layananID}
+func (h *Handler) RemoveBookingLayanan(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	layananID, err := strconv.ParseInt(chi.URLParam(r, "layananID"), 10, 64)
+	if err != nil || layananID <= 0 {
+		writeError(w, http.StatusBadRequest, "Layanan tidak valid.")
+		return
+	}
+
+	brandID := identity.GetBrandID(r.Context())
+	if _, err := h.repo.GetByID(r.Context(), id, brandID); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	if err := h.repo.DeleteLayanan(r.Context(), id, layananID); err != nil {
+		handleRepoError(w, err)
+		return
+	}
+
+	b, err := h.repo.GetByID(r.Context(), id, brandID)
+	if err != nil {
+		handleRepoError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, b)
 }
 

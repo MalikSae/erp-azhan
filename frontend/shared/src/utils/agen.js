@@ -32,6 +32,7 @@ export const SEBAB_BATAL_KOMISI = {
   void_pembayaran: 'Pembayaran dibatalkan',
   diskon_dihapus: 'Diskon dihapus',
   ganti_kamar: 'Tipe kamar diganti',
+  layanan_ditambah: 'Layanan ditambah',
   status_turun: 'Booking turun dari lunas',
   penyesuaian_aturan: 'Penyesuaian aturan',
 };

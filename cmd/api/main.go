@@ -265,6 +265,8 @@ func main() {
 	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.ListPublic)
 	// Klik link referral agen dari situs publik (satu per pengunjung per hari).
 	r.With(requireDB(db)).Post("/api/public/referral/klik", agenHandler.KlikReferral)
+	// Konsultan dari tautan agen: nama + WA agen aktif pemilik kode. Tanpa cache publik, dibatasi per IP.
+	r.With(requireDB(db)).Get("/api/public/v1/agen/konsultan", agenHandler.KonsultanPublik)
 
 	// Akun pelanggan (email + password): daftar, masuk, lupa password
 	r.Route("/api/public/auth", func(r chi.Router) {
@@ -549,6 +551,8 @@ func main() {
 		bookingEdit.Delete("/bookings/{id}/seat-block", bookingHandler.CancelSeatBlock)
 		bookingEdit.Post("/bookings/{id}/discounts", bookingHandler.AddBookingDiscount)
 		bookingEdit.Delete("/bookings/{id}/discounts/{discountID}", bookingHandler.RemoveBookingDiscount)
+		bookingEdit.Post("/bookings/{id}/layanan", bookingHandler.AddBookingLayanan)
+		bookingEdit.Delete("/bookings/{id}/layanan/{layananID}", bookingHandler.RemoveBookingLayanan)
 		bookingView.Get("/bookings/{id}/cashback", bookingHandler.GetKreditCashback)
 		bookingView.Get("/bookings/{id}/agen-komisi", bookingHandler.GetAgenKomisi)
 		bookingEdit.Post("/bookings/{id}/cashback", bookingHandler.PakaiKreditCashback)

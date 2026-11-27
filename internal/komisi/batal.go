@@ -25,12 +25,13 @@ const HariTahanSetelahBerangkat = 3
 
 // Sebab pembatalan komisi yang dicatat di transaksi_komisi.sebab_batal.
 const (
-	SebabStatusTurun   = "status_turun"
-	SebabVoid          = "void_pembayaran"
-	SebabDiskonDihapus = "diskon_dihapus"
-	SebabGantiKamar    = "ganti_kamar"
-	SebabGantiKaitan   = "ganti_kaitan"       // bonus pembinaan tanpa penerima sah setelah kaitan jamaah diganti
-	SebabAturanBaru    = "penyesuaian_aturan" // migrasi 126
+	SebabStatusTurun     = "status_turun"
+	SebabVoid            = "void_pembayaran"
+	SebabDiskonDihapus   = "diskon_dihapus"
+	SebabGantiKamar      = "ganti_kamar"
+	SebabLayananDitambah = "layanan_ditambah"   // layanan tambahan membuat booking lunas turun ke DP
+	SebabGantiKaitan     = "ganti_kaitan"       // bonus pembinaan tanpa penerima sah setelah kaitan jamaah diganti
+	SebabAturanBaru      = "penyesuaian_aturan" // migrasi 126
 )
 
 type kunciSebabBatal struct{}

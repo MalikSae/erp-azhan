@@ -17,6 +17,16 @@ type BookingDiscount struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// BookingLayanan adalah biaya layanan tambahan pada booking (migrasi 165), mis. kereta cepat.
+type BookingLayanan struct {
+	ID             int64     `json:"id"`
+	BookingID      int64     `json:"booking_id"`
+	Nama           string    `json:"nama"`
+	Nominal        float64   `json:"nominal"`
+	DibuatOlehNama string    `json:"dibuat_oleh_nama"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
 // BookingPax adalah detail penumpang (pax) pada booking.
 type BookingPax struct {
 	ID                       int64   `json:"id"`
@@ -100,6 +110,7 @@ type Booking struct {
 	ProgressVaksinMeningitis bool              `json:"progress_vaksin_meningitis"`
 	SiapBerangkat            bool              `json:"siap_berangkat"`
 	Pax                      []BookingPax      `json:"pax"`
+	Layanan                  []BookingLayanan  `json:"layanan"`
 	Discounts                []BookingDiscount `json:"discounts"`
 	// Pemesan: akun pelanggan yang memesan lewat situs publik (nil untuk booking dari ERP/agen).
 	Pemesan   *Pemesan  `json:"pemesan,omitempty"`
@@ -147,6 +158,12 @@ type UpdatePaxRoomTypeRequest struct {
 
 // AddBookingDiscountRequest adalah payload untuk POST /api/admin/bookings/{id}/discounts.
 type AddBookingDiscountRequest struct {
+	Nama    string  `json:"nama"`
+	Nominal float64 `json:"nominal"`
+}
+
+// AddBookingLayananRequest adalah payload untuk POST /api/admin/bookings/{id}/layanan.
+type AddBookingLayananRequest struct {
 	Nama    string  `json:"nama"`
 	Nominal float64 `json:"nominal"`
 }

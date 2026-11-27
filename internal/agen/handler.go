@@ -24,6 +24,9 @@ type Handler struct {
 	klikIP     *shared.WindowLimiter
 	klikIPKode *shared.WindowLimiter
 
+	konsultanIP     *shared.WindowLimiter
+	konsultanIPKode *shared.WindowLimiter
+
 	nikGagalAkun *shared.WindowLimiter
 	nikGagalIP   *shared.WindowLimiter
 }
@@ -39,6 +42,9 @@ func NewHandler(repo *Repository) *Handler {
 		repo:       repo,
 		klikIP:     shared.NewWindowLimiter(klikPerIPPerJam, time.Hour),
 		klikIPKode: shared.NewWindowLimiter(klikPerIPPerKodeSehari, 24*time.Hour),
+
+		konsultanIP:     shared.NewWindowLimiter(konsultanKodePerIPPerJam, time.Hour),
+		konsultanIPKode: shared.NewWindowLimiter(1, time.Hour),
 
 		nikGagalAkun: shared.NewWindowLimiter(nikGagalPerAkunSehari, 24*time.Hour),
 		nikGagalIP:   shared.NewWindowLimiter(nikGagalPerIPSehari, 24*time.Hour),

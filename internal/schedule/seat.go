@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 
@@ -41,8 +42,8 @@ func (h *Handler) UpdateScheduleSeatTampil(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req UpdateSeatTampilRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	req, err := parseSeatTampilBody(r.Body)
+	if err != nil {
 		shared.WriteError(w, http.StatusBadRequest, "Data tidak valid.")
 		return
 	}
@@ -63,6 +64,24 @@ func (h *Handler) UpdateScheduleSeatTampil(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	shared.WriteJSON(w, http.StatusOK, map[string]any{"id": id, "seat_tampil": req.SeatTampil})
+}
+
+// parseSeatTampilBody membaca {"seat_tampil": int|null}. Field wajib ada: hanya null eksplisit yang
+// mematikan scarcity, supaya body kosong tidak mematikannya tanpa sengaja.
+func parseSeatTampilBody(body io.Reader) (UpdateSeatTampilRequest, error) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(body).Decode(&raw); err != nil {
+		return UpdateSeatTampilRequest{}, err
+	}
+	v, ok := raw["seat_tampil"]
+	if !ok {
+		return UpdateSeatTampilRequest{}, errors.New("seat_tampil wajib dikirim")
+	}
+	var req UpdateSeatTampilRequest
+	if err := json.Unmarshal(v, &req.SeatTampil); err != nil {
+		return UpdateSeatTampilRequest{}, err
+	}
+	return req, nil
 }
 
 // GetScheduleSeat godoc
@@ -102,14 +121,14 @@ func (r *Repository) GetSeatTotal(ctx context.Context, id int64, brandID *int64)
 }
 
 // SamakanSeat mengisi seat_sisa = seat_total − seat dipegang booking (minimal 0). Hanya untuk
-// memperbaiki sisa seat yang tidak cocok dengan booking; dicatat di log server.
+// memperbaiki sisa seat yang tidak cocok dengan booking; dicatat di riwayat seat (jenis 'samakan') dan log server.
 func (r *Repository) SamakanSeat(ctx context.Context, id int64, brandID *int64, actorID int64) (int, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
-	owner, before, after, err := samakanSeatTx(ctx, tx, id, brandID)
+	owner, before, after, err := samakanSeatTx(ctx, tx, id, brandID, actorID)
 	if err != nil {
 		return 0, err
 	}
@@ -122,7 +141,7 @@ func (r *Repository) SamakanSeat(ctx context.Context, id int64, brandID *int64, 
 	return after, nil
 }
 
-func samakanSeatTx(ctx context.Context, tx *sql.Tx, id int64, brandID *int64) (owner int64, before, after int, err error) {
+func samakanSeatTx(ctx context.Context, tx *sql.Tx, id int64, brandID *int64, actorID int64) (owner int64, before, after int, err error) {
 	var total int
 	err = tx.QueryRowContext(ctx, `SELECT seat_total, seat_sisa, brand_id FROM schedules WHERE id=? FOR UPDATE`, id).Scan(&total, &before, &owner)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -145,6 +164,11 @@ func samakanSeatTx(ctx context.Context, tx *sql.Tx, id int64, brandID *int64) (o
 	if after != before {
 		if _, err := tx.ExecContext(ctx, `UPDATE schedules SET seat_sisa=? WHERE id=?`, after, id); err != nil {
 			return 0, 0, 0, err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schedule_seat_adjustments (schedule_id, jenis, admin_user_id, seat_before, seat_after, reason) VALUES (?, 'samakan', ?, ?, ?, ?)`,
+			id, nullInt64(actorID), before, after, "Samakan dengan booking"); err != nil {
+			return 0, 0, 0, fmt.Errorf("catat riwayat samakan seat: %w", err)
 		}
 	}
 	return owner, before, after, nil
