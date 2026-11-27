@@ -6,7 +6,14 @@ import Alert from 'shared/ui/Alert';
 import LoadingSpinner from 'shared/ui/LoadingSpinner';
 import { getScheduleSeat, samakanScheduleSeat, updateScheduleSeatTampil } from '../api/schedules';
 
-const teksTampil = (n) => (n ? `${n} seat` : 'Mati');
+const SESUAI_SISA = 'Sesuai sisa seat';
+const teksTampil = (n) => (n ? `${n} seat` : SESUAI_SISA);
+
+const judulRiwayat = (a) => {
+  if (a.jenis === 'tampil') return `Seat tampil: ${teksTampil(a.seat_before)} → ${teksTampil(a.seat_after)}`;
+  if (a.jenis === 'samakan') return `Sisa seat disamakan: ${a.seat_before} → ${a.seat_after}`;
+  return `Sisa seat: ${a.seat_before} → ${a.seat_after}`;
+};
 
 const formatWaktu = (iso) => new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
 
@@ -55,8 +62,9 @@ const SeatManagement = ({ scheduleId, canEdit = true }) => {
     }
   };
 
-  // Seat tampil di publik (scarcity): hanya label, tidak mengubah sisa seat.
-  const angkaTampil = overview.seat_tampil == null ? null : Math.min(overview.seat_tampil, overview.seat_sisa);
+  // Seat tampil di publik (scarcity): hanya label, tidak mengubah sisa seat. Berefek hanya bila lebih kecil
+  // dari sisa seat; selain itu publik melihat sisa seat apa adanya.
+  const angkaTampil = overview.seat_tampil != null && overview.seat_tampil < overview.seat_sisa ? overview.seat_tampil : null;
 
   const bukaTampil = () => {
     setNilaiTampil(overview.seat_tampil == null ? '' : String(overview.seat_tampil));
@@ -129,7 +137,7 @@ const SeatManagement = ({ scheduleId, canEdit = true }) => {
         <div className="flex justify-between gap-2">
           <span>Seat tampil:</span>
           <span className="flex items-center gap-2">
-            <span className="font-semibold text-neutral-900">{angkaTampil == null ? 'Sesuai sisa seat' : `${angkaTampil} seat`}</span>
+            <span className="font-semibold text-neutral-900">{angkaTampil == null ? SESUAI_SISA : `${angkaTampil} seat`}</span>
             {canEdit && (
               <button type="button" className={linkClass} onClick={bukaTampil}>
                 Ubah
@@ -147,13 +155,11 @@ const SeatManagement = ({ scheduleId, canEdit = true }) => {
               <li key={a.id} className="p-2 bg-neutral-50 border border-neutral-200 rounded-md">
                 <div className="flex justify-between gap-2">
                   <span className="font-semibold text-neutral-900">
-                    {a.jenis === 'tampil'
-                      ? `Seat tampil: ${teksTampil(a.seat_before)} → ${teksTampil(a.seat_after)}`
-                      : `Sisa seat: ${a.seat_before} → ${a.seat_after}`}
+                    {judulRiwayat(a)}
                   </span>
                   <span className="text-neutral-500">{formatWaktu(a.created_at)}</span>
                 </div>
-                {a.jenis !== 'tampil' && <div className="mt-0.5">{a.reason}</div>}
+                {a.jenis === 'kuota' && <div className="mt-0.5">{a.reason}</div>}
                 <div className="mt-0.5 text-neutral-500">oleh {a.admin_email || 'akun yang sudah dihapus'}</div>
               </li>
             ))}
