@@ -407,6 +407,18 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// Layanan tambahan (booking_layanan, migrasi 165): baris rincian sesudah jamaah, sebelum diskon.
+	layanan := []discountView{}
+	lrows, err := o.db.QueryContext(r.Context(), `SELECT nama, nominal FROM booking_layanan WHERE booking_id=? ORDER BY id`, id)
+	if err == nil {
+		defer lrows.Close()
+		for lrows.Next() {
+			var l discountView
+			if lrows.Scan(&l.Nama, &l.Nominal) == nil {
+				layanan = append(layanan, l)
+			}
+		}
+	}
 	discounts := []discountView{}
 	drows, err := o.db.QueryContext(r.Context(), `SELECT nama, nominal FROM booking_discounts WHERE booking_id=? ORDER BY id`, id)
 	if err == nil {
@@ -435,7 +447,7 @@ func (o *Orders) Detail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Gagal mengambil data kantor.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": order, "pax": pax, "discounts": discounts, "payments": payments, "bank_accounts": banks, "kantor": kantor})
+	writeJSON(w, http.StatusOK, map[string]any{"order": order, "pax": pax, "layanan": layanan, "discounts": discounts, "payments": payments, "bank_accounts": banks, "kantor": kantor})
 }
 
 // Cancel POST /api/account/bookings/{id}/cancel: hanya sebelum ada pembayaran tercatat.

@@ -107,6 +107,16 @@ export const deletePayment = async (paymentId) => {
   return data;
 };
 
+export const addBookingLayanan = async (bookingId, payload) => {
+  const { data } = await api.post(`/api/admin/bookings/${bookingId}/layanan`, payload);
+  return data;
+};
+
+export const removeBookingLayanan = async (bookingId, layananId) => {
+  const { data } = await api.delete(`/api/admin/bookings/${bookingId}/layanan/${layananId}`);
+  return data;
+};
+
 export const addBookingDiscount = async (bookingId, payload) => {
   const { data } = await api.post(`/api/admin/bookings/${bookingId}/discounts`, payload);
   return data;

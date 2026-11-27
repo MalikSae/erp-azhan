@@ -10,6 +10,8 @@ import {
   updatePaymentStatus, 
   addBookingDiscount,
   removeBookingDiscount,
+  addBookingLayanan,
+  removeBookingLayanan,
   updateBookingProgress,
   updatePaxProgress,
   cancelBookingPax,
@@ -155,6 +157,10 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [selectedBuktiUrl, setSelectedBuktiUrl] = useState(null);
 
+
+  // Layanan tambahan: form tambah { nama, nominal, error, konfirmasi, saving } dan hapus { id, nama, nominal, saving, error }.
+  const [layananForm, setLayananForm] = useState(null);
+  const [hapusLayanan, setHapusLayanan] = useState(null);
 
   // Diskon Modal State
   const [isDiskonModalOpen, setIsDiskonModalOpen] = useState(false);
@@ -408,8 +414,10 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
   // Perhitungan Keuangan
   const hargaDasar = booking?.harga_dasar ? parseFloat(booking.harga_dasar) : (parseFloat(booking?.total_harga) || 0);
   const discounts = booking?.discounts || [];
+  const layananList = booking?.layanan || [];
   const totalDiskon = discounts.reduce((sum, d) => sum + (parseFloat(d.nominal) || 0), 0);
-  const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, hargaDasar - totalDiskon);
+  const totalLayanan = layananList.reduce((sum, l) => sum + (parseFloat(l.nominal) || 0), 0);
+  const totalHarga = booking?.total_harga ? parseFloat(booking.total_harga) : Math.max(0, hargaDasar + totalLayanan - totalDiskon);
 
   // Bila riwayat pembayaran tidak termuat, pakai total terkonfirmasi dari data booking agar sisa tagihan tetap benar.
   const totalPaid = paymentsGagal
@@ -492,6 +500,7 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
         harga: formatRupiah(p.harga_pax),
       })),
       hargaDasar: formatRupiah(aktif.reduce((sum, p) => sum + (parseFloat(p.harga_pax) || 0), 0) || hargaDasar),
+      layanan: layananList.map((l) => ({ nama: l.nama, nominal: formatRupiah(l.nominal) })),
       diskon: discounts.map((d) => ({ nama: d.nama, nominal: formatRupiah(d.nominal) })),
       totalTagihan: formatRupiah(totalHarga),
       totalDibayar: formatRupiah(totalPaid),
@@ -505,6 +514,50 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
         })),
       printedAt: formatTanggal(new Date()),
     });
+  };
+
+  // ─── Layanan Tambahan Handlers ───────────────────────────────────────────────
+  const bukaTambahLayanan = () => {
+    setLayananForm({ nama: "", nominal: "", error: {}, konfirmasi: false, saving: false });
+  };
+
+  const simpanLayanan = async (e) => {
+    e?.preventDefault();
+    if (!layananForm) return;
+    const nama = layananForm.nama.trim();
+    const nominal = parseFloat(layananForm.nominal) || 0;
+    const error = {};
+    if (!nama) error.nama = "Nama layanan wajib diisi.";
+    if (nominal <= 0) error.nominal = "Nominal harus lebih dari 0.";
+    if (Object.keys(error).length) {
+      setLayananForm((s) => ({ ...s, error }));
+      return;
+    }
+    // Booking lunas turun ke DP setelah tagihan naik: minta konfirmasi sekali.
+    if (booking.status === "lunas" && !layananForm.konfirmasi) {
+      setLayananForm((s) => ({ ...s, error: {}, konfirmasi: true }));
+      return;
+    }
+    setLayananForm((s) => ({ ...s, error: {}, saving: true }));
+    try {
+      await addBookingLayanan(id, { nama, nominal });
+      setLayananForm(null);
+      fetchAll();
+    } catch (err) {
+      setLayananForm((s) => ({ ...s, saving: false, konfirmasi: false, error: { umum: err.response?.data?.error || "Layanan gagal ditambahkan." } }));
+    }
+  };
+
+  const konfirmasiHapusLayanan = async () => {
+    if (!hapusLayanan) return;
+    setHapusLayanan((s) => ({ ...s, saving: true, error: "" }));
+    try {
+      await removeBookingLayanan(id, hapusLayanan.id);
+      setHapusLayanan(null);
+      fetchAll();
+    } catch (err) {
+      setHapusLayanan((s) => ({ ...s, saving: false, error: err.response?.data?.error || "Layanan gagal dihapus." }));
+    }
   };
 
   // ─── Diskon Handlers ─────────────────────────────────────────────────────────
@@ -1068,6 +1121,43 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
             )}
           </TableCard>
 
+          {/* Section: Layanan Tambahan (SPEK-LAYANAN-TAMBAHAN-BOOKING-2026-11-27) */}
+          <TableCard
+            title="Layanan Tambahan"
+            aside={booking.status !== "batal" ? (
+              <Button size="sm" variant="secondary" onClick={bukaTambahLayanan} className="text-xs flex items-center gap-1">
+                <Plus size={14} strokeWidth={1.75} />
+                <span>Tambah layanan</span>
+              </Button>
+            ) : null}
+          >
+            {layananList.length === 0 ? (
+              <EmptyState variant="section" message="Belum ada layanan." />
+            ) : (
+              <div className="divide-y divide-neutral-200">
+                {layananList.map((l) => (
+                  <div key={l.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-neutral-900 font-body break-words">{l.nama}</p>
+                      <span className="text-xs text-neutral-400 font-body">
+                        {[formatTanggal(l.created_at), l.dibuat_oleh_nama].filter(Boolean).join(" · ")}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-sm font-semibold text-neutral-900 font-body whitespace-nowrap">{formatRupiah(l.nominal)}</span>
+                      {booking.status !== "batal" && (
+                        <ActionMenu
+                          align="right"
+                          items={[{ label: 'Hapus', icon: Trash2, danger: true, tooltip: 'Hapus layanan', onClick: () => setHapusLayanan({ id: l.id, nama: l.nama, nominal: l.nominal, saving: false, error: "" }) }]}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TableCard>
+
           {/* Section: Diskon Khusus */}
           <TableCard
             title="Program Diskon"
@@ -1250,6 +1340,12 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
                 <span className="text-neutral-500">Harga Paket Dasar:</span>
                 <span className="font-medium text-neutral-900">{formatRupiah(hargaDasar)}</span>
               </div>
+              {totalLayanan > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-neutral-500">Layanan Tambahan:</span>
+                  <span className="font-medium text-neutral-900">{formatRupiah(totalLayanan)}</span>
+                </div>
+              )}
               {totalDiskon > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-neutral-500">Total Diskon:</span>
@@ -1486,6 +1582,73 @@ export const BookingDetailPage = ({ showBrandColumn = false, bolehLihatAgen = tr
               />
             )
           ) : null}
+        </div>
+      </Modal>
+
+      {/* Modal: Tambah layanan (booking lunas: konfirmasi turun ke DP) */}
+      <Modal
+        isOpen={Boolean(layananForm)}
+        onClose={() => !layananForm?.saving && setLayananForm(null)}
+        title="Tambah Layanan"
+        size="sm"
+        footer={layananForm?.konfirmasi ? (
+          <>
+            <Button variant="secondary" onClick={() => setLayananForm((s) => ({ ...s, konfirmasi: false }))} disabled={layananForm?.saving}>Batal</Button>
+            <Button variant="primary" onClick={simpanLayanan} isLoading={layananForm?.saving}>Tambah</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={() => setLayananForm(null)} disabled={layananForm?.saving}>Batal</Button>
+            <Button variant="primary" type="submit" form="form-layanan" isLoading={layananForm?.saving}>Simpan</Button>
+          </>
+        )}
+      >
+        {layananForm?.konfirmasi ? (
+          <p className="text-sm font-body text-neutral-700">
+            Tambah {layananForm.nama.trim()}? Booking jadi belum lunas.
+          </p>
+        ) : layananForm && (
+          <form id="form-layanan" onSubmit={simpanLayanan} className="space-y-4" noValidate>
+            {layananForm.error.umum && <Alert variant="error">{layananForm.error.umum}</Alert>}
+            <Input
+              label="Nama layanan"
+              required
+              value={layananForm.nama}
+              onChange={(e) => setLayananForm((s) => ({ ...s, nama: e.target.value }))}
+              placeholder="Kereta cepat Madinah–Makkah"
+              error={layananForm.error.nama}
+              maxLength={255}
+            />
+            <CurrencyInput
+              label="Nominal"
+              required
+              value={layananForm.nominal}
+              onChange={(val) => setLayananForm((s) => ({ ...s, nominal: val }))}
+              placeholder="Total untuk semua jamaah"
+              error={layananForm.error.nominal}
+            />
+          </form>
+        )}
+      </Modal>
+
+      {/* Modal: Konfirmasi hapus layanan */}
+      <Modal
+        isOpen={Boolean(hapusLayanan)}
+        onClose={() => !hapusLayanan?.saving && setHapusLayanan(null)}
+        title="Hapus Layanan"
+        size="sm"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setHapusLayanan(null)} disabled={hapusLayanan?.saving}>Batal</Button>
+            <Button variant="danger" onClick={konfirmasiHapusLayanan} isLoading={hapusLayanan?.saving}>Hapus</Button>
+          </>
+        )}
+      >
+        <div className="space-y-3">
+          {hapusLayanan?.error && <Alert variant="error">{hapusLayanan.error}</Alert>}
+          <p className="text-sm font-body text-neutral-700">
+            Hapus {hapusLayanan?.nama}? Total turun {formatRupiah(hapusLayanan?.nominal)}.
+          </p>
         </div>
       </Modal>
 

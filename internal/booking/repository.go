@@ -414,6 +414,12 @@ func (r *Repository) GetByID(ctx context.Context, id int64, brandID *int64) (*Bo
 	}
 	terapkanTahapan(b, tahap)
 
+	layanan, err := r.ListLayanan(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	b.Layanan = layanan
+
 	discounts, err := r.ListDiscounts(ctx, id)
 	if err != nil {
 		return nil, err
@@ -1976,12 +1982,17 @@ func lockNotBatalTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
 // wajibTotalDiAtasNolTx menolak perubahan yang membuat total booking Rp 0 (keputusan 2026-11-26): booking
 // bertotal 0 tidak pernah lunas, komisi tidak tercatat, dan hold self-booking-nya dilepas.
 func wajibTotalDiAtasNolTx(ctx context.Context, tx *sql.Tx, bookingID int64) error {
+	return totalDiAtasNolTx(ctx, tx, bookingID, "Diskon tidak boleh membuat total booking Rp 0.")
+}
+
+// totalDiAtasNolTx menolak total booking Rp 0 dengan pesan pesan.
+func totalDiAtasNolTx(ctx context.Context, tx *sql.Tx, bookingID int64, pesan string) error {
 	var total float64
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(total_harga,0) FROM bookings WHERE id=?`, bookingID).Scan(&total); err != nil {
 		return fmt.Errorf("booking: baca total %d: %w", bookingID, err)
 	}
 	if total <= 0 {
-		return bizErr("Diskon tidak boleh membuat total booking Rp 0.")
+		return bizErr("%s", pesan)
 	}
 	return nil
 }
@@ -2006,7 +2017,7 @@ func ensureTotalCoversPaidTx(ctx context.Context, tx *sql.Tx, bookingID int64) e
 		return fmt.Errorf("booking.ensureTotalCoversPaid: %w", err)
 	}
 	if total < paid {
-		return bizErr("total tagihan tidak boleh lebih kecil dari pembayaran terkonfirmasi (%s)", formatRupiah(paid))
+		return bizErr("Total tidak boleh di bawah pembayaran %s.", formatRupiah(paid))
 	}
 	return nil
 }
@@ -2034,11 +2045,13 @@ func (r *Repository) recalculateTotalTx(ctx context.Context, tx *sql.Tx, booking
 		UPDATE bookings
 		SET total_harga = GREATEST(0, (
 			SELECT COALESCE(SUM(harga_pax), 0) FROM booking_pax WHERE booking_id = ?
+		) + (
+			SELECT COALESCE(SUM(nominal), 0) FROM booking_layanan WHERE booking_id = ?
 		) - (
 			SELECT COALESCE(SUM(nominal), 0) FROM booking_discounts WHERE booking_id = ?
 		))
 		WHERE id = ?`
-	if _, err := tx.ExecContext(ctx, q, bookingID, bookingID, bookingID); err != nil {
+	if _, err := tx.ExecContext(ctx, q, bookingID, bookingID, bookingID, bookingID); err != nil {
 		return err
 	}
 
@@ -2191,6 +2204,97 @@ func (r *Repository) DeleteDiscount(ctx context.Context, bookingID int64, discou
 	}
 
 	return tx.Commit()
+}
+
+// ─── Layanan tambahan (SPEK-LAYANAN-TAMBAHAN-BOOKING-2026-11-27) ─────────────
+
+// ListLayanan mengambil layanan tambahan sebuah booking beserta nama admin penambahnya.
+func (r *Repository) ListLayanan(ctx context.Context, bookingID int64) ([]BookingLayanan, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT l.id, l.booking_id, l.nama, l.nominal, COALESCE(NULLIF(a.display_name,''), a.email, ''), l.created_at
+		FROM booking_layanan l LEFT JOIN admin_users a ON a.id = l.dibuat_oleh
+		WHERE l.booking_id = ? ORDER BY l.id ASC`, bookingID)
+	if err != nil {
+		return nil, fmt.Errorf("booking.ListLayanan: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]BookingLayanan, 0)
+	for rows.Next() {
+		var l BookingLayanan
+		if err := rows.Scan(&l.ID, &l.BookingID, &l.Nama, &l.Nominal, &l.DibuatOlehNama, &l.CreatedAt); err != nil {
+			return nil, fmt.Errorf("booking.ListLayanan scan: %w", err)
+		}
+		items = append(items, l)
+	}
+	return items, rows.Err()
+}
+
+// AddLayanan menambahkan layanan ke booking dan menghitung ulang total. Booking lunas bisa turun ke DP;
+// komisinya batal dan dicatat ulang saat lunas lagi (K25).
+func (r *Repository) AddLayanan(ctx context.Context, bookingID int64, nama string, nominal float64, adminID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := r.addLayananTx(ctx, tx, bookingID, nama, nominal, adminID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *Repository) addLayananTx(ctx context.Context, tx *sql.Tx, bookingID int64, nama string, nominal float64, adminID int64) error {
+	if err := lockNotBatalTx(ctx, tx, bookingID); err != nil {
+		return err
+	}
+	var dibuatOleh any
+	if adminID > 0 {
+		dibuatOleh = adminID
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO booking_layanan (booking_id, nama, nominal, dibuat_oleh) VALUES (?, ?, ?, ?)`,
+		bookingID, nama, nominal, dibuatOleh); err != nil {
+		return fmt.Errorf("booking.AddLayanan insert: %w", err)
+	}
+	if err := r.recalculateTotalTx(komisi.DenganSebabBatal(ctx, komisi.SebabLayananDitambah), tx, bookingID); err != nil {
+		return fmt.Errorf("booking.AddLayanan recalc: %w", err)
+	}
+	return nil
+}
+
+// DeleteLayanan menghapus layanan dan menghitung ulang total. Ditolak bila total menjadi Rp 0 atau di
+// bawah pembayaran terkonfirmasi; penolakan membatalkan seluruh perubahan.
+func (r *Repository) DeleteLayanan(ctx context.Context, bookingID, layananID int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := r.deleteLayananTx(ctx, tx, bookingID, layananID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *Repository) deleteLayananTx(ctx context.Context, tx *sql.Tx, bookingID, layananID int64) error {
+	if err := lockNotBatalTx(ctx, tx, bookingID); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM booking_layanan WHERE id=? AND booking_id=?`, layananID, bookingID)
+	if err != nil {
+		return fmt.Errorf("booking.DeleteLayanan delete: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	if err := r.recalculateTotalTx(ctx, tx, bookingID); err != nil {
+		return fmt.Errorf("booking.DeleteLayanan recalc: %w", err)
+	}
+	if err := totalDiAtasNolTx(ctx, tx, bookingID, "Total booking tidak boleh Rp 0."); err != nil {
+		return err
+	}
+	return ensureTotalCoversPaidTx(ctx, tx, bookingID)
 }
 
 // ─── Existence checks ─────────────────────────────────────────────────────────

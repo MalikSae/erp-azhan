@@ -1,6 +1,7 @@
 # SPEK — Layanan Tambahan Booking
 
-> **Status:** Disepakati 27 Nov 2026. Belum dibangun.
+> **Status:** Disepakati dan dibangun 27 Nov 2026 (migrasi 165; ERP, `azhan-booking`, `azhan-mobile`).
+> **Catatan pembangunan:** pesan "Total tidak boleh di bawah pembayaran Rp …" juga dipakai diskon, ganti kamar, dan batal pax (dulu "total tagihan tidak boleh lebih kecil dari pembayaran terkonfirmasi (…)"). Ringkasan Pembayaran di Detail Booking mendapat baris "Layanan Tambahan". Halaman Detail Booking tidak punya pola pesan sukses, jadi daftar yang diperbarui menjadi tanda berhasil, sama dengan diskon.
 > **Sumber keputusan:** sesi grilling 27 Nov 2026 (3 babak, 18 keputusan), atas permintaan pemilik bisnis: admin bisa menambahkan biaya layanan ke sebuah booking, misalnya kereta cepat, dengan isian sederhana nama + nominal.
 > **Prinsip:** layanan adalah kebalikan diskon. Bentuk, gate, dan alur hitung ulangnya mengikuti `booking_discounts`, yang sudah melewati audit.
 
