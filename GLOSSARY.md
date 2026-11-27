@@ -59,6 +59,10 @@ _Hindari_: role, jabatan, divisi, struktur organisasi (semuanya dihapus 25 Novem
 **Siap berangkat**: semua tahapan umroh setiap pax aktif selesai, termasuk tiket booking.
 **Retur perlengkapan**: stok brand bertambah kembali karena penyerahan dibatalkan. Saat pax atau seluruh booking batal, perlengkapan yang sudah diserahkan kembali ke stok hanya bila booking masih baru atau draft; pada booking dp atau lunas perlengkapan dianggap dibawa jamaah (keputusan 25 November 2026). Item perlengkapan yang punya riwayat stok tidak bisa dihapus.
 
+**Total tagihan**: `bookings.total_harga` = jumlah harga pax + layanan tambahan − diskon, minimal di atas Rp 0 dan tidak di bawah pembayaran terkonfirmasi.
+**Layanan tambahan**: biaya layanan yang diinput admin ke satu booking, misalnya kereta cepat (`booking_layanan`). Nama teks bebas dan nominal total untuk booking itu; menambah total tagihan, tidak menambah DP wajib maupun komisi. Kebalikan diskon.
+_Hindari_: add-on (nama fitur lama yang dihapus di migrasi 086).
+
 **Kuota seat**: jumlah seat yang dijual untuk satu jadwal (`schedules.seat_total`). Padanan "block seat" atau allotment yang travel pesan dari maskapai.
 
 **Sisa seat**: kuota seat dikurangi seat yang sedang di-hold (`schedules.seat_sisa`).

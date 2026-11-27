@@ -32,6 +32,10 @@ export const buildInvoiceDocument = (data) => {
         <td class="r">${escapeHtml(p.harga)}</td>
       </tr>`).join('');
 
+  // Layanan tambahan: nama saja + nominal, sesudah subtotal jamaah dan sebelum diskon.
+  const layananRows = (data.layanan || []).map((l) => `
+      <tr><td>${escapeHtml(l.nama)}</td><td class="r">${escapeHtml(l.nominal)}</td></tr>`).join('');
+
   const diskonRows = (data.diskon || []).map((d) => `
       <tr><td>Diskon ${escapeHtml(d.nama)}</td><td class="r pos">- ${escapeHtml(d.nominal)}</td></tr>`).join('');
 
@@ -165,6 +169,7 @@ export const buildInvoiceDocument = (data) => {
     </div>
     <table class="totals">
       <tr><td>Subtotal</td><td class="r">${escapeHtml(data.hargaDasar)}</td></tr>
+      ${layananRows}
       ${diskonRows}
       <tr class="grand"><td>Total Tagihan</td><td class="r">${escapeHtml(data.totalTagihan)}</td></tr>
       <tr><td>Sudah Dibayar</td><td class="r pos">${escapeHtml(data.totalDibayar)}</td></tr>

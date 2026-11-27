@@ -549,6 +549,8 @@ func main() {
 		bookingEdit.Delete("/bookings/{id}/seat-block", bookingHandler.CancelSeatBlock)
 		bookingEdit.Post("/bookings/{id}/discounts", bookingHandler.AddBookingDiscount)
 		bookingEdit.Delete("/bookings/{id}/discounts/{discountID}", bookingHandler.RemoveBookingDiscount)
+		bookingEdit.Post("/bookings/{id}/layanan", bookingHandler.AddBookingLayanan)
+		bookingEdit.Delete("/bookings/{id}/layanan/{layananID}", bookingHandler.RemoveBookingLayanan)
 		bookingView.Get("/bookings/{id}/cashback", bookingHandler.GetKreditCashback)
 		bookingView.Get("/bookings/{id}/agen-komisi", bookingHandler.GetAgenKomisi)
 		bookingEdit.Post("/bookings/{id}/cashback", bookingHandler.PakaiKreditCashback)

@@ -99,7 +99,7 @@ Bandara di ERP disimpan sebagai nama bebas tanpa kode IATA, dan jam tiba tidak d
 25. Setiap pax punya isian pendek **Catatan seat**, disalin ke kolom Keterangan di sheet Blok Seat.
 
 ### Layanan tambahan (Fase 3)
-26. Setiap pax diberi centang **ikut** untuk setiap layanan dari master add-on paket (`schedule_add_ons`). Centang ini tidak terhubung ke `booking_addons` atau tagihan.
+26. Setiap pax diberi centang **ikut** untuk setiap layanan paket. Master add-on paket (`schedule_add_ons`) sudah dihapus di migrasi 086, jadi sumber daftar layanan diputuskan saat Fase 3. Centang ini tidak terhubung ke tagihan (`booking_layanan`, lihat `SPEK-LAYANAN-TAMBAHAN-BOOKING-2026-11-27.md`).
 27. Sheet Speed Train dan Telefric hanya berisi pax yang dicentang.
 
 ## 5. Tahapan
