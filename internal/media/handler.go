@@ -184,7 +184,19 @@ func (h *Handler) ServePublic(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	w.Header().Set("Cache-Control", publicMediaCacheControl(filename))
 	http.ServeFile(w, r, filepath.Join(".", "uploads", category, filename))
+}
+
+var uuidFilename = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]+$`)
+
+// publicMediaCacheControl: uploads get a fresh UUID name and are never rewritten in place, so they can be
+// cached for good. Other names (seeded logos such as garuda-indonesia.webp) may be replaced, so one day.
+func publicMediaCacheControl(filename string) string {
+	if uuidFilename.MatchString(strings.ToLower(filename)) {
+		return "public, max-age=31536000, immutable"
+	}
+	return "public, max-age=86400"
 }
 
 // ServeProtected serves sensitive media only after the admin middleware has

@@ -48,11 +48,12 @@ func (c *Config) Location() *time.Location {
 // DSN membangun Data Source Name untuk koneksi MySQL. loc membuat driver
 // membaca/menulis DATETIME dalam zona bisnis; time_zone membuat NOW() dan
 // CURRENT_DATE di MySQL memakai zona yang sama, tidak bergantung pada
-// zona sistem server database.
+// zona sistem server database. interpolateParams membuat query berparameter
+// cukup satu round trip (tanpa prepare/close); aman karena charset utf8mb4.
 func (c *Config) DSN() string {
 	loc := c.Location()
 	offset := time.Now().In(loc).Format("-07:00")
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci&loc=%s&time_zone=%s",
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&interpolateParams=true&charset=utf8mb4&collation=utf8mb4_unicode_ci&loc=%s&time_zone=%s",
 		c.DBUser, c.DBPassword, c.DBHost, c.DBPort, c.DBName,
 		url.QueryEscape(loc.String()), url.QueryEscape("'"+offset+"'"))
 }

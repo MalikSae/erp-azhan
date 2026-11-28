@@ -557,6 +557,10 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 	if err != nil {
 		return nil, err
 	}
+	// Close before the follow-up queries so each request holds one pool connection, not two.
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("schedule.fetchFull close: %w", err)
+	}
 
 	th, err := r.GetTransitHotelsByScheduleID(ctx, s.ID)
 	if err != nil {

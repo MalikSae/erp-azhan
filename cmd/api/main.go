@@ -127,6 +127,8 @@ func main() {
 	// Logger akses dengan token invoice/token query disamarkan (shared.RedactURI).
 	r.Use(shared.RedactingLogger(&middleware.DefaultLogFormatter{Logger: log.New(os.Stdout, "", log.LstdFlags), NoColor: false}))
 	r.Use(middleware.Recoverer)
+	// Kompres JSON (list paket ±90% lebih kecil). Gambar tidak ikut: sudah terkompresi.
+	r.Use(middleware.Compress(5, "application/json"))
 
 	// ─── Handlers ─────────────────────────────────────────────────────────────
 	hotelRepo := hotel.NewRepository(db)
