@@ -150,8 +150,6 @@ func main() {
 	scheduleRepo := schedule.NewRepository(db)
 	scheduleHandler := schedule.NewHandler(scheduleRepo)
 	manifestHandler := manifest.NewHandler(db)
-	// Paket yang tanggal berangkatnya sudah lewat diarsipkan otomatis: sekali saat API menyala, lalu tiap 24 jam.
-	go schedule.JalankanArsipOtomatis(context.Background(), scheduleRepo, 24*time.Hour)
 
 	identityRepo := identity.NewRepository(db)
 	aksesRepo := akses.NewRepository(db)
@@ -195,16 +193,7 @@ func main() {
 	selfBookingRepo := selfbooking.NewRepository(db)
 	selfBookingHandler := selfbooking.NewHandler(selfBookingRepo, mailer.NewFromEnv())
 
-	if db != nil {
-		go runSeatHoldExpiry(bookingRepo)
-		go runAktivasiCleanup(db)
-		go notifikasi.JalankanPengingat(context.Background(), db, time.Minute)
-		if v := strings.ToLower(strings.TrimSpace(os.Getenv("PELUNASAN_AUTO_BATAL"))); v == "false" || v == "0" || v == "off" {
-			log.Printf("[INFO] pembatalan otomatis lewat batas pelunasan DIMATIKAN (PELUNASAN_AUTO_BATAL=%s)", v)
-		} else {
-			go runPelunasanExpiry(bookingRepo, db)
-		}
-	}
+	mulaiWorker(db, scheduleRepo, bookingRepo)
 
 	dokumenRepo := dokumen.NewRepository(db)
 	dokumenHandler := dokumen.NewHandler(dokumenRepo)
@@ -888,4 +877,25 @@ func requireDB(db *sql.DB) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// mulaiWorker menyalakan worker latar dan mengembalikan true, hanya bila database tersambung. Tanpa database
+// (degraded mode) worker yang menyentuh db nil membuat seluruh API panic saat start, padahal endpoint lain sudah
+// dijaga requireDB (bug 2026-11-28: worker arsip paket dijalankan di luar pemeriksaan ini).
+func mulaiWorker(db *sql.DB, scheduleRepo *schedule.Repository, bookingRepo *booking.Repository) bool {
+	if db == nil {
+		log.Printf("[WARN] database tidak tersedia: worker latar (arsip paket, hold seat, notifikasi, pelunasan) tidak dijalankan")
+		return false
+	}
+	// Paket yang tanggal berangkatnya sudah lewat diarsipkan otomatis: sekali saat API menyala, lalu tiap 24 jam.
+	go schedule.JalankanArsipOtomatis(context.Background(), scheduleRepo, 24*time.Hour)
+	go runSeatHoldExpiry(bookingRepo)
+	go runAktivasiCleanup(db)
+	go notifikasi.JalankanPengingat(context.Background(), db, time.Minute)
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("PELUNASAN_AUTO_BATAL"))); v == "false" || v == "0" || v == "off" {
+		log.Printf("[INFO] pembatalan otomatis lewat batas pelunasan DIMATIKAN (PELUNASAN_AUTO_BATAL=%s)", v)
+	} else {
+		go runPelunasanExpiry(bookingRepo, db)
+	}
+	return true
 }
