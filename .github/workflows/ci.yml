@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Go build, vet, test (MySQL 8.4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    # Dibaca shared.LoadConfig dan migrations/run.go; .env tidak ada di CI (godotenv dilewati).
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: ci-root
+      DB_NAME: erp_azhan_ci
+      APP_TIMEZONE: Asia/Jakarta
+      ERP_TEST_DB: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Buat database
+        run: >-
+          mysql -h 127.0.0.1 -uroot -p"$DB_PASSWORD"
+          -e "CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+      - name: Jalankan semua migrasi + seed CI
+        run: bash .github/ci/setup-db.sh
+
+      - name: go test (dengan integration test DB)
+        run: go test ./...
