@@ -1,6 +1,7 @@
 package media
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -364,6 +365,23 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 		}
 	}
 
+	// Foto dan poster dikecilkan sebelum disimpan (lebar maks 2000 px, berkas > 1 MB disimpan ulang). Kategori lain
+	// dan gambar yang sudah kecil disimpan apa adanya.
+	var sumber io.Reader = file
+	if isImage {
+		if _, ok := kategoriVarian[category]; ok {
+			data, err := io.ReadAll(io.LimitReader(file, MaxUploadBytes+1))
+			if err != nil {
+				shared.WriteError(w, http.StatusInternalServerError, "Gagal membaca file.")
+				return
+			}
+			sumber = bytes.NewReader(data)
+			if isi, ekstensi, ok := optimasiUnggahan(category, ext, data); ok {
+				sumber, ext = bytes.NewReader(isi), ekstensi
+			}
+		}
+	}
+
 	// 3. Generate unique name
 	newFileName := uuid.New().String() + ext
 	uploadDir := filepath.Join(".", "uploads", category)
@@ -381,7 +399,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 		shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
 		return
 	}
-	if _, err := io.Copy(destination, file); err != nil {
+	if _, err := io.Copy(destination, sumber); err != nil {
 		destination.Close()
 		_ = os.Remove(finalPath)
 		shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
@@ -421,7 +439,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	}
 	response := map[string]string{"url": publicURL}
 
-	// Format asli dipertahankan agar upload tidak bergantung pada binary eksternal.
+	// Foto dan poster sudah dikecilkan di atas (optimasiUnggahan); kategori lain disimpan dalam format asli.
 	_ = isImage
 
 	// 8. Success

@@ -139,6 +139,14 @@ func buatVarian(sumber string, lebar int) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	return kecilkanGambar(data, lebar, kualitasJPEG, false)
+}
+
+// kecilkanGambar mengecilkan gambar ke lebar lebarMaks (tegak sesuai EXIF; metadata EXIF tidak ikut, termasuk lokasi
+// GPS). Gambar yang sudah tidak lebih lebar: errTanpaVarian, kecuali ulangBilaSempit (disimpan ulang di lebar asli,
+// misalnya PNG poster 6 MB). Hasil yang lebarnya tetap dan tidak ≥15% lebih kecil: errTanpaVarian. Tanpa transparansi
+// menjadi JPEG, sisanya PNG.
+func kecilkanGambar(data []byte, lebarMaks, kualitas int, ulangBilaSempit bool) ([]byte, string, error) {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, "", errTanpaVarian
@@ -151,23 +159,42 @@ func buatVarian(sumber string, lebar int) ([]byte, string, error) {
 	if orientasi >= 5 { // diputar 90°: lebar tampil = tinggi berkas
 		w, h = h, w
 	}
-	if w <= lebar {
-		return nil, "", errTanpaVarian
+	lebar := lebarMaks
+	dikecilkan := w > lebarMaks
+	if !dikecilkan {
+		if !ulangBilaSempit {
+			return nil, "", errTanpaVarian
+		}
+		lebar = w
 	}
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, "", errTanpaVarian
 	}
-	src = terapkanOrientasi(src, orientasi)
-
 	tinggi := max(1, int(float64(h)*float64(lebar)/float64(w)+0.5))
-	dst := image.NewNRGBA(image.Rect(0, 0, lebar, tinggi))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Src, nil)
+	// Dikecilkan dalam orientasi berkas, lalu diputar: memutar gambar kecil jauh lebih murah daripada foto 12 MP.
+	lb, tb := lebar, tinggi
+	if orientasi >= 5 {
+		lb, tb = tinggi, lebar
+	}
+	// RGBA (bukan NRGBA): x/image/draw punya jalur cepat untuk tujuan RGBA (±3x lebih cepat).
+	// Pengecilan besar (poster 25 MP ke 2000 px): bilinear cepat ke 2x target lalu rata-rata blok 2x2 (halus, tanpa
+	// aliasing). CatmullRom dari sumber sebesar itu butuh beberapa detik. Pengecilan kecil tetap CatmullRom.
+	var kecil *image.RGBA
+	if src.Bounds().Dx() > 2*lb {
+		antara := image.NewRGBA(image.Rect(0, 0, 2*lb, 2*tb))
+		draw.ApproxBiLinear.Scale(antara, antara.Bounds(), src, src.Bounds(), draw.Src, nil)
+		kecil = setengahRGBA(antara)
+	} else {
+		kecil = image.NewRGBA(image.Rect(0, 0, lb, tb))
+		draw.CatmullRom.Scale(kecil, kecil.Bounds(), src, src.Bounds(), draw.Src, nil)
+	}
+	dst := terapkanOrientasi(kecil, orientasi)
 
 	var buf bytes.Buffer
 	ekstensi := ".jpg"
-	if dst.Opaque() {
-		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: kualitasJPEG})
+	if kecil.Opaque() { // rotasi tidak mengubah transparansi
+		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: kualitas})
 	} else {
 		ekstensi = ".png"
 		err = (&png.Encoder{CompressionLevel: png.BestCompression}).Encode(&buf, dst)
@@ -175,10 +202,34 @@ func buatVarian(sumber string, lebar int) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	if float64(buf.Len()) > float64(len(data))*rasioVarianMaks {
+	// Lebar tetap: hanya dipakai bila jelas lebih hemat. Dikecilkan: selalu dipakai (batas lebar dijaga).
+	if !dikecilkan && float64(buf.Len()) > float64(len(data))*rasioVarianMaks {
 		return nil, "", errTanpaVarian
 	}
 	return buf.Bytes(), ekstensi, nil
+}
+
+// Unggahan foto dan poster (kategoriVarian) dikecilkan saat disimpan: lebar maksimal 2000 px, atau disimpan ulang
+// bila berkasnya di atas 1 MB. Gambar resolusi penuh tidak disimpan (keputusan 2026-11-28).
+const (
+	LebarMaksUnggahan  = 2000
+	ukuranUlangUnggah  = 1 << 20
+	kualitasJPEGUnggah = 85
+)
+
+// optimasiUnggahan mengembalikan isi baru dan ekstensinya, atau ok=false bila berkas disimpan apa adanya
+// (kategori lain, GIF, gambar sudah kecil, tidak terbaca, atau di atas batas piksel dekode).
+func optimasiUnggahan(category, ext string, data []byte) ([]byte, string, bool) {
+	if _, ok := kategoriVarian[category]; !ok || ext == ".gif" {
+		return nil, "", false
+	}
+	slotVarian <- struct{}{}
+	defer func() { <-slotVarian }()
+	isi, ekstensi, err := kecilkanGambar(data, LebarMaksUnggahan, kualitasJPEGUnggah, len(data) > ukuranUlangUnggah)
+	if err != nil {
+		return nil, "", false
+	}
+	return isi, ekstensi, true
 }
 
 // orientasiEXIF membaca tag Orientation (1-8) dari JPEG; 1 bila tidak ada. Foto ponsel sering disimpan miring
@@ -275,6 +326,25 @@ func terapkanOrientasi(src image.Image, o int) image.Image {
 				dx, dy = y, w-1-x
 			}
 			dst.Set(dx, dy, src.At(b.Min.X+x, b.Min.Y+y))
+		}
+	}
+	return dst
+}
+
+// setengahRGBA mengecilkan tepat setengah: tiap piksel hasil = rata-rata blok 2x2.
+func setengahRGBA(src *image.RGBA) *image.RGBA {
+	b := src.Bounds()
+	w, h := b.Dx()/2, b.Dy()/2
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		r0 := src.Pix[(2*y)*src.Stride:]
+		r1 := src.Pix[(2*y+1)*src.Stride:]
+		d := dst.Pix[y*dst.Stride:]
+		for x := 0; x < w; x++ {
+			i, j := 8*x, 4*x
+			for c := 0; c < 4; c++ {
+				d[j+c] = uint8((uint16(r0[i+c]) + uint16(r0[i+4+c]) + uint16(r1[i+c]) + uint16(r1[i+4+c]) + 2) / 4)
+			}
 		}
 	}
 	return dst

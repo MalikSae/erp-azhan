@@ -296,6 +296,29 @@ Tidak dikerjakan: cache brand di memori Go (lookup brand per domain sudah memaka
 - `EXPLAIN` daftar paket publik memakai `idx_schedules_brand_status_berangkat` (`Using index`, tanpa filesort).
 - Query per permintaan detail publik (performance_schema, 20 permintaan): **5** (sebelumnya ±13). Waktu lokal 8,2 ms median (DB lokal, RTT ±0,1 ms; selisih nyata muncul bila DB di host lain).
 
+## Unggahan dikecilkan saat disimpan (2026-11-28, keputusan: batas 2000 px)
+
+Foto dan poster (`schedule-brosur`, `banner-promosi`, `haramain`, `ulasan-haramain`, `hotel-photos`) dikecilkan sebelum disimpan:
+- lebih lebar dari 2000 px → disimpan selebar 2000 px;
+- ≤ 2000 px tetapi berkas > 1 MB → disimpan ulang di lebar yang sama, hanya bila hasilnya ≥15% lebih kecil;
+- selain itu disimpan apa adanya.
+
+Detail perilaku:
+- Hasil JPEG kualitas 85, atau PNG bila gambar transparan. URL yang dikembalikan memakai ekstensi hasil.
+- Orientasi EXIF diterapkan, metadata EXIF (termasuk lokasi GPS foto ponsel) tidak ikut tersimpan.
+- Resolusi penuh tidak disimpan.
+- Tidak diubah: GIF, logo (brand, maskapai, hotel, bank), dokumen jamaah, bukti bayar, gambar di atas 40 MP (disimpan asli, terlalu berat untuk didekode).
+- Berlaku untuk unggahan baru saja; berkas yang sudah ada tidak ditulis ulang.
+- Berkas: `internal/media/varian.go` (`kecilkanGambar`, `optimasiUnggahan`), `internal/media/handler.go` (`processUpload`).
+- Penskalaan memakai tujuan `RGBA` (jalur cepat `x/image/draw`) dan, untuk pengecilan > 2x, bilinear ke 2x target lalu rata-rata blok 2x2. Varian `?w=` ikut lebih cepat.
+
+Hasil pada poster terbesar data dev (PNG 4501×5626): **6.401 KB → 695 KB** (JPEG 2000×2500, −89%) dalam ±3 detik (1,2 detik di antaranya membaca PNG). Pemeriksaan visual: teks kecil di poster tetap tajam.
+
+Verifikasi:
+- Tes baru `unggah_kecil_test.go`: 3000 px → 2000 px; gambar kecil tidak diubah; PNG > 1 MB disimpan ulang; kategori lain dan GIF tidak diubah; uji ujung ke ujung `processUpload` (URL `.jpg`, berkas 2000×2500).
+- `ERP_TEST_DB=1 go test ./...`: 37 paket ok.
+- Belum diuji lewat unggahan dari layar admin ERP.
+
 ### Temuan: drift skema DB dev
 Kolom dari migrasi `035_crm_atomic_deals.sql` ada di DB dev, tetapi indeksnya tidak: `idx_bookings_expired_seat_hold` dan `uq_bookings_seat_hold_key`. Worker lepas seat (tiap menit) di DB dev jadi scan tabel. Tidak diubah; perlu dicek apakah DB lain (staging/production) juga kehilangan indeks ini.
 
