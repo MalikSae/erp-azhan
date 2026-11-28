@@ -49,6 +49,9 @@ func (c *Config) Location() *time.Location {
 // membaca/menulis DATETIME dalam zona bisnis; time_zone membuat NOW() dan
 // CURRENT_DATE di MySQL memakai zona yang sama, tidak bergantung pada
 // zona sistem server database.
+//
+// Jangan menambah interpolateParams=true: driver lalu mengirim argumen []byte sebagai _binary'...', dan INSERT
+// hasil json.Marshal ke kolom JSON gagal (Error 3144). Ditemukan lewat ERP_TEST_DB=1 (audit performa 2026-11-28).
 func (c *Config) DSN() string {
 	loc := c.Location()
 	offset := time.Now().In(loc).Format("-07:00")

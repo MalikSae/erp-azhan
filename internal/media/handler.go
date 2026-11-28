@@ -1,10 +1,13 @@
 package media
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -184,7 +187,29 @@ func (h *Handler) ServePublic(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	w.Header().Set("Cache-Control", publicMediaCacheControl(filename))
+	if lebar := lebarDiminta(r.URL.Query().Get("w")); lebar > 0 {
+		p, err := pathVarian(filepath.Join(".", "uploads"), category, filename, lebar)
+		if err == nil {
+			http.ServeFile(w, r, p)
+			return
+		}
+		if !errors.Is(err, errTanpaVarian) {
+			log.Printf("[WARN] varian %s/%s w=%d: %v", category, filename, lebar, err)
+		}
+	}
 	http.ServeFile(w, r, filepath.Join(".", "uploads", category, filename))
+}
+
+var uuidFilename = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]+$`)
+
+// publicMediaCacheControl: uploads get a fresh UUID name and are never rewritten in place, so they can be
+// cached for good. Other names (seeded logos such as garuda-indonesia.webp) may be replaced, so one day.
+func publicMediaCacheControl(filename string) string {
+	if uuidFilename.MatchString(strings.ToLower(filename)) {
+		return "public, max-age=31536000, immutable"
+	}
+	return "public, max-age=86400"
 }
 
 // ServeProtected serves sensitive media only after the admin middleware has
@@ -340,6 +365,23 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 		}
 	}
 
+	// Foto dan poster dikecilkan sebelum disimpan (lebar maks 2000 px, berkas > 1 MB disimpan ulang). Kategori lain
+	// dan gambar yang sudah kecil disimpan apa adanya.
+	var sumber io.Reader = file
+	if isImage {
+		if _, ok := kategoriVarian[category]; ok {
+			data, err := io.ReadAll(io.LimitReader(file, MaxUploadBytes+1))
+			if err != nil {
+				shared.WriteError(w, http.StatusInternalServerError, "Gagal membaca file.")
+				return
+			}
+			sumber = bytes.NewReader(data)
+			if isi, ekstensi, ok := optimasiUnggahan(category, ext, data); ok {
+				sumber, ext = bytes.NewReader(isi), ekstensi
+			}
+		}
+	}
+
 	// 3. Generate unique name
 	newFileName := uuid.New().String() + ext
 	uploadDir := filepath.Join(".", "uploads", category)
@@ -357,7 +399,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 		shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
 		return
 	}
-	if _, err := io.Copy(destination, file); err != nil {
+	if _, err := io.Copy(destination, sumber); err != nil {
 		destination.Close()
 		_ = os.Remove(finalPath)
 		shared.WriteError(w, http.StatusInternalServerError, "Gagal menyimpan file.")
@@ -397,7 +439,7 @@ func (h *Handler) processUpload(w http.ResponseWriter, r *http.Request, category
 	}
 	response := map[string]string{"url": publicURL}
 
-	// Format asli dipertahankan agar upload tidak bergantung pada binary eksternal.
+	// Foto dan poster sudah dikecilkan di atas (optimasiUnggahan); kategori lain disimpan dalam format asli.
 	_ = isImage
 
 	// 8. Success
