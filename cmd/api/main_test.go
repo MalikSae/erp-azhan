@@ -3,6 +3,9 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"erp-azhan/api/internal/booking"
+	"erp-azhan/api/internal/schedule"
 )
 
 // Butir 7i: origin pengembangan (localhost, *.test, dengan credentials) hanya di luar produksi.
@@ -32,5 +35,12 @@ func TestPeringatanTrustedProxies(t *testing.T) {
 	}
 	if p := peringatanTrustedProxies(false, ""); p != "" {
 		t.Fatalf("non-produksi: %q", p)
+	}
+}
+
+// Tanpa database API tetap menyala (degraded mode): tidak ada worker yang dijalankan dengan db nil.
+func TestMulaiWorkerTanpaDatabase(t *testing.T) {
+	if mulaiWorker(nil, schedule.NewRepository(nil), booking.NewRepository(nil)) {
+		t.Fatal("worker tidak boleh jalan tanpa database")
 	}
 }
