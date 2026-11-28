@@ -183,5 +183,40 @@ Verifikasi: `go build ./...` dan `go test ./...` lulus (37 paket ok); `npm run b
 
 TTFB halaman web hampir sama (lokal 35–70 ms); penghematan nyata ada di byte dan beban ERP. Tahap 1 belum menyentuh gambar ukuran asli (tahap 2) dan render dinamis web (tahap 6).
 
+## Tahap 2 dikerjakan (2026-11-28): varian gambar
+
+**Cara kerja.** `GET /uploads/{kategori}/{berkas}?w=400|600|800|1200` menyajikan salinan selebar itu. Varian dibuat sekali saat pertama diminta (±0,1–0,3 dtk), disimpan di `uploads/_varian/` (tidak bisa diakses langsung), lalu disajikan dari disk (±2 ms) dengan cache 1 tahun. URL di respons API tidak berubah; klien yang menambahkan `?w=`. Tanpa skema DB baru, tanpa dependensi baru (JPEG/PNG dari pustaka Go yang sudah ada; PNG bila gambar transparan).
+
+- Hanya kategori foto/poster: `schedule-brosur`, `banner-promosi`, `haramain`, `ulasan-haramain`, `hotel-photos`. Logo tidak.
+- Berkas asli disajikan bila gambar sudah lebih kecil dari lebar diminta, varian tidak ≥15% lebih kecil, format tidak didukung, atau sumber > 40 MP.
+- Orientasi EXIF foto ponsel diikuti (varian tidak miring).
+- Paling banyak 2 gambar didekode bersamaan; satu varian tidak dibuat dua kali.
+- Lebar yang dipakai klien:
+  - Web: poster di kartu 600, foto hotel 600, banner 800, poster di detail paket (non-Hana) 800. Poster di jendela "Lihat poster" Hana tetap asli tapi `loading="lazy"` sehingga tidak diunduh sebelum dibuka.
+  - App: kartu paket, foto hotel, kartu Haramain 800; hero detail paket & Haramain 1200; thumbnail galeri/ulasan dan ringkasan booking 400; banner 1200; penampil foto penuh dan tautan bagikan poster tetap asli.
+- Logo legal statis dikecilkan (tetap PNG, nama sama): `kemenhaj.png` web 158→17 KB (192 px), app 158→13 KB (160 px); `kan.png` dan `nusuk.png` ikut.
+
+### Hasil
+Ukuran per lebar (31 gambar data dev):
+
+| | Asli | w400 | w600 | w800 | w1200 |
+|---|---|---|---|---|---|
+| Total | 4.033 KB | 803 KB | 1.538 KB | 2.384 KB | 3.598 KB |
+| Poster 1080×1350 (WebP ±160 KB) | 160 | 38 | 74 | 115 | asli |
+| Foto Haramain (±200 KB) | 221 | 18 | 39 | 66 | 138 |
+| Banner 1200×600 | 133 | 18 | 33 | 51 | asli |
+
+Halaman web (375 px, gambar setelah gulir ke bawah):
+
+| Halaman | Total sebelum | Total sesudah | Gambar sebelum | Gambar sesudah |
+|---|---|---|---|---|
+| `/` | 1.206 KB | 788 KB | 965 KB | 536 KB |
+| `/paket/umroh/12-januari-2027-9-hari` | 600 KB | 342 KB | 346 KB | 92 KB |
+
+- Detail paket Hana: poster di jendela tertutup (160 KB) tidak lagi diunduh.
+- `/paket` sesudah: 315 KB (pembanding sebelum 708 KB diukur tanpa gulir, jadi tidak setara).
+
+App Beranda (12 gambar yang tampil): 1.607 KB → 1.163 KB (−28%). Poster kartu memakai 800 karena kartu ±330 pt (≈990 px di layar 3×); memakai 600 akan menjadi ±870 KB (−46%) dengan poster sedikit kurang tajam di HP berlayar padat.
+
 ### Bug yang ditemukan saat mengukur
 API ERP crash saat start bila MySQL mati, padahal log menyatakan "degraded mode": worker arsip jadwal tetap jalan dengan `db` nil (`internal/schedule/arsip.go:24`, dipanggil dari `cmd/api/main.go:152`).

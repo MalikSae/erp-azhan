@@ -3,8 +3,10 @@ package media
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -185,6 +187,16 @@ func (h *Handler) ServePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", publicMediaCacheControl(filename))
+	if lebar := lebarDiminta(r.URL.Query().Get("w")); lebar > 0 {
+		p, err := pathVarian(filepath.Join(".", "uploads"), category, filename, lebar)
+		if err == nil {
+			http.ServeFile(w, r, p)
+			return
+		}
+		if !errors.Is(err, errTanpaVarian) {
+			log.Printf("[WARN] varian %s/%s w=%d: %v", category, filename, lebar, err)
+		}
+	}
 	http.ServeFile(w, r, filepath.Join(".", "uploads", category, filename))
 }
 
