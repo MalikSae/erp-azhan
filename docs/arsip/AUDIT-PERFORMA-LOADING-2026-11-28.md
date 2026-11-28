@@ -218,5 +218,38 @@ Halaman web (375 px, gambar setelah gulir ke bawah):
 
 App Beranda (12 gambar yang tampil): 1.607 KB → 1.163 KB (−28%). Poster kartu memakai 800 karena kartu ±330 pt (≈990 px di layar 3×); memakai 600 akan menjadi ±870 KB (−46%) dengan poster sedikit kurang tajam di HP berlayar padat.
 
+## Tahap 3 dikerjakan (2026-11-28): web
+
+| # | Perubahan | Berkas (azhan-booking) |
+|---|---|---|
+| W5 | `getPackages` dibungkus React `cache()`: layout, `generateMetadata`, dan page dalam satu request memakai hasil yang sama | `src/lib/api.js` |
+| W6 | Beranda: 7 pemanggilan berurutan (paket, destinasi, konten, testimoni, galeri, banner, origin) jadi satu `Promise.all`; `/paket`: 5 jadi satu | `src/app/page.jsx`, `src/app/paket/(daftar)/page.jsx` |
+| W7 | Foto hero Hana di-preload: dikirim di header HTTP `Link` (800 untuk ≤767 px, 1600 untuk ≥768 px, sama dengan CSS) | `src/lib/heroHaram.js`, `HeroHana`, `HeroHalamanHana`, `LayarFokus` |
+| W9 | `public/hero/*` dan `hero-makkah.webp`: `Cache-Control: public, max-age=604800, stale-while-revalidate=86400` (sebelumnya `max-age=0`) | `next.config.mjs` |
+| W2 | Skeleton `loading.jsx` untuk `/paket` dan `/jadwal-umroh` (komponen `ui/Skeleton` + `paket/DaftarPaketMemuat`) | `src/app/paket/(daftar)/`, `src/app/jadwal-umroh/(daftar)/` |
+
+**Keputusan W2.** `loading.jsx` membuat respons selalu mulai dengan status 200; redirect 301/308 dan 404 sesudahnya hanya jadi meta tag (soft redirect/soft 404). Karena itu:
+- Tidak dipasang di `/paket/[...slug]` dan `/blog/[slug]` (redirect slug lama dan 404 harus tetap status HTTP asli).
+- Halaman daftar dipindah ke route group `(daftar)` karena `loading.jsx` di folder `/paket` juga membungkus `/paket/[...slug]`. URL tidak berubah.
+- Diverifikasi sesudah perubahan: `/paket/113` → 308 ke path paket; `/paket/tidak-ada-xyz` 404; `/blog/tidak-ada-xyz` 404; `/paket` dan `/jadwal-umroh` 200; skeleton hanya ada di stream `/paket`, tidak di detail.
+- `/tentang-kami` dan halaman informasi lain tidak diberi skeleton.
+
+Verifikasi: `npm run build`, `npm test` (957 pass, 0 fail), `npm run check:design` OK. Screenshot skeleton di 375 px dan 1440 px, dan halaman `/paket` asli sesudah stream selesai.
+
+### Hasil (A/B lokal, 30 permintaan per halaman, dua putaran)
+| Halaman | Sebelum tahap 3 (median byte pertama) | Sesudah tahap 3 |
+|---|---|---|
+| `/` | 67 / 67 ms | 79 / 76 ms |
+| `/paket` | 58 / 54 ms | 59 / 68 ms |
+| `/jadwal-umroh` | 75 / 70 ms | 70 / 79 ms |
+
+- **Tidak ada perbaikan TTFB yang terukur di lokal**; selisihnya dalam rentang noise mesin (satu putaran sesudah sempat 36–42 ms saat server sudah lama hangat).
+- Sebabnya: data paket sudah di cache 5 menit dan CMS 30 detik, jadi pemanggilan yang diparalelkan hampir semuanya kena cache. Byte pertama ≈ selesai karena layout bersama (brand, akun, nav) selesai lebih dulu sebelum batas skeleton.
+- Manfaat yang tersisa dan belum terukur di lokal:
+  - Permintaan dengan cache dingin (setiap 5 menit per brand): Beranda menunggu 1 putaran paralel, bukan 7 berurutan.
+  - Navigasi klik ke `/paket` dan `/jadwal-umroh` langsung menampilkan skeleton.
+  - Foto hero mulai diunduh bersamaan dengan HTML di jaringan lambat.
+  - Kunjungan ulang tidak memvalidasi ulang aset `/hero`.
+
 ### Bug yang ditemukan saat mengukur
 API ERP crash saat start bila MySQL mati, padahal log menyatakan "degraded mode": worker arsip jadwal tetap jalan dengan `db` nil (`internal/schedule/arsip.go:24`, dipanggil dari `cmd/api/main.go:152`).
