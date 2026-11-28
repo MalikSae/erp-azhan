@@ -533,7 +533,23 @@ func (r *Repository) exists(ctx context.Context, id int64, brandID *int64) error
 	return nil
 }
 
+// GetPublicByID: hanya data yang tampil di respons publik (baris jadwal, hotel transit, benefit). Hitungan admin
+// (booking, komisi, seat dipegang, itinerary khusus, lokasi admin, klasifikasi) dibuang ToPublic(), jadi tidak
+// dihitung untuk lalu lintas publik: 3 query, bukan ±12.
+func (r *Repository) GetPublicByID(ctx context.Context, id int64, brandID *int64) (*Schedule, error) {
+	return r.fetchInti(ctx, id, brandID)
+}
+
 func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*Schedule, error) {
+	s, err := r.fetchInti(ctx, id, brandID)
+	if err != nil {
+		return nil, err
+	}
+	return r.lengkapiAdmin(ctx, s)
+}
+
+// fetchInti: baris jadwal + hotel transit + benefit.
+func (r *Repository) fetchInti(ctx context.Context, id int64, brandID *int64) (*Schedule, error) {
 	q := selectFull + " WHERE s.id=?"
 	var args []interface{}
 	args = append(args, id)
@@ -576,7 +592,12 @@ func (r *Repository) fetchFull(ctx context.Context, id int64, brandID *int64) (*
 	if s.Benefits == nil {
 		s.Benefits = []benefit.Ref{}
 	}
+	return s, nil
+}
 
+// lengkapiAdmin: lokasi, itinerary khusus, seat dipegang, jumlah booking, klasifikasi (layar admin dan /api/schedules).
+func (r *Repository) lengkapiAdmin(ctx context.Context, s *Schedule) (*Schedule, error) {
+	var err error
 	if s.Lokasi, err = lokasiJadwal(ctx, r.db, s.ID); err != nil {
 		return nil, fmt.Errorf("schedule.GetByID lokasi: %w", err)
 	}

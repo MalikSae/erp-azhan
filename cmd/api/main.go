@@ -258,11 +258,12 @@ func main() {
 	// Jelajah Haramain (web dan app). Detail tanpa cache publik supaya ulasan baru langsung terlihat.
 	publicV1.Get("/api/public/v1/haramain", haramainHandler.DaftarPublik)
 	r.With(requireDB(db)).Get("/api/public/v1/haramain/{id}", haramainHandler.DetailPublik)
-	r.With(requireDB(db)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
+	r.With(requireDB(db), shared.PublicCache(60)).Get("/api/itineraries/{id}", itineraryHandler.GetPublicItinerary)
 
 	// Public: categories & brand & bank accounts
-	r.With(requireDB(db)).Get("/api/public/categories", categoryHandler.ListPublicCategories)
-	r.With(requireDB(db)).Get("/api/public/brand", brandHandler.ResolveDomain)
+	r.With(requireDB(db), shared.PublicCache(60)).Get("/api/public/categories", categoryHandler.ListPublicCategories)
+	// Tanpa data per pengguna: cache publik 60 detik seperti API v1 (perubahan admin tampil paling lambat 1 menit).
+	r.With(requireDB(db), shared.PublicCache(60)).Get("/api/public/brand", brandHandler.ResolveDomain)
 	// Publik: wajib brand, hanya rekening aktif dan field untuk pelanggan (handler admin terpisah).
 	r.With(requireDB(db)).Get("/api/public/bank-accounts", bankAccountHandler.ListPublic)
 	// Klik link referral agen dari situs publik (satu per pengunjung per hari).

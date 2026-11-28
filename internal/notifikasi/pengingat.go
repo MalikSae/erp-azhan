@@ -13,10 +13,24 @@ const JamPengingat = 8
 
 // JalankanPengingat menjalankan loop latar: pengingat berbasis waktu, pengiriman pengumuman, dan
 // pembersihan notifikasi lama. Berhenti saat ctx selesai.
+//
+// Hold seat dan pengumuman dicek tiap putaran. Pengingat harian dan pembersihan cukup sekali sehari setelah
+// pukul 08.00 WIB: dulu diulang tiap menit (±960 kali sehari) dengan scan tabel bookings/payments/transaksi_komisi
+// yang mengunci baris sumber. Gagal = dicoba lagi putaran berikut; restart di siang hari menjalankannya lagi
+// sekali, aman karena kunci unik (INSERT IGNORE).
 func JalankanPengingat(ctx context.Context, db *sql.DB, jeda time.Duration) {
+	var hariTerakhir string
 	jalan := func() {
-		if err := Pengingat(ctx, db, time.Now()); err != nil {
+		now := time.Now()
+		if err := PengingatSering(ctx, db, now); err != nil {
 			log.Printf("[ERROR] notifikasi pengingat: %v", err)
+		}
+		if hari, ok := hariPengingat(now); ok && hari != hariTerakhir {
+			if err := PengingatHarian(ctx, db, now); err != nil {
+				log.Printf("[ERROR] notifikasi pengingat harian: %v", err)
+				return
+			}
+			hariTerakhir = hari
 		}
 	}
 	jalan()
@@ -32,16 +46,33 @@ func JalankanPengingat(ctx context.Context, db *sql.DB, jeda time.Duration) {
 	}
 }
 
-// Pengingat menjalankan satu putaran. now menentukan "hari ini" (WIB) dan jam pengingat harian.
+// hariPengingat: tanggal WIB untuk pengingat harian, ok=false sebelum pukul JamPengingat.
+func hariPengingat(now time.Time) (string, bool) {
+	w := now.In(ZonaWIB)
+	return w.Format("2006-01-02"), w.Hour() >= JamPengingat
+}
+
+// Pengingat menjalankan satu putaran lengkap (tes dan pemanggilan manual). now menentukan "hari ini" (WIB)
+// dan jam pengingat harian.
 func Pengingat(ctx context.Context, db Querier, now time.Time) error {
+	if err := PengingatSering(ctx, db, now); err != nil {
+		return err
+	}
+	return PengingatHarian(ctx, db, now)
+}
+
+// PengingatSering: yang bergantung pada jam (hold seat berakhir 3 jam lagi, pengumuman terjadwal).
+func PengingatSering(ctx context.Context, db Querier, now time.Time) error {
 	if err := holdSeat(ctx, db, now); err != nil {
 		return err
 	}
-	if err := KirimPengumuman(ctx, db, now); err != nil {
-		return err
-	}
-	if now.In(ZonaWIB).Hour() >= JamPengingat {
-		hari := now.In(ZonaWIB).Format("2006-01-02")
+	return KirimPengumuman(ctx, db, now)
+}
+
+// PengingatHarian: pelunasan, keberangkatan, komisi tersedia, manasik besok (mulai pukul 08.00 WIB),
+// lalu hapus notifikasi lama.
+func PengingatHarian(ctx context.Context, db Querier, now time.Time) error {
+	if hari, ok := hariPengingat(now); ok {
 		for _, f := range []func(context.Context, Execer, string) error{pelunasan, berangkat, komisiTersedia, manasikBesok} {
 			if err := f(ctx, db, hari); err != nil {
 				return err
@@ -134,7 +165,7 @@ func berangkat(ctx context.Context, db Execer, hari string) error {
 // berangkat (komisi.SQLTersediaMulai). Jendela 3 hari menutup jeda bila server sempat mati, tanpa
 // membanjiri agen dengan komisi lama. Status booking tidak disaring, sama dengan saldo (komisi.HitungSaldo):
 // booking yang dibatalkan setelah lunas tetap memberi komisi (K20), sedangkan turun dari lunas membatalkan
-// komisinya lewat dibatalkan_at.
+// komisinya lewat dibatalkan_at. Jendela ditulis sebagai tanggal berangkat H-6..H-3 agar idx_schedules_berangkat terpakai.
 func komisiTersedia(ctx context.Context, db Execer, hari string) error {
 	_, err := db.ExecContext(ctx, `INSERT IGNORE INTO notifikasi (akun_id, jenis, judul, isi, ref_tipe, kunci)
 		SELECT t.akun_penerima_id, ?, 'Komisi tersedia', LEFT(CONCAT('Rp', FORMAT(t.nominal, 0, 'id_ID'), ' · ', j.nama_lengkap), 300), ?,
@@ -145,7 +176,7 @@ func komisiTersedia(ctx context.Context, db Execer, hari string) error {
 		JOIN booking_pax bp ON bp.id = t.booking_pax_id
 		JOIN jamaah j ON j.id = bp.jamaah_id
 		WHERE t.dibatalkan_at IS NULL AND t.jenis <> 'cashback'
-		  AND DATE_ADD(s.berangkat_tanggal, INTERVAL 3 DAY) BETWEEN DATE_SUB(?, INTERVAL 3 DAY) AND ?`,
+		  AND s.berangkat_tanggal BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND DATE_SUB(?, INTERVAL 3 DAY)`,
 		JenisKomisiTersedia, RefDompet, hari, hari)
 	return err
 }

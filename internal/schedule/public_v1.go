@@ -327,7 +327,7 @@ func (h *Handler) GetPackageV1(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s, err := h.repo.GetByID(r.Context(), id, &brandID)
+	s, err := h.repo.GetPublicByID(r.Context(), id, &brandID)
 	if err != nil {
 		handleRepoError(w, err)
 		return

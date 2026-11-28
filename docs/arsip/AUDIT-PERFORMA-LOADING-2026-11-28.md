@@ -161,14 +161,14 @@ Urutan request saat Beranda dibuka (ms sejak navigasi):
 
 | # | Perubahan | Repo |
 |---|---|---|
-| A1 | DSN `interpolateParams=true` | erp-azhan `internal/shared/config.go` |
+| ~~A1~~ | ~~DSN `interpolateParams=true`~~ — **dibatalkan di tahap 5**: memecahkan INSERT JSON (Error 3144), lihat Tahap 5 | erp-azhan `internal/shared/config.go` |
 | A2 | `fetchFull` menutup `rows` sebelum query lanjutan | erp-azhan `internal/schedule/repository.go` |
 | A4 | `middleware.Compress(5, "application/json")` | erp-azhan `cmd/api/main.go` |
 | A5 | `/uploads` publik: nama UUID `public, max-age=31536000, immutable`; nama lain (logo seed) `public, max-age=86400` | erp-azhan `internal/media/handler.go` + tes |
 | W3 | Itinerary detail paket `revalidate: 300` (CMS admin tetap `no-store`) | azhan-booking `src/lib/api.js` |
 | M1 | Katalog app tampil setelah paket diterima; itinerary menyusul di background (bagian Itinerary di detail disembunyikan selama belum ada) | azhan-mobile `apps/hana/src/data/paket.ts`, `app/detail-paket/[id].tsx` |
 
-Verifikasi: `go build ./...` dan `go test ./...` lulus (37 paket ok); `npm run build` + `npm test` azhan-booking lulus (955 pass, 0 fail); `npm run typecheck` azhan-mobile lulus.
+Verifikasi: `go build ./...` dan `go test ./...` lulus (37 paket ok, tanpa `ERP_TEST_DB=1` sehingga tes integrasi DB terlewati; lihat Tahap 5); `npm run build` + `npm test` azhan-booking lulus (955 pass, 0 fail); `npm run typecheck` azhan-mobile lulus.
 
 ### Hasil sesudah
 | Ukuran | Sebelum | Sesudah |
@@ -276,6 +276,28 @@ Verifikasi: `npm run typecheck` lulus. `npm run lint` gagal di `src/data/agen.ts
 
 - Tab Paket: pencarian "millen" → 6 paket, hanya 4 kartu dirender awal; fokus kolom cari tetap saat mengetik.
 - Belum diukur di HP sungguhan (waktu buka dingin, efek font).
+
+## Tahap 5 dikerjakan (2026-11-28): API
+
+| # | Perubahan | Berkas (erp-azhan) |
+|---|---|---|
+| A3 | Detail paket publik memakai `GetPublicByID`: baris jadwal + hotel transit + benefit. Hitungan admin (booking, komisi, seat dipegang, itinerary khusus, lokasi admin, klasifikasi ganda) tidak lagi dihitung untuk lalu lintas publik. `fetchFull` admin tetap sama (dipecah jadi `fetchInti` + `lengkapiAdmin`). | `internal/schedule/repository.go`, `public_v1.go` |
+| A11 | `Cache-Control: public, max-age=60` untuk `/api/public/brand`, `/api/public/categories`, `/api/itineraries/{id}` (hanya jawaban 200; 404 tidak di-cache) | `cmd/api/main.go` |
+| A6 | Worker notifikasi: hold seat + pengumuman tetap tiap menit; pengingat harian (pelunasan, berangkat, komisi tersedia, manasik) + hapus notifikasi lama sekali sehari setelah 08.00 WIB (sebelumnya ±960 kali sehari). `komisiTersedia` ditulis ulang jadi rentang `berangkat_tanggal` H-6..H-3 (bisa memakai indeks). | `internal/notifikasi/pengingat.go` |
+| A12 | Migrasi `167_indeks_performa.sql`: `schedules(brand_id,status,berangkat_tanggal)`, `bookings(status,customer_account_id)`, `bookings(schedule_id,status,is_seat_blocked)`, `payments(booking_id,status,jumlah)`, `booking_pax(jamaah_id,pax_status)`, `transaksi_komisi(akun_penerima_id,jenis,dibatalkan_at)`. Sudah dijalankan di DB dev. **Wajib dijalankan saat rilis.** | `migrations/167_indeks_performa.sql` |
+| A1 | **Dibatalkan.** `interpolateParams=true` membuat driver mengirim argumen `[]byte` sebagai `_binary'…'`; INSERT hasil `json.Marshal` ke kolom JSON gagal (MySQL Error 3144). 36 kegagalan di `selfbooking` (checkout publik, booking agen) dan `itinerary`. Komentar peringatan ditambahkan di `DSN()`. | `internal/shared/config.go` |
+
+Tidak dikerjakan: cache brand di memori Go (lookup brand per domain sudah memakai indeks UNIQUE, ±1 ms; header cache 60 detik lebih berdampak), DTO list ramping dan filter di SQL (A7/A8, menyentuh kontrak web/app), UNION untuk daftar pesanan akun dan dasbor agen (A9/A10).
+
+### Verifikasi
+- `go build ./...`; `ERP_TEST_DB=1 go test ./...` (tes integrasi DB resmi repo, transaksi selalu di-rollback): **37 paket ok, 0 gagal** sesudah A1 dibatalkan.
+- Tahap 1–4 sebelumnya hanya menjalankan `go test ./...` tanpa `ERP_TEST_DB=1`, sehingga regresi A1 tidak terdeteksi saat itu. Belum ada yang di-push.
+- Respons detail 6 paket sesudah perubahan identik byte per byte dengan sebelumnya.
+- `EXPLAIN` daftar paket publik memakai `idx_schedules_brand_status_berangkat` (`Using index`, tanpa filesort).
+- Query per permintaan detail publik (performance_schema, 20 permintaan): **5** (sebelumnya ±13). Waktu lokal 8,2 ms median (DB lokal, RTT ±0,1 ms; selisih nyata muncul bila DB di host lain).
+
+### Temuan: drift skema DB dev
+Kolom dari migrasi `035_crm_atomic_deals.sql` ada di DB dev, tetapi indeksnya tidak: `idx_bookings_expired_seat_hold` dan `uq_bookings_seat_hold_key`. Worker lepas seat (tiap menit) di DB dev jadi scan tabel. Tidak diubah; perlu dicek apakah DB lain (staging/production) juga kehilangan indeks ini.
 
 ### Bug yang ditemukan saat mengukur
 API ERP crash saat start bila MySQL mati, padahal log menyatakan "degraded mode": worker arsip jadwal tetap jalan dengan `db` nil (`internal/schedule/arsip.go:24`, dipanggil dari `cmd/api/main.go:152`).
