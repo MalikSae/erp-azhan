@@ -251,5 +251,31 @@ Verifikasi: `npm run build`, `npm test` (957 pass, 0 fail), `npm run check:desig
   - Foto hero mulai diunduh bersamaan dengan HTML di jaringan lambat.
   - Kunjungan ulang tidak memvalidasi ulang aset `/hero`.
 
+## Tahap 4 dikerjakan (2026-11-28): app Hana
+
+| # | Perubahan | Berkas (azhan-mobile/apps/hana) |
+|---|---|---|
+| M2 | Salinan disk untuk data publik: brand, katalog (paket + judul hari itinerary, maks 3 hari), banner promosi, daftar Haramain. Cold start menampilkan salinan, lalu menyegarkan di belakang tanpa spinner. Gagal segar tetap menampilkan salinan. Kunci per domain brand. | `src/lib/cacheDisk.ts` (baru), `src/lib/brand.ts`, `src/data/paket.ts`, `src/data/promo.ts`, `src/data/haramain.ts` |
+| M1+ | Permintaan paket berangkat bersamaan dengan brand memakai id brand tersimpan (tanpa menunggu respons brand) | `src/data/paket.ts`, `src/data/promo.ts` |
+| M3 | `useMuat` jadi cache bersama: satu permintaan per kunci untuk semua layar, hasil < 60 detik dipakai ulang, muat ulang manual / `versi` tetap memaksa ambil | `src/lib/muat.ts` |
+| M4 | Font Arab (±200 KB) tidak lagi menahan splash: dimuat di belakang setelah layar pertama | `src/app/_layout.tsx` |
+| M7 | Tab Paket memakai `FlatList` (render awal 4 kartu) | `src/app/(tabs)/paket.tsx` |
+
+- Tanpa dependensi baru: memakai `expo-file-system` dan `expo-font` yang sudah ada; di web memakai `localStorage`.
+- Token dan data akun tetap hanya di SecureStore; salinan disk hanya data publik.
+- Tidak diubah: penyegaran tab Booking setiap fokus (sengaja, agar kartu dan detail selalu sama); N+1 kelengkapan per kartu booking butuh endpoint ringkasan di ERP.
+- Font Figtree belum ditanam di build (plugin `expo-font`): nama keluarga font di iOS berbeda dari nama `@expo-google-fonts`, perlu diuji di perangkat dulu.
+
+Verifikasi: `npm run typecheck` lulus. `npm run lint` gagal di `src/data/agen.ts:410` (`set-state-in-effect`), galat yang sama sudah ada sebelum perubahan ini.
+
+### Hasil (app versi web, proxy jeda 300 ms per permintaan)
+| Ukuran | Tanpa salinan (start pertama) | Dengan salinan (start berikutnya) |
+|---|---|---|
+| Katalog Beranda tampil | 868 ms setelah permintaan pertama | sebelum respons jaringan apa pun (166 ms setelah permintaan pertama, sisa waktu render bundle dev) |
+| Permintaan paket mulai | setelah respons brand (+319 ms) | bersamaan dengan brand (+3 ms) |
+
+- Tab Paket: pencarian "millen" → 6 paket, hanya 4 kartu dirender awal; fokus kolom cari tetap saat mengetik.
+- Belum diukur di HP sungguhan (waktu buka dingin, efek font).
+
 ### Bug yang ditemukan saat mengukur
 API ERP crash saat start bila MySQL mati, padahal log menyatakan "degraded mode": worker arsip jadwal tetap jalan dengan `db` nil (`internal/schedule/arsip.go:24`, dipanggil dari `cmd/api/main.go:152`).
